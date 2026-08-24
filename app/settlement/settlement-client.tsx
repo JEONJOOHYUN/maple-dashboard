@@ -262,7 +262,7 @@ export function SettlementClient({
             onClick={() => setSellFragmentInput(totalFragments)}
             className="pb-2 text-xs font-medium text-orange-600 hover:underline dark:text-orange-400"
           >
-            전부 판매
+            판매
           </button>
         </div>
 
