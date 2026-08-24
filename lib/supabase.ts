@@ -19,3 +19,15 @@ export type HuntingLog = {
   created_at: string;
   updated_at: string;
 };
+
+export type Settlement = {
+  id: number;
+  settled_at: string;
+  fragment_price: number;
+  cash_rate: number;
+  fragment_count: number;
+  pure_meso: number;
+  fee_meso: number;
+  total_meso: number;
+  krw_value: number;
+};

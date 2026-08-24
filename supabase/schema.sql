@@ -17,3 +17,27 @@ create policy "Allow all access to hunting_logs"
   for all
   using (true)
   with check (true);
+
+-- 정산(경매장 판매) 내역. 정산할 때마다 그 시점의 시세와 정산된 수량을
+-- 한 행으로 기록해두고, 누적 현황은 hunting_logs 합계에서 이 합계를 뺀
+-- "미정산 잔액"으로 계산합니다. 일일 기록 자체는 지우지 않아 달력에는
+-- 계속 남습니다.
+create table if not exists settlements (
+  id bigint generated always as identity primary key,
+  settled_at timestamptz not null default now(),
+  fragment_price bigint not null,
+  cash_rate bigint not null,
+  fragment_count bigint not null,
+  pure_meso bigint not null,
+  fee_meso bigint not null,
+  total_meso bigint not null,
+  krw_value bigint not null
+);
+
+alter table settlements enable row level security;
+
+create policy "Allow all access to settlements"
+  on settlements
+  for all
+  using (true)
+  with check (true);
