@@ -5,6 +5,7 @@ import { ActivityCalendar, type DayActivity } from "@/components/activity-calend
 import { IconValue } from "@/components/icon-value";
 import { AUCTION_HOUSE_FEE_RATE } from "@/lib/constants";
 import { formatNumber, formatKrw } from "@/lib/format";
+import { computeSettlement } from "@/lib/settlement-math";
 import type { HuntingLog, Settlement } from "@/lib/supabase";
 import {
   deleteLog,
@@ -46,6 +47,16 @@ export function SettlementClient({
 
   const [fragmentPrice, setFragmentPrice] = useState(0);
   const [cashRate, setCashRate] = useState(140);
+  // null이면 "보유한 조각 전부"를 판매 수량 기본값으로 사용합니다.
+  const [sellFragmentInput, setSellFragmentInput] = useState<number | null>(null);
+
+  useEffect(() => {
+    // 정산이 성공하면 판매 수량 입력을 초기화해 다음에는 다시 "전부"가 기본값이 되게 합니다.
+    if (settleState.successAt) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSellFragmentInput(null);
+    }
+  }, [settleState.successAt]);
 
   useEffect(() => {
     // 최초 렌더는 SSR과 동일한 기본값을 유지해야 하므로, localStorage에 저장된
@@ -85,18 +96,23 @@ export function SettlementClient({
     return map;
   }, [logs]);
 
-  const fragmentGrossMeso = fragmentPrice * totalFragments;
-  const auctionFeeMeso = fragmentGrossMeso * AUCTION_HOUSE_FEE_RATE;
-  const fragmentNetMeso = fragmentGrossMeso - auctionFeeMeso;
-  const totalMeso = fragmentNetMeso + totalPureMeso;
-  const krwValue = (totalMeso / 100_000_000) * cashRate;
+  // 보유한 조각 전체를 지금 시세로 팔았을 때의 전체 자산 가치 (누적 현황 카드용)
+  const portfolio = computeSettlement(totalFragments, totalPureMeso, fragmentPrice, cashRate);
 
-  const canSettle = totalFragments > 0 || totalPureMeso > 0;
+  // 조각은 한 번에 전부 팔지 않고 일부만 팔 수도 있습니다.
+  const fragmentsToSell = Math.min(
+    Math.max(0, sellFragmentInput ?? totalFragments),
+    totalFragments
+  );
+  // 실제로 이번에 정산할 내역 (계산기 하단 breakdown + 정산하기 버튼용)
+  const pending = computeSettlement(fragmentsToSell, totalPureMeso, fragmentPrice, cashRate);
+
+  const canSettle = fragmentsToSell > 0 || totalPureMeso > 0;
 
   function handleSettleClick(e: React.MouseEvent<HTMLButtonElement>) {
     e.preventDefault();
     const confirmed = window.confirm(
-      `${formatNumber(totalFragments)}개 / ${formatNumber(
+      `${formatNumber(fragmentsToSell)}개 / ${formatNumber(
         totalPureMeso
       )}메소를 정산 처리할까요?\n정산 후에는 누적 현황에서 이 수량이 빠지고, 정산 내역에 기록됩니다.`
     );
@@ -129,7 +145,7 @@ export function SettlementClient({
           </SummaryCard>
           <SummaryCard label="현재 시세 기준 누적 가치">
             <span className="text-2xl font-bold text-orange-600 dark:text-orange-400">
-              {formatKrw(krwValue)}
+              {formatKrw(portfolio.krwValue)}
             </span>
           </SummaryCard>
         </div>
@@ -225,25 +241,50 @@ export function SettlementClient({
           </label>
         </div>
 
-        <div className="mt-5 rounded-lg bg-slate-50 p-4 text-sm dark:bg-slate-800/60">
+        <div className="mt-4 flex flex-wrap items-end gap-3">
+          <label className="flex flex-col gap-1 text-sm text-slate-600 dark:text-slate-300">
+            판매할 조각 개수
+            <input
+              type="number"
+              min={0}
+              max={totalFragments}
+              step={1}
+              value={fragmentsToSell}
+              onChange={(e) => setSellFragmentInput(Number(e.target.value))}
+              className="w-32 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-orange-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+            />
+          </label>
+          <span className="pb-2 text-xs text-slate-400 dark:text-slate-500">
+            보유 {formatNumber(totalFragments)}개
+          </span>
+          <button
+            type="button"
+            onClick={() => setSellFragmentInput(totalFragments)}
+            className="pb-2 text-xs font-medium text-orange-600 hover:underline dark:text-orange-400"
+          >
+            전부 판매
+          </button>
+        </div>
+
+        <div className="mt-3 rounded-lg bg-slate-50 p-4 text-sm dark:bg-slate-800/60">
           <div className="flex flex-wrap items-center gap-2 text-slate-600 dark:text-slate-300">
             <IconValue icon="/fragment.png" alt="조각" size={16}>
-              {formatNumber(totalFragments)}개 × {formatNumber(fragmentPrice)}
+              {formatNumber(fragmentsToSell)}개 × {formatNumber(fragmentPrice)}
             </IconValue>
             <span>=</span>
             <IconValue icon="/meso.png" alt="메소" size={16}>
-              {formatNumber(fragmentGrossMeso)}
+              {formatNumber(pending.grossMeso)}
             </IconValue>
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-slate-400 dark:text-slate-500">
             <span>경매장 수수료 ({AUCTION_HOUSE_FEE_RATE * 100}%)</span>
-            <span>− {formatNumber(auctionFeeMeso)}</span>
+            <span>− {formatNumber(pending.feeMeso)}</span>
           </div>
           <div className="my-2 border-t border-slate-200 dark:border-slate-700" />
           <div className="flex flex-wrap items-center gap-2 text-slate-600 dark:text-slate-300">
             <span>조각 판매 실수령</span>
             <IconValue icon="/meso.png" alt="메소" size={16}>
-              {formatNumber(fragmentNetMeso)}
+              {formatNumber(pending.netMeso)}
             </IconValue>
             <span>+</span>
             <IconValue icon="/meso.png" alt="메소" size={16}>
@@ -251,24 +292,24 @@ export function SettlementClient({
             </IconValue>
             <span>=</span>
             <span className="font-semibold text-slate-900 dark:text-slate-100">
-              총 {formatNumber(totalMeso)} 메소
+              총 {formatNumber(pending.totalMeso)} 메소
             </span>
           </div>
           <div className="mt-3 flex flex-wrap items-baseline justify-between gap-3">
             <div className="flex items-baseline gap-2">
               <span className="text-slate-500 dark:text-slate-400">총 메소 기준 현금 환산액</span>
               <span className="text-xl font-bold text-orange-600 dark:text-orange-400">
-                {formatKrw(krwValue)}
+                {formatKrw(pending.krwValue)}
               </span>
             </div>
             <form ref={settleFormRef} action={settleFormAction}>
               <input type="hidden" name="fragment_price" value={fragmentPrice} />
               <input type="hidden" name="cash_rate" value={cashRate} />
-              <input type="hidden" name="fragment_count" value={totalFragments} />
+              <input type="hidden" name="fragment_count" value={fragmentsToSell} />
               <input type="hidden" name="pure_meso" value={totalPureMeso} />
-              <input type="hidden" name="fee_meso" value={auctionFeeMeso} />
-              <input type="hidden" name="total_meso" value={totalMeso} />
-              <input type="hidden" name="krw_value" value={krwValue} />
+              <input type="hidden" name="fee_meso" value={pending.feeMeso} />
+              <input type="hidden" name="total_meso" value={pending.totalMeso} />
+              <input type="hidden" name="krw_value" value={pending.krwValue} />
               <button
                 type="submit"
                 disabled={!canSettle || isSettlePending}
