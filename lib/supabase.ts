@@ -11,8 +11,16 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+export type Worker = {
+  id: number;
+  name: string;
+  sort_order: number;
+  created_at: string;
+};
+
 export type HuntingLog = {
   id: number;
+  worker_id: number;
   log_date: string;
   pure_meso: number;
   fragment_count: number;
@@ -22,6 +30,7 @@ export type HuntingLog = {
 
 export type Settlement = {
   id: number;
+  worker_id: number;
   settled_at: string;
   fragment_price: number;
   cash_rate: number;

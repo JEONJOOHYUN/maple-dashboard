@@ -1,11 +1,30 @@
+-- 부주(캐릭터/사람) 목록. 상단 탭에서 승환, 양우처럼 여러 명을 추가하고
+-- 전환할 수 있습니다. 각 부주의 기록/정산은 worker_id로 구분됩니다.
+create table if not exists workers (
+  id bigint generated always as identity primary key,
+  name text not null,
+  sort_order integer not null default 0,
+  created_at timestamptz not null default now()
+);
+
+alter table workers enable row level security;
+
+create policy "Allow all access to workers"
+  on workers
+  for all
+  using (true)
+  with check (true);
+
 -- 부주 사냥 수익 정산 대시보드: 일일 사냥 기록 테이블
 create table if not exists hunting_logs (
   id bigint generated always as identity primary key,
-  log_date date not null unique,
+  worker_id bigint not null references workers(id) on delete cascade,
+  log_date date not null,
   pure_meso bigint not null default 0,
   fragment_count integer not null default 0,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  unique (worker_id, log_date)
 );
 
 -- 개인용 도구이며 별도 로그인 기능이 없으므로, anon key로 전체 접근을 허용합니다.
@@ -24,6 +43,7 @@ create policy "Allow all access to hunting_logs"
 -- 계속 남습니다.
 create table if not exists settlements (
   id bigint generated always as identity primary key,
+  worker_id bigint not null references workers(id) on delete cascade,
   settled_at timestamptz not null default now(),
   fragment_price bigint not null,
   cash_rate bigint not null,

@@ -24,9 +24,11 @@ function todayString() {
 }
 
 export function SettlementClient({
+  workerId,
   logs,
   settlements,
 }: {
+  workerId: number;
   logs: HuntingLog[];
   settlements: Settlement[];
 }) {
@@ -161,6 +163,7 @@ export function SettlementClient({
           action={logFormAction}
           className="grid grid-cols-1 gap-4 sm:grid-cols-[auto_1fr_1fr_auto] sm:items-end"
         >
+          <input type="hidden" name="worker_id" value={workerId} />
           <label className="flex flex-col gap-1 text-sm text-slate-600 dark:text-slate-300">
             날짜
             <input
@@ -303,6 +306,7 @@ export function SettlementClient({
               </span>
             </div>
             <form ref={settleFormRef} action={settleFormAction}>
+              <input type="hidden" name="worker_id" value={workerId} />
               <input type="hidden" name="fragment_price" value={fragmentPrice} />
               <input type="hidden" name="cash_rate" value={cashRate} />
               <input type="hidden" name="fragment_count" value={fragmentsToSell} />

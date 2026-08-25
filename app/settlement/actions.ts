@@ -12,10 +12,14 @@ export async function upsertLog(
   _prevState: UpsertLogState,
   formData: FormData
 ): Promise<UpsertLogState> {
+  const workerId = Number(formData.get("worker_id"));
   const logDate = String(formData.get("log_date") ?? "");
   const pureMeso = Number(formData.get("pure_meso"));
   const fragmentCount = Number(formData.get("fragment_count"));
 
+  if (!Number.isFinite(workerId) || workerId <= 0) {
+    return { error: "부주를 선택해주세요." };
+  }
   if (!logDate) {
     return { error: "날짜를 입력해주세요." };
   }
@@ -32,12 +36,13 @@ export async function upsertLog(
 
   const { error } = await supabase.from("hunting_logs").upsert(
     {
+      worker_id: workerId,
       log_date: logDate,
       pure_meso: pureMeso,
       fragment_count: fragmentCount,
       updated_at: new Date().toISOString(),
     },
-    { onConflict: "log_date" }
+    { onConflict: "worker_id,log_date" }
   );
 
   if (error) {
@@ -45,12 +50,14 @@ export async function upsertLog(
   }
 
   revalidatePath("/settlement");
+  revalidatePath("/admin");
   return { successAt: Date.now() };
 }
 
 export async function deleteLog(id: number) {
   await supabase.from("hunting_logs").delete().eq("id", id);
   revalidatePath("/settlement");
+  revalidatePath("/admin");
 }
 
 export type SettleState = {
@@ -62,6 +69,7 @@ export async function settleUp(
   _prevState: SettleState,
   formData: FormData
 ): Promise<SettleState> {
+  const workerId = Number(formData.get("worker_id"));
   const fragmentPrice = Number(formData.get("fragment_price"));
   const cashRate = Number(formData.get("cash_rate"));
   const fragmentCount = Number(formData.get("fragment_count"));
@@ -79,6 +87,9 @@ export async function settleUp(
     totalMeso,
     krwValue,
   ];
+  if (!Number.isFinite(workerId) || workerId <= 0) {
+    return { error: "부주를 선택해주세요." };
+  }
   if (!values.every(Number.isFinite)) {
     return { error: "정산 값이 올바르지 않습니다." };
   }
@@ -87,6 +98,7 @@ export async function settleUp(
   }
 
   const { error } = await supabase.from("settlements").insert({
+    worker_id: workerId,
     fragment_price: fragmentPrice,
     cash_rate: cashRate,
     fragment_count: fragmentCount,
@@ -101,10 +113,12 @@ export async function settleUp(
   }
 
   revalidatePath("/settlement");
+  revalidatePath("/admin");
   return { successAt: Date.now() };
 }
 
 export async function deleteSettlement(id: number) {
   await supabase.from("settlements").delete().eq("id", id);
   revalidatePath("/settlement");
+  revalidatePath("/admin");
 }
