@@ -124,7 +124,7 @@ export function AdminDashboard({
                     <td className="px-4 py-2">
                       <form
                         id={`log-${log.id}`}
-                        action={updateLog.bind(null, log.id)}
+                        action={updateLog.bind(null, log.id, log.worker_id)}
                         className="contents"
                       >
                         <input
@@ -161,7 +161,10 @@ export function AdminDashboard({
                       >
                         저장
                       </button>
-                      <form action={deleteLog.bind(null, log.id)} className="inline">
+                      <form
+                        action={deleteLog.bind(null, log.id, log.worker_id)}
+                        className="inline"
+                      >
                         <button
                           type="submit"
                           className="text-xs text-slate-400 hover:text-red-500 dark:text-slate-500 dark:hover:text-red-400"
@@ -217,7 +220,7 @@ export function AdminDashboard({
                     <td className="px-4 py-2">
                       <form
                         id={`settlement-${s.id}`}
-                        action={updateSettlement.bind(null, s.id)}
+                        action={updateSettlement.bind(null, s.id, s.worker_id)}
                         className="contents"
                       >
                         <input
@@ -266,7 +269,10 @@ export function AdminDashboard({
                       >
                         저장
                       </button>
-                      <form action={deleteSettlement.bind(null, s.id)} className="inline">
+                      <form
+                        action={deleteSettlement.bind(null, s.id, s.worker_id)}
+                        className="inline"
+                      >
                         <button
                           type="submit"
                           className="text-xs text-slate-400 hover:text-red-500 dark:text-slate-500 dark:hover:text-red-400"

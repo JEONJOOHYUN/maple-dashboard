@@ -1,5 +1,5 @@
 import { WorkerTabs } from "@/components/worker-tabs";
-import { supabase } from "@/lib/supabase";
+import { getWorkerData, getWorkers } from "@/lib/queries";
 import { SettlementClient } from "./settlement-client";
 
 export default async function SettlementPage({
@@ -9,21 +9,17 @@ export default async function SettlementPage({
 }) {
   const { worker } = await searchParams;
 
-  const { data: workers, error: workersError } = await supabase
-    .from("workers")
-    .select("*")
-    .order("sort_order", { ascending: true })
-    .order("id", { ascending: true });
+  const { data: workers, error: workersError } = await getWorkers();
 
   if (workersError) {
     return (
       <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-        데이터를 불러오지 못했습니다: {workersError.message}
+        데이터를 불러오지 못했습니다: {workersError}
       </div>
     );
   }
 
-  if (!workers || workers.length === 0) {
+  if (workers.length === 0) {
     return (
       <div className="flex flex-col gap-4">
         <WorkerTabs workers={[]} selectedWorkerId={undefined} />
@@ -38,30 +34,12 @@ export default async function SettlementPage({
   const selectedWorker =
     workers.find((w) => w.id === requestedId) ?? workers[0];
 
-  const [logsResult, settlementsResult] = await Promise.all([
-    supabase
-      .from("hunting_logs")
-      .select("*")
-      .eq("worker_id", selectedWorker.id)
-      .order("log_date", { ascending: false }),
-    supabase
-      .from("settlements")
-      .select("*")
-      .eq("worker_id", selectedWorker.id)
-      .order("settled_at", { ascending: false }),
-  ]);
+  const { logs, settlements, error } = await getWorkerData(selectedWorker.id);
 
-  if (logsResult.error) {
+  if (error) {
     return (
       <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-        데이터를 불러오지 못했습니다: {logsResult.error.message}
-      </div>
-    );
-  }
-  if (settlementsResult.error) {
-    return (
-      <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-        데이터를 불러오지 못했습니다: {settlementsResult.error.message}
+        데이터를 불러오지 못했습니다: {error}
       </div>
     );
   }
@@ -72,8 +50,8 @@ export default async function SettlementPage({
       <SettlementClient
         key={selectedWorker.id}
         workerId={selectedWorker.id}
-        logs={logsResult.data ?? []}
-        settlements={settlementsResult.data ?? []}
+        logs={logs}
+        settlements={settlements}
       />
     </div>
   );

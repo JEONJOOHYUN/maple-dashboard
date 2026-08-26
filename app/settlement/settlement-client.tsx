@@ -384,7 +384,7 @@ export function SettlementClient({
                       </IconValue>
                     </td>
                     <td className="px-5 py-3 text-right">
-                      <form action={deleteLog.bind(null, log.id)}>
+                      <form action={deleteLog.bind(null, log.id, workerId)}>
                         <button
                           type="submit"
                           className="text-xs text-slate-400 hover:text-red-500 dark:text-slate-500 dark:hover:text-red-400"
@@ -452,7 +452,7 @@ export function SettlementClient({
                       {formatKrw(s.krw_value)}
                     </td>
                     <td className="px-5 py-3 text-right">
-                      <form action={deleteSettlement.bind(null, s.id)}>
+                      <form action={deleteSettlement.bind(null, s.id, workerId)}>
                         <button
                           type="submit"
                           className="text-xs text-slate-400 hover:text-red-500 dark:text-slate-500 dark:hover:text-red-400"

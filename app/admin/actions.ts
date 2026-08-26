@@ -1,9 +1,10 @@
 "use server";
 
 import { cookies } from "next/headers";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { supabase } from "@/lib/supabase";
 import { computeSettlement } from "@/lib/settlement-math";
+import { workerTag } from "@/lib/queries";
 
 const COOKIE_NAME = "admin_session";
 
@@ -43,7 +44,7 @@ export async function adminLogout() {
   revalidatePath("/admin");
 }
 
-export async function updateLog(id: number, formData: FormData) {
+export async function updateLog(id: number, workerId: number, formData: FormData) {
   const logDate = String(formData.get("log_date") ?? "");
   const pureMeso = Number(formData.get("pure_meso"));
   const fragmentCount = Number(formData.get("fragment_count"));
@@ -63,10 +64,14 @@ export async function updateLog(id: number, formData: FormData) {
     .eq("id", id);
 
   revalidatePath("/admin");
-  revalidatePath("/settlement");
+  updateTag(workerTag(workerId));
 }
 
-export async function updateSettlement(id: number, formData: FormData) {
+export async function updateSettlement(
+  id: number,
+  workerId: number,
+  formData: FormData
+) {
   const fragmentPrice = Number(formData.get("fragment_price"));
   const cashRate = Number(formData.get("cash_rate"));
   const fragmentCount = Number(formData.get("fragment_count"));
@@ -99,5 +104,5 @@ export async function updateSettlement(id: number, formData: FormData) {
     .eq("id", id);
 
   revalidatePath("/admin");
-  revalidatePath("/settlement");
+  updateTag(workerTag(workerId));
 }

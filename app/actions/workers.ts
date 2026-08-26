@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { supabase } from "@/lib/supabase";
 
 export type AddWorkerState = {
@@ -30,7 +30,7 @@ export async function addWorker(
     return { error: `추가에 실패했습니다: ${error.message}` };
   }
 
-  revalidatePath("/settlement");
+  updateTag("workers");
   revalidatePath("/admin");
   return { successAt: Date.now() };
 }
@@ -40,12 +40,12 @@ export async function renameWorker(id: number, formData: FormData) {
   if (!name) return;
 
   await supabase.from("workers").update({ name }).eq("id", id);
-  revalidatePath("/settlement");
+  updateTag("workers");
   revalidatePath("/admin");
 }
 
 export async function deleteWorker(id: number) {
   await supabase.from("workers").delete().eq("id", id);
-  revalidatePath("/settlement");
+  updateTag("workers");
   revalidatePath("/admin");
 }

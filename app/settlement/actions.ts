@@ -1,7 +1,8 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { supabase } from "@/lib/supabase";
+import { workerTag } from "@/lib/queries";
 
 export type UpsertLogState = {
   error?: string;
@@ -49,14 +50,14 @@ export async function upsertLog(
     return { error: `저장에 실패했습니다: ${error.message}` };
   }
 
-  revalidatePath("/settlement");
+  updateTag(workerTag(workerId));
   revalidatePath("/admin");
   return { successAt: Date.now() };
 }
 
-export async function deleteLog(id: number) {
+export async function deleteLog(id: number, workerId: number) {
   await supabase.from("hunting_logs").delete().eq("id", id);
-  revalidatePath("/settlement");
+  updateTag(workerTag(workerId));
   revalidatePath("/admin");
 }
 
@@ -112,13 +113,13 @@ export async function settleUp(
     return { error: `정산 저장에 실패했습니다: ${error.message}` };
   }
 
-  revalidatePath("/settlement");
+  updateTag(workerTag(workerId));
   revalidatePath("/admin");
   return { successAt: Date.now() };
 }
 
-export async function deleteSettlement(id: number) {
+export async function deleteSettlement(id: number, workerId: number) {
   await supabase.from("settlements").delete().eq("id", id);
-  revalidatePath("/settlement");
+  updateTag(workerTag(workerId));
   revalidatePath("/admin");
 }
