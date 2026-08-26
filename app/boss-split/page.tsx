@@ -48,10 +48,21 @@ function createMember(name: string, percent: number): Member {
   return { id: crypto.randomUUID(), name, percent };
 }
 
+type Item = {
+  id: string;
+  name: string;
+  grossMeso: number;
+};
+
+function createItem(name: string): Item {
+  return { id: crypto.randomUUID(), name, grossMeso: 0 };
+}
+
 export default function BossSplitPage() {
   const [feePercent, setFeePercent] = useState(3);
-  const [grossMeso, setGrossMeso] = useState(0);
-  const netMeso = grossMeso * (1 - feePercent / 100);
+  const [items, setItems] = useState<Item[]>(() => [createItem("아이템 1")]);
+  const totalGrossMeso = items.reduce((sum, item) => sum + item.grossMeso, 0);
+  const netMeso = totalGrossMeso * (1 - feePercent / 100);
 
   const [mode, setMode] = useState<"equal" | "custom">("equal");
   const [members, setMembers] = useState<Member[]>(() => [
@@ -77,9 +88,20 @@ export default function BossSplitPage() {
     return computeBossSplit(netMeso, ratios, feePercent / 100);
   }, [members, mode, equalPercent, netMeso, feePercent, isValidSplit]);
 
-  function handleNetChange(value: number) {
-    const fee = feePercent / 100;
-    setGrossMeso(fee >= 1 ? 0 : Math.round(value / (1 - fee)));
+  function addItem() {
+    setItems((prev) => [...prev, createItem(`아이템 ${prev.length + 1}`)]);
+  }
+
+  function removeItem(id: string) {
+    setItems((prev) => (prev.length <= 1 ? prev : prev.filter((item) => item.id !== id)));
+  }
+
+  function updateItemName(id: string, name: string) {
+    setItems((prev) => prev.map((item) => (item.id === id ? { ...item, name } : item)));
+  }
+
+  function updateItemGross(id: string, grossMeso: number) {
+    setItems((prev) => prev.map((item) => (item.id === id ? { ...item, grossMeso } : item)));
   }
 
   function addMember() {
@@ -116,35 +138,66 @@ export default function BossSplitPage() {
         <h2 className="mb-4 text-sm font-semibold text-slate-500 dark:text-slate-400">
           아이템 판매액
         </h2>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <label className="flex flex-col gap-1 text-sm text-slate-600 dark:text-slate-300">
-            아이템 판매액 (경매장 수수료 적용 전)
-            <input
-              type="text"
-              inputMode="numeric"
-              value={grossMeso === 0 ? "" : formatNumber(grossMeso)}
-              placeholder="0"
-              onChange={(e) => handleMesoInput(e, setGrossMeso)}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-orange-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-            />
+
+        <div className="flex flex-col gap-2">
+          {items.map((item) => (
+            <div
+              key={item.id}
+              className="flex items-center gap-2 rounded-lg border border-slate-200 p-2 dark:border-slate-800"
+            >
+              <input
+                type="text"
+                value={item.name}
+                onChange={(e) => updateItemName(item.id, e.target.value)}
+                className="w-28 shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-orange-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+              />
+              <input
+                type="text"
+                inputMode="numeric"
+                value={item.grossMeso === 0 ? "" : formatNumber(item.grossMeso)}
+                placeholder="0"
+                onChange={(e) => handleMesoInput(e, (value) => updateItemGross(item.id, value))}
+                className="flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-right text-sm text-slate-900 focus:border-orange-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+              />
+              <button
+                type="button"
+                onClick={() => removeItem(item.id)}
+                disabled={items.length <= 1}
+                className="shrink-0 text-xs text-slate-400 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-30 dark:text-slate-500 dark:hover:text-red-400"
+              >
+                삭제
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <button
+          type="button"
+          onClick={addItem}
+          className="mt-3 rounded-lg border border-dashed border-slate-300 px-4 py-2 text-sm text-slate-500 hover:border-orange-400 hover:text-orange-600 dark:border-slate-700 dark:text-slate-400 dark:hover:border-orange-400 dark:hover:text-orange-400"
+        >
+          + 아이템 추가
+        </button>
+
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="flex flex-col gap-1 text-sm text-slate-600 dark:text-slate-300">
+            합계 판매액 (경매장 수수료 적용 전)
+            <p className="text-lg font-bold text-slate-900 dark:text-slate-100">
+              {formatNumber(totalGrossMeso)}
+            </p>
             <span className="text-xs text-slate-400 dark:text-slate-500">
-              {formatKoreanMeso(grossMeso)}
+              {formatKoreanMeso(totalGrossMeso)}
             </span>
-          </label>
-          <label className="flex flex-col gap-1 text-sm text-slate-600 dark:text-slate-300">
+          </div>
+          <div className="flex flex-col gap-1 text-sm text-slate-600 dark:text-slate-300">
             실수령액 (경매장 수수료 적용 후)
-            <input
-              type="text"
-              inputMode="numeric"
-              value={Math.round(netMeso) === 0 ? "" : formatNumber(netMeso)}
-              placeholder="0"
-              onChange={(e) => handleMesoInput(e, handleNetChange)}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-orange-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-            />
+            <p className="text-lg font-bold text-orange-600 dark:text-orange-400">
+              {formatNumber(netMeso)}
+            </p>
             <span className="text-xs text-slate-400 dark:text-slate-500">
               {formatKoreanMeso(netMeso)}
             </span>
-          </label>
+          </div>
           <label className="flex flex-col gap-1 text-sm text-slate-600 dark:text-slate-300">
             경매장 수수료 (%)
             <input
@@ -159,7 +212,7 @@ export default function BossSplitPage() {
           </label>
         </div>
         <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
-          모든 파티원에게 공통 적용됩니다.
+          여러 아이템을 등록하면 합계 판매액을 기준으로 분배금이 계산됩니다.
         </p>
       </section>
 
