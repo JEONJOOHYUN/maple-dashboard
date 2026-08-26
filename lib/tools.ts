@@ -14,4 +14,10 @@ export const tools: Tool[] = [
     href: "/settlement",
     description: "일일 사냥 기록을 누적하고, 실시간 시세로 정산 금액을 계산합니다.",
   },
+  {
+    slug: "boss-split",
+    label: "보스 분배금",
+    href: "/boss-split",
+    description: "아이템 판매액을 파티원끼리 나눌 때 수수료까지 반영해 분배금을 계산합니다.",
+  },
 ];
