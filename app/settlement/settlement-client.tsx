@@ -4,7 +4,8 @@ import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityCalendar, type DayActivity } from "@/components/activity-calendar";
 import { IconValue } from "@/components/icon-value";
 import { AUCTION_HOUSE_FEE_RATE } from "@/lib/constants";
-import { formatNumber, formatKrw } from "@/lib/format";
+import { formatKoreanMeso, formatNumber, formatKrw } from "@/lib/format";
+import { handleMesoInput } from "@/lib/meso-input";
 import { computeSettlement } from "@/lib/settlement-math";
 import type { HuntingLog, Settlement } from "@/lib/supabase";
 import {
@@ -51,12 +52,14 @@ export function SettlementClient({
   const [cashRate, setCashRate] = useState(140);
   // null이면 "보유한 조각 전부"를 판매 수량 기본값으로 사용합니다.
   const [sellFragmentInput, setSellFragmentInput] = useState<number | null>(null);
+  const [incentiveMeso, setIncentiveMeso] = useState(0);
 
   useEffect(() => {
-    // 정산이 성공하면 판매 수량 입력을 초기화해 다음에는 다시 "전부"가 기본값이 되게 합니다.
+    // 정산이 성공하면 판매 수량/인센티브 입력을 초기화해 다음 정산에 영향이 없게 합니다.
     if (settleState.successAt) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setSellFragmentInput(null);
+      setIncentiveMeso(0);
     }
   }, [settleState.successAt]);
 
@@ -107,16 +110,24 @@ export function SettlementClient({
     totalFragments
   );
   // 실제로 이번에 정산할 내역 (계산기 하단 breakdown + 정산하기 버튼용)
-  const pending = computeSettlement(fragmentsToSell, totalPureMeso, fragmentPrice, cashRate);
+  const pending = computeSettlement(
+    fragmentsToSell,
+    totalPureMeso,
+    fragmentPrice,
+    cashRate,
+    incentiveMeso
+  );
 
-  const canSettle = fragmentsToSell > 0 || totalPureMeso > 0;
+  const canSettle = fragmentsToSell > 0 || totalPureMeso > 0 || incentiveMeso > 0;
 
   function handleSettleClick(e: React.MouseEvent<HTMLButtonElement>) {
     e.preventDefault();
+    const incentiveNote =
+      incentiveMeso > 0 ? ` (인센티브 ${formatNumber(incentiveMeso)}메소 포함)` : "";
     const confirmed = window.confirm(
       `${formatNumber(fragmentsToSell)}개 / ${formatNumber(
         totalPureMeso
-      )}메소를 정산 처리할까요?\n정산 후에는 누적 현황에서 이 수량이 빠지고, 정산 내역에 기록됩니다.`
+      )}메소를 정산 처리할까요?${incentiveNote}\n정산 후에는 누적 현황에서 이 수량이 빠지고, 정산 내역에 기록됩니다.`
     );
     if (confirmed) {
       settleFormRef.current?.requestSubmit();
@@ -269,6 +280,25 @@ export function SettlementClient({
           </button>
         </div>
 
+        <div className="mt-3">
+          <label className="flex flex-col gap-1 text-sm text-slate-600 dark:text-slate-300">
+            인센티브 메소 (부주에게 추가로 지급)
+            <input
+              type="text"
+              inputMode="numeric"
+              value={incentiveMeso === 0 ? "" : formatNumber(incentiveMeso)}
+              placeholder="0"
+              onChange={(e) => handleMesoInput(e, setIncentiveMeso)}
+              className="w-48 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-orange-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+            />
+          </label>
+          {incentiveMeso > 0 && (
+            <span className="mt-1 block text-xs text-slate-400 dark:text-slate-500">
+              {formatKoreanMeso(incentiveMeso)}
+            </span>
+          )}
+        </div>
+
         <div className="mt-3 rounded-lg bg-slate-50 p-4 text-sm dark:bg-slate-800/60">
           <div className="flex flex-wrap items-center gap-2 text-slate-600 dark:text-slate-300">
             <IconValue icon="/fragment.png" alt="조각" size={16}>
@@ -293,6 +323,15 @@ export function SettlementClient({
             <IconValue icon="/meso.png" alt="메소" size={16}>
               {formatNumber(totalPureMeso)}
             </IconValue>
+            {pending.incentiveMeso > 0 && (
+              <>
+                <span>+</span>
+                <span>인센티브</span>
+                <IconValue icon="/meso.png" alt="메소" size={16}>
+                  {formatNumber(pending.incentiveMeso)}
+                </IconValue>
+              </>
+            )}
             <span>=</span>
             <span className="font-semibold text-slate-900 dark:text-slate-100">
               총 {formatNumber(pending.totalMeso)} 메소
@@ -312,6 +351,7 @@ export function SettlementClient({
               <input type="hidden" name="fragment_count" value={fragmentsToSell} />
               <input type="hidden" name="pure_meso" value={totalPureMeso} />
               <input type="hidden" name="fee_meso" value={pending.feeMeso} />
+              <input type="hidden" name="incentive_meso" value={pending.incentiveMeso} />
               <input type="hidden" name="total_meso" value={pending.totalMeso} />
               <input type="hidden" name="krw_value" value={pending.krwValue} />
               <button
@@ -443,6 +483,11 @@ export function SettlementClient({
                             {formatNumber(s.pure_meso)}
                           </span>
                         </IconValue>
+                        {s.incentive_meso > 0 && (
+                          <span className="text-xs text-orange-500 dark:text-orange-400">
+                            인센티브 +{formatNumber(s.incentive_meso)}
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="px-5 py-3 text-slate-700 dark:text-slate-300">

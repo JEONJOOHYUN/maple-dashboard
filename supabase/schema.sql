@@ -50,6 +50,7 @@ create table if not exists settlements (
   fragment_count bigint not null,
   pure_meso bigint not null,
   fee_meso bigint not null,
+  incentive_meso bigint not null default 0,
   total_meso bigint not null,
   krw_value bigint not null
 );

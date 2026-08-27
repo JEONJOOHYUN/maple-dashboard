@@ -201,6 +201,7 @@ export function AdminDashboard({
                   <th className="px-4 py-2 font-medium">현금화 비율</th>
                   <th className="px-4 py-2 font-medium">조각 수</th>
                   <th className="px-4 py-2 font-medium">순수 메소</th>
+                  <th className="px-4 py-2 font-medium">인센티브</th>
                   <th className="px-4 py-2 font-medium">KRW</th>
                   <th className="px-4 py-2 font-medium"></th>
                 </tr>
@@ -256,6 +257,15 @@ export function AdminDashboard({
                         defaultValue={s.pure_meso}
                         form={`settlement-${s.id}`}
                         className={`w-32 ${inputClass}`}
+                      />
+                    </td>
+                    <td className="px-4 py-2">
+                      <input
+                        type="number"
+                        name="incentive_meso"
+                        defaultValue={s.incentive_meso}
+                        form={`settlement-${s.id}`}
+                        className={`w-28 ${inputClass}`}
                       />
                     </td>
                     <td className="px-4 py-2 text-slate-700 dark:text-slate-300">

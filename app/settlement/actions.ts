@@ -76,6 +76,7 @@ export async function settleUp(
   const fragmentCount = Number(formData.get("fragment_count"));
   const pureMeso = Number(formData.get("pure_meso"));
   const feeMeso = Number(formData.get("fee_meso"));
+  const incentiveMeso = Number(formData.get("incentive_meso") ?? 0);
   const totalMeso = Number(formData.get("total_meso"));
   const krwValue = Number(formData.get("krw_value"));
 
@@ -85,6 +86,7 @@ export async function settleUp(
     fragmentCount,
     pureMeso,
     feeMeso,
+    incentiveMeso,
     totalMeso,
     krwValue,
   ];
@@ -94,7 +96,10 @@ export async function settleUp(
   if (!values.every(Number.isFinite)) {
     return { error: "정산 값이 올바르지 않습니다." };
   }
-  if (fragmentCount <= 0 && pureMeso <= 0) {
+  if (incentiveMeso < 0) {
+    return { error: "인센티브 메소는 0 이상이어야 합니다." };
+  }
+  if (fragmentCount <= 0 && pureMeso <= 0 && incentiveMeso <= 0) {
     return { error: "정산할 미정산 잔액이 없습니다." };
   }
 
@@ -105,6 +110,7 @@ export async function settleUp(
     fragment_count: fragmentCount,
     pure_meso: pureMeso,
     fee_meso: feeMeso,
+    incentive_meso: incentiveMeso,
     total_meso: totalMeso,
     krw_value: krwValue,
   });

@@ -37,6 +37,7 @@ export type Settlement = {
   fragment_count: number;
   pure_meso: number;
   fee_meso: number;
+  incentive_meso: number;
   total_meso: number;
   krw_value: number;
 };

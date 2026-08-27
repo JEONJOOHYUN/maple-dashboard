@@ -76,9 +76,12 @@ export async function updateSettlement(
   const cashRate = Number(formData.get("cash_rate"));
   const fragmentCount = Number(formData.get("fragment_count"));
   const pureMeso = Number(formData.get("pure_meso"));
+  const incentiveMeso = Number(formData.get("incentive_meso") ?? 0);
 
   if (
-    ![fragmentPrice, cashRate, fragmentCount, pureMeso].every(Number.isFinite)
+    ![fragmentPrice, cashRate, fragmentCount, pureMeso, incentiveMeso].every(
+      Number.isFinite
+    )
   ) {
     return;
   }
@@ -87,7 +90,8 @@ export async function updateSettlement(
     fragmentCount,
     pureMeso,
     fragmentPrice,
-    cashRate
+    cashRate,
+    incentiveMeso
   );
 
   await supabase
@@ -98,6 +102,7 @@ export async function updateSettlement(
       fragment_count: fragmentCount,
       pure_meso: pureMeso,
       fee_meso: feeMeso,
+      incentive_meso: incentiveMeso,
       total_meso: totalMeso,
       krw_value: krwValue,
     })

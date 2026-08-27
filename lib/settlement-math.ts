@@ -4,6 +4,7 @@ export type SettlementBreakdown = {
   grossMeso: number;
   feeMeso: number;
   netMeso: number;
+  incentiveMeso: number;
   totalMeso: number;
   krwValue: number;
 };
@@ -12,12 +13,13 @@ export function computeSettlement(
   fragmentCount: number,
   pureMeso: number,
   fragmentPrice: number,
-  cashRate: number
+  cashRate: number,
+  incentiveMeso = 0
 ): SettlementBreakdown {
   const grossMeso = fragmentPrice * fragmentCount;
   const feeMeso = grossMeso * AUCTION_HOUSE_FEE_RATE;
   const netMeso = grossMeso - feeMeso;
-  const totalMeso = netMeso + pureMeso;
+  const totalMeso = netMeso + pureMeso + incentiveMeso;
   const krwValue = (totalMeso / 100_000_000) * cashRate;
-  return { grossMeso, feeMeso, netMeso, totalMeso, krwValue };
+  return { grossMeso, feeMeso, netMeso, incentiveMeso, totalMeso, krwValue };
 }
