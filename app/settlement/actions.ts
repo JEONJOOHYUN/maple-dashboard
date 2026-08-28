@@ -17,6 +17,7 @@ export async function upsertLog(
   const logDate = String(formData.get("log_date") ?? "");
   const pureMeso = Number(formData.get("pure_meso"));
   const fragmentCount = Number(formData.get("fragment_count"));
+  const mode = formData.get("mode") === "overwrite" ? "overwrite" : "add";
 
   if (!Number.isFinite(workerId) || workerId <= 0) {
     return { error: "부주를 선택해주세요." };
@@ -35,12 +36,30 @@ export async function upsertLog(
     return { error: "솔 에르다 조각 개수는 0 이상의 정수여야 합니다." };
   }
 
+  let finalPureMeso = pureMeso;
+  let finalFragmentCount = fragmentCount;
+
+  if (mode === "add") {
+    // 하루를 끊어서 여러 번 사냥할 수 있으므로, 기본은 기존 기록에 더합니다.
+    const { data: existing } = await supabase
+      .from("hunting_logs")
+      .select("pure_meso, fragment_count")
+      .eq("worker_id", workerId)
+      .eq("log_date", logDate)
+      .maybeSingle();
+
+    if (existing) {
+      finalPureMeso = existing.pure_meso + pureMeso;
+      finalFragmentCount = existing.fragment_count + fragmentCount;
+    }
+  }
+
   const { error } = await supabase.from("hunting_logs").upsert(
     {
       worker_id: workerId,
       log_date: logDate,
-      pure_meso: pureMeso,
-      fragment_count: fragmentCount,
+      pure_meso: finalPureMeso,
+      fragment_count: finalFragmentCount,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "worker_id,log_date" }
