@@ -35,11 +35,40 @@ export function SettlementClient({
 }) {
   const [logState, logFormAction, isLogPending] = useActionState(upsertLog, initialLogState);
   const logFormRef = useRef<HTMLFormElement>(null);
-  const [showOverwrite, setShowOverwrite] = useState(false);
+
+  const [logDateInput, setLogDateInput] = useState(() => todayString());
+  const [logPureMesoInput, setLogPureMesoInput] = useState<number | "">("");
+  const [logFragmentInput, setLogFragmentInput] = useState<number | "">("");
+  const [isEditingLog, setIsEditingLog] = useState(false);
+  const [editNotice, setEditNotice] = useState<string | null>(null);
+
+  function resetLogForm() {
+    setLogDateInput(todayString());
+    setLogPureMesoInput("");
+    setLogFragmentInput("");
+    setIsEditingLog(false);
+    setEditNotice(null);
+  }
+
+  function handleEditClick() {
+    const existing = logs.find((log) => log.log_date === logDateInput);
+    if (!existing) {
+      setEditNotice("해당 날짜에 저장된 기록이 없습니다.");
+      setLogPureMesoInput("");
+      setLogFragmentInput("");
+      setIsEditingLog(true);
+      return;
+    }
+    setLogPureMesoInput(existing.pure_meso);
+    setLogFragmentInput(existing.fragment_count);
+    setIsEditingLog(true);
+    setEditNotice(null);
+  }
 
   useEffect(() => {
     if (logState.successAt) {
-      logFormRef.current?.reset();
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      resetLogForm();
     }
   }, [logState.successAt]);
 
@@ -174,15 +203,17 @@ export function SettlementClient({
           id="log-form"
           ref={logFormRef}
           action={logFormAction}
-          className="grid grid-cols-1 gap-4 sm:grid-cols-[auto_1fr_1fr_auto] sm:items-end"
+          className="grid grid-cols-1 gap-4 sm:grid-cols-[auto_1fr_1fr_auto_auto] sm:items-end"
         >
           <input type="hidden" name="worker_id" value={workerId} />
+          <input type="hidden" name="mode" value={isEditingLog ? "overwrite" : "add"} />
           <label className="flex flex-col gap-1 text-sm text-slate-600 dark:text-slate-300">
             날짜
             <input
               type="date"
               name="log_date"
-              defaultValue={todayString()}
+              value={logDateInput}
+              onChange={(e) => setLogDateInput(e.target.value)}
               required
               className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-orange-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
             />
@@ -196,6 +227,10 @@ export function SettlementClient({
               step={1}
               required
               placeholder="0"
+              value={logPureMesoInput}
+              onChange={(e) =>
+                setLogPureMesoInput(e.target.value === "" ? "" : Number(e.target.value))
+              }
               className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-orange-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
             />
           </label>
@@ -208,58 +243,43 @@ export function SettlementClient({
               step={1}
               required
               placeholder="0"
+              value={logFragmentInput}
+              onChange={(e) =>
+                setLogFragmentInput(e.target.value === "" ? "" : Number(e.target.value))
+              }
               className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-orange-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
             />
           </label>
           <button
-            type="submit"
-            name="mode"
-            value="add"
-            disabled={isLogPending}
-            className="h-fit rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-orange-600 disabled:opacity-50"
+            type="button"
+            onClick={isEditingLog ? resetLogForm : handleEditClick}
+            className="h-fit rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:border-orange-400 hover:text-orange-600 dark:border-slate-700 dark:text-slate-300 dark:hover:border-orange-400 dark:hover:text-orange-400"
           >
-            {isLogPending ? "저장 중..." : "기록 추가"}
+            {isEditingLog ? "취소" : "수정하기"}
+          </button>
+          <button
+            type="submit"
+            disabled={isLogPending}
+            className={`h-fit rounded-lg px-4 py-2 text-sm font-semibold text-white transition-colors disabled:opacity-50 ${
+              isEditingLog
+                ? "bg-slate-900 hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600"
+                : "bg-orange-500 hover:bg-orange-600"
+            }`}
+          >
+            {isLogPending ? "저장 중..." : isEditingLog ? "수정 저장" : "기록 추가"}
           </button>
         </form>
         {logState.error && (
           <p className="mt-3 text-sm text-red-600 dark:text-red-400">{logState.error}</p>
         )}
-        <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
-          같은 날짜에 다시 저장하면 끊어서 사냥한 만큼 기존 기록에 더해집니다.
-        </p>
-
-        {showOverwrite ? (
-          <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-dashed border-slate-300 p-3 dark:border-slate-700">
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              위에 입력한 값으로 해당 날짜 기록을 완전히 덮어씁니다(더하지 않음).
-            </p>
-            <button
-              type="submit"
-              form="log-form"
-              name="mode"
-              value="overwrite"
-              disabled={isLogPending}
-              className="rounded-lg border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50 dark:border-red-500/40 dark:text-red-400 dark:hover:bg-red-500/10"
-            >
-              덮어쓰기로 저장
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowOverwrite(false)}
-              className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-            >
-              닫기
-            </button>
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setShowOverwrite(true)}
-            className="mt-2 text-xs text-slate-400 hover:text-orange-600 hover:underline dark:text-slate-500 dark:hover:text-orange-400"
-          >
-            더하지 않고 값을 새로 지정하려면 (덮어쓰기)
-          </button>
+        {editNotice && (
+          <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">{editNotice}</p>
         )}
+        <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
+          {isEditingLog
+            ? "이 날짜에 저장된 값을 불러왔습니다. 수정 후 저장하면 값을 그대로 덮어씁니다."
+            : "같은 날짜에 다시 저장하면 끊어서 사냥한 만큼 기존 기록에 더해집니다. 값을 고치려면 \"수정하기\"를 눌러주세요."}
+        </p>
       </section>
 
       {/* 실시간 시세 연동 정산 계산기 */}
