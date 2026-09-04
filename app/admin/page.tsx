@@ -16,9 +16,10 @@ export default async function AdminPage() {
     return <AdminLoginForm />;
   }
 
-  const [workersResult, logsResult, settlementsResult] = await Promise.all([
+  const [workersResult, logsResult, salesResult, settlementsResult] = await Promise.all([
     supabase.from("workers").select("*").order("sort_order").order("id"),
     supabase.from("hunting_logs").select("*").order("log_date", { ascending: false }),
+    supabase.from("fragment_sales").select("*").order("sold_at", { ascending: false }),
     supabase.from("settlements").select("*").order("settled_at", { ascending: false }),
   ]);
 
@@ -26,6 +27,7 @@ export default async function AdminPage() {
     <AdminDashboard
       workers={workersResult.data ?? []}
       logs={logsResult.data ?? []}
+      fragmentSales={salesResult.data ?? []}
       settlements={settlementsResult.data ?? []}
     />
   );

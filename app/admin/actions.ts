@@ -3,6 +3,7 @@
 import { cookies } from "next/headers";
 import { revalidatePath, updateTag } from "next/cache";
 import { supabase } from "@/lib/supabase";
+import { AUCTION_HOUSE_FEE_RATE } from "@/lib/constants";
 import { computeSettlement } from "@/lib/settlement-math";
 import { workerTag } from "@/lib/queries";
 
@@ -94,17 +95,48 @@ export async function updateSettlement(
     incentiveMeso
   );
 
+  // 금액 컬럼이 모두 bigint이므로 소수점은 반올림해서 저장합니다.
   await supabase
     .from("settlements")
     .update({
-      fragment_price: fragmentPrice,
-      cash_rate: cashRate,
-      fragment_count: fragmentCount,
-      pure_meso: pureMeso,
+      fragment_price: Math.round(fragmentPrice),
+      cash_rate: Math.round(cashRate),
+      fragment_count: Math.round(fragmentCount),
+      pure_meso: Math.round(pureMeso),
+      fee_meso: Math.round(feeMeso),
+      incentive_meso: Math.round(incentiveMeso),
+      total_meso: Math.round(totalMeso),
+      krw_value: Math.round(krwValue),
+    })
+    .eq("id", id);
+
+  revalidatePath("/admin");
+  updateTag(workerTag(workerId));
+}
+
+export async function updateFragmentSale(
+  id: number,
+  workerId: number,
+  formData: FormData
+) {
+  const fragmentCount = Number(formData.get("fragment_count"));
+  const fragmentPrice = Number(formData.get("fragment_price"));
+
+  if (![fragmentCount, fragmentPrice].every(Number.isFinite)) {
+    return;
+  }
+
+  const grossMeso = Math.round(fragmentPrice * fragmentCount);
+  const feeMeso = Math.round(grossMeso * AUCTION_HOUSE_FEE_RATE);
+
+  await supabase
+    .from("fragment_sales")
+    .update({
+      fragment_count: Math.round(fragmentCount),
+      fragment_price: Math.round(fragmentPrice),
+      gross_meso: grossMeso,
       fee_meso: feeMeso,
-      incentive_meso: incentiveMeso,
-      total_meso: totalMeso,
-      krw_value: krwValue,
+      net_meso: grossMeso - feeMeso,
     })
     .eq("id", id);
 

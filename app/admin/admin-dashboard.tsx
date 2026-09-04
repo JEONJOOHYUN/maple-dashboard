@@ -1,8 +1,17 @@
 import { deleteWorker, renameWorker } from "@/app/actions/workers";
-import { deleteLog, deleteSettlement } from "@/app/settlement/actions";
-import { formatKrw } from "@/lib/format";
-import type { HuntingLog, Settlement, Worker } from "@/lib/supabase";
-import { adminLogout, updateLog, updateSettlement } from "./actions";
+import {
+  deleteFragmentSale,
+  deleteLog,
+  deleteSettlement,
+} from "@/app/settlement/actions";
+import { formatKrw, formatNumber } from "@/lib/format";
+import type { FragmentSale, HuntingLog, Settlement, Worker } from "@/lib/supabase";
+import {
+  adminLogout,
+  updateFragmentSale,
+  updateLog,
+  updateSettlement,
+} from "./actions";
 import { AdminAddWorkerForm } from "./admin-add-worker-form";
 
 const inputClass =
@@ -11,10 +20,12 @@ const inputClass =
 export function AdminDashboard({
   workers,
   logs,
+  fragmentSales,
   settlements,
 }: {
   workers: Worker[];
   logs: HuntingLog[];
+  fragmentSales: FragmentSale[];
   settlements: Settlement[];
 }) {
   const workerName = (id: number) =>
@@ -163,6 +174,94 @@ export function AdminDashboard({
                       </button>
                       <form
                         action={deleteLog.bind(null, log.id, log.worker_id)}
+                        className="inline"
+                      >
+                        <button
+                          type="submit"
+                          className="text-xs text-slate-400 hover:text-red-500 dark:text-slate-500 dark:hover:text-red-400"
+                        >
+                          삭제
+                        </button>
+                      </form>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {/* 조각 판매 내역 관리 */}
+      <section className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <h2 className="border-b border-slate-100 px-5 py-4 text-sm font-semibold text-slate-500 dark:border-slate-800 dark:text-slate-400">
+          조각 판매 내역 관리 ({fragmentSales.length}건)
+        </h2>
+        {fragmentSales.length === 0 ? (
+          <p className="px-5 py-8 text-center text-sm text-slate-400 dark:text-slate-500">
+            조각 판매 내역이 없습니다.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-100 text-left text-slate-500 dark:border-slate-800 dark:text-slate-400">
+                  <th className="px-4 py-2 font-medium">부주</th>
+                  <th className="px-4 py-2 font-medium">판매 일시</th>
+                  <th className="px-4 py-2 font-medium">조각 수</th>
+                  <th className="px-4 py-2 font-medium">개당 가격</th>
+                  <th className="px-4 py-2 font-medium">받은 메소</th>
+                  <th className="px-4 py-2 font-medium"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {fragmentSales.map((s) => (
+                  <tr
+                    key={s.id}
+                    className="border-b border-slate-50 last:border-0 dark:border-slate-800/60"
+                  >
+                    <td className="px-4 py-2 text-slate-700 dark:text-slate-300">
+                      {workerName(s.worker_id)}
+                    </td>
+                    <td className="px-4 py-2 whitespace-nowrap text-slate-700 dark:text-slate-300">
+                      {new Date(s.sold_at).toLocaleString("ko-KR")}
+                    </td>
+                    <td className="px-4 py-2">
+                      <form
+                        id={`sale-${s.id}`}
+                        action={updateFragmentSale.bind(null, s.id, s.worker_id)}
+                        className="contents"
+                      >
+                        <input
+                          type="number"
+                          name="fragment_count"
+                          defaultValue={s.fragment_count}
+                          className={`w-20 ${inputClass}`}
+                        />
+                      </form>
+                    </td>
+                    <td className="px-4 py-2">
+                      <input
+                        type="number"
+                        name="fragment_price"
+                        defaultValue={s.fragment_price}
+                        form={`sale-${s.id}`}
+                        className={`w-28 ${inputClass}`}
+                      />
+                    </td>
+                    <td className="px-4 py-2 text-slate-700 dark:text-slate-300">
+                      {formatNumber(s.net_meso)}
+                    </td>
+                    <td className="px-4 py-2 text-right whitespace-nowrap">
+                      <button
+                        type="submit"
+                        form={`sale-${s.id}`}
+                        className="mr-3 text-xs text-orange-600 hover:underline dark:text-orange-400"
+                      >
+                        저장
+                      </button>
+                      <form
+                        action={deleteFragmentSale.bind(null, s.id, s.worker_id)}
                         className="inline"
                       >
                         <button

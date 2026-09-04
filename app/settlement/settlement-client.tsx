@@ -3,34 +3,55 @@
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityCalendar, type DayActivity } from "@/components/activity-calendar";
 import { IconValue } from "@/components/icon-value";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { AUCTION_HOUSE_FEE_RATE } from "@/lib/constants";
 import { formatKoreanMeso, formatNumber, formatKrw } from "@/lib/format";
 import { handleMesoInput } from "@/lib/meso-input";
 import { computeSettlement } from "@/lib/settlement-math";
-import type { HuntingLog, Settlement } from "@/lib/supabase";
+import type { FragmentSale, HuntingLog, Settlement } from "@/lib/supabase";
+import { cn } from "@/lib/utils";
 import {
+  deleteFragmentSale,
   deleteLog,
   deleteSettlement,
+  sellFragments,
   settleUp,
   upsertLog,
+  type SellFragmentsState,
   type SettleState,
   type UpsertLogState,
 } from "./actions";
 
 const initialLogState: UpsertLogState = {};
+const initialSellState: SellFragmentsState = {};
 const initialSettleState: SettleState = {};
+
+const LOGS_PER_PAGE = 5;
+
+// 기존 디자인(slate 팔레트)을 유지하면서 shadcn Input을 쓰기 위한 공통 클래스입니다.
+const fieldClass =
+  "h-10 rounded-lg border-slate-300 bg-white px-3 text-sm text-slate-900 focus-visible:border-orange-400 focus-visible:ring-orange-400/30 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100";
 
 function todayString() {
   return new Date().toISOString().slice(0, 10);
 }
 
+/** number | "" 상태를 쓰는 숫자 입력의 onChange 핸들러 (빈 칸을 0으로 되돌리지 않습니다) */
+function numberInputHandler(setter: (value: number | "") => void) {
+  return (e: React.ChangeEvent<HTMLInputElement>) =>
+    setter(e.target.value === "" ? "" : Number(e.target.value));
+}
+
 export function SettlementClient({
   workerId,
   logs,
+  fragmentSales,
   settlements,
 }: {
   workerId: number;
   logs: HuntingLog[];
+  fragmentSales: FragmentSale[];
   settlements: Settlement[];
 }) {
   const [logState, logFormAction, isLogPending] = useActionState(upsertLog, initialLogState);
@@ -72,23 +93,41 @@ export function SettlementClient({
     }
   }, [logState.successAt]);
 
+  const [sellState, sellFormAction, isSellPending] = useActionState(
+    sellFragments,
+    initialSellState
+  );
+  const sellFormRef = useRef<HTMLFormElement>(null);
+
   const [settleState, settleFormAction, isSettlePending] = useActionState(
     settleUp,
     initialSettleState
   );
   const settleFormRef = useRef<HTMLFormElement>(null);
 
-  const [fragmentPrice, setFragmentPrice] = useState(0);
-  const [cashRate, setCashRate] = useState(140);
-  // null이면 "보유한 조각 전부"를 판매 수량 기본값으로 사용합니다.
-  const [sellFragmentInput, setSellFragmentInput] = useState<number | null>(null);
+  // 시세/수량 입력은 일일 기록 폼과 동일하게 "빈 칸"을 그대로 유지합니다.
+  // (0으로 되돌아가 지워지지 않는 문제를 막기 위함)
+  const [fragmentPriceMan, setFragmentPriceMan] = useState<number | "">("");
+  const [cashRateInput, setCashRateInput] = useState<number | "">(140);
+  // ""이면 "보유한 조각 전부"를 판매 수량으로 사용합니다.
+  const [sellFragmentInput, setSellFragmentInput] = useState<number | "">("");
   const [incentiveMeso, setIncentiveMeso] = useState(0);
+  const [logPage, setLogPage] = useState(0);
+
+  const fragmentPrice = (fragmentPriceMan === "" ? 0 : fragmentPriceMan) * 10_000;
+  const cashRate = cashRateInput === "" ? 0 : cashRateInput;
 
   useEffect(() => {
-    // 정산이 성공하면 판매 수량/인센티브 입력을 초기화해 다음 정산에 영향이 없게 합니다.
+    if (sellState.successAt) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSellFragmentInput("");
+    }
+  }, [sellState.successAt]);
+
+  useEffect(() => {
+    // 정산이 성공하면 인센티브 입력을 초기화해 다음 정산에 영향이 없게 합니다.
     if (settleState.successAt) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSellFragmentInput(null);
       setIncentiveMeso(0);
     }
   }, [settleState.successAt]);
@@ -96,11 +135,11 @@ export function SettlementClient({
   useEffect(() => {
     // 최초 렌더는 SSR과 동일한 기본값을 유지해야 하므로, localStorage에 저장된
     // 시세 값은 마운트 이후 한 번만 불러와 반영합니다(하이드레이션 불일치 방지).
-    const savedPrice = localStorage.getItem("maple:fragmentPrice");
-    const savedRate = localStorage.getItem("maple:cashRate");
+    const savedPrice = Number(localStorage.getItem("maple:fragmentPrice"));
+    const savedRate = Number(localStorage.getItem("maple:cashRate"));
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (savedPrice) setFragmentPrice(Number(savedPrice));
-    if (savedRate) setCashRate(Number(savedRate));
+    if (savedPrice > 0) setFragmentPriceMan(savedPrice / 10_000);
+    if (savedRate > 0) setCashRateInput(savedRate);
   }, []);
 
   useEffect(() => {
@@ -113,12 +152,16 @@ export function SettlementClient({
 
   const rawTotalPureMeso = logs.reduce((sum, log) => sum + log.pure_meso, 0);
   const rawTotalFragments = logs.reduce((sum, log) => sum + log.fragment_count, 0);
+  const soldFragments = fragmentSales.reduce((sum, s) => sum + s.fragment_count, 0);
+  const soldNetMeso = fragmentSales.reduce((sum, s) => sum + s.net_meso, 0);
   const settledPureMeso = settlements.reduce((sum, s) => sum + s.pure_meso, 0);
+  // 조각 판매가 분리되기 전에 기록된 정산 행은 조각도 함께 소모했습니다.
   const settledFragments = settlements.reduce((sum, s) => sum + s.fragment_count, 0);
 
-  // 정산(경매장 판매)한 만큼은 누적에서 자동으로 빠집니다.
-  const totalPureMeso = Math.max(0, rawTotalPureMeso - settledPureMeso);
-  const totalFragments = Math.max(0, rawTotalFragments - settledFragments);
+  // 조각: 사냥으로 모은 만큼에서 판매(+과거 정산)한 만큼이 빠집니다.
+  const totalFragments = Math.max(0, rawTotalFragments - soldFragments - settledFragments);
+  // 메소: 순수 메소 + 조각을 팔아 받은 메소에서 현금 정산한 만큼이 빠집니다.
+  const totalPureMeso = Math.max(0, rawTotalPureMeso + soldNetMeso - settledPureMeso);
 
   const logsByDate = useMemo(() => {
     const map = new Map<string, DayActivity>();
@@ -135,29 +178,48 @@ export function SettlementClient({
   const portfolio = computeSettlement(totalFragments, totalPureMeso, fragmentPrice, cashRate);
 
   // 조각은 한 번에 전부 팔지 않고 일부만 팔 수도 있습니다.
-  const fragmentsToSell = Math.min(
-    Math.max(0, sellFragmentInput ?? totalFragments),
-    totalFragments
-  );
-  // 실제로 이번에 정산할 내역 (계산기 하단 breakdown + 정산하기 버튼용)
-  const pending = computeSettlement(
-    fragmentsToSell,
-    totalPureMeso,
-    fragmentPrice,
-    cashRate,
-    incentiveMeso
+  const fragmentsToSell =
+    sellFragmentInput === ""
+      ? totalFragments
+      : Math.min(Math.max(0, sellFragmentInput), totalFragments);
+  // 이번 판매로 받게 될 메소 (수수료 3% 차감)
+  const sale = computeSettlement(fragmentsToSell, 0, fragmentPrice, cashRate);
+  const canSell = fragmentsToSell > 0 && fragmentPrice > 0;
+
+  // 현금 정산 대상: 보유 메소 + 인센티브
+  const pending = computeSettlement(0, totalPureMeso, fragmentPrice, cashRate, incentiveMeso);
+  const canSettle = pending.totalMeso > 0;
+
+  // 일일 기록은 5개씩 페이지로 나눠 보여줍니다.
+  const logPageCount = Math.max(1, Math.ceil(logs.length / LOGS_PER_PAGE));
+  const currentLogPage = Math.min(logPage, logPageCount - 1);
+  const pagedLogs = logs.slice(
+    currentLogPage * LOGS_PER_PAGE,
+    currentLogPage * LOGS_PER_PAGE + LOGS_PER_PAGE
   );
 
-  const canSettle = fragmentsToSell > 0 || totalPureMeso > 0 || incentiveMeso > 0;
+  function handleSellClick(e: React.MouseEvent<HTMLButtonElement>) {
+    e.preventDefault();
+    const confirmed = window.confirm(
+      `조각 ${formatNumber(fragmentsToSell)}개를 개당 ${formatNumber(
+        fragmentPrice
+      )} 메소에 판매할까요?\n수수료 ${
+        AUCTION_HOUSE_FEE_RATE * 100
+      }%를 뗀 ${formatNumber(sale.netMeso)} 메소가 누적 순수 메소에 더해집니다.`
+    );
+    if (confirmed) {
+      sellFormRef.current?.requestSubmit();
+    }
+  }
 
   function handleSettleClick(e: React.MouseEvent<HTMLButtonElement>) {
     e.preventDefault();
     const incentiveNote =
       incentiveMeso > 0 ? ` (인센티브 ${formatNumber(incentiveMeso)}메소 포함)` : "";
     const confirmed = window.confirm(
-      `${formatNumber(fragmentsToSell)}개 / ${formatNumber(
-        totalPureMeso
-      )}메소를 정산 처리할까요?${incentiveNote}\n정산 후에는 누적 현황에서 이 수량이 빠지고, 정산 내역에 기록됩니다.`
+      `보유 메소 ${formatNumber(pending.totalMeso)}메소를 ${formatKrw(
+        pending.krwValue
+      )}으로 정산 처리할까요?${incentiveNote}\n정산 후에는 누적 메소에서 이 금액이 빠지고, 정산 내역에 기록됩니다.`
     );
     if (confirmed) {
       settleFormRef.current?.requestSubmit();
@@ -209,18 +271,18 @@ export function SettlementClient({
           <input type="hidden" name="mode" value={isEditingLog ? "overwrite" : "add"} />
           <label className="flex flex-col gap-1 text-sm text-slate-600 dark:text-slate-300">
             날짜
-            <input
+            <Input
               type="date"
               name="log_date"
               value={logDateInput}
               onChange={(e) => setLogDateInput(e.target.value)}
               required
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-orange-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+              className={fieldClass}
             />
           </label>
           <label className="flex flex-col gap-1 text-sm text-slate-600 dark:text-slate-300">
             순수 메소
-            <input
+            <Input
               type="number"
               name="pure_meso"
               min={0}
@@ -228,15 +290,13 @@ export function SettlementClient({
               required
               placeholder="0"
               value={logPureMesoInput}
-              onChange={(e) =>
-                setLogPureMesoInput(e.target.value === "" ? "" : Number(e.target.value))
-              }
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-orange-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+              onChange={numberInputHandler(setLogPureMesoInput)}
+              className={fieldClass}
             />
           </label>
           <label className="flex flex-col gap-1 text-sm text-slate-600 dark:text-slate-300">
             솔 에르다 조각 (개)
-            <input
+            <Input
               type="number"
               name="fragment_count"
               min={0}
@@ -244,30 +304,29 @@ export function SettlementClient({
               required
               placeholder="0"
               value={logFragmentInput}
-              onChange={(e) =>
-                setLogFragmentInput(e.target.value === "" ? "" : Number(e.target.value))
-              }
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-orange-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+              onChange={numberInputHandler(setLogFragmentInput)}
+              className={fieldClass}
             />
           </label>
-          <button
+          <Button
             type="button"
+            variant="outline"
             onClick={isEditingLog ? resetLogForm : handleEditClick}
-            className="h-fit rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:border-orange-400 hover:text-orange-600 dark:border-slate-700 dark:text-slate-300 dark:hover:border-orange-400 dark:hover:text-orange-400"
+            className="h-10 border-slate-300 px-4 text-sm font-medium text-slate-600 hover:border-orange-400 hover:text-orange-600 dark:border-slate-700 dark:text-slate-300 dark:hover:border-orange-400 dark:hover:text-orange-400"
           >
             {isEditingLog ? "취소" : "수정하기"}
-          </button>
-          <button
+          </Button>
+          <Button
             type="submit"
             disabled={isLogPending}
-            className={`h-fit rounded-lg px-4 py-2 text-sm font-semibold text-white transition-colors disabled:opacity-50 ${
-              isEditingLog
-                ? "bg-slate-900 hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600"
-                : "bg-orange-500 hover:bg-orange-600"
-            }`}
+            className={cn(
+              "h-10 px-4 text-sm font-semibold",
+              isEditingLog &&
+                "bg-slate-900 text-white hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600"
+            )}
           >
             {isLogPending ? "저장 중..." : isEditingLog ? "수정 저장" : "기록 추가"}
-          </button>
+          </Button>
         </form>
         {logState.error && (
           <p className="mt-3 text-sm text-red-600 dark:text-red-400">{logState.error}</p>
@@ -290,63 +349,136 @@ export function SettlementClient({
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <label className="flex flex-col gap-1 text-sm text-slate-600 dark:text-slate-300">
             현재 조각 가격 (만 메소 / 1개)
-            <input
+            <Input
               type="number"
               min={0}
               step={10}
-              value={fragmentPrice / 10_000}
-              onChange={(e) => setFragmentPrice(Number(e.target.value) * 10_000)}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-orange-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+              placeholder="0"
+              value={fragmentPriceMan}
+              onChange={numberInputHandler(setFragmentPriceMan)}
+              className={fieldClass}
             />
+            {fragmentPrice > 0 && (
+              <span className="text-xs text-slate-400 dark:text-slate-500">
+                개당 {formatKoreanMeso(fragmentPrice)}
+              </span>
+            )}
           </label>
           <label className="flex flex-col gap-1 text-sm text-slate-600 dark:text-slate-300">
             현금화 비율 (원 / 1억 메소)
-            <input
+            <Input
               type="number"
               min={0}
               step={50}
-              value={cashRate}
-              onChange={(e) => setCashRate(Number(e.target.value))}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-orange-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+              placeholder="0"
+              value={cashRateInput}
+              onChange={numberInputHandler(setCashRateInput)}
+              className={fieldClass}
             />
           </label>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-end gap-3">
-          <label className="flex flex-col gap-1 text-sm text-slate-600 dark:text-slate-300">
-            판매할 조각 개수
-            <input
-              type="number"
-              min={0}
-              max={totalFragments}
-              step={1}
-              value={fragmentsToSell}
-              onChange={(e) => setSellFragmentInput(Number(e.target.value))}
-              className="w-32 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-orange-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-            />
-          </label>
-          <span className="pb-2 text-xs text-slate-400 dark:text-slate-500">
-            보유 {formatNumber(totalFragments)}개
-          </span>
-          <button
-            type="button"
-            onClick={() => setSellFragmentInput(totalFragments)}
-            className="pb-2 text-xs font-medium text-orange-600 hover:underline dark:text-orange-400"
-          >
-            판매
-          </button>
+        {/* 1단계: 조각 → 메소 */}
+        <div className="mt-5 rounded-xl border-2 border-orange-200 bg-orange-50/60 p-4 dark:border-orange-500/30 dark:bg-orange-500/5">
+          <p className="mb-3 text-sm font-semibold text-orange-700 dark:text-orange-300">
+            조각 판매
+          </p>
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="flex flex-col gap-1 text-sm text-slate-600 dark:text-slate-300">
+              판매할 조각 개수
+              <Input
+                type="number"
+                min={0}
+                max={totalFragments}
+                step={1}
+                placeholder={String(totalFragments)}
+                value={sellFragmentInput}
+                onChange={numberInputHandler(setSellFragmentInput)}
+                className={cn(fieldClass, "w-32")}
+              />
+            </label>
+            <span className="pb-3 text-xs text-slate-400 dark:text-slate-500">
+              보유 {formatNumber(totalFragments)}개 (비우면 전량)
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setSellFragmentInput(totalFragments)}
+              className="mb-2 text-xs font-medium text-orange-600 hover:bg-orange-100 hover:text-orange-700 dark:text-orange-400 dark:hover:bg-orange-500/10"
+            >
+              전량 입력
+            </Button>
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+            <IconValue icon="/fragment.png" alt="조각" size={16}>
+              {formatNumber(fragmentsToSell)}개 × {formatNumber(fragmentPrice)}
+            </IconValue>
+            <span>=</span>
+            <IconValue icon="/meso.png" alt="메소" size={16}>
+              {formatNumber(sale.grossMeso)}
+            </IconValue>
+            <span className="text-slate-400 dark:text-slate-500">
+              − 수수료 {AUCTION_HOUSE_FEE_RATE * 100}% ({formatNumber(sale.feeMeso)})
+            </span>
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-baseline gap-2">
+              <span className="text-sm text-slate-500 dark:text-slate-400">
+                판매 후 받는 메소
+              </span>
+              <span className="text-xl font-bold text-slate-900 dark:text-slate-100">
+                {formatNumber(sale.netMeso)}
+              </span>
+              {sale.netMeso > 0 && (
+                <span className="text-xs text-slate-400 dark:text-slate-500">
+                  ({formatKoreanMeso(sale.netMeso)})
+                </span>
+              )}
+            </div>
+            <form ref={sellFormRef} action={sellFormAction}>
+              <input type="hidden" name="worker_id" value={workerId} />
+              <input type="hidden" name="fragment_count" value={fragmentsToSell} />
+              <input type="hidden" name="fragment_price" value={fragmentPrice} />
+              <Button
+                type="submit"
+                size="lg"
+                disabled={!canSell || isSellPending}
+                onClick={handleSellClick}
+                className="h-12 animate-none px-7 text-base font-bold shadow-md shadow-orange-500/25 ring-2 ring-orange-400/0 transition-all hover:-translate-y-0.5 hover:bg-primary hover:shadow-lg hover:shadow-orange-500/40 hover:ring-orange-400/60 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {isSellPending ? "판매 중..." : "조각 판매하기 →"}
+              </Button>
+            </form>
+          </div>
+          {!canSell && !isSellPending && (
+            <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
+              {totalFragments === 0
+                ? "판매할 조각이 없습니다."
+                : "조각 가격을 입력하면 판매할 수 있습니다."}
+            </p>
+          )}
+          {sellState.error && (
+            <p className="mt-2 text-sm text-red-600 dark:text-red-400">{sellState.error}</p>
+          )}
         </div>
 
-        <div className="mt-3">
+        {/* 2단계: 메소 → 현금 */}
+        <div className="mt-4 rounded-xl bg-slate-50 p-4 dark:bg-slate-800/60">
+          <p className="mb-3 text-sm font-semibold text-slate-600 dark:text-slate-300">
+            현금 정산
+          </p>
           <label className="flex flex-col gap-1 text-sm text-slate-600 dark:text-slate-300">
             인센티브 메소 (부주에게 추가로 지급)
-            <input
+            <Input
               type="text"
               inputMode="numeric"
               value={incentiveMeso === 0 ? "" : formatNumber(incentiveMeso)}
               placeholder="0"
               onChange={(e) => handleMesoInput(e, setIncentiveMeso)}
-              className="w-48 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-orange-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+              className={cn(fieldClass, "w-48")}
             />
           </label>
           {incentiveMeso > 0 && (
@@ -354,38 +486,17 @@ export function SettlementClient({
               {formatKoreanMeso(incentiveMeso)}
             </span>
           )}
-        </div>
 
-        <div className="mt-3 rounded-lg bg-slate-50 p-4 text-sm dark:bg-slate-800/60">
-          <div className="flex flex-wrap items-center gap-2 text-slate-600 dark:text-slate-300">
-            <IconValue icon="/fragment.png" alt="조각" size={16}>
-              {formatNumber(fragmentsToSell)}개 × {formatNumber(fragmentPrice)}
-            </IconValue>
-            <span>=</span>
-            <IconValue icon="/meso.png" alt="메소" size={16}>
-              {formatNumber(pending.grossMeso)}
-            </IconValue>
-          </div>
-          <div className="mt-1 flex flex-wrap items-center gap-2 text-slate-400 dark:text-slate-500">
-            <span>경매장 수수료 ({AUCTION_HOUSE_FEE_RATE * 100}%)</span>
-            <span>− {formatNumber(pending.feeMeso)}</span>
-          </div>
-          <div className="my-2 border-t border-slate-200 dark:border-slate-700" />
-          <div className="flex flex-wrap items-center gap-2 text-slate-600 dark:text-slate-300">
-            <span>조각 판매 실수령</span>
-            <IconValue icon="/meso.png" alt="메소" size={16}>
-              {formatNumber(pending.netMeso)}
-            </IconValue>
-            <span>+</span>
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+            <span>보유 메소</span>
             <IconValue icon="/meso.png" alt="메소" size={16}>
               {formatNumber(totalPureMeso)}
             </IconValue>
-            {pending.incentiveMeso > 0 && (
+            {incentiveMeso > 0 && (
               <>
-                <span>+</span>
-                <span>인센티브</span>
+                <span>+ 인센티브</span>
                 <IconValue icon="/meso.png" alt="메소" size={16}>
-                  {formatNumber(pending.incentiveMeso)}
+                  {formatNumber(incentiveMeso)}
                 </IconValue>
               </>
             )}
@@ -394,6 +505,7 @@ export function SettlementClient({
               총 {formatNumber(pending.totalMeso)} 메소
             </span>
           </div>
+
           <div className="mt-3 flex flex-wrap items-baseline justify-between gap-3">
             <div className="flex items-baseline gap-2">
               <span className="text-slate-500 dark:text-slate-400">총 메소 기준 현금 환산액</span>
@@ -405,20 +517,21 @@ export function SettlementClient({
               <input type="hidden" name="worker_id" value={workerId} />
               <input type="hidden" name="fragment_price" value={fragmentPrice} />
               <input type="hidden" name="cash_rate" value={cashRate} />
-              <input type="hidden" name="fragment_count" value={fragmentsToSell} />
+              {/* 조각은 1단계에서 이미 메소로 전환되므로 정산에는 포함하지 않습니다. */}
+              <input type="hidden" name="fragment_count" value={0} />
               <input type="hidden" name="pure_meso" value={totalPureMeso} />
-              <input type="hidden" name="fee_meso" value={pending.feeMeso} />
+              <input type="hidden" name="fee_meso" value={0} />
               <input type="hidden" name="incentive_meso" value={pending.incentiveMeso} />
               <input type="hidden" name="total_meso" value={pending.totalMeso} />
               <input type="hidden" name="krw_value" value={pending.krwValue} />
-              <button
+              <Button
                 type="submit"
                 disabled={!canSettle || isSettlePending}
                 onClick={handleSettleClick}
-                className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-orange-500 dark:hover:bg-orange-600"
+                className="h-11 bg-slate-900 px-5 text-sm font-semibold text-white transition-all hover:-translate-y-0.5 hover:bg-slate-700 hover:shadow-lg active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
               >
                 {isSettlePending ? "정산 중..." : "이 금액으로 정산하기"}
-              </button>
+              </Button>
             </form>
           </div>
           {settleState.error && (
@@ -447,46 +560,144 @@ export function SettlementClient({
             아직 기록이 없습니다. 위에서 첫 기록을 추가해보세요.
           </p>
         ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100 text-left text-slate-500 dark:border-slate-800 dark:text-slate-400">
+                    <th className="px-5 py-3 font-medium">날짜</th>
+                    <th className="px-5 py-3 font-medium">순수 메소</th>
+                    <th className="px-5 py-3 font-medium">솔 에르다 조각</th>
+                    <th className="px-5 py-3 font-medium"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pagedLogs.map((log) => (
+                    <tr
+                      key={log.id}
+                      className="border-b border-slate-50 last:border-0 dark:border-slate-800/60"
+                    >
+                      <td className="px-5 py-3 text-slate-700 dark:text-slate-300">
+                        {log.log_date}
+                      </td>
+                      <td className="px-5 py-3">
+                        <IconValue icon="/meso.png" alt="메소">
+                          <span className="text-slate-700 dark:text-slate-300">
+                            {formatNumber(log.pure_meso)}
+                          </span>
+                        </IconValue>
+                      </td>
+                      <td className="px-5 py-3">
+                        <IconValue icon="/fragment.png" alt="조각">
+                          <span className="text-slate-700 dark:text-slate-300">
+                            {formatNumber(log.fragment_count)}개
+                          </span>
+                        </IconValue>
+                      </td>
+                      <td className="px-5 py-3 text-right">
+                        <form action={deleteLog.bind(null, log.id, workerId)}>
+                          <button
+                            type="submit"
+                            className="text-xs text-slate-400 hover:text-red-500 dark:text-slate-500 dark:hover:text-red-400"
+                          >
+                            삭제
+                          </button>
+                        </form>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {logPageCount > 1 && (
+              <div className="flex items-center justify-center gap-1 border-t border-slate-100 px-5 py-3 dark:border-slate-800">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={currentLogPage === 0}
+                  onClick={() => setLogPage(currentLogPage - 1)}
+                  className="text-slate-500 disabled:opacity-30 dark:text-slate-400"
+                >
+                  이전
+                </Button>
+                {Array.from({ length: logPageCount }, (_, i) => (
+                  <Button
+                    key={i}
+                    type="button"
+                    variant={i === currentLogPage ? "default" : "ghost"}
+                    size="icon-sm"
+                    onClick={() => setLogPage(i)}
+                    className={cn(
+                      "text-xs",
+                      i !== currentLogPage && "text-slate-500 dark:text-slate-400"
+                    )}
+                  >
+                    {i + 1}
+                  </Button>
+                ))}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={currentLogPage === logPageCount - 1}
+                  onClick={() => setLogPage(currentLogPage + 1)}
+                  className="text-slate-500 disabled:opacity-30 dark:text-slate-400"
+                >
+                  다음
+                </Button>
+              </div>
+            )}
+          </>
+        )}
+      </section>
+
+      {/* 조각 판매 내역 */}
+      {fragmentSales.length > 0 && (
+        <section className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <h2 className="border-b border-slate-100 px-5 py-4 text-sm font-semibold text-slate-500 dark:border-slate-800 dark:text-slate-400">
+            조각 판매 내역 ({fragmentSales.length}건)
+          </h2>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 text-left text-slate-500 dark:border-slate-800 dark:text-slate-400">
-                  <th className="px-5 py-3 font-medium">날짜</th>
-                  <th className="px-5 py-3 font-medium">순수 메소</th>
-                  <th className="px-5 py-3 font-medium">솔 에르다 조각</th>
+                  <th className="px-5 py-3 font-medium">판매 일시</th>
+                  <th className="px-5 py-3 font-medium">판매 수량</th>
+                  <th className="px-5 py-3 font-medium">개당 가격</th>
+                  <th className="px-5 py-3 font-medium">받은 메소</th>
                   <th className="px-5 py-3 font-medium"></th>
                 </tr>
               </thead>
               <tbody>
-                {logs.map((log) => (
+                {fragmentSales.map((s) => (
                   <tr
-                    key={log.id}
+                    key={s.id}
                     className="border-b border-slate-50 last:border-0 dark:border-slate-800/60"
                   >
                     <td className="px-5 py-3 text-slate-700 dark:text-slate-300">
-                      {log.log_date}
+                      {new Date(s.sold_at).toLocaleString("ko-KR")}
                     </td>
                     <td className="px-5 py-3">
-                      <IconValue icon="/meso.png" alt="메소">
+                      <IconValue icon="/fragment.png" alt="조각" size={14}>
                         <span className="text-slate-700 dark:text-slate-300">
-                          {formatNumber(log.pure_meso)}
+                          {formatNumber(s.fragment_count)}개
                         </span>
                       </IconValue>
                     </td>
-                    <td className="px-5 py-3">
-                      <IconValue icon="/fragment.png" alt="조각">
-                        <span className="text-slate-700 dark:text-slate-300">
-                          {formatNumber(log.fragment_count)}개
-                        </span>
-                      </IconValue>
+                    <td className="px-5 py-3 text-slate-500 dark:text-slate-400">
+                      {formatNumber(s.fragment_price)}
+                    </td>
+                    <td className="px-5 py-3 font-semibold text-slate-900 dark:text-slate-100">
+                      +{formatNumber(s.net_meso)}
                     </td>
                     <td className="px-5 py-3 text-right">
-                      <form action={deleteLog.bind(null, log.id, workerId)}>
+                      <form action={deleteFragmentSale.bind(null, s.id, workerId)}>
                         <button
                           type="submit"
                           className="text-xs text-slate-400 hover:text-red-500 dark:text-slate-500 dark:hover:text-red-400"
                         >
-                          삭제
+                          되돌리기
                         </button>
                       </form>
                     </td>
@@ -495,8 +706,8 @@ export function SettlementClient({
               </tbody>
             </table>
           </div>
-        )}
-      </section>
+        </section>
+      )}
 
       {/* 정산 내역 */}
       <section className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
@@ -530,11 +741,13 @@ export function SettlementClient({
                     </td>
                     <td className="px-5 py-3">
                       <div className="flex flex-col gap-0.5">
-                        <IconValue icon="/fragment.png" alt="조각" size={14}>
-                          <span className="text-slate-700 dark:text-slate-300">
-                            {formatNumber(s.fragment_count)}개
-                          </span>
-                        </IconValue>
+                        {s.fragment_count > 0 && (
+                          <IconValue icon="/fragment.png" alt="조각" size={14}>
+                            <span className="text-slate-700 dark:text-slate-300">
+                              {formatNumber(s.fragment_count)}개
+                            </span>
+                          </IconValue>
+                        )}
                         <IconValue icon="/meso.png" alt="메소" size={14}>
                           <span className="text-slate-700 dark:text-slate-300">
                             {formatNumber(s.pure_meso)}

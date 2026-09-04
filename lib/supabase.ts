@@ -28,6 +28,18 @@ export type HuntingLog = {
   updated_at: string;
 };
 
+// 조각을 경매장에 팔아 메소로 전환한 기록. (현금 정산과는 별개 단계)
+export type FragmentSale = {
+  id: number;
+  worker_id: number;
+  sold_at: string;
+  fragment_count: number;
+  fragment_price: number;
+  gross_meso: number;
+  fee_meso: number;
+  net_meso: number;
+};
+
 export type Settlement = {
   id: number;
   worker_id: number;

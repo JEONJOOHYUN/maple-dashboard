@@ -2,6 +2,7 @@
 
 import { revalidatePath, updateTag } from "next/cache";
 import { supabase } from "@/lib/supabase";
+import { AUCTION_HOUSE_FEE_RATE } from "@/lib/constants";
 import { workerTag } from "@/lib/queries";
 
 export type UpsertLogState = {
@@ -80,6 +81,62 @@ export async function deleteLog(id: number, workerId: number) {
   revalidatePath("/admin");
 }
 
+export type SellFragmentsState = {
+  error?: string;
+  successAt?: number;
+};
+
+/**
+ * 조각을 경매장 시세로 팔아 메소로 전환합니다.
+ * 판매한 조각만큼 누적 조각이 줄고, 수수료를 뗀 실수령 메소가 누적 메소에 더해집니다.
+ * (현금 정산은 settleUp이 따로 담당합니다.)
+ */
+export async function sellFragments(
+  _prevState: SellFragmentsState,
+  formData: FormData
+): Promise<SellFragmentsState> {
+  const workerId = Number(formData.get("worker_id"));
+  const fragmentCount = Number(formData.get("fragment_count"));
+  const fragmentPrice = Number(formData.get("fragment_price"));
+
+  if (!Number.isFinite(workerId) || workerId <= 0) {
+    return { error: "부주를 선택해주세요." };
+  }
+  if (!Number.isFinite(fragmentCount) || fragmentCount <= 0) {
+    return { error: "판매할 조각 개수를 입력해주세요." };
+  }
+  if (!Number.isFinite(fragmentPrice) || fragmentPrice <= 0) {
+    return { error: "조각 가격을 입력해주세요." };
+  }
+
+  const grossMeso = Math.round(fragmentPrice * fragmentCount);
+  const feeMeso = Math.round(grossMeso * AUCTION_HOUSE_FEE_RATE);
+  const netMeso = grossMeso - feeMeso;
+
+  const { error } = await supabase.from("fragment_sales").insert({
+    worker_id: workerId,
+    fragment_count: Math.round(fragmentCount),
+    fragment_price: Math.round(fragmentPrice),
+    gross_meso: grossMeso,
+    fee_meso: feeMeso,
+    net_meso: netMeso,
+  });
+
+  if (error) {
+    return { error: `판매 저장에 실패했습니다: ${error.message}` };
+  }
+
+  updateTag(workerTag(workerId));
+  revalidatePath("/admin");
+  return { successAt: Date.now() };
+}
+
+export async function deleteFragmentSale(id: number, workerId: number) {
+  await supabase.from("fragment_sales").delete().eq("id", id);
+  updateTag(workerTag(workerId));
+  revalidatePath("/admin");
+}
+
 export type SettleState = {
   error?: string;
   successAt?: number;
@@ -122,16 +179,17 @@ export async function settleUp(
     return { error: "정산할 미정산 잔액이 없습니다." };
   }
 
+  // 모든 금액 컬럼이 bigint라 소수점이 있으면 저장에 실패하므로 반올림합니다.
   const { error } = await supabase.from("settlements").insert({
     worker_id: workerId,
-    fragment_price: fragmentPrice,
-    cash_rate: cashRate,
-    fragment_count: fragmentCount,
-    pure_meso: pureMeso,
-    fee_meso: feeMeso,
-    incentive_meso: incentiveMeso,
-    total_meso: totalMeso,
-    krw_value: krwValue,
+    fragment_price: Math.round(fragmentPrice),
+    cash_rate: Math.round(cashRate),
+    fragment_count: Math.round(fragmentCount),
+    pure_meso: Math.round(pureMeso),
+    fee_meso: Math.round(feeMeso),
+    incentive_meso: Math.round(incentiveMeso),
+    total_meso: Math.round(totalMeso),
+    krw_value: Math.round(krwValue),
   });
 
   if (error) {
