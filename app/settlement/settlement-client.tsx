@@ -606,6 +606,35 @@ export function SettlementClient({
                       </td>
                     </tr>
                   ))}
+                  {/* 마지막 페이지에서도 표 높이가 5줄로 유지되도록, 실제 행과
+                      같은 구조의 빈 행으로 채웁니다(visibility만 숨김). */}
+                  {logPageCount > 1 &&
+                    Array.from({ length: LOGS_PER_PAGE - pagedLogs.length }, (_, i) => (
+                      <tr
+                        key={`log-filler-${i}`}
+                        aria-hidden
+                        className="invisible border-b border-slate-50 last:border-0 dark:border-slate-800/60"
+                      >
+                        <td className="px-5 py-3">0000-00-00</td>
+                        <td className="px-5 py-3">
+                          <IconValue icon="/meso.png" alt="">
+                            <span>0</span>
+                          </IconValue>
+                        </td>
+                        <td className="px-5 py-3">
+                          <IconValue icon="/fragment.png" alt="">
+                            <span>0개</span>
+                          </IconValue>
+                        </td>
+                        <td className="px-5 py-3 text-right">
+                          <form>
+                            <button type="button" tabIndex={-1} className="text-xs">
+                              삭제
+                            </button>
+                          </form>
+                        </td>
+                      </tr>
+                    ))}
                 </tbody>
               </table>
             </div>
