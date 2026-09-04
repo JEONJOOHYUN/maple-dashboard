@@ -43,7 +43,7 @@ export function WorkerTabs({
             key={worker.id}
             type="button"
             onClick={() => selectWorker(worker.id)}
-            className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+            className={`h-9 rounded-full border border-transparent px-4 text-sm font-medium transition-colors ${
               active
                 ? "bg-orange-500 text-white"
                 : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700"
@@ -65,19 +65,19 @@ export function WorkerTabs({
             name="name"
             autoFocus
             placeholder="이름"
-            className="w-24 rounded-full border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-orange-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+            className="h-9 w-24 rounded-full border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-orange-400 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
           />
           <button
             type="submit"
             disabled={isPending}
-            className="rounded-full bg-orange-500 px-3 py-1.5 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50"
+            className="h-9 rounded-full border border-transparent bg-orange-500 px-3 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50"
           >
             추가
           </button>
           <button
             type="button"
             onClick={() => setAdding(false)}
-            className="rounded-full px-2 py-1.5 text-sm text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+            className="h-9 rounded-full border border-transparent px-3 text-sm text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
           >
             취소
           </button>
@@ -86,7 +86,7 @@ export function WorkerTabs({
         <button
           type="button"
           onClick={() => setAdding(true)}
-          className="rounded-full border border-dashed border-slate-300 px-4 py-1.5 text-sm text-slate-500 hover:border-orange-400 hover:text-orange-600 dark:border-slate-700 dark:text-slate-400 dark:hover:border-orange-400 dark:hover:text-orange-400"
+          className="h-9 rounded-full border border-dashed border-slate-300 px-4 text-sm text-slate-500 hover:border-orange-400 hover:text-orange-600 dark:border-slate-700 dark:text-slate-400 dark:hover:border-orange-400 dark:hover:text-orange-400"
         >
           + 부주 추가
         </button>

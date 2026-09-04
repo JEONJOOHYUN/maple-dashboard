@@ -3,6 +3,16 @@
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityCalendar, type DayActivity } from "@/components/activity-calendar";
 import { IconValue } from "@/components/icon-value";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AUCTION_HOUSE_FEE_RATE } from "@/lib/constants";
@@ -30,6 +40,13 @@ const initialSettleState: SettleState = {};
 const LOGS_PER_PAGE = 5;
 
 // 기존 디자인(slate 팔레트)을 유지하면서 shadcn Input을 쓰기 위한 공통 클래스입니다.
+// 버튼 크기를 3단계로 통일합니다.
+// - ctaButtonClass: 섹션의 대표 실행 버튼 (조각 판매하기 / 이 금액으로 정산하기)
+// - formButtonClass: 폼 안의 일반 버튼 (기록 추가 / 수정하기)
+const ctaButtonClass =
+  "h-11 px-6 text-sm font-semibold transition-all hover:-translate-y-0.5 hover:shadow-lg active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40";
+const formButtonClass = "h-10 px-4 text-sm font-semibold";
+
 const fieldClass =
   "h-10 rounded-lg border-slate-300 bg-white px-3 text-sm text-slate-900 focus-visible:border-orange-400 focus-visible:ring-orange-400/30 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100";
 
@@ -113,6 +130,8 @@ export function SettlementClient({
   const [sellFragmentInput, setSellFragmentInput] = useState<number | "">("");
   const [incentiveMeso, setIncentiveMeso] = useState(0);
   const [logPage, setLogPage] = useState(0);
+  // 브라우저 기본 confirm 대신 테마에 맞는 모달로 확인받습니다.
+  const [confirmTarget, setConfirmTarget] = useState<null | "sell" | "settle">(null);
 
   const fragmentPrice = (fragmentPriceMan === "" ? 0 : fragmentPriceMan) * 10_000;
   const cashRate = cashRateInput === "" ? 0 : cashRateInput;
@@ -198,32 +217,10 @@ export function SettlementClient({
     currentLogPage * LOGS_PER_PAGE + LOGS_PER_PAGE
   );
 
-  function handleSellClick(e: React.MouseEvent<HTMLButtonElement>) {
-    e.preventDefault();
-    const confirmed = window.confirm(
-      `조각 ${formatNumber(fragmentsToSell)}개를 개당 ${formatNumber(
-        fragmentPrice
-      )} 메소에 판매할까요?\n수수료 ${
-        AUCTION_HOUSE_FEE_RATE * 100
-      }%를 뗀 ${formatNumber(sale.netMeso)} 메소가 누적 순수 메소에 더해집니다.`
-    );
-    if (confirmed) {
-      sellFormRef.current?.requestSubmit();
-    }
-  }
-
-  function handleSettleClick(e: React.MouseEvent<HTMLButtonElement>) {
-    e.preventDefault();
-    const incentiveNote =
-      incentiveMeso > 0 ? ` (인센티브 ${formatNumber(incentiveMeso)}메소 포함)` : "";
-    const confirmed = window.confirm(
-      `보유 메소 ${formatNumber(pending.totalMeso)}메소를 ${formatKrw(
-        pending.krwValue
-      )}으로 정산 처리할까요?${incentiveNote}\n정산 후에는 누적 메소에서 이 금액이 빠지고, 정산 내역에 기록됩니다.`
-    );
-    if (confirmed) {
-      settleFormRef.current?.requestSubmit();
-    }
+  function handleConfirm() {
+    if (confirmTarget === "sell") sellFormRef.current?.requestSubmit();
+    if (confirmTarget === "settle") settleFormRef.current?.requestSubmit();
+    setConfirmTarget(null);
   }
 
   return (
@@ -312,7 +309,10 @@ export function SettlementClient({
             type="button"
             variant="outline"
             onClick={isEditingLog ? resetLogForm : handleEditClick}
-            className="h-10 border-slate-300 px-4 text-sm font-medium text-slate-600 hover:border-orange-400 hover:text-orange-600 dark:border-slate-700 dark:text-slate-300 dark:hover:border-orange-400 dark:hover:text-orange-400"
+            className={cn(
+              formButtonClass,
+              "border-slate-300 text-slate-600 hover:border-orange-400 hover:text-orange-600 dark:border-slate-700 dark:text-slate-300 dark:hover:border-orange-400 dark:hover:text-orange-400"
+            )}
           >
             {isEditingLog ? "취소" : "수정하기"}
           </Button>
@@ -320,7 +320,7 @@ export function SettlementClient({
             type="submit"
             disabled={isLogPending}
             className={cn(
-              "h-10 px-4 text-sm font-semibold",
+              formButtonClass,
               isEditingLog &&
                 "bg-slate-900 text-white hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600"
             )}
@@ -443,11 +443,10 @@ export function SettlementClient({
               <input type="hidden" name="fragment_count" value={fragmentsToSell} />
               <input type="hidden" name="fragment_price" value={fragmentPrice} />
               <Button
-                type="submit"
-                size="lg"
+                type="button"
                 disabled={!canSell || isSellPending}
-                onClick={handleSellClick}
-                className="h-12 animate-none px-7 text-base font-bold shadow-md shadow-orange-500/25 ring-2 ring-orange-400/0 transition-all hover:-translate-y-0.5 hover:bg-primary hover:shadow-lg hover:shadow-orange-500/40 hover:ring-orange-400/60 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40"
+                onClick={() => setConfirmTarget("sell")}
+                className={cn(ctaButtonClass, "shadow-md shadow-orange-500/25 hover:shadow-orange-500/40")}
               >
                 {isSellPending ? "판매 중..." : "조각 판매하기 →"}
               </Button>
@@ -471,7 +470,7 @@ export function SettlementClient({
             현금 정산
           </p>
           <label className="flex flex-col gap-1 text-sm text-slate-600 dark:text-slate-300">
-            인센티브 메소 (부주에게 추가로 지급)
+            인센티브 메소
             <Input
               type="text"
               inputMode="numeric"
@@ -525,10 +524,13 @@ export function SettlementClient({
               <input type="hidden" name="total_meso" value={pending.totalMeso} />
               <input type="hidden" name="krw_value" value={pending.krwValue} />
               <Button
-                type="submit"
+                type="button"
                 disabled={!canSettle || isSettlePending}
-                onClick={handleSettleClick}
-                className="h-11 bg-slate-900 px-5 text-sm font-semibold text-white transition-all hover:-translate-y-0.5 hover:bg-slate-700 hover:shadow-lg active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
+                onClick={() => setConfirmTarget("settle")}
+                className={cn(
+                  ctaButtonClass,
+                  "bg-slate-900 text-white shadow-md shadow-slate-900/20 hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
+                )}
               >
                 {isSettlePending ? "정산 중..." : "이 금액으로 정산하기"}
               </Button>
@@ -812,6 +814,62 @@ export function SettlementClient({
           </div>
         )}
       </section>
+
+      {/* 판매/정산 확인 모달 (브라우저 기본 confirm 대체) */}
+      <AlertDialog
+        open={confirmTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmTarget(null);
+        }}
+      >
+        <AlertDialogContent className="border border-slate-200 bg-white text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirmTarget === "sell" ? "조각을 판매할까요?" : "이 금액으로 정산할까요?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-slate-500 dark:text-slate-400">
+              {confirmTarget === "sell" ? (
+                <>
+                  조각 {formatNumber(fragmentsToSell)}개를 개당{" "}
+                  {formatNumber(fragmentPrice)} 메소에 판매합니다.
+                  <br />
+                  수수료 {AUCTION_HOUSE_FEE_RATE * 100}%를 뗀{" "}
+                  <span className="font-semibold text-orange-600 dark:text-orange-400">
+                    {formatNumber(sale.netMeso)} 메소
+                  </span>
+                  가 누적 순수 메소에 더해집니다.
+                </>
+              ) : (
+                <>
+                  보유 메소 {formatNumber(pending.totalMeso)}메소를{" "}
+                  <span className="font-semibold text-orange-600 dark:text-orange-400">
+                    {formatKrw(pending.krwValue)}
+                  </span>
+                  으로 정산합니다.
+                  {incentiveMeso > 0 && (
+                    <> (인센티브 {formatNumber(incentiveMeso)}메소 포함)</>
+                  )}
+                  <br />
+                  정산 후에는 누적 메소에서 이 금액이 빠지고, 정산 내역에 기록됩니다.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="h-10 px-4 text-sm">취소</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirm}
+              className={cn(
+                "h-10 px-4 text-sm font-semibold",
+                confirmTarget === "settle" &&
+                  "bg-slate-900 text-white hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
+              )}
+            >
+              {confirmTarget === "sell" ? "판매하기" : "정산하기"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
