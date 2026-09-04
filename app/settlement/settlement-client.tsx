@@ -39,6 +39,11 @@ const initialSettleState: SettleState = {};
 
 const LOGS_PER_PAGE = 5;
 
+/** 확인 모달에 표시할 내용 (열 때 고정되는 스냅샷) */
+type ConfirmInfo =
+  | { kind: "sell"; fragmentCount: number; fragmentPrice: number; netMeso: number }
+  | { kind: "settle"; totalMeso: number; krwValue: number; incentiveMeso: number };
+
 // 기존 디자인(slate 팔레트)을 유지하면서 shadcn Input을 쓰기 위한 공통 클래스입니다.
 // 버튼 크기를 3단계로 통일합니다.
 // - ctaButtonClass: 섹션의 대표 실행 버튼 (조각 판매하기 / 이 금액으로 정산하기)
@@ -131,7 +136,11 @@ export function SettlementClient({
   const [incentiveMeso, setIncentiveMeso] = useState(0);
   const [logPage, setLogPage] = useState(0);
   // 브라우저 기본 confirm 대신 테마에 맞는 모달로 확인받습니다.
-  const [confirmTarget, setConfirmTarget] = useState<null | "sell" | "settle">(null);
+  // 닫힘 애니메이션이 끝날 때까지 모달이 화면에 남아 있으므로, 표시할 내용은
+  // 열 때 스냅샷으로 고정하고 닫을 때는 open만 false로 바꿉니다.
+  // (그렇지 않으면 취소 직후 다른 쪽 모달 내용이 잠깐 스쳐 보입니다)
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmInfo, setConfirmInfo] = useState<ConfirmInfo | null>(null);
 
   const fragmentPrice = (fragmentPriceMan === "" ? 0 : fragmentPriceMan) * 10_000;
   const cashRate = cashRateInput === "" ? 0 : cashRateInput;
@@ -217,10 +226,30 @@ export function SettlementClient({
     currentLogPage * LOGS_PER_PAGE + LOGS_PER_PAGE
   );
 
+  function openSellConfirm() {
+    setConfirmInfo({
+      kind: "sell",
+      fragmentCount: fragmentsToSell,
+      fragmentPrice,
+      netMeso: sale.netMeso,
+    });
+    setConfirmOpen(true);
+  }
+
+  function openSettleConfirm() {
+    setConfirmInfo({
+      kind: "settle",
+      totalMeso: pending.totalMeso,
+      krwValue: pending.krwValue,
+      incentiveMeso: pending.incentiveMeso,
+    });
+    setConfirmOpen(true);
+  }
+
   function handleConfirm() {
-    if (confirmTarget === "sell") sellFormRef.current?.requestSubmit();
-    if (confirmTarget === "settle") settleFormRef.current?.requestSubmit();
-    setConfirmTarget(null);
+    if (confirmInfo?.kind === "sell") sellFormRef.current?.requestSubmit();
+    if (confirmInfo?.kind === "settle") settleFormRef.current?.requestSubmit();
+    setConfirmOpen(false);
   }
 
   return (
@@ -445,7 +474,7 @@ export function SettlementClient({
               <Button
                 type="button"
                 disabled={!canSell || isSellPending}
-                onClick={() => setConfirmTarget("sell")}
+                onClick={openSellConfirm}
                 className={cn(ctaButtonClass, "shadow-md shadow-orange-500/25 hover:shadow-orange-500/40")}
               >
                 {isSellPending ? "판매 중..." : "조각 판매하기 →"}
@@ -526,10 +555,11 @@ export function SettlementClient({
               <Button
                 type="button"
                 disabled={!canSettle || isSettlePending}
-                onClick={() => setConfirmTarget("settle")}
+                onClick={openSettleConfirm}
                 className={cn(
                   ctaButtonClass,
-                  "bg-slate-900 text-white shadow-md shadow-slate-900/20 hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
+                  // 조각 판매(orange-500)보다 한 톤 진하게 해서 2단계임을 구분합니다.
+                  "bg-orange-600 text-white shadow-md shadow-orange-600/25 hover:bg-orange-700 hover:shadow-orange-600/40 dark:bg-orange-600 dark:hover:bg-orange-700"
                 )}
               >
                 {isSettlePending ? "정산 중..." : "이 금액으로 정산하기"}
@@ -816,42 +846,39 @@ export function SettlementClient({
       </section>
 
       {/* 판매/정산 확인 모달 (브라우저 기본 confirm 대체) */}
-      <AlertDialog
-        open={confirmTarget !== null}
-        onOpenChange={(open) => {
-          if (!open) setConfirmTarget(null);
-        }}
-      >
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent className="border border-slate-200 bg-white text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {confirmTarget === "sell" ? "조각을 판매할까요?" : "이 금액으로 정산할까요?"}
+              {confirmInfo?.kind === "sell" ? "조각을 판매할까요?" : "이 금액으로 정산할까요?"}
             </AlertDialogTitle>
             <AlertDialogDescription className="text-slate-500 dark:text-slate-400">
-              {confirmTarget === "sell" ? (
+              {confirmInfo?.kind === "sell" ? (
                 <>
-                  조각 {formatNumber(fragmentsToSell)}개를 개당{" "}
-                  {formatNumber(fragmentPrice)} 메소에 판매합니다.
+                  조각 {formatNumber(confirmInfo.fragmentCount)}개를 개당{" "}
+                  {formatNumber(confirmInfo.fragmentPrice)} 메소에 판매합니다.
                   <br />
                   수수료 {AUCTION_HOUSE_FEE_RATE * 100}%를 뗀{" "}
                   <span className="font-semibold text-orange-600 dark:text-orange-400">
-                    {formatNumber(sale.netMeso)} 메소
+                    {formatNumber(confirmInfo.netMeso)} 메소
                   </span>
                   가 누적 순수 메소에 더해집니다.
                 </>
               ) : (
-                <>
-                  보유 메소 {formatNumber(pending.totalMeso)}메소를{" "}
-                  <span className="font-semibold text-orange-600 dark:text-orange-400">
-                    {formatKrw(pending.krwValue)}
-                  </span>
-                  으로 정산합니다.
-                  {incentiveMeso > 0 && (
-                    <> (인센티브 {formatNumber(incentiveMeso)}메소 포함)</>
-                  )}
-                  <br />
-                  정산 후에는 누적 메소에서 이 금액이 빠지고, 정산 내역에 기록됩니다.
-                </>
+                confirmInfo && (
+                  <>
+                    보유 메소 {formatNumber(confirmInfo.totalMeso)}메소를{" "}
+                    <span className="font-semibold text-orange-600 dark:text-orange-400">
+                      {formatKrw(confirmInfo.krwValue)}
+                    </span>
+                    으로 정산합니다.
+                    {confirmInfo.incentiveMeso > 0 && (
+                      <> (인센티브 {formatNumber(confirmInfo.incentiveMeso)}메소 포함)</>
+                    )}
+                    <br />
+                    정산 후에는 누적 메소에서 이 금액이 빠지고, 정산 내역에 기록됩니다.
+                  </>
+                )
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -861,11 +888,11 @@ export function SettlementClient({
               onClick={handleConfirm}
               className={cn(
                 "h-10 px-4 text-sm font-semibold",
-                confirmTarget === "settle" &&
-                  "bg-slate-900 text-white hover:bg-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
+                confirmInfo?.kind === "settle" &&
+                  "bg-orange-600 text-white hover:bg-orange-700 dark:bg-orange-600 dark:hover:bg-orange-700"
               )}
             >
-              {confirmTarget === "sell" ? "판매하기" : "정산하기"}
+              {confirmInfo?.kind === "sell" ? "판매하기" : "정산하기"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
