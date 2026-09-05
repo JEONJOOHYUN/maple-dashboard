@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { IconValue } from "@/components/icon-value";
+import { todayInSeoul } from "@/lib/date";
 import { formatCompactMeso, formatNumber } from "@/lib/format";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
@@ -22,12 +23,13 @@ export function ActivityCalendar({
 }: {
   logsByDate: Map<string, DayActivity>;
 }) {
-  const today = new Date();
-  const [cursor, setCursor] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
+  // 서버(UTC)와 브라우저(KST)가 같은 "오늘"을 보도록 한국 시간 기준으로 계산합니다.
+  const todayKey = todayInSeoul();
+  const [todayYear, todayMonth] = todayKey.split("-").map(Number);
+  const [cursor, setCursor] = useState(() => new Date(todayYear, todayMonth - 1, 1));
 
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
-  const todayKey = toDateKey(today.getFullYear(), today.getMonth(), today.getDate());
 
   const { weeks, activeCount, monthPureMeso, monthFragmentCount } = useMemo(() => {
     const firstWeekday = new Date(year, month, 1).getDay();

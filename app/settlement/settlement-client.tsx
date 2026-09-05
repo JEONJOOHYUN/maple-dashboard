@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { AUCTION_HOUSE_FEE_RATE } from "@/lib/constants";
 import { formatKoreanMeso, formatNumber, formatKrw } from "@/lib/format";
 import { handleMesoInput } from "@/lib/meso-input";
+import { todayInSeoul } from "@/lib/date";
 import { computeSettlement } from "@/lib/settlement-math";
 import type { FragmentSale, HuntingLog, Settlement } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
@@ -55,10 +56,6 @@ const formButtonClass = "h-10 px-4 text-sm font-semibold";
 const fieldClass =
   "h-10 rounded-lg border-slate-300 bg-white px-3 text-sm text-slate-900 focus-visible:border-orange-400 focus-visible:ring-orange-400/30 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100";
 
-function todayString() {
-  return new Date().toISOString().slice(0, 10);
-}
-
 /** number | "" 상태를 쓰는 숫자 입력의 onChange 핸들러 (빈 칸을 0으로 되돌리지 않습니다) */
 function numberInputHandler(setter: (value: number | "") => void) {
   return (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -79,14 +76,14 @@ export function SettlementClient({
   const [logState, logFormAction, isLogPending] = useActionState(upsertLog, initialLogState);
   const logFormRef = useRef<HTMLFormElement>(null);
 
-  const [logDateInput, setLogDateInput] = useState(() => todayString());
+  const [logDateInput, setLogDateInput] = useState(() => todayInSeoul());
   const [logPureMesoInput, setLogPureMesoInput] = useState<number | "">("");
   const [logFragmentInput, setLogFragmentInput] = useState<number | "">("");
   const [isEditingLog, setIsEditingLog] = useState(false);
   const [editNotice, setEditNotice] = useState<string | null>(null);
 
   function resetLogForm() {
-    setLogDateInput(todayString());
+    setLogDateInput(todayInSeoul());
     setLogPureMesoInput("");
     setLogFragmentInput("");
     setIsEditingLog(false);
