@@ -18,9 +18,9 @@ import { Input } from "@/components/ui/input";
 import { AUCTION_HOUSE_FEE_RATE } from "@/lib/constants";
 import { formatKoreanMeso, formatNumber, formatKrw } from "@/lib/format";
 import { handleMesoInput } from "@/lib/meso-input";
-import { todayInSeoul } from "@/lib/date";
+import { formatKstDateTime, todayInSeoul } from "@/lib/date";
 import { computeSettlement } from "@/lib/settlement-math";
-import type { FragmentSale, HuntingLog, Settlement } from "@/lib/supabase";
+import type { FragmentSale, HuntingLog, LogEntry, Settlement } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import {
   deleteFragmentSale,
@@ -65,11 +65,13 @@ function numberInputHandler(setter: (value: number | "") => void) {
 export function SettlementClient({
   workerId,
   logs,
+  logEntries,
   fragmentSales,
   settlements,
 }: {
   workerId: number;
   logs: HuntingLog[];
+  logEntries: LogEntry[];
   fragmentSales: FragmentSale[];
   settlements: Settlement[];
 }) {
@@ -710,6 +712,57 @@ export function SettlementClient({
         )}
       </section>
 
+      {/* 입력 내역 (트리거가 남긴 변경분) */}
+      {logEntries.length > 0 && (
+        <section className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <h2 className="border-b border-slate-100 px-5 py-4 text-sm font-semibold text-slate-500 dark:border-slate-800 dark:text-slate-400">
+            입력 내역 (최근 {logEntries.length}건)
+          </h2>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-100 text-left text-slate-500 dark:border-slate-800 dark:text-slate-400">
+                  <th className="px-5 py-3 font-medium">입력 시각</th>
+                  <th className="px-5 py-3 font-medium">기록 날짜</th>
+                  <th className="px-5 py-3 font-medium">메소 변동</th>
+                  <th className="px-5 py-3 font-medium">조각 변동</th>
+                  <th className="px-5 py-3 font-medium">구분</th>
+                </tr>
+              </thead>
+              <tbody>
+                {logEntries.map((entry) => (
+                  <tr
+                    key={entry.id}
+                    className="border-b border-slate-50 last:border-0 dark:border-slate-800/60"
+                  >
+                    <td className="px-5 py-3 whitespace-nowrap text-slate-700 dark:text-slate-300">
+                      {formatKstDateTime(entry.created_at)}
+                    </td>
+                    <td className="px-5 py-3 text-slate-500 dark:text-slate-400">
+                      {entry.log_date}
+                    </td>
+                    <td className="px-5 py-3">
+                      <DeltaValue icon="/meso.png" alt="메소" value={entry.delta_pure_meso} />
+                    </td>
+                    <td className="px-5 py-3">
+                      <DeltaValue
+                        icon="/fragment.png"
+                        alt="조각"
+                        value={entry.delta_fragment_count}
+                        suffix="개"
+                      />
+                    </td>
+                    <td className="px-5 py-3 text-xs text-slate-400 dark:text-slate-500">
+                      {OPERATION_LABEL[entry.operation]}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
       {/* 조각 판매 내역 */}
       {fragmentSales.length > 0 && (
         <section className="rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
@@ -895,6 +948,44 @@ export function SettlementClient({
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+const OPERATION_LABEL: Record<LogEntry["operation"], string> = {
+  insert: "신규",
+  update: "수정",
+  delete: "삭제",
+};
+
+/** 변동분을 +/- 부호와 색으로 표시합니다. (0이면 회색 하이픈) */
+function DeltaValue({
+  icon,
+  alt,
+  value,
+  suffix = "",
+}: {
+  icon: string;
+  alt: string;
+  value: number;
+  suffix?: string;
+}) {
+  if (value === 0) {
+    return <span className="text-slate-300 dark:text-slate-600">—</span>;
+  }
+  return (
+    <IconValue icon={icon} alt={alt} size={14}>
+      <span
+        className={
+          value > 0
+            ? "text-slate-700 dark:text-slate-300"
+            : "text-red-500 dark:text-red-400"
+        }
+      >
+        {value > 0 ? "+" : "−"}
+        {formatNumber(Math.abs(value))}
+        {suffix}
+      </span>
+    </IconValue>
   );
 }
 

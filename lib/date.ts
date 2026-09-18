@@ -9,3 +9,18 @@
 export function todayInSeoul(): string {
   return new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul" }).format(new Date());
 }
+
+/**
+ * ISO 시각 문자열을 한국 시간 기준 "9/18 14:34" 형태로 표시합니다.
+ * 시간대를 명시해 서버(UTC)와 브라우저(KST)가 같은 결과를 내도록 합니다.
+ */
+export function formatKstDateTime(iso: string): string {
+  return new Intl.DateTimeFormat("ko-KR", {
+    timeZone: "Asia/Seoul",
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(iso));
+}

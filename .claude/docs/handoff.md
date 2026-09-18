@@ -166,6 +166,11 @@ create policy "Allow all access to settlements" on settlements for all using (tr
   "수정하기" 버튼으로 명시적 덮어쓰기 모드 전환 가능.
 - `fragment_sales`: **조각 → 메소 전환** 기록. 경매장 시세로 조각을 팔면 한 행이 쌓이고,
   판매 수량만큼 누적 조각이 줄고 수수료 3%를 뗀 `net_meso`만큼 누적 순수 메소가 늘어납니다.
+- `log_entries`: 일일 기록의 변경 이력. `hunting_logs`에 트리거(`hunting_logs_audit`)를
+  걸어 INSERT/UPDATE/DELETE마다 변동분(delta)을 남깁니다. 날짜당 한 행에 값을 더하거나
+  덮어쓰는 구조라 "언제 얼마를 더했는지"가 남지 않던 문제를 보완한 것이며, 앱·관리자
+  페이지·SQL 어디서 바꾸든 모두 기록됩니다. 조회 실패해도 페이지가 깨지지 않도록
+  `getWorkerData`에서 비치명적으로 처리합니다.
 - `settlements`: **메소 → 현금 정산** 스냅샷 — 그 시점의 시세/현금화 비율/정산한 순수 메소/
   인센티브/합계 메소/KRW 환산액을 기록. `fragment_count`, `fee_meso`는 조각 판매가 분리되기
   전(2026-09-04 이전) 행과의 호환용이며 새 정산은 0으로 저장됩니다.

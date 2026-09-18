@@ -34,7 +34,7 @@ export default async function SettlementPage({
   const selectedWorker =
     workers.find((w) => w.id === requestedId) ?? workers[0];
 
-  const { logs, fragmentSales, settlements, error } = await getWorkerData(
+  const { logs, logEntries, fragmentSales, settlements, error } = await getWorkerData(
     selectedWorker.id
   );
 
@@ -53,6 +53,7 @@ export default async function SettlementPage({
         key={selectedWorker.id}
         workerId={selectedWorker.id}
         logs={logs}
+        logEntries={logEntries}
         fragmentSales={fragmentSales}
         settlements={settlements}
       />
