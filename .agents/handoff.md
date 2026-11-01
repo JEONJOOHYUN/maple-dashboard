@@ -11,14 +11,15 @@
 
 > 지금 상태·결정·함정만 둔다. 디렉터리 구조·DB 스키마는 [structure.md](structure.md), 작업 규칙은 [../CLAUDE.md](../CLAUDE.md).
 
-## 현재 상태 (2026-10-29)
+## 현재 상태 (2026-11-01)
 
-- 마지막 커밋 `cb497ac`(2026-09-18, 일일 기록 입력 이력 `log_entries`) 이후 코드 변경 없음. 진행 중인 일 없음.
+- 마지막 커밋 `cb497ac`(2026-09-18, 일일 기록 입력 이력 `log_entries`) 이후 기능 변경 없음. 진행 중인 일 없음.
+- 2026-11-01 Next 16.3.1 → 16.4.3 + `npm audit fix`(Next.js 10월 보안 업데이트(2026-10-14: Server Actions DoS·이미지 SVG RCE·use cache RCE, 16.4.1 에서 수정) — 이 앱은 Server Actions 를 써서 해당). 남은 audit 경고는 보통·낮음뿐(대부분 shadcn CLI 경유).
 - 2026-10-29 문서 위치 통일: 이 파일은 `.claude/docs/handoff.md` 에서 옮겨 옴.
 
 ## 기술 스택
 
-- Next.js 16.3.1 (App Router, Turbopack), React 19.2.8, TypeScript
+- Next.js 16.4.3 (App Router, Turbopack), React 19.2.8, TypeScript
 - Tailwind CSS v4 (`@custom-variant dark (&:where(.dark, .dark *))`), `next-themes` (다크모드)
 - **shadcn/ui** (style `base-nova`, Base UI 기반) — `components.json`, `components/ui/*`에 소스가
   복사되는 방식. 현재 `Button`, `Input`을 정산 계산기/일일 기록 폼에서 사용.
