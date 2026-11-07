@@ -31,3 +31,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# untouched third-party originals kept locally for reference (license review in .agents/project-spec.md 4-7)
+/vendor/

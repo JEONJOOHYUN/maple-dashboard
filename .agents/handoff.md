@@ -14,7 +14,7 @@
 ## 현재 상태 (2026-11-08)
 
 - 코드: 마지막 기능 커밋 `cb497ac`(2026-09-18, 일일 기록 입력 이력 `log_entries`) 이후 기능 변경 없음.
-- 진행 중: 전면 개편 **디자인·명세 단계**(아래). `.agents/` 문서 변경(design.md·project-spec.md·handoff.md)과 `vendor/roulette/` 는 아직 커밋 안 함.
+- 진행 중: 전면 개편 **디자인·명세 단계**(아래). `.agents/` 문서는 `4fb4de3`(2026-11-08)로 커밋, 푸시 안 함. `vendor/` 는 `.gitignore`·tsconfig `exclude`·eslint `globalIgnores` 로 뺌(2026-11-08) — 원본은 이 PC 에만 두는 참고용, 광고 코드·인물 그림을 공개 저장소에 올리지 않으려고.
 - 2026-11-01 Next 16.3.1 → 16.4.3 + `npm audit fix`(Next.js 10월 보안 업데이트(2026-10-14: Server Actions DoS·이미지 SVG RCE·use cache RCE, 16.4.1 에서 수정) — 이 앱은 Server Actions 를 써서 해당). 남은 audit 경고는 보통·낮음뿐(대부분 shadcn CLI 경유).
 - 2026-10-29 문서 위치 통일: 이 파일은 `.claude/docs/handoff.md` 에서 옮겨 옴.
 
@@ -30,10 +30,10 @@
   숙제 현황 = 캐릭터 수 요약 + 캐릭터 목록(최대 36) → 선택 캐릭터의 보스 표(파티원·가격)·일일·주간, 보스 수익·가격 설정,
   강화 기록 5가지 보기, 아이콘 = lucide-react(캐릭터·아이템 그림만 Open API 이미지), 달력 월요일 시작.
 - **다음 할 일**(2026-11-08 기준): ① 사용자가 design.md 의 대기 목록에서 고칠 번호 고르기 ② 명세 문구 정리(§1·§2 API 키 로그인) ③ A안으로 화면 코드 시작
-  (코드 전에 `node_modules/next/dist/docs/` 확인, shadcn 먼저, Supabase 는 서버에서만). 문서 변경은 아직 커밋 안 함.
+  (코드 전에 `node_modules/next/dist/docs/` 확인, shadcn 먼저, Supabase 는 서버에서만).
 - 2026-11-08 시안·명세 반영: 부주 정산 인센티브 = "실제로 준 금액"이 계산보다 많은 차이(입력 칸 없앰) + 정산 내역 표, 보스 도우미 대상 = 카링·흉성·림보·발드릭스·유피테르(명세 §4-4·§4-5, design.md).
 - 2026-11-08 캔버스 B·C 삭제, 새 도구 추가 — 핀볼 추첨(`Pinball`, C안 기반)·기댓값 계산기(`StarEv`, A+B) 시안 → A 프로토타입 메뉴·모바일 보드에 연결함(design.md "새 도구", 명세 §4-7·8).
-- 핀볼 원본: 사용자가 github.com/lazygyu/roulette ZIP 을 `vendor/roulette/` 에 풀어 둠(2026-11-08 확인, 받은 그대로·설치·실행 안 함, 맵 이식은 사용자 몫·Claude 는 연결만). 구현 때 tsconfig/eslint 에서 제외하고 광고 코드·인물 그림 빼기 — 라이선스 검토는 명세 §4-7, brain `wiki/research/marble-roulette-license.md`.
+- 핀볼 원본: 사용자가 github.com/lazygyu/roulette ZIP 을 `vendor/roulette/` 에 풀어 둠(2026-11-08 확인, 받은 그대로·설치·실행 안 함, 맵 이식은 사용자 몫·Claude 는 연결만). 구현 때는 필요한 코드만 우리 폴더(예: `lib/pinball/`)로 옮겨 광고 코드·인물 그림을 빼고, 원본 `LICENSE` 사본을 함께 커밋 — 라이선스 검토는 명세 §4-7, brain `wiki/research/marble-roulette-license.md`.
 - 개편 전 보안 구멍(관리자 확인 없는 액션, 쿠키에 비밀번호 원문)은 명세 §5, 아직 열림.
 
 
