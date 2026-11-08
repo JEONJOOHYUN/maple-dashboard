@@ -7,8 +7,9 @@
 ```
 maple-dashboard/
   app/
-    layout.tsx              # 루트 레이아웃: Paperlogy 폰트, ThemeProvider, 헤더+NavTabs
-    page.tsx                 # 홈 — 도구 카드 목록 (lib/tools.ts 기반)
+    layout.tsx              # 루트 레이아웃: Pretendard(fonts/Pretendard CSS import) + 메이플스토리 서체(숫자 전용 font-num), ThemeProvider, SideNav + SiteHeader, Clarity
+    page.tsx                 # 홈 — 비회원 "이번 주" + 내 수익 소개 + 도구 카드(lib/nav.ts)
+    [tool]/page.tsx          # 아직 없는 도구·로그인의 "준비 중" 페이지(generateStaticParams, 그 밖은 404)
     globals.css
     icon.jpg / apple-icon.jpg / opengraph-image.jpg  # 버섯 마스코트 브랜딩
     actions/
@@ -26,7 +27,9 @@ maple-dashboard/
       admin-login-form.tsx
       admin-add-worker-form.tsx
   components/
-    nav-tabs.tsx              # 상단 탭 네비게이션 (헤더와 같은 max-w-5xl 컨테이너로 정렬)
+    side-nav.tsx              # 데스크톱 왼쪽 메뉴(lg 이상)
+    site-header.tsx            # 머리줄(경로 · 테마 · 로그인) + 모바일 묶음 탭/아래 탭
+    brand.tsx / page-header.tsx / clarity.tsx
     worker-tabs.tsx            # 부주 선택 탭 + "+ 부주 추가" 인라인 폼
     theme-provider.tsx / theme-toggle.tsx
     icon-value.tsx              # 아이콘+숫자 표시 헬퍼
@@ -39,8 +42,10 @@ maple-dashboard/
     format.ts                     # formatNumber, formatKrw, formatCompactMeso, formatKoreanMeso
     meso-input.ts                  # 콤마 포맷 + 캐럿 위치 유지 입력 핸들러
     constants.ts                    # AUCTION_HOUSE_FEE_RATE = 0.03
-    tools.ts                         # 홈 카드 + NavTabs가 공유하는 도구 목록
-  components/ui/             # shadcn/ui 컴포넌트 (button, input) — 직접 수정 가능
+    nav.ts                           # 메뉴 묶음·도구 목록(아이콘·홈 카드 문구·준비 중 여부) — 메뉴·홈이 공유
+  components/ui/             # shadcn/ui 컴포넌트 (button, input, badge, alert-dialog) — 직접 수정 가능
+  fonts/Maplestory/          # 넥슨 공식 OTF 그대로 + LICENSE.md
+  fonts/Pretendard/          # 공식 가변 동적 서브셋(92조각) + LICENSE.txt(OFL)
   supabase/
     schema.sql                # 최신 전체 스키마 (신규 설치용)
     migrations/

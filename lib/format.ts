@@ -19,7 +19,7 @@ export function formatCompactMeso(value: number): string {
 }
 
 // 입력값 확인용으로 "5억 메소", "4억7500만 메소"처럼 억/만 단위로 풀어 씁니다.
-export function formatKoreanMeso(value: number): string {
+export function formatKoreanMeso(value: number, { spaced = false } = {}): string {
   const rounded = Math.round(value);
   if (rounded <= 0) return "0 메소";
 
@@ -33,5 +33,5 @@ export function formatKoreanMeso(value: number): string {
   if (man > 0) parts.push(`${man}만`);
   if (rest > 0 || parts.length === 0) parts.push(`${rest}`);
 
-  return `${parts.join("")} 메소`;
+  return `${parts.join(spaced ? " " : "")} 메소`;
 }

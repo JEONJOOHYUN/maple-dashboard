@@ -6,87 +6,99 @@
    the `dark:` variant off that class instead of `prefers-color-scheme`. */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* `:root`와 `.dark`는 명시도가 같으므로 반드시 :root(라이트)를 먼저,
-   .dark를 나중에 선언해야 다크 토큰이 라이트 값을 덮어씁니다.
-   (순서가 뒤집히면 다크모드에서 배경/글자색이 라이트 값으로 남습니다) */
+/* Tokens follow the confirmed redesign mock (A: warm black + orange).
+   :root (light) must come before .dark: both selectors have the same
+   specificity, so if the order flips the dark values get overridden. */
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  /* 앱 전체 CTA 색상(orange-500)과 맞춥니다. */
-  --primary: oklch(0.705 0.213 47.6);
-  --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --background: #f7f5f0;
+  --foreground: #1c1a16;
+  --card: #ffffff;
+  --card-foreground: #1c1a16;
+  --popover: #ffffff;
+  --popover-foreground: #1c1a16;
+  --primary: #f26a22;
+  --primary-foreground: #1a0d04;
+  /* primary-text: orange that stays readable as text; primary-soft: tinted fill */
+  --primary-text: #b4440a;
+  --primary-soft: rgba(242, 106, 34, 0.11);
+  --secondary: #f1ede5;
+  --secondary-foreground: #1c1a16;
+  --muted: #f1ede5;
+  --muted-foreground: #625c52;
+  --accent: #f1ede5;
+  --accent-foreground: #1c1a16;
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --gain: #b9500f;
+  --loss: #2b67cf;
+  --border: #e3ddd2;
+  --input: #d6cfc2;
+  --ring: #f26a22;
+  --chart-1: #f26a22;
+  --chart-2: #2b67cf;
+  --chart-3: #b9500f;
+  --chart-4: #625c52;
+  --chart-5: #e3ddd2;
+  --radius: 0.5rem;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #1c1a16;
+  --sidebar-primary: #f26a22;
+  --sidebar-primary-foreground: #1a0d04;
+  --sidebar-accent: rgba(242, 106, 34, 0.11);
+  --sidebar-accent-foreground: #b4440a;
+  --sidebar-border: #e3ddd2;
+  --sidebar-ring: #f26a22;
 }
 
 .dark {
-  /* 기존 대시보드 팔레트(slate 계열)를 유지하기 위해 shadcn 기본 토큰 중
-     배경/전경/포인트 색은 앱 색감에 맞춰 덮어씁니다. */
-  --background: #0b1120;
-  --foreground: #f1f5f9;
-  --card: #0f172a;
-  --card-foreground: #f1f5f9;
-  --popover: #0f172a;
-  --popover-foreground: #f1f5f9;
-  --primary: oklch(0.705 0.213 47.6);
-  --primary-foreground: oklch(1 0 0);
-  --secondary: #1e293b;
-  --secondary-foreground: #f1f5f9;
-  --muted: #1e293b;
-  --muted-foreground: #94a3b8;
-  --accent: #1e293b;
-  --accent-foreground: #f1f5f9;
+  --background: #121210;
+  --foreground: #f4f0e8;
+  --card: #1d1c19;
+  --card-foreground: #f4f0e8;
+  --popover: #1d1c19;
+  --popover-foreground: #f4f0e8;
+  --primary: #ff7429;
+  --primary-foreground: #1a0d04;
+  --primary-text: #ff8a4c;
+  --primary-soft: rgba(255, 116, 41, 0.14);
+  --secondary: #272520;
+  --secondary-foreground: #f4f0e8;
+  --muted: #272520;
+  --muted-foreground: #aba498;
+  --accent: #272520;
+  --accent-foreground: #f4f0e8;
   --destructive: oklch(0.704 0.191 22.216);
-  --border: #1e293b;
-  --input: #334155;
-  --ring: #f97316;
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: #0f172a;
-  --sidebar-foreground: #f1f5f9;
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: #1e293b;
-  --sidebar-accent-foreground: #f1f5f9;
-  --sidebar-border: #1e293b;
-  --sidebar-ring: #f97316;
+  --gain: #ff9a57;
+  --loss: #78aeff;
+  --border: #34312b;
+  --input: #403c35;
+  --ring: #ff7429;
+  --chart-1: #ff7429;
+  --chart-2: #78aeff;
+  --chart-3: #ff9a57;
+  --chart-4: #aba498;
+  --chart-5: #34312b;
+  --sidebar: #171714;
+  --sidebar-foreground: #f4f0e8;
+  --sidebar-primary: #ff7429;
+  --sidebar-primary-foreground: #1a0d04;
+  --sidebar-accent: rgba(255, 116, 41, 0.14);
+  --sidebar-accent-foreground: #ff8a4c;
+  --sidebar-border: #34312b;
+  --sidebar-ring: #ff7429;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-paperlogy), ui-sans-serif, system-ui, -apple-system,
+  --font-sans: "Pretendard Variable", ui-sans-serif, system-ui, -apple-system,
     "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
   --font-heading: var(--font-sans);
+  /* Big numbers only: NEXON Maplestory (ASCII range), Korean units fall back to Pretendard */
+  --font-num: var(--font-maple), "Pretendard Variable", "Malgun Gothic", sans-serif;
+  --color-primary-text: var(--primary-text);
+  --color-primary-soft: var(--primary-soft);
+  --color-gain: var(--gain);
+  --color-loss: var(--loss);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);

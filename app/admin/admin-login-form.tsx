@@ -17,6 +17,7 @@ export function AdminLoginForm() {
         <input
           type="password"
           name="password"
+          data-clarity-mask="true"
           placeholder="비밀번호"
           required
           autoFocus

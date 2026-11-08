@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
+import { Moon, Sun } from "lucide-react";
 
 export function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
@@ -13,7 +14,7 @@ export function ThemeToggle() {
   }, []);
 
   if (!mounted) {
-    return <div className="h-9 w-9" aria-hidden="true" />;
+    return <div className="size-10" aria-hidden="true" />;
   }
 
   const isDark = resolvedTheme === "dark";
@@ -23,9 +24,13 @@ export function ThemeToggle() {
       type="button"
       onClick={() => setTheme(isDark ? "light" : "dark")}
       aria-label={isDark ? "라이트 모드로 전환" : "다크 모드로 전환"}
-      className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-600 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+      className="flex size-10 items-center justify-center rounded-lg border border-border bg-card text-foreground transition-colors outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
     >
-      {isDark ? "☀️" : "🌙"}
+      {isDark ? (
+        <Sun className="size-[17px]" aria-hidden="true" />
+      ) : (
+        <Moon className="size-[17px]" aria-hidden="true" />
+      )}
     </button>
   );
 }

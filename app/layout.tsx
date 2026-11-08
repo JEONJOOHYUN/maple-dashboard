@@ -1,29 +1,35 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+// Body and titles: Pretendard, official dynamic subset (92 unicode-range slices;
+// the browser fetches only the slices a page uses). License: fonts/Pretendard/LICENSE.txt
+import "../fonts/Pretendard/pretendardvariable-dynamic-subset.css";
 import "./globals.css";
-import { NavTabs } from "@/components/nav-tabs";
+import { Clarity } from "@/components/clarity";
+import { SideNav } from "@/components/side-nav";
+import { SiteHeader } from "@/components/site-header";
 import { ThemeProvider } from "@/components/theme-provider";
-import { ThemeToggle } from "@/components/theme-toggle";
 
-const paperlogy = localFont({
-  variable: "--font-paperlogy",
+// Big numbers only (font-num). Official NEXON files, unmodified (license: fonts/Maplestory/LICENSE.md).
+// unicode-range keeps it to ASCII so units like 억 or 명 fall through to Pretendard
+// (Maplestory Korean read too heavy, user decision 2026-11-08).
+// Not preloaded: ~690KB per weight, and Light is not used yet.
+const maple = localFont({
+  variable: "--font-maple",
   src: [
-    { path: "../fonts/Paperlogy/Paperlogy-1Thin.ttf", weight: "100", style: "normal" },
-    { path: "../fonts/Paperlogy/Paperlogy-2ExtraLight.ttf", weight: "200", style: "normal" },
-    { path: "../fonts/Paperlogy/Paperlogy-3Light.ttf", weight: "300", style: "normal" },
-    { path: "../fonts/Paperlogy/Paperlogy-4Regular.ttf", weight: "400", style: "normal" },
-    { path: "../fonts/Paperlogy/Paperlogy-5Medium.ttf", weight: "500", style: "normal" },
-    { path: "../fonts/Paperlogy/Paperlogy-6SemiBold.ttf", weight: "600", style: "normal" },
-    { path: "../fonts/Paperlogy/Paperlogy-7Bold.ttf", weight: "700", style: "normal" },
-    { path: "../fonts/Paperlogy/Paperlogy-8ExtraBold.ttf", weight: "800", style: "normal" },
-    { path: "../fonts/Paperlogy/Paperlogy-9Black.ttf", weight: "900", style: "normal" },
+    { path: "../fonts/Maplestory/Maplestory OTF Light.otf", weight: "300", style: "normal" },
+    { path: "../fonts/Maplestory/Maplestory OTF Bold.otf", weight: "700", style: "normal" },
   ],
+  declarations: [{ prop: "unicode-range", value: "U+0020-007E" }],
+  preload: false,
   display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "메이플 대시보드",
-  description: "메이플스토리 부주 사냥 수익 정산 및 누적 대시보드",
+  title: {
+    default: "메이플 대시보드",
+    template: "%s · 메이플 대시보드",
+  },
+  description: "메이플스토리 내 수익 기록, 보스 분배금 · 강화 기댓값 계산기 모음",
 };
 
 export default function RootLayout({
@@ -32,20 +38,20 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="ko" suppressHydrationWarning className={paperlogy.variable}>
+    <html lang="ko" suppressHydrationWarning className={maple.variable}>
       <body>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <header className="bg-white dark:bg-slate-900">
-            <div className="mx-auto flex max-w-5xl items-center justify-between px-4 pt-6 sm:px-8">
-              <h1 className="text-lg font-bold text-slate-900 dark:text-slate-100">
-                메이플 대시보드
-              </h1>
-              <ThemeToggle />
+          <div className="flex min-h-dvh">
+            <SideNav />
+            <div className="flex min-w-0 flex-1 flex-col">
+              <SiteHeader />
+              <main className="flex-1 px-4 pt-[18px] pb-7 lg:px-8 lg:pt-7 lg:pb-9">
+                <div className="mx-auto w-full max-w-6xl">{children}</div>
+              </main>
             </div>
-            <NavTabs />
-          </header>
-          <main className="mx-auto max-w-5xl px-4 py-8 sm:px-8">{children}</main>
+          </div>
         </ThemeProvider>
+        <Clarity />
       </body>
     </html>
   );
