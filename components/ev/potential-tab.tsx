@@ -53,7 +53,8 @@ const TIERS: { id: WeaponGoal["tier"]; label: string; desc: string }[] = [
   { id: "all", label: "올이탈", desc: "세 줄 모두 최고 수치" },
 ];
 type Extra = "stat" | "cool" | "crit" | "drop";
-type ConvText = Record<keyof typeof STAT_CONV_DEFAULT, string>;
+// cd8 = what was typed in the main-potential "크뎀 8%" box; cd3 (maplescouter's unit) stays the source of truth.
+type ConvText = Record<keyof typeof STAT_CONV_DEFAULT, string> & { cd8?: string };
 const CONV_TEXT_DEFAULT = Object.fromEntries(Object.entries(STAT_CONV_DEFAULT).map(([k, v]) => [k, String(v)])) as ConvText;
 const ADD_GOALS: { id: AddWeaponGoal; label: (need: number, a: string) => string }[] = [
   { id: "a21", label: (n, a) => `${a} ${n}%` },
@@ -90,7 +91,9 @@ export function PotentialTab() {
   const [convText, setConvText] = useStored<ConvText>("ev:statConv", CONV_TEXT_DEFAULT);
   // Conversion inputs are detail most people never touch: closed until asked for (user, 2026-11-10).
   const [convOpen, setConvOpen] = useState(false);
-  const convChanged = (Object.keys(CONV_TEXT_DEFAULT) as (keyof ConvText)[]).some((k) => (convText[k] ?? "") !== CONV_TEXT_DEFAULT[k]);
+  // Crit damage box in the line size people see: main potential 8 %, additional 3 % (user, 2026-11-10).
+  const cdUnit = kind === "main" ? 8 : 3;
+  const convChanged = (Object.keys(CONV_TEXT_DEFAULT) as (keyof typeof STAT_CONV_DEFAULT)[]).some((k) => (convText[k] ?? "") !== CONV_TEXT_DEFAULT[k]);
   const [customMin, setCustomMin] = useState("");
   const [prices, setPrices] = useState<Record<string, string>>({});
 
@@ -103,7 +106,7 @@ export function PotentialTab() {
   // Start with the in-game resets only (the ones everyone has); cash cubes are opt-in for comparing.
   const picked = (chosen ?? cubes.filter((c) => c.name.includes("재설정")).map((c) => c.id)).filter((id) => cubes.some((c) => c.id === id));
   const conv = useMemo(() => {
-    const n = (k: keyof ConvText) => parseNum(convText[k] ?? "", STAT_CONV_DEFAULT[k]);
+    const n = (k: keyof typeof STAT_CONV_DEFAULT) => parseNum(convText[k] ?? "", STAT_CONV_DEFAULT[k]);
     return convFromScouter({ level: n("level"), v9: n("v9"), cd3: n("cd3"), atk1: n("atk1"), all1: n("all1") });
   }, [convText]);
 
@@ -607,7 +610,7 @@ export function PotentialTab() {
                     [
                       ["level", "캐릭터 레벨", "", ""],
                       ["v9", "렙당+2 = 주스탯", "%", `렙당+1 = ${conv.lvstr.toFixed(2)}%`],
-                      ["cd3", "크뎀 3% = 주스탯", "%", ""],
+                      ["cd3", `크뎀 ${cdUnit}% = 주스탯`, "%", `크뎀 1% = ${conv.cd.toFixed(2)}%`],
                       ["atk1", "공격력(마력) 1 = 주스탯", "", ""],
                       ["all1", "올스탯 1% = 주스탯", "", ""],
                     ] as const
@@ -619,8 +622,16 @@ export function PotentialTab() {
                       </span>
                       <NumberField
                         label={label}
-                        value={convText[k] ?? ""}
-                        onChange={(t) => setConvText({ ...convText, [k]: t })}
+                        value={k === "cd3" && cdUnit === 8 ? (convText.cd8 ?? String(Math.round(conv.cd * 8 * 100) / 100)) : (convText[k] ?? "")}
+                        onChange={(t) =>
+                          setConvText(
+                            k !== "cd3"
+                              ? { ...convText, [k]: t }
+                              : cdUnit === 8
+                                ? { ...convText, cd8: t, cd3: String(Math.round((parseNum(t, 0) * 3) / 8 * 10000) / 10000) }
+                                : { ...convText, cd3: t, cd8: undefined },
+                          )
+                        }
                         decimal={k !== "level"}
                         suffix={unit || undefined}
                         inputClassName="h-8 w-20 text-xs"
