@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { averageTries } from "./luck.ts";
-import { NO_CONV, SOUL_EXTRA, addWeaponChance, comboChance, bestValues, convFromScouter, fixFirstLine, gradeUp, lineTables, resetMeso, soulChance, statTargets, sumChance, weaponChance, type WeaponGoal } from "./potential.ts";
+import { NO_CONV, SOUL_EXTRA, addWeaponChance, comboChance, practicalTargets, bestValues, convFromScouter, fixFirstLine, gradeUp, lineTables, resetMeso, soulChance, statTargets, sumChance, weaponChance, type WeaponGoal } from "./potential.ts";
 
 const near = (actual: number, expected: number, tolerance: number, label: string) =>
   assert.ok(Math.abs(actual - expected) <= tolerance, `${label}: ${actual} is not within ${tolerance} of ${expected}`);
@@ -185,4 +185,37 @@ test("gloves / hats: special-option lines + main stat lines, the rest any option
   // Prime cube keeps line 1 = crit damage → one crit line is certain.
   const primeRows = lineTables("prime", "legendary", "gloves", 200);
   if (primeRows) assert.equal(+comboChance(fixFirstLine(primeRows, "cd", bestValues([primeRows[0]]).cd ?? 0), { type: "combo", special: "cd", lines: 1, stat: 0 }).toFixed(6), 1);
+});
+
+test("additional gloves: crit damage 1 % lines do not count (3 % only, user 2026-11-10)", () => {
+  const add = lineTables("white", "legendary", "gloves", 200)!;
+  const all = comboChance(add, { type: "combo", special: "cd", lines: 1, stat: 1 });
+  const only3 = comboChance(add, { type: "combo", special: "cd", lines: 1, stat: 1, minSpecial: 3 });
+  assert.equal(+(only3 * 100).toFixed(4), 0.2733);
+  assert.ok(only3 < all);
+  // Main potential has crit damage 8 % only: the threshold changes nothing there.
+  const main = lineTables("black", "legendary", "gloves", 200)!;
+  assert.equal(
+    comboChance(main, { type: "combo", special: "cd", lines: 1, stat: 1, minSpecial: 3 }),
+    comboChance(main, { type: "combo", special: "cd", lines: 1, stat: 1 }),
+  );
+});
+
+test("target chips = realistic three-line sums, dense below the top (user, 2026-11-10)", () => {
+  const conv = convFromScouter({ level: 296, v9: 6.31, cd3: 11.9, atk1: 2.29, all1: 11.6 });
+  const black = lineTables("black", "legendary", "hat", 200)!;
+  const white = lineTables("white", "legendary", "hat", 200)!;
+  // Additional armor tops out at 8 + 6 + 6 = 20 (8 % on lines 2 · 3 is a 0.02 % line).
+  assert.deepEqual(practicalTargets(white, { conv }, 2), [12, 14, 16, 18, 20]);
+  // Main armor: 12 + 12 + 9 = 33 (line 3 at 12 % is 0.5 %, below the 1 % cut).
+  assert.deepEqual(practicalTargets(black, { conv }, 3), [21, 24, 27, 30, 33]);
+  // Additional HP (Demon Avenger): only HP lines count → 16 (8 + 8), 19 (11 + 8), 27 (11 + 8 + 8).
+  assert.deepEqual(practicalTargets(white, { main: "hp" }, 2), [16, 19, 27]);
+  // Gloves: crit damage 8 % converts to 31.7 % main stat, so the chips follow crit lines (efficiency).
+  const gloves = lineTables("black", "legendary", "gloves", 200)!;
+  const g = practicalTargets(gloves, { conv }, 3);
+  assert.equal(g.at(-1), 72, "crit 8 + crit 8 + main stat 9");
+  assert.ok(g.includes(63), "two crit lines");
+  // Every chip has a real chance.
+  for (const n of g) assert.ok(sumChance(gloves, { type: "stat", min: n, conv }) > 0);
 });

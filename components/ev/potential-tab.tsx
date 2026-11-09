@@ -20,7 +20,7 @@ import { type MainStat,
   addWeaponNeed,
   lineTables,
   resetMeso,
-  statTargets,
+  practicalTargets,
   sumChance,
   weaponChance,
   type AddWeaponGoal,
@@ -108,7 +108,8 @@ export function PotentialTab() {
   }, [convText]);
 
   const extraOptions: { id: Extra; label: string }[] = [
-    { id: "stat", label: "주스탯" },
+    // Gloves: the main-stat target converts crit damage lines too (efficiency), so say so (user, 2026-11-10).
+    { id: "stat", label: slot.extra === "crit" ? "효율 환산" : "주스탯" },
     ...(slot.extra === "cool" ? [{ id: "cool" as const, label: "쿨감" }] : []),
     ...(slot.extra === "crit" ? [{ id: "crit" as const, label: "크뎀" }] : []),
     ...(slot.extra === "drop" ? [{ id: "drop" as const, label: "드메" }] : []),
@@ -126,23 +127,28 @@ export function PotentialTab() {
   const sumTargets: { label: string; sub: string; goal: SumGoal }[] = useMemo(() => {
     if (!refRows) return [];
     if (target === "stat") {
-      const chips = statTargets(refRows, mainStat).map((n) => ({ label: `${n}%`, sub: "이상", goal: { type: "stat", min: n, conv, attack, main: mainStat } as SumGoal }));
+      const chips = practicalTargets(refRows, { conv, attack, main: mainStat }, kind === "add" ? 2 : 3).map((n) => ({ label: `${n}%`, sub: "이상", goal: { type: "stat", min: n, conv, attack, main: mainStat } as SumGoal }));
       const own = parseNum(customMin, 0);
       return own > 0 ? [...chips, { label: `${own}%`, sub: "직접", goal: { type: "stat", min: own, conv, attack, main: mainStat } as SumGoal }] : chips;
     }
     if (target === "cool") return [2, 3, 4, 5, 6].map((n) => ({ label: `−${n}초`, sub: "이상", goal: { type: "cool", min: n } as SumGoal }));
     if (target === "crit") return [1, 2, 3].map((n) => ({ label: `${n}줄`, sub: best.cd ? `+${best.cd * n}%` : "", goal: { type: "crit", lines: n } as SumGoal }));
     return [1, 2, 3].map((n) => ({ label: `${n}줄`, sub: "이상", goal: { type: "drop", lines: n } as SumGoal }));
-  }, [refRows, target, best.cd, conv, attack, customMin, mainStat]);
+  }, [refRows, target, best.cd, conv, attack, customMin, mainStat, kind]);
   const tIdx = Math.min(targetIdx, Math.max(0, sumTargets.length - 1));
   const comboSpecial = target === "crit" ? "cd" : target === "cool" ? "cool" : null;
-  const comboGoal: SumGoal | null = comboSpecial ? { type: "combo", special: comboSpecial, lines: combo.lines, stat: combo.stat, main: mainStat } : null;
+  const comboGoal: SumGoal | null = comboSpecial ? { type: "combo", special: comboSpecial, lines: combo.lines, stat: combo.stat, main: mainStat, minSpecial: comboSpecial === "cd" ? 3 : undefined } : null;
   const comboRest = 3 - combo.lines - combo.stat;
   const specialName = comboSpecial === "cd" ? "크뎀" : "쿨감";
   const mainName = mainStat === "all" ? "올스탯" : mainStat === "hp" ? "HP" : "주스탯";
   const comboText = [`${specialName} ${combo.lines}줄`, combo.stat ? `${mainName} ${combo.stat}줄` : "", comboRest ? `아무 옵션 ${comboRest}줄` : ""]
     .filter(Boolean)
     .join(" + ");
+  // Lowest value of an option in this table: what "any value" means on screen (user, 2026-11-10: "올스탯 6% 이상").
+  const lowest = (cat: string) => {
+    const vals = (refRows ?? []).flat().filter((r) => r[0] === cat).map((r) => r[1]);
+    return vals.length ? Math.min(...vals) : 0;
+  };
   const setComboPart = (k: "lines" | "stat", v: number) => {
     const next = { ...combo, [k]: v };
     if (next.lines < 1 || next.stat < 0 || next.lines + next.stat > 3) return;
@@ -509,8 +515,8 @@ export function PotentialTab() {
               <div className="flex flex-col gap-2">
                 {(
                   [
-                    ["lines", `${specialName} 줄`, comboSpecial === "cd" ? "크리티컬 데미지 % · 값 상관없이" : "재사용 대기시간 감소 · 값 상관없이"],
-                    ["stat", `${mainName} 줄`, "값 상관없이"],
+                    ["lines", `${specialName} 줄`, comboSpecial === "cd" ? "크리티컬 데미지 3% 이상" : `재사용 대기시간 −${lowest("cool")}초 이상`],
+                    ["stat", `${mainName} 줄`, `${mainName} ${lowest(mainStat)}% 이상`],
                   ] as const
                 ).map(([k, label, note]) => (
                   <div key={k} className="flex items-center justify-between gap-2">

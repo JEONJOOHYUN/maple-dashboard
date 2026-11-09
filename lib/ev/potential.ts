@@ -266,10 +266,11 @@ export type SumGoal =
 
 /**
  * Gloves / hats (user, 2026-11-10): at least `lines` lines of the special option (crit damage on gloves, cooldown
- * on hats, any value) plus at least `stat` main stat lines (any value); the rest can be anything.
+ * on hats) of at least `minSpecial` (additional crit damage 1 % lines do not count: 3 % only, user 2026-11-10) plus at
+ * least `stat` main stat lines (any value); the rest can be anything.
  * e.g. gloves 크뎀 1 + 주스탯 1 = 2.16 % on a Lv.200 legendary black cube.
  */
-export type ComboGoal = { type: "combo"; special: "cd" | "cool"; lines: number; stat: number; main?: MainStat };
+export type ComboGoal = { type: "combo"; special: "cd" | "cool"; lines: number; stat: number; main?: MainStat; minSpecial?: number };
 
 export function comboChance(rows: Row[][], goal: ComboGoal): number {
   const main = goal.main ?? "str";
@@ -277,7 +278,7 @@ export function comboChance(rows: Row[][], goal: ComboGoal): number {
     let sp = 0;
     let st = 0;
     for (const r of line) {
-      if (r[0] === goal.special) sp += r[2];
+      if (r[0] === goal.special && r[1] >= (goal.minSpecial ?? 0)) sp += r[2];
       else if (r[0] === main) st += r[2];
     }
     return { sp, st, other: Math.max(0, 1 - sp - st) };
@@ -346,6 +347,45 @@ export function statTargets(rows: Row[][], main: MainStat = "str"): number[] {
   if (vals.length === 0) return [];
   const [hi, lo = hi] = vals;
   return [...new Set([lo * 3, hi + lo * 2, hi * 2 + lo, hi * 3])].sort((a, b) => a - b);
+}
+
+/** A line value counts as "realistic" when it shows up at least this often on that line. */
+const PRACTICAL_P = 0.01;
+
+/**
+ * Target chips (user, 2026-11-10): sums three lines can realistically make — on each line, per counted option, the
+ * values seen at least 1 % of the time (crit damage / attack / per-level lines turned into main stat % by the
+ * conversion, so gloves count crit damage by efficiency) — highest first, at least `step` apart, `count` of them.
+ * e.g. additional armor Lv.200: 20 (8 + 6 + 6) · 18 · 16 · 14 · 12 instead of 18 · 20 · 22 · 24 (22 and 24 need
+ * 0.02 % lines); black gloves: 72 · 63 · 52 · 49 · 43 (crit 8 % = 31.7 % main stat) instead of 27 · 30 · 33 · 36.
+ */
+export function practicalTargets(
+  rows: Row[][],
+  goal: { conv?: StatConv; attack?: "atk" | "matk"; main?: MainStat },
+  step: number,
+  count = 5,
+): number[] {
+  const main = goal.main ?? "str";
+  const value = (r: Row) => (main === "str" ? statValue(r, goal.conv ?? NO_CONV, goal.attack ?? "atk") : r[0] === main ? r[1] : 0);
+  // Per line: 0 (any other option) plus every counted value seen at least 1 % of the time.
+  const options = rows.map((line) => [0, ...new Set(line.filter((r) => r[2] >= PRACTICAL_P).map(value).filter((v) => v > 0))]);
+  const sums = new Set<number>();
+  const walk = (i: number, acc: number) => {
+    if (i === options.length) {
+      if (acc > 0) sums.add(Math.floor(acc + 1e-9));
+      return;
+    }
+    for (const v of options[i]) walk(i + 1, acc + v);
+  };
+  walk(0, 0);
+  const picked: number[] = [];
+  const sorted = [...sums].sort((x, y) => y - x);
+  // Below half the realistic top is a one-line goal (e.g. additional HP 8 %): not worth a chip.
+  for (const v of sorted.filter((x) => x >= sorted[0] / 2)) {
+    if (picked.length >= count) break;
+    if (picked.length === 0 || picked[picked.length - 1] - v >= step) picked.push(v);
+  }
+  return picked.sort((x, y) => x - y);
 }
 
 /** Highest single-line values (for labels). */
