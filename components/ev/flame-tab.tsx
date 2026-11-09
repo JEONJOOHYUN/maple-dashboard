@@ -203,7 +203,7 @@ export function FlameTab() {
               </span>
             </>
           ) : (
-            <span className="text-lg font-bold">불꽃으로는 안 나와요 · 목표를 낮춰 보세요</span>
+            <span className="text-lg font-bold">불꽃으로 불가 · 목표 낮추기</span>
           )}
         </div>
         <div className="overflow-hidden rounded-lg border border-border bg-card">
@@ -225,7 +225,7 @@ export function FlameTab() {
               <span className="flex min-w-0 flex-col">
                 <b className="truncate">{r.name}</b>
                 <span className="text-[11px] text-muted-foreground">
-                  {equip === "weapon" ? `최고 ${bestWeaponGrade(r.id)}추까지` : "추옵을 다시 굴려요"}
+                  {equip === "weapon" ? `최고 ${bestWeaponGrade(r.id)}추까지` : "추옵 재설정"}
                   {r.id === "eternal" && " · 1번 300만 메소"}
                 </span>
                 {(r.id === "abyss" || r.id === "strong") && (

@@ -172,7 +172,7 @@ export function PinballGame() {
 
   return (
     <div className="flex flex-col gap-4 lg:gap-5">
-      <PageHeader title="핀볼 추첨" description="보스 드롭 주인, 파티 순서 정하기. 구슬이 긴 코스를 굴러 내려가고 화면이 앞선 구슬을 따라가요." />
+      <PageHeader title="핀볼 추첨" description="보스 드롭 주인 · 파티 순서 정하기" />
       <div className="grid items-start gap-4 lg:grid-cols-[340px_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col gap-3 lg:col-start-1 lg:row-start-1">
           <section className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4">
@@ -180,7 +180,7 @@ export function PinballGame() {
               <b className="text-[15px]">
                 참가자 {people.length}명 · 구슬 {totalMarbles}개
               </b>
-              <span className="text-xs text-muted-foreground">이름을 누르면 이름 · 구슬 개수를 고쳐요</span>
+              <span className="text-xs text-muted-foreground">이름 누르면 이름 · 구슬 수 수정</span>
             </div>
             <div className="flex flex-wrap gap-1.5">
               {entries.map((e, i) =>
@@ -281,15 +281,15 @@ export function PinballGame() {
             >
               {status === "loading" ? "준비 중…" : running || status === "done" ? "다시 섞어서 시작" : "시작"}
             </button>
-            {status === "error" && <span className="text-xs text-destructive">물리 엔진을 불러오지 못했어요. 새로고침해 주세요.</span>}
+            {status === "error" && <span className="text-xs text-destructive">물리 엔진 불러오기 실패 · 새로고침</span>}
           </section>
 
         </div>
 
         <section className="relative min-w-0 overflow-hidden rounded-lg border border-border bg-card lg:col-start-2 lg:row-span-2 lg:row-start-1">
           <div ref={boardRef} className="h-[480px] w-full sm:h-[600px] lg:h-[720px]" aria-label="핀볼 판" role="img" />
-          {status === "loading" && <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">판을 준비하고 있어요…</div>}
-          <span className="pointer-events-none absolute right-3 bottom-2 text-[11px] text-muted-foreground">왼쪽 미니맵 위에 올리면 그 자리를 봐요</span>
+          {status === "loading" && <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">판 준비 중…</div>}
+          <span className="pointer-events-none absolute right-3 bottom-2 text-[11px] text-muted-foreground">미니맵에 올리면 그 자리 보기</span>
         </section>
 
         <section className="flex min-w-0 flex-col gap-2 rounded-lg border border-border bg-card p-4 lg:col-start-1 lg:row-start-2">
@@ -321,7 +321,7 @@ export function PinballGame() {
         </section>
       </div>
       <p className="text-xs leading-relaxed text-muted-foreground">
-        lazygyu 의 Marble Roulette 기반(MIT) · 코스 = 원본의 Wheel of fortune · 물리 엔진 box2d-wasm(Zlib) · 참가자 목록은 이 브라우저에만 저장돼요.
+        lazygyu 의 Marble Roulette 기반(MIT) · 코스 = 원본의 Wheel of fortune · 물리 엔진 box2d-wasm(Zlib) · 참가자 목록은 이 브라우저에만 저장
       </p>
     </div>
   );

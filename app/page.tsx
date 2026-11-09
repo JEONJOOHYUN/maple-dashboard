@@ -8,19 +8,19 @@ import { cn } from "@/lib/utils";
 const incomeFeatures = [
   {
     title: "캡처 한 장으로 기록",
-    description: "인벤토리 [기타] 탭을 붙여넣으면 사냥으로 얻는 메소 · 솔 에르다 조각이 채워져요",
+    description: "인벤토리 [기타] 탭 붙여넣기 → 사냥 메소 · 솔 에르다 조각 자동 입력",
   },
   {
     title: "0에서 시작하면 끝",
-    description: "메소 · 조각을 비우고 사냥 → 끝나고 들고 있는 게 오늘 번 돈 · 주간 · 월간으로 모아 봐요",
+    description: "메소 · 조각을 비우고 사냥 → 끝나고 가진 만큼이 오늘 번 돈 · 주간 · 월간 합계",
   },
   {
     title: "보스 수익은 자동으로 빼기",
-    description: "API 키가 있으면 오늘 판 결정석을 스케줄러로 찾아 사냥 수익에서 빼요",
+    description: "API 키가 있으면 오늘 판 결정석을 스케줄러로 찾아 사냥 수익에서 제외",
   },
   {
     title: "여러 계정 묶어 보기",
-    description: "API 키를 여러 개 등록하면 계정별로 캐릭터를 묶어요",
+    description: "API 키 여러 개 등록 → 계정별 캐릭터 묶기",
   },
 ];
 
@@ -40,7 +40,7 @@ export default function Home() {
         <div className="flex min-w-[220px] flex-1 flex-col gap-1">
           <h1 className="font-heading text-base font-bold">이번 주 내 메이플</h1>
           <p className="text-[13px] leading-relaxed text-muted-foreground">
-            로그인하면 남은 숙제와 내 수익이 여기 보여요. API 키만 넣어도 이번 주 보스 수익은 로그인 없이 볼 수 있어요.
+            로그인하면 남은 숙제 · 내 수익 표시 · API 키만 넣어도 이번 주 보스 수익은 로그인 없이 확인
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -65,7 +65,7 @@ export default function Home() {
         </span>
         <span className="flex min-w-[180px] flex-1 flex-col gap-0.5">
           <span className="text-xs text-muted-foreground">오늘 썬데이 메이플</span>
-          <b className="text-sm">썬데이 혜택 모아 보기를 준비하고 있어요</b>
+          <b className="text-sm">썬데이 혜택 모아 보기 준비 중</b>
         </span>
         <span className="text-xs font-semibold text-primary-text">준비 중 →</span>
       </Link>
@@ -78,7 +78,7 @@ export default function Home() {
               내 수익
             </span>
             <h2 className="font-heading text-[22px] leading-snug font-bold lg:text-[26px]">
-              오늘 번 메소, 캡처 한 장이면 기록돼요
+              오늘 번 메소, 캡처 한 장으로 기록
             </h2>
           </div>
           <Link href="/income" className={primaryButton}>

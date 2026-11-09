@@ -387,11 +387,22 @@ export function StarforceTab() {
                 </Chip>
               ))}
             </div>
-            <span className="text-xs leading-relaxed text-muted-foreground">
-              {optimize
-                ? `추천: 파괴 방지 ${recommended.protect.length ? starList(recommended.protect) : "안 함"} · 확정 복구 ${recommended.restore.length ? starList(recommended.restore) : "안 함"} (그 밖에서 파괴되면 노작 1개로 ${FLOOR_STAR}성 복구). 노작값이 바뀌면 추천도 바뀌어요. 끄면 직접 골라요.`
-                : `고르지 않은 성에서 파괴되면 노작 1개로 ${FLOOR_STAR}성 복구. 23성부터는 확정 복구가 없어요.`}
-            </span>
+            {/* One fact per line: a single "·" chain wrapped mid-item. */}
+            <ul className="flex flex-col gap-0.5 text-xs leading-relaxed text-muted-foreground">
+              {(optimize
+                ? [
+                    `추천 파괴 방지: ${recommended.protect.length ? starList(recommended.protect) : "안 함"}`,
+                    `추천 확정 복구: ${recommended.restore.length ? starList(recommended.restore) : "안 함"}`,
+                    `그 밖 파괴 → 노작 1개로 ${FLOOR_STAR}성 복구`,
+                  ]
+                : [
+                    `고르지 않은 성 파괴 → 노작 1개로 ${FLOOR_STAR}성 복구`,
+                    "23성부터 확정 복구 없음",
+                  ]
+              ).map((t) => (
+                <li key={t}>{t}</li>
+              ))}
+            </ul>
           </div>
         </Panel>
 
@@ -531,12 +542,12 @@ export function StarforceTab() {
               <span className="font-num text-primary-text">{cart.length}</span>
             </b>
             <span className="text-xs text-muted-foreground">
-              표에서 &quot;담기&quot;로 구간을 넣어요
+              표에서 &quot;담기&quot;로 추가
             </span>
           </div>
           {cart.length === 0 ? (
             <p className="rounded-lg border border-dashed border-border py-6 text-center text-[13px] text-muted-foreground">
-              아직 담은 구간이 없어요
+              담은 구간 없음
             </p>
           ) : (
             <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
@@ -690,14 +701,6 @@ export function StarforceTab() {
           </div>
         </div>
       </div>
-      <p className={cn("text-xs leading-relaxed text-muted-foreground")}>
-        확률 · 비용은 2025년 3월 30성 개편 기준(나무위키 정리, 넥슨 공식 확률
-        페이지에는 스타포스가 없어요) · 스타캐치는 항상 적용(성공 ×1.05) · 장비
-        그림 출처 starforce.gg · 파괴 방지 추가 비용은 할인 없음 · 샤타포스 =
-        강화비 30% 할인 · 21성까지 파괴 30% 감소 · 복구비 20% 할인(starforce.gg
-        와 같은 규칙, 기댓값 표 일치) · 기댓값 = 평균이라 실제로는 더 들거나 덜
-        들 수 있어요.
-      </p>
     </div>
   );
 }

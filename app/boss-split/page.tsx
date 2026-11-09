@@ -29,7 +29,7 @@ const PERCENT_COLS: Record<number, string> = {
   5: "grid-cols-3 sm:grid-cols-5",
   6: "grid-cols-3 sm:grid-cols-6",
 };
-const NOTE = "파티원 금액은 받는 사람이 다시 내는 수수료까지 더한 전달 금액이에요.";
+const NOTE = "파티원 금액 = 받는 사람이 다시 낼 수수료 포함";
 
 type Item = { id: string; grossMeso: number };
 type ImageState = "idle" | "working" | "copied" | "saved" | "error";
@@ -170,13 +170,13 @@ export default function BossSplitPage() {
     idle: "이미지 복사",
     working: "이미지 만드는 중…",
     copied: "이미지 복사됨",
-    saved: "복사가 안 돼서 파일로 저장했어요",
-    error: "이미지를 만들지 못했어요",
+    saved: "복사 불가 · 파일로 저장",
+    error: "이미지 만들기 실패",
   }[imageState];
 
   return (
     <div className="flex flex-col gap-4 lg:gap-5">
-      <PageHeader title="분배금 계산기" description="판매가와 수수료, 인원만 고르면 바로 계산돼요." />
+      <PageHeader title="분배금 계산기" description="판매가 · 수수료 · 인원만 고르면 바로 계산" />
 
       <section className="flex flex-col gap-[18px] rounded-lg border border-border bg-card p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -291,7 +291,7 @@ export default function BossSplitPage() {
                   합계 {Math.round(percentSum * 10) / 10}%
                 </span>
                 <span className={isValidSplit ? "text-muted-foreground" : "text-destructive"}>
-                  {isValidSplit ? "100%로 맞춰졌어요" : "합계가 100%가 되어야 해요"}
+                  {isValidSplit ? "100% 맞음" : "합계 100% 필요"}
                 </span>
               </div>
             </>
@@ -361,13 +361,13 @@ export default function BossSplitPage() {
 
         {!hasResult && (
           <p className="text-center text-sm text-muted-foreground">
-            {isValidSplit ? "판매가를 넣으면 금액이 채워져요." : "비율 합계를 100%로 맞추면 금액이 채워져요."}
+            {isValidSplit ? "판매가를 넣으면 금액 표시" : "비율 합계 100%로 맞추면 금액 표시"}
           </p>
         )}
 
         <p className="flex items-start justify-center gap-1.5 text-center text-xs leading-relaxed text-muted-foreground">
           <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-          {NOTE} &quot;금액 복사&quot;는 숫자만 복사돼요.
+          {NOTE} · &quot;금액 복사&quot; = 숫자만
         </p>
 
         <div className="flex flex-col items-center gap-1.5 border-t border-border pt-3.5">
@@ -381,7 +381,7 @@ export default function BossSplitPage() {
             <ImageIcon className="size-4" aria-hidden="true" />
             {imageLabel}
           </button>
-          <span className="text-xs text-muted-foreground">결과를 그림으로 복사해 디스코드 · 카톡에 붙여 넣어요.</span>
+          <span className="text-xs text-muted-foreground">결과를 그림으로 복사 → 디스코드 · 카톡에 붙여 넣기</span>
         </div>
       </section>
     </div>

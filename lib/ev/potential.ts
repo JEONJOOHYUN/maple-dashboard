@@ -93,7 +93,7 @@ export type Slot = { id: string; label: string; group: "wpn" | "arm" | "acc" | "
 // Slots as on mesu.live + soul. Force shield · soul ring · shield are the same as the secondary weapon.
 export const SLOTS: Slot[] = [
   { id: "weapon", label: "무기", group: "wpn", kind: "weapon", extra: null, sub: "공 · 보공 · 방무" },
-  { id: "sub", label: "보조무기", group: "wpn", kind: "sub", extra: null, sub: "무기와 같아요" },
+  { id: "sub", label: "보조무기", group: "wpn", kind: "sub", extra: null, sub: "무기와 같음" },
   { id: "emblem", label: "엠블렘", group: "wpn", kind: "emblem", extra: null, sub: "공 · 방무" },
   { id: "hat", label: "모자", group: "arm", kind: "armor", extra: "cool", sub: "주스탯 · 쿨감" },
   { id: "top", label: "상의", group: "arm", kind: "armor", extra: null, sub: "주스탯" },

@@ -42,7 +42,7 @@ export default async function PlaceholderPage({ params }: Props) {
           준비 중
         </Badge>
         <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">
-          지금 만들고 있어요. 그동안 분배금 계산기는 바로 쓸 수 있어요.
+          준비 중 · 분배금 계산기는 지금 사용 가능
         </p>
         <div className="flex flex-wrap justify-center gap-2">
           <Link href="/boss-split" className={cn(buttonVariants(), "h-10 rounded-lg px-4 font-bold")}>

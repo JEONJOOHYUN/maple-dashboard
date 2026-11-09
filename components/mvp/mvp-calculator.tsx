@@ -138,7 +138,7 @@ export function MvpCalculator() {
   if (now === 0) {
     return (
       <div className="flex flex-col gap-4">
-        <PageHeader title="MVP 계산기" description="최근 13주 결제 합계로 등급이 정해져요 · 매주 수요일 23:59 마감, 목요일 반영" />
+        <PageHeader title="MVP 계산기" description="등급 = 최근 13주 결제 합계 · 수요일 23:59 마감, 목요일 반영" />
         <div className="h-40 animate-pulse rounded-lg bg-muted" />
       </div>
     );
@@ -214,24 +214,39 @@ export function MvpCalculator() {
     .map((m) => `${m.name} ${man(plan.takes[m.id])}`)
     .join(" · ");
 
-  function steps(r: Route): string[] {
-    const out: string[] = [];
-    out.push(`충전 · ${chargeText || "—"} → 현금 ${won(plan.pay)}`);
-    for (const it of r.items) out.push(`${it.name} × ${num(it.count)} 사서 경매장에 팔기 → ${won(it.won)}`);
-    if (r.mm.cash) out.push(`메이플포인트 ${num(r.mm.cash)} → 메소마켓 ${num(r.mm.eok)}억 → ${won(r.mm.won)}`);
-    if (r.gift.cash) out.push(`캐시 ${man(r.gift.cash)} 선물 → ${won(r.gift.won)} 바로 받기`);
+  /** One step per line; `sub` = small second line (credit purchases), so long lists never wrap mid-sentence. */
+  function steps(r: Route): { text: string; sub?: string }[] {
+    const out: { text: string; sub?: string }[] = [];
+    out.push({ text: `충전: ${chargeText || "—"} (현금 ${won(plan.pay)})` });
+    for (const it of r.items) out.push({ text: `${it.name} × ${num(it.count)} → 경매장 → ${won(it.won)}` });
+    if (r.mm.cash) out.push({ text: `메소마켓: ${num(r.mm.cash)}포인트 → ${num(r.mm.eok)}억 → ${won(r.mm.won)}` });
+    if (r.gift.cash) out.push({ text: `캐시 ${man(r.gift.cash)} 선물 → ${won(r.gift.won)}` });
     if (market.useCredit && r.mode !== "gift" && r.credit.total > 0) {
-      const buys = r.credit.buys.map((b) => `${b.name} × ${b.count}`).join(" + ");
-      out.push(`크레딧 ${num(r.credit.total)}${r.credit.earned ? ` (이번에 ${num(r.credit.earned)})` : ""} → ${buys || "살 수 있는 게 없어요"}${r.credit.won ? ` → ${won(r.credit.won)}` : ""}`);
+      const buys = r.credit.buys.map((b) => `${b.name} × ${b.count}`).join(" · ");
+      // Split only when credit was already there; "30,000 (이번에 30,000)" just repeated itself.
+      const had = r.credit.total - r.credit.earned;
+      const from = had > 0 && r.credit.earned > 0 ? ` (보유 ${num(had)} + 적립 ${num(r.credit.earned)})` : "";
+      out.push(
+        buys
+          ?{ text: `크레딧 ${num(r.credit.total)}${from} → ${won(r.credit.won)}`, sub: buys }
+          : { text: `크레딧 ${num(r.credit.total)}${from} → 살 것 없음` },
+      );
     }
-    if (r.mode === "gift" && market.useCredit) out.push("선물한 캐시는 크레딧이 안 쌓여요");
+    return out;
+  }
+
+  /** Side notes under the steps (not steps themselves). */
+  function notes(r: Route): string[] {
+    const out: string[] = [];
+    if (r.mode === "gift" && market.useCredit) out.push("선물 캐시는 크레딧 적립 없음");
     if (r.leftover > 0) out.push(`남는 캐시 ${num(r.leftover)}`);
+    if (r.approx) out.push("600만 원 넘음 → 근삿값");
     return out;
   }
 
   return (
     <div className="flex flex-col gap-4 lg:gap-5">
-      <PageHeader title="MVP 계산기" description="최근 13주 결제 합계로 등급이 정해져요 · 매주 수요일 23:59 마감, 목요일 반영" />
+      <PageHeader title="MVP 계산기" description="등급 = 최근 13주 결제 합계 · 수요일 23:59 마감, 목요일 반영" />
 
       <section className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
         <div className="flex min-w-0 flex-col gap-1.5 rounded-lg border border-border bg-card px-4 py-3.5">
@@ -253,7 +268,7 @@ export function MvpCalculator() {
         <Stat
           label="이번 주 결제"
           big={<span className="font-num">{won(pay)}</span>}
-          sub={pay > 0 ? `${mdw(nextThu)}부터 ${afterTier?.name ?? "등급 없음"}` : "결제할 금액을 골라 주세요"}
+          sub={pay > 0 ? `${mdw(nextThu)}부터 ${afterTier?.name ?? "등급 없음"}` : "결제 금액 선택"}
         />
         <Stat
           accent
@@ -549,7 +564,7 @@ export function MvpCalculator() {
           )}
         </div>
         {pay === 0 ? (
-          <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-[13px] text-muted-foreground">위에서 결제할 금액을 골라 주세요</p>
+          <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-[13px] text-muted-foreground">위에서 결제 금액 선택</p>
         ) : (
           <div className="grid gap-3 md:grid-cols-3">
             {routes.map((r) => {
@@ -558,23 +573,31 @@ export function MvpCalculator() {
               return (
                 <div key={r.mode} className={cn("flex min-w-0 flex-col gap-2.5 rounded-lg border bg-card p-4", isBest ? "border-primary" : "border-border")}>
                   <span className={cn("text-xs font-semibold", isBest ? "text-primary-text" : "text-muted-foreground")}>{ROUTE_LABEL[r.mode]}</span>
-                  <b className="font-num text-[28px] leading-none">{won(net(r))}</b>
+                  <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                    <b className="font-num text-[28px] leading-none">{won(net(r))}</b>
+                    <span className="text-xs text-muted-foreground">실제 부담</span>
+                    {!isBest && diff > 0.5 && <span className="text-xs font-semibold text-destructive">최저가보다 +{won(diff)}</span>}
+                  </span>
                   <span className="text-xs text-muted-foreground">
-                    {isBest ? "가장 적게 나가요" : diff > 0.5 ? `최저가보다 +${won(diff)}` : "최저가와 같아요"} · 회수 {won(r.won)} · 회수율{" "}
-                    {((r.won / Math.max(1, plan.pay)) * 100).toFixed(1)}%
+                    회수 {won(r.won)} ({((r.won / Math.max(1, plan.pay)) * 100).toFixed(1)}%)
                     {r.sales ? ` · 경매장 판매 ${num(r.sales)}회` : ""}
-                    {r.approx ? " · 600만 원을 넘어 근삿값" : ""}
                   </span>
                   {r.short > 0 && (
                     <span className="rounded-md bg-destructive/10 px-2.5 py-1.5 text-xs font-semibold text-destructive">
-                      등급까지 {won(r.short)} 덜 써요 · 그만큼 캐시를 더 써야 해요
+                      등급까지 {won(r.short)} 부족 · 캐시 추가 필요
                     </span>
                   )}
                   <ol className="m-0 flex list-decimal flex-col gap-1 pl-5 text-[13px] leading-relaxed">
                     {steps(r).map((t) => (
-                      <li key={t}>{t}</li>
+                      <li key={t.text}>
+                        {t.text}
+                        {t.sub && <span className="block text-xs text-muted-foreground">{t.sub}</span>}
+                      </li>
                     ))}
                   </ol>
+                  {notes(r).length > 0 && (
+                    <span className="text-xs text-muted-foreground">{notes(r).join(" · ")}</span>
+                  )}
                 </div>
               );
             })}

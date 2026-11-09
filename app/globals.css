@@ -143,6 +143,9 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* Korean wraps between words, not mid-word ("12 / 성"); very long tokens may still break. */
+    word-break: keep-all;
+    overflow-wrap: anywhere;
   }
   html {
     /* Keep the scrollbar slot so pages and tabs of different heights never shift sideways. */

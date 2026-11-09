@@ -179,23 +179,23 @@ export function PotentialTab() {
       const cost = (n: number) => (price > 0 ? `${eok(n * price)} 메소` : `${n.toLocaleString("ko-KR")}번`);
       if (goal === "grade") {
         const next = NEXT_GRADE[grade];
-        if (!next) return { cube: c, p: 0, cap: 0, price, auto, fixed, cost, note: "이미 가장 높은 등급이에요" };
+        if (!next) return { cube: c, p: 0, cap: 0, price, auto, fixed, cost, note: "이미 최고 등급" };
         const alt = whiteUp && !!c.upAlt;
         const up = gradeUp(c.id, grade, miracle, alt);
-        if (!up) return { cube: c, p: 0, cap: 0, price, auto, fixed, cost, note: c.fixFirst ? "등급 올리기에는 못 써요" : `${GRADE_LABEL[next]}까지 못 올라가요` };
+        if (!up) return { cube: c, p: 0, cap: 0, price, auto, fixed, cost, note: c.fixFirst ? "등급 올리기 불가" : `${GRADE_LABEL[next]}까지 불가` };
         return { cube: c, p: up.p, cap: up.cap, price, auto, fixed, cost, note: alt ? "화이트 에디셔널 큐브" : "" };
       }
       const p = optionChance(c.id);
       const note = c.fixFirst
         ? optGrade === "legendary"
           ? `첫 줄 ${primeFirstLabel(lineTables(c.id, "legendary", slotId, level))} 고정 · 경매장 가격 기준`
-          : "레전드리에서만 써요"
+          : "레전드리 전용"
         : !p
           ? soul
             ? ""
             : !optGrade
-              ? "유니크 · 레전드리에서 계산해요"
-              : `${GRADE_LABEL[optGrade]} 옵션을 못 띄워요`
+              ? "유니크 · 레전드리만 계산"
+              : `${GRADE_LABEL[optGrade]} 옵션 불가`
           : "";
       return { cube: c, p, cap: 0, price, auto, fixed, cost, note };
     });
@@ -300,7 +300,7 @@ export function PotentialTab() {
               ]}
               className="w-44"
             />
-            {level < 120 && <span className="text-xs text-destructive">120레벨 이상 장비만 계산해요</span>}
+            {level < 120 && <span className="text-xs text-destructive">120레벨 이상 장비만</span>}
           </div>
         )}
 
@@ -641,7 +641,7 @@ export function PotentialTab() {
           <span className="text-muted-foreground">목표 </span>
           <b>{goalText}</b>
         </div>
-        {results.length === 0 && <Note>큐브를 하나 이상 골라 주세요.</Note>}
+        {results.length === 0 && <Note>큐브 1개 이상 선택</Note>}
         {results.map((r, i) => {
           const avg = r.p ? averageTries(r.p, r.cap) : Infinity;
           return (

@@ -49,7 +49,7 @@ export default function RootLayout({
                 <div className="mx-auto w-full max-w-6xl">{children}</div>
                 {/* Nexon IP guide · Open API terms ask for these notices (brain wiki/research/nexon-ip-guide.md). */}
                 <p className="mx-auto mt-10 w-full max-w-6xl text-[11px] text-muted-foreground lg:hidden">
-                  MapleStory © NEXON Korea · Data based on NEXON Open API · 넥슨과 관계없는 비공식 팬 사이트예요
+                  MapleStory © NEXON Korea · Data based on NEXON Open API · 넥슨과 무관한 비공식 팬 사이트
                 </p>
               </main>
             </div>

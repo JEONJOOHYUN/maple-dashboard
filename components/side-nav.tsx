@@ -54,7 +54,7 @@ export function SideNav() {
         <br />
         Data based on NEXON Open API
         <br />
-        넥슨과 관계없는 비공식 팬 사이트예요
+        넥슨과 무관한 비공식 팬 사이트
       </p>
     </nav>
   );

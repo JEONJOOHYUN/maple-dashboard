@@ -165,7 +165,7 @@ export const navGroups: NavGroup[] = [
         short: "보스 도우미",
         href: "/boss",
         icon: ScanEye,
-        card: { title: "보스 패턴 도우미", description: "화면을 보고 다음 패턴을 소리로 알려 줘요" },
+        card: { title: "보스 패턴 도우미", description: "화면을 보고 다음 패턴을 소리로 알림" },
         needs: "PC",
         ready: false,
       },
@@ -203,7 +203,7 @@ export const placeholderPages: { slug: string; title: string; description: strin
   {
     slug: "login",
     title: "로그인",
-    description: "아이디 또는 API 키로 로그인할 수 있게 만들고 있어요.",
+    description: "아이디 또는 API 키 로그인 · 준비 중",
   },
 ];
 

@@ -24,7 +24,7 @@ export function EvCalculator() {
   return (
     <div className="flex flex-col gap-4 lg:gap-5">
       {/* One description for every tab so switching tabs never moves the tab row. */}
-      <PageHeader title="기댓값 계산기" description="목표까지 평균 메소와 횟수를 넥슨 공식 확률로 계산해요." />
+      <PageHeader title="기댓값 계산기" description="목표까지 평균 메소 · 횟수 (넥슨 공식 확률)" />
       <div role="tablist" aria-label="계산 종류" className="grid grid-cols-5 gap-0.5 rounded-lg bg-muted p-[3px]">
         {TABS.map((t) => (
           <button
