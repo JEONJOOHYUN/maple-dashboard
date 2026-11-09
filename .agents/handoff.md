@@ -10,13 +10,21 @@
   (약 1주 미사용 시 자동 일시정지됨 — 오랜만에 접속하면 첫 요청이 느릴 수 있음)
 
 > 지금 상태·결정·함정만 둔다. 디렉터리 구조·DB 스키마는 [structure.md](structure.md), 작업 규칙은 [../CLAUDE.md](../CLAUDE.md).
+> 지난 기록 원문(1단계 과정, 2단계 1~14차 세션 기록, 디자인 단계 과정, 개편 전 앱 설명)은 [history.md](history.md). 2026-11-09 정리 전 원본 `C:\dev\_backup\maple-handoff-2026-11-09\`.
 
-## 현재 상태 (2026-11-08, 1단계 코드 완료)
+## 현재 상태 (2026-11-09, 2단계 진행 중)
 
-- 코드: 마지막 기능 커밋 `cb497ac`(2026-09-18, 일일 기록 입력 이력 `log_entries`) 이후 기능 변경 없음.
-- 진행 중: 전면 개편 — 0단계 완료, **1단계(화면만 A안) + 글꼴 + 분배금 계산기 개편 완료, `redesign` 브랜치에 커밋(2026-11-08, 푸시 안 함)**. 다음 = **2단계 공개 도구**(아래 "개편 단계"). 문서는 커밋만, 푸시 안 함. `vendor/` 는 `.gitignore`·tsconfig `exclude`·eslint `globalIgnores` 로 뺌(2026-11-08) — 원본은 이 PC 에만 두는 참고용, 광고 코드·인물 그림을 공개 저장소에 올리지 않으려고.
-- 2026-11-01 Next 16.3.1 → 16.4.3 + `npm audit fix`(Next.js 10월 보안 업데이트(2026-10-14: Server Actions DoS·이미지 SVG RCE·use cache RCE, 16.4.1 에서 수정) — 이 앱은 Server Actions 를 써서 해당). 남은 audit 경고는 보통·낮음뿐(대부분 shadcn CLI 경유).
-- 2026-10-29 문서 위치 통일: 이 파일은 `.claude/docs/handoff.md` 에서 옮겨 옴.
+- 운영(`main`): 마지막 푸시 `c60f794`(2026-11-01 Next 16.4.3 보안 업데이트), 마지막 기능 변경 `cb497ac`(2026-09-18). 운영 사이트는 개편 전 모양 그대로.
+- 개편(`redesign` 브랜치, 푸시 안 함): 0단계 `bfcbcc7` · 1단계 `6e2eb10` 커밋. **2단계 공개 도구 3개(기댓값 · MVP · 핀볼) 완성, 전부 미커밋 — 커밋은 사용자 확인 후**. 썬데이 · 숨은 스펙업은 아직(넥슨 키 `NEXON_API_KEY` 는 2026-11-09 `.env.local` 에 들어옴).
+- `vendor/` 는 `.gitignore`·tsconfig `exclude`·eslint `globalIgnores` 로 뺌(2026-11-08) — 원본은 이 PC 에만 두는 참고용, 광고 코드·인물 그림을 공개 저장소에 올리지 않으려고.
+- 2026-11-01 Next 16.3.1 → 16.4.3 + `npm audit fix`(Next.js 10월 보안 업데이트 — Server Actions DoS 등, 이 앱은 Server Actions 를 써서 해당). 남은 audit 경고는 보통·낮음뿐(대부분 shadcn CLI 경유).
+
+## 다음 할 일 (2026-11-09 세션 끝)
+
+1. **커밋**(`redesign`, 사용자 확인 후 · 푸시 안 함) — 2단계 전부 + 어빌리티 4단계 칩 + 이 문서 정리. lint · build · 테스트 44개 통과.
+2. **설명 문구 전부 줄이기**(2026-11-09 사용자 요청 · 동의, 토큰 리필 뒤): 어빌리티처럼 "~해요" 없이 명사형 + 화살표("재설정 · 잠금 · 목표 수치"). 대상 = 스타포스 · 잠재 · 추옵 · 소울 · MVP · 핀볼 화면 문구. 계산은 안 건드림. 사용자가 "렌더링이 너무 오래 걸린다"고 함 → 개발 서버 탓인지 빌드본(`next start -p 3011`)에서 재 보고, 빌드본도 느리면 어빌리티 `abilityPlan` 계산 시간을 잴 것(아직 안 잼).
+3. 썬데이 메이플(명세 §4-10) · 숨은 스펙업(§4-11) — 넥슨 키 있음.
+4. 3단계 회원·권한(아래 "개편 단계").
 
 ## 전면 개편 계획 → [project-spec.md](project-spec.md)
 
@@ -30,48 +38,35 @@
   캐릭터 검색 없음(숨은 스펙업만 예외), 로그인 = 아이디 또는 API 키, 로그인 상태 4가지(비회원 / 비회원 + 키 / 아이디만 / 키 있음),
   숙제 현황 = 캐릭터 수 요약 + 캐릭터 목록(최대 36) → 선택 캐릭터의 보스 표(파티원·가격)·일일·주간, 보스 수익·가격 설정,
   강화 기록 5가지 보기, 아이콘 = lucide-react(캐릭터·아이템 그림만 Open API 이미지), 달력·요일 표기는 전부 일~토(2026-11-08 바꿈, 예외 없음 — design.md).
-- **디자인 끝(2026-11-08 사용자)** — design.md 대기 목록 11개 답을 명세에 반영함(0단계).
-- **2026-11-08 시안 추가·변경(사용자 요청, 명세 §6 → 본문에 녹임)**: 중심 기능 부주 정산 → **내 수익**(캡처로 기록, 오늘·주간·월간 수익, 여러 계정), 부주 정산은 캔버스 맨 아래 "보관"(실제 사이트·코드 없음, 화면 문구에 "부주" 안 씀),
-  비회원도 API 키만 있으면 이번 주 보스 수익(키는 브라우저에만), 새 공개 도구 MVP 계산기·썬데이 메이플·숨은 스펙업(닉네임 검색 예외). 상세 design.md "2026-11-08 추가·변경".
-  같은 날 이어서(Version 55~67): 메뉴 묶음, 보스 수익 ↔ 내 수익 링크, 내 수익 = 사냥 수익(메소 · 조각만, PC 캡처 · 직접 입력, 0에서 시작만, 보스 빼기 스위치, 가격 설정 따로, 결과 카드),
-  MVP "실제로 나가는 돈"(충전 할인 · 되팔기 효율표, Version 68 = 아이템 추가 목록), 기댓값 5탭(탭 줄 가로 꽉 채움, Version 68~69 에 잠재 이탈 칩 · 부위 고르기(무기 3 · 방어구 9 · 장신구 6) + 소울 · 소울 공식 확률 · 어빌 레전1+유니크2 메소 없음 추가, 명세 §4-8 · §4-9 / 스타포스 · 잠재 · 추옵 · 소울 · 어빌리티 — 무기 잠재 · 무기 추옵은 넥슨 공식 확률로 정확히 계산, 인벤 글 검증 결과는 명세 §4-8).
+- **디자인 끝(2026-11-08 사용자)** — design.md 대기 목록 11개 답을 명세에 반영함(0단계). 시안 수정 끝 = 캔버스 Version 71.
+  2026-11-08 시안 추가·변경 요지: 중심 기능 = **내 수익**(부주 정산은 캔버스 "보관", 화면 문구에 "부주" 안 씀), 새 공개 도구 기댓값 · MVP · 핀볼 · 썬데이 · 숨은 스펙업, 보스 도우미 대상 = 카링·흉성·림보·발드릭스·유피테르. 과정 원문은 history "디자인 단계 과정 기록", 상세 design.md.
 - **캔버스 고치는 방법(다음 세션용)**: Artifact `read`(url + `paths`)로 `project/*.dc.html` 을 scratchpad 에 받아 고치고, 같은 `url` + `root` 로 게시(보드 위치·크기를 바꾸면 `project/canvas.json` 도 다시 읽고 같이).
   고친 뒤 검사: `node C:/dev/_work/maple-canvas/scripts/check-dc.mjs <받은 project 폴더>`(모든 {{ }} 가 채워지는지 · 화면 블록 하나만 켜지는지), `tags.mjs <파일들>`(태그 짝). `flame.mjs` = 추옵 공식 확률 계산 예.
   눈으로 확인: 크롬으로 캔버스를 열고 보드 클릭 → 확대 메뉴(▾) "Zoom to selection" → 보드 PLAY → "Play full screen" → Fill.
-- 2026-11-08 시안·명세 반영: 부주 정산 인센티브 = "실제로 준 금액"이 계산보다 많은 차이(입력 칸 없앰) + 정산 내역 표, 보스 도우미 대상 = 카링·흉성·림보·발드릭스·유피테르(명세 §4-4·§4-5, design.md).
-- 2026-11-08 캔버스 B·C 삭제, 새 도구 추가 — 핀볼 추첨(`Pinball`, C안 기반)·기댓값 계산기(`StarEv`, A+B) 시안 → A 프로토타입 메뉴·모바일 보드에 연결함(design.md "새 도구", 명세 §4-7·8).
-- 핀볼 원본: 사용자가 github.com/lazygyu/roulette ZIP 을 `vendor/roulette/` 에 풀어 둠(2026-11-08 확인, 받은 그대로·설치·실행 안 함, 맵 이식은 사용자 몫·Claude 는 연결만). 구현 때는 필요한 코드만 우리 폴더(예: `lib/pinball/`)로 옮겨 광고 코드·인물 그림을 빼고, 원본 `LICENSE` 사본을 함께 커밋 — 라이선스 검토는 명세 §4-7, brain `wiki/research/marble-roulette-license.md`.
+- 핀볼 원본: 사용자가 github.com/lazygyu/roulette ZIP 을 `vendor/roulette/` 에 풀어 둠(받은 그대로). 라이선스 검토는 명세 §4-7, brain `wiki/research/marble-roulette-license.md`.
 - 개편 전 보안 구멍(관리자 확인 없는 액션, 쿠키에 비밀번호 원문)은 명세 §5, 아직 열림 → 3단계에서 옛 관리자 방식을 통째로 없애며 닫는다.
 - **2026-11-08 사용자 결정**: 기존 데이터는 옮기지 않고 새로 시작(백업 `C:\dev\_backup\maple-db-2026-11-08\`, git 밖). 옛 관리자 방식(`/admin`·`ADMIN_PASSWORD`·관리자 쿠키·액션)은 통째로 없앰, 운영용 관리자 기능은 지금 안 만듦(명세 §1·§5).
 
 ## 개편 단계 (2026-11-08 사용자 지시 — 단계마다 보고하고 멈춤, 사용자가 "다음"이라고 하면 진행)
 
-- **0단계 문서 정리** — 완료(2026-11-08): 명세·design.md 에 11개 답 반영, 메이플스토리 서체 라이선스 확인(명세 §2 "글꼴"). `vendor/` 는 이미 `.gitignore`(`937bb0a`). 커밋은 사용자 확인 후.
-- **1단계 결과(2026-11-08, `redesign` 브랜치에 커밋, 푸시 안 함)**: 토큰 = `globals.css`(A안 색, 반경 8px, `primary-text`·`primary-soft`·`gain`·`loss` 추가), 메뉴 정의 `lib/nav.ts` 하나 → 왼쪽 메뉴(`side-nav`, lg 이상)·모바일 묶음 탭 + 아래 탭(`site-header`)·홈 카드.
-  없는 기능은 `app/[tool]/page.tsx` "준비 중"(목록에 없는 주소는 404, 실제 기능은 자기 폴더를 만들면 이게 이김). 로그인 버튼 → `/login` 준비 중. 홈 = 비회원 상태(이번 주 카드 · 썬데이 준비 중 · 내 수익 소개 · 도구 카드 11개).
-  분배금 계산기 = 로직 그대로 겉모습만(meso.png 대신 "메소" 글자). Clarity = `components/clarity.tsx`. 옛 `nav-tabs`·`lib/tools.ts`·Paperlogy 글꼴 삭제.
-  **사용자 결정(1단계 시작 때)**: 부주 정산(`/settlement`)은 메뉴에서만 빼고 코드는 3단계에서 `/admin`·옛 테이블과 함께 삭제(주소로 들어가면 옛 모양). 본문 글꼴은 처음 IBM Plex Sans KR 로 정했다가 바꿈(아래).
-  메이플스토리 서체 = **넥슨 공식 zip 의 OTF 를 손대지 않고**(`fonts/Maplestory/`, 라이선스 안내 `LICENSE.md`) — fonts-archive 미러는 제3자가 woff2 변환·글자 쪼개기를 한 것이라 "수정 편집 재배포 금지"에 더 가까워 안 씀. TTF(1.4MB)보다 OTF(690KB)가 같은 공식 파일이면서 절반.
-  **글꼴 최종(2026-11-08 사용자 "추천대로")**: 본문·제목 = **Pretendard**(공식 npm `pretendard@1.3.9` 의 가변 동적 서브셋 92조각을 `fonts/Pretendard/` 에 그대로, `app/layout.tsx` 에서 CSS import, OFL), 메이플 서체 = **큰 숫자에만** `font-num`(`unicode-range: U+0020-007E` 이라 억·명 같은 한글 단위는 Pretendard).
-  과정: 처음엔 한글 제목까지 메이플 서체 → "보기 힘들다" → 시안을 확대해 보니 한글 제목은 IBM Plex, 숫자만 메이플이었음 → IBM Plex 도 "균등 분배·분배 글씨가 이상하다" → Codex·brain(`_fonts/README.md`) 의견 + 비교 아티팩트 https://claude.ai/artifact/UqWCpetpRXcT4QmKKBdam2 (A Pretendard · B SUIT · C Noto Sans KR · 지금 IBM Plex) → A 추천안 확정.
-  분배금 화면 첫 로드 글꼴 약 960KB(Pretendard 조각 11개 + 메이플 Bold 약 680KB).
-  **분배금 계산기 다시 짜기(2026-11-08 사용자 요청 → A안 확정, 코드 반영함)**: 보내 준 결과 카드 그림(파티장 % · 금액 · 한글 단위 · "실수령 기준 잔여" / 파티원 "전달 금액 (수수료 포함)") + mefit.co.kr/boss-split 처럼 인원 고르기(2~6명), 복사 = 이미지 복사 + 금액만(예 3000000).
-  시안 3개 캔버스 https://claude.ai/artifact/YYTQ3PRL1hQodJ3z1MixXk — A 결과 카드형(추천) · B 좌우 작업대형(mefit 식, 오른쪽 "보낼 금액") · C 정산서형(입력 한 줄 + 공유용 정산서). 계산식은 지금 `computeBossSplit` 그대로(파티원 카드 = beforeMeso, 파티장 = finalMeso).
-  사용자 결정: 수수료 = 3%·5% 고르기만(직접 입력·0% 없음), 파티원 이름 바꾸기 유지(결과 카드에서), 금액은 1메소 단위. 이미지 복사 = `lib/split-image.ts` 캔버스로 직접 그림(새 의존성 없음, 클립보드 안 되면 PNG 저장). 금액 복사 = 숫자만.
-  확인: 112억·3%·2명 → 5,349,279,188 / 5,514,720,812, 40·20·20·20 5% 확인, 이미지(가로챈 PNG 화면 확인), 375px 가로 넘침 없음. 수수료·인원 배치 = 배치 3안 보드(`Controls.dc.html`, 같은 캔버스) 중 **A 꽉 찬 한 줄 버튼** 확정·반영(휴대폰에서도 2~6 한 줄, 데스크톱은 수수료 2fr · 인원 5fr 나란히).
-  Codex 리뷰(gpt-6.1-sol): 3명 이상 이미지에서 설명 글이 카드 폭을 넘음 → 줄바꿈 + 카드 높이 자동, 6명 이미지로 확인. 반영이 지적 그대로라 다시 리뷰 생략.
-  같은 날: 분배 비율 버튼 "비율 직접" → "자율"(사용자), 자율 비율 칸 = 폭을 나눠 갖는 격자(2·3명 한 줄, 4명 2×2→데스크톱 4칸, 5·6명 3칸→데스크톱 한 줄), 칸 안에 이름 · 큰 숫자 · %.
-  **함정**: 한글 구글 글꼴은 `preload` 를 켜면 글자 조각 약 280개를 전부 미리 받음 → `preload: false`(메이플 서체도). 홈 첫 화면 글꼴 합계 약 1MB(메이플 Bold 약 680KB 포함).
-  확인: lint/build, 크롬으로 데스크톱 다크·라이트, 375px(iframe) 다크·라이트, 가로 넘침 없음, 분배금 10억 입력 → 1인당 477,614,213, Codex 리뷰(기본 모델) 지적 없음. "Data based on NEXON Open API" 문구는 넥슨 데이터를 쓰기 시작할 때 넣는다.
-- **1단계 화면만 A안** (DB·로그인 안 건드림): 새 브랜치 `redesign`(main·운영 사이트 그대로). A안 색·글꼴·간격 → `globals.css` 토큰, 왼쪽 메뉴·모바일 탭·홈 틀 = shadcn, 아이콘 = design.md 확정표.
-  분배금 계산기는 동작 그대로 겉모습만. **지금 있는 부주 정산 화면은 A안으로 옮기지 않는다**(2026-11-08 사용자 — 옛 페이지를 그대로 둘지 지울지는 1단계 시작 때 확인).
-  내 수익·MVP·썬데이·숨은 스펙업 등 아직 없는 기능은 메뉴·홈에 자리만 두고 "준비 중" 카드.
-  Microsoft Clarity: `app/layout.tsx` 에 `next/script`, ID = `NEXT_PUBLIC_CLARITY_ID`(없으면 안 불러옴), production 에서만·localhost 꺼짐, API 키·비밀번호 칸에 `data-clarity-mask="true"`, 새 의존성 없음(ID 값은 사용자가 Vercel 에).
-  확인 = lint/build, 375px·데스크톱, 라이트·다크 스크린샷, 로직을 건드렸으면 Codex 리뷰. 커밋은 확인 후, 푸시는 사용자가 말할 때만.
-- **2단계 공개 도구**(로그인 없이): 기댓값 계산기 = 실제 스타포스 확률·비용(출처를 명세 §4-8 에), 파괴 방지·확정 복구·노작값·배율, 계산 함수는 `lib/` 에 따로 + 테스트 케이스.
-  핀볼 = 명세 §4-7(광고 코드·인물 그림 빼고, 코스는 우리 것). 아이템 가격 등 기본값은 데이터 파일 하나에 날짜와 함께.
-  **MVP 계산기**(§4-9, 등급 기준 공식 확인, 결제 금액은 비회원 브라우저 저장), **썬데이 메이플**(§4-10, 공지 API + 지난 기록 데이터 파일),
-  **숨은 스펙업**(§4-11, 우리 서버 키로 캐릭터 조회 → 키 환경변수·`lib/nexon/`·캐시·하루 한도 안내가 필요, 규칙은 데이터 파일).
+- **0단계 문서 정리** — 완료(2026-11-08, `bfcbcc7`): 명세·design.md 에 11개 답 반영, 메이플스토리 서체 라이선스 확인(명세 §2 "글꼴").
+- **1단계 화면만 A안 + 글꼴 + 분배금 계산기 개편** — 완료, `redesign` 브랜치 커밋 `6e2eb10`(2026-11-08). 토큰 `globals.css`, 메뉴 정의 `lib/nav.ts`, 없는 기능은 `app/[tool]/page.tsx` "준비 중", 글꼴 = Pretendard + 큰 숫자만 메이플 서체(`font-num`), Clarity `components/clarity.tsx`. 상세·과정·함정(구글 한글 글꼴 `preload: false` 등) 원문은 [history.md](history.md) "개편 1단계".
+- **2단계 공개 도구(로그인 없이)** — 기댓값 · MVP · 핀볼 완료(미커밋), 썬데이 · 숨은 스펙업 남음. 차수별 기록 원문은 [history.md](history.md) "개편 2단계 세션 기록".
+  - **기댓값 계산기** `/ev`(스타포스 · 잠재 · 추옵 · 소울 · 어빌리티 5탭). 계산 `lib/ev/*.ts`, 테스트 `npm test`(= `node --test`, 44개). 데이터 `lib/ev/data/potential.json`(넥슨 공식 큐브 옵션표, GetSearchProbList) · `ability.json`(공식 어빌리티 옵션표), 기본값 `lib/ev/defaults.ts`(날짜와 함께). 출처·검증은 명세 §4-7 · §4-8 · §4-9. 확률표 다시 받는 스크립트 `C:/dev/_work/maple-ev-data/`(git 밖, README 에 순서).
+  - **MVP 계산기** `/mvp` = **C안(효율 순위판) 확정**(시안 https://claude.ai/artifact/LPEC3cM7S9A1Ae4fAKjALf). 계산 `lib/mvp.ts`(`sellRoute` · `creditPlan` 배낭 DP, 600만 원 넘으면 근삿값 `route.approx`), 저장 키 `mvp:settings2`.
+  - **핀볼 추첨** `/pinball` = `vendor/roulette` 엔진을 `lib/pinball/` 로 옮김(광고 · 커뮤니티 맵 · 녹화 · 인물 그림 등 뺌, 원본 `LICENSE` 사본). 코스 = 원본 맵 "Wheel of fortune" 하나(MIT 출처 표기, 광고판만 뺌, `stage.ts`), 물리 = 새 의존성 `box2d-wasm@7.0.0`(Zlib), 구슬 = 색깔 공.
+  - 비회원 저장 = `lib/use-stored.ts`(localStorage, 실패하면 메모리), 시계 = `lib/use-now.ts`.
+  - **어빌리티 계산**(`abilityPlan`): 상태 = 잠근 줄 + 수치 목표 달성 여부, 매 재설정 뒤 그대로 / 잠금 / 서큘레이터 중 가장 싼 길을 값 반복으로 고름. 화면 단계 ①시작 ②첫째 줄 ③둘째 · 셋째 줄 ④남은 줄에 하나 더 ⑤수치.
+    ③ · ④ 제목 옆 "뜬 옵션" 칩(④는 ③을 고른 뒤에만 보임, ③을 바꾸면 ④ 초기화, 조합 · 등급을 바꾸면 둘 다 해제, 목표 수치 · 가격 · 썬데이처럼 계산이 바뀌면 ④ 해제 — ③ 처리 방식이 바뀌어 ④ 숫자가 틀려짐, Codex 지적) → 위 요약이 그 상황의 남은 비용 + "처음부터 평균 n억 · n억 덜 들어요". 남은 재설정 횟수 = `afterFirstLower[].resets` · `afterTwo[].resets`.
+  - **사용자 결정**: 서큘레이터 개수 = (1 − P) ÷ P(ygh · chuchu 는 1 ÷ P — 수학적으로 맞는 쪽이 신뢰가 감), 천장 = N번 연속 실패 뒤 다음 번 확정(`gradeUp` cap = 보장 횟수 + 1), 메소를 항상 먼저(큰 숫자 · 정렬 · 운 칸), 정해진 재설정 비용은 입력 칸 없이 글자만,
+    에디 재설정 · 화이트 에디셔널 큐브는 한 줄(`upAlt`), 방어구 · 장신구 주스탯 목표 = maplescouter 환산(`STAT_CONV_DEFAULT`, 저장 `ev:statConv`), 메소마켓 기본 2,100메포, 명성치 가격 = 5,000당 "만" 입력(기본 200).
+  - **넥슨 그림(2026-11-09, brain `wiki/research/nexon-ip-guide.md`)**: 원본 게임 그림은 공개 저장소 · 사이트에 안 씀 → 소울 그림 · starforce.gg PNG 는 `C:\dev\_backup\maple-nexon-art-2026-11-09\` 로 옮김. 장비 그림 = Open API 아이콘 주소(`STAR_ITEMS[].icons`, 키 없이 열림). 표기 "MapleStory © NEXON Korea · Data based on NEXON Open API · 비공식" = 데스크톱 사이드 메뉴 맨 아래, 모바일 페이지 끝.
+  - 사이트 대조 끝(2026-11-09): starforce.gg · boomback · mesu.live · maplemoru · mapletiptip · chuchu.gg · ygh.kr · begchi 와 확률 · 메소 일치(차이 나는 곳의 이유는 history).
+  - **확인 필요(사용자)**: 추옵 탭 환산 기본값(올스탯1%=10 · 공1=4)을 잠재 탭 maplescouter 환산에 맞출지, MVP 크레딧 적립 5%(maple-mvp.com 기준), 에디 방어구 주스탯 합에 9레벨당 · 공 정수를 안 세는 부분이 maplescouter 환산 반영 뒤에도 남았는지.
+  - **함정**: box2d-wasm 의 Emscripten 코드가 `require('fs')` 를 품어 `next.config.ts` `turbopack.resolveAlias`(fs · path → `lib/empty-module.ts`, browser 만). 이 설정을 바꾼 뒤 개발 서버(3001)가 다시 읽지 않아 **페이지가 무한 새로고침** → 개발 서버를 껐다 켜야 함.
+    한 폴더에 `next dev` 는 하나만(두 번째는 "Another next dev server" 로 꺼짐) → 확인용은 `next build` 후 `next start -p 3011`. 백그라운드 `npx next start` 를 작업 중지로 끄면 node 자식이 남아 3011 을 계속 잡음(2026-11-09) → 명령줄을 확인하고 그 PID 를 끈다.
+    JSON import 는 `with { type: "json" }`(node --test 에 필요). 크롬 창 크기를 375로 줄여도 `innerWidth` 가 안 바뀜 → 같은 출처 페이지에 375px iframe 을 넣어 확인.
+  - 남은 도구: **썬데이 메이플**(§4-10, 공지 API + 지난 기록 데이터 파일), **숨은 스펙업**(§4-11, 우리 서버 키로 캐릭터 조회 → 키 환경변수 · `lib/nexon/` · 캐시 · 하루 한도 안내, 규칙은 데이터 파일).
 - **3단계 회원·권한**(명세 §1·§5): 냠냠과 같은 Supabase 프로젝트 → 전체 인증 설정·`nyamnyam` 스키마 안 건드림, 가입 = 서버 `auth.admin.createUser` + `app_metadata.app = "maple"`, 로그인은 그 계정만, service role 서버 전용.
   아이디 로그인(가상 이메일)·API 키 로그인(ouid). 새 테이블 `user_id NOT NULL` + RLS `auth.uid() = user_id`. 옛 public 테이블·트리거·함수 삭제는 새 사이트 배포 때(SQL 은 실행 전에 보여 줌).
   옛 관리자 방식 삭제. 대시보드 설정·키 입력은 사용자가(할 일 목록으로 줌). 개인정보처리방침 페이지(Clarity 수집 내용 포함, 캡처 이미지는 서버로 안 보냄·비회원 키는 브라우저에만도 적기). Codex 리뷰 기본 모델.
@@ -80,18 +75,16 @@
   (내 수익을 맨 앞에 둔 건 Claude 판단 — 순서는 사용자가 바꿀 수 있음.)
   넥슨 API 는 서버에서만, 하루 1,000건 제한이라 캐시, "Data based on NEXON Open API" 표기, 저장한 데이터는 30일 안에 갱신.
 
-
 ## 기술 스택
 
 - Next.js 16.4.3 (App Router, Turbopack), React 19.2.8, TypeScript
 - Tailwind CSS v4 (`@custom-variant dark (&:where(.dark, .dark *))`), `next-themes` (다크모드)
+- 글꼴 = Pretendard(`fonts/Pretendard/`) + 큰 숫자만 메이플스토리 서체(`fonts/Maplestory/`, `font-num`) — 1단계에서 Paperlogy 를 바꿈.
 - **shadcn/ui** (style `base-nova`, Base UI 기반) — `components.json`, `components/ui/*`에 소스가
-  복사되는 방식. 현재 `Button`, `Input`을 정산 계산기/일일 기록 폼에서 사용.
-  클래스 병합은 `cn` 패키지(`lib/utils.ts`가 re-export). 새 컴포넌트는
+  복사되는 방식. 클래스 병합은 `cn` 패키지(`lib/utils.ts`가 re-export). 새 컴포넌트는
   `npx shadcn@latest add <name>`으로 추가.
   주의 1: `shadcn init`이 `app/globals.css`와 `app/layout.tsx`를 덮어쓰면서 Geist 폰트를
-  넣어버렸던 적이 있어, 로컬 Paperlogy 폰트와 slate 배경/오렌지 primary 토큰은 수동으로
-  되돌려놨습니다. shadcn CLI를 다시 돌릴 때는 두 파일의 diff를 꼭 확인하세요.
+  넣어버렸던 적이 있다. shadcn CLI를 다시 돌릴 때는 두 파일의 diff를 꼭 확인하세요.
   주의 2 (다크모드 버그): `globals.css`에서 **`:root`(라이트)가 반드시 `.dark`보다 먼저**
   와야 합니다. 두 셀렉터는 명시도가 같아서 순서가 뒤집히면 `.dark`가 `:root`에 덮여
   다크모드에서 배경/글자색이 라이트 값 그대로 남습니다 (shadcn init이 실제로 이 순서를
@@ -101,65 +94,16 @@
 - 데이터 mutation은 전부 Server Actions(`"use server"`)로만 처리. 클라이언트 fetch/API route 없음.
 - 캐싱: `unstable_cache`로 읽기 캐시 + `updateTag`로 Server Action 안에서 즉시 무효화
   (Cache Components 신모델이 아니라 "Previous Model" 유지 — 영향 범위를 좁게 가져가기 위한 의도적 선택)
+- Vercel 함수 리전 `icn1` 고정(`vercel.json`) — 미국 리전에서 서울 Supabase 를 부르면 느렸음(해결 과정은 history).
+- 환경변수(`.env.local`, gitignored, 값은 출력 · 커밋 · 문서 기록 금지): `SUPABASE_URL` · `SUPABASE_ANON_KEY` · `ADMIN_PASSWORD`(3단계 운영 배포 뒤 삭제) · `NEXON_API_KEY`. 키 이름은 `.env.local.example`.
 - 이 Next 버전은 학습 데이터보다 최신이라 `node_modules/next/dist/docs/`를 직접 참고해야 함 (AGENTS.md 참고)
 
-### 중요 인프라 이슈: 리전 문제 (해결됨)
+## 개편 전 앱(옛 코드, 3단계에서 삭제 예정)
 
-부주 정산 페이지가 항상 느렸던 원인은 Vercel 서버리스 함수가 미국 리전에서 실행되고
-Supabase는 서울(ap-northeast-2)에 있어서 매 요청마다 태평양을 왕복한 것 (`x-vercel-id`
-헤더로 `icn1::iad1::...` 확인해서 진단). `vercel.json`에 `{"regions": ["icn1"]}`을
-추가해 함수를 서울에 고정 → 1100~1700ms에서 95~374ms로 개선, 이후 `unstable_cache` +
-`updateTag` 캐싱 레이어(`lib/queries.ts`) 추가로 51~75ms까지 개선.
+- 부주 정산 `/settlement`(메뉴에서만 빠짐, 주소로 들어가면 옛 모양) · 관리자 `/admin` · 정산 계산 `lib/settlement-math.ts` · 캐시 `lib/queries.ts`. 설명 원문은 [history.md](history.md) "개편 전 앱 설명".
+- 보스 분배금 계산 `lib/boss-split-math.ts`(chuchu.gg 산식)는 1단계에서 새 화면으로 옮겨 계속 씀.
 
-## 핵심 로직
+## 세션 기록
 
-- **정산 계산** (`lib/settlement-math.ts`): `computeSettlement(fragmentCount, pureMeso,
-  fragmentPrice, cashRate, incentiveMeso=0)` → 조각을 가격×현금화비율로 환산한 총 메소에서
-  경매장 수수료 3%(`AUCTION_HOUSE_FEE_RATE`)를 떼고, 순수 메소·인센티브 메소를 더해 최종
-  합계 메소와 KRW 환산액 산출.
-- **보스 분배금** (`lib/boss-split-math.ts`, chuchu.gg 리버스 엔지니어링): 파티장은 2차
-  수수료를 내지 않고, 파티원 몫은 `(1 - feeRate)`로 나눠서(재판매/양도 시 세금 반영) 역산.
-  아이템 여러 개 등록 시 총액을 합산한 뒤 분배.
-- **캐싱** (`lib/queries.ts`): `getWorkers()`는 태그 `"workers"`, `getWorkerData(workerId)`는
-  태그 `` `worker-${workerId}` ``로 5분(`revalidate: 300`) 캐시. 모든 mutation Server Action이
-  끝나면 관련 태그를 `updateTag()`로 즉시 무효화 + `/admin` 페이지는 `revalidatePath`.
-
-## 관리자 페이지 (`/admin`) — 개편 3단계에서 통째로 삭제 예정(지금 코드 설명)
-
-- 비밀번호는 `ADMIN_PASSWORD` 환경변수로만 관리 (값은 코드·저장소·문서에 적지 않는다).
-- httpOnly 쿠키에 비밀번호를 저장해 로그인 상태 유지, `adminLogout`으로 해제.
-- 부주 이름 변경/삭제, 일일 기록 전체 수정/삭제, 정산 내역 전체 수정(인센티브 포함)/삭제 가능.
-- 앞으로 새 도구가 추가되면 이 admin 대시보드도 확장하는 것이 원칙.
-
-## 환경변수 (`.env.local`, gitignored — 실제 값은 절대 커밋 금지)
-
-```
-SUPABASE_URL=
-SUPABASE_ANON_KEY=
-ADMIN_PASSWORD=
-```
-`.env.local.example`에 키 이름만 플레이스홀더로 문서화되어 있음. Vercel 프로젝트 설정에도
-동일한 3개 환경변수가 등록되어 있어야 배포본이 정상 동작함.
-
-## 지금까지 만든 기능 (탭)
-
-1. **부주 정산** (`/settlement`)
-   - 부주 탭 전환 (부주별로 독립된 데이터), "+ 부주 추가"
-   - 일일 사냥 기록 입력(순수 메소 + 조각 개수), 기본은 해당 날짜 기존 값에 **더하기**
-   - "수정하기" 버튼: 클릭 시 선택된 날짜에 저장된 값을 폼에 불러와서 그 값 기준으로 수정 →
-     저장 시 덮어쓰기(overwrite)로 처리. "취소"로 원래(더하기) 모드 복귀.
-   - 일일 기록 테이블은 5개씩 페이지네이션(클라이언트 사이드).
-   - 실시간 시세 연동 계산기는 **2단계**로 분리되어 있습니다:
-     1. **조각 판매** (오렌지 강조 블록): 판매할 조각 개수(비우면 전량) × 조각 가격 → 수수료 3%
-        차감 → `fragment_sales`에 insert. 누적 조각이 줄고 누적 메소가 늘어납니다.
-     2. **현금 정산**: 보유 메소 + 인센티브 메소 → 현금화 비율로 KRW 환산 → `settlements`에
-        insert. 누적 메소에서 정산액이 빠집니다.
-   - 숫자 입력은 전부 `number | ""` 상태로 관리합니다. 빈 칸을 0으로 되돌리면 "0이 안 지워지는"
-     컨트롤드 인풋 버그가 생기므로, 절대 `Number(e.target.value)`만 쓰지 말 것
-     (`numberInputHandler` 헬퍼 사용).
-2. **보스 분배금** (`/boss-split`, DB 미사용)
-   - https://chuchu.gg/simulators/boss-profit 과 동일한 산식 재현.
-   - 아이템 여러 개 등록 가능(각각 콤마 포맷 입력) → 합산 후 분배.
-   - 총 판매액/실수령액 표시(4억7500만 메소 같은 한글 단위 포함), 수수료 %, 멤버 균등/자율 분배,
-     "결과 복사" 버튼(`이름 : 정수` 형식으로 클립보드 복사).
-3. **관리자 페이지** (`/admin`) — 위 설명 참고.
+- 2026-11-08: 0단계 · 1단계 커밋, 2단계 기댓값 · MVP · 핀볼(상세 history).
+- 2026-11-09: 2단계 1~14차 수정(상세 history), 어빌리티 4단계 "뜬 옵션" 칩 + `afterTwo[].resets`(테스트 44개, 크롬 3011 빌드본 데스크톱 다크 · 375px iframe 다크 · 라이트, 넘침 없음), 어빌리티 안내 문구를 명사형 화살표로 줄임(사용자: "~해요" 없이 "재설정 · 잠금 · 목표 수치" 식, 예 "서큘레이터로 목표 수치 → 잠금 → 고급 재설정", 제목 "가장 싼 순서", "n억 절약"), Codex 집중 리뷰(gpt-6.1-sol) 지적 1개(계산 조건이 바뀌어도 ④ 선택이 남음) 반영 · 크롬 재확인(지적 그대로라 다시 리뷰 생략), handoff 34KB → 정리(원문 history).

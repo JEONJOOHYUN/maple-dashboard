@@ -48,6 +48,14 @@ export function SideNav() {
           ))}
         </div>
       ))}
+      {/* Nexon IP guide · Open API notices, always in the same place on desktop (mobile: end of the page). */}
+      <p className="mt-auto px-2.5 pt-6 text-[11px] leading-relaxed text-muted-foreground">
+        MapleStory © NEXON Korea
+        <br />
+        Data based on NEXON Open API
+        <br />
+        넥슨과 관계없는 비공식 팬 사이트예요
+      </p>
     </nav>
   );
 }

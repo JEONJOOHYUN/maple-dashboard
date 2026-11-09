@@ -20,6 +20,9 @@ maple-dashboard/
       actions.ts               # upsertLog, deleteLog, settleUp, deleteSettlement
     boss-split/
       page.tsx                # 보스 분배금 계산기 (DB 없음, 완전 클라이언트 사이드)
+    ev/page.tsx               # 기댓값 계산기 → components/ev/ev-calculator.tsx (5탭)
+    mvp/page.tsx              # MVP 계산기 → components/mvp/mvp-calculator.tsx
+    pinball/page.tsx          # 핀볼 추첨 → components/pinball/pinball-game.tsx
     admin/
       page.tsx                 # 쿠키 체크 → 로그인 폼 or 대시보드
       actions.ts                # adminLogin/adminLogout, updateLog, updateSettlement
@@ -34,6 +37,8 @@ maple-dashboard/
     theme-provider.tsx / theme-toggle.tsx
     icon-value.tsx              # 아이콘+숫자 표시 헬퍼
     activity-calendar.tsx        # 일별 조각/메소 아이콘 달력, 월별 합계
+    ev/                       # 기댓값 탭 5개(starforce · potential · flame · soul · ability) + ui.tsx(칩 · 세그먼트 · 결과 카드 등 공용)
+    mvp/ · pinball/           # MVP · 핀볼 화면
   lib/
     supabase.ts               # supabase 클라이언트 + Worker/HuntingLog/Settlement 타입
     queries.ts                  # getWorkers(), getWorkerData(workerId), workerTag() — unstable_cache 래핑
@@ -43,6 +48,11 @@ maple-dashboard/
     meso-input.ts                  # 콤마 포맷 + 캐럿 위치 유지 입력 핸들러
     constants.ts                    # AUCTION_HOUSE_FEE_RATE = 0.03
     nav.ts                           # 메뉴 묶음·도구 목록(아이콘·홈 카드 문구·준비 중 여부) — 메뉴·홈이 공유
+    ev/                               # 기댓값 계산 함수(starforce · potential · flame · soul · ability · luck) + *.test.ts, data/(공식 확률표 JSON), defaults.ts(가격 기본값 + 날짜)
+    mvp.ts (+ test)                   # MVP 등급 · 주차(목~수, KST) · 충전 계획 · 되팔기 효율
+    pinball/                          # lazygyu roulette 엔진(MIT, LICENSE 사본) 정리본 + 우리 코스 stage.ts
+    use-stored.ts / use-now.ts        # 비회원 브라우저 저장(localStorage) / 30초 시계
+    empty-module.ts                   # box2d-wasm 의 fs·path 를 브라우저에서 비우는 별칭(next.config.ts)
   components/ui/             # shadcn/ui 컴포넌트 (button, input, badge, alert-dialog) — 직접 수정 가능
   fonts/Maplestory/          # 넥슨 공식 OTF 그대로 + LICENSE.md
   fonts/Pretendard/          # 공식 가변 동적 서브셋(92조각) + LICENSE.txt(OFL)

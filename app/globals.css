@@ -145,6 +145,8 @@
     @apply bg-background text-foreground;
   }
   html {
+    /* Keep the scrollbar slot so pages and tabs of different heights never shift sideways. */
+    scrollbar-gutter: stable;
     @apply font-sans;
   }
 }
