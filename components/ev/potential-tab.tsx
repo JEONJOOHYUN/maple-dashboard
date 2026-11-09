@@ -1,12 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Minus, Plus } from "lucide-react";
+import { ChevronDown, Minus, Plus } from "lucide-react";
 import { Label, LuckRow, Note, NumberField, Panel, Segment, Switch, count, eok, parseNum, pct } from "@/components/ev/ui";
 import { CREDIT_SHOP, STAT_CONV_DEFAULT } from "@/lib/ev/defaults";
 import { averageTries } from "@/lib/ev/luck";
 import { useStored } from "@/lib/use-stored";
-import {
+import { type MainStat,
   CUBES,
   GRADE_LABEL,
   NEXT_GRADE,
@@ -68,13 +68,19 @@ export function PotentialTab() {
   const [kind, setKind] = useState<Exclude<PotKind, "soul">>("main");
   const [grade, setGrade] = useState<Grade>("legendary");
   const [goal, setGoal] = useState<"grade" | "opt">("opt");
-  const [attack, setAttack] = useState<"atk" | "matk">("atk");
+  // No 공격력 / 마력 choice: the official table gives attack and magic lines the same values and chances on every slot
+  // (188 pairs checked 2026-11-10), so every result is the same; labels say "공/마".
+  const attack: "atk" | "matk" = "atk";
+  // Xenon counts all stat %, Demon Avenger max HP % (own values and chances in the official table).
+  const [mainStat, setMainStat] = useStored<MainStat>("ev:mainStat", "str");
   const [ied, setIed] = useState(true);
   const [min, setMin] = useState({ a: 0, b: 0, i: 0, v: 3 });
   const [tier, setTier] = useState<WeaponGoal["tier"]>("v3");
   const [addGoal, setAddGoal] = useState<AddWeaponGoal>("a21");
   const [extra, setExtra] = useState<Extra>("stat");
   const [targetIdx, setTargetIdx] = useState(1);
+  // Gloves (crit damage) / hats (cooldown): how many lines of that option and of main stat (user, 2026-11-10, option B).
+  const [combo, setCombo] = useState({ lines: 1, stat: 1 });
   const [soulStage, setSoulStage] = useState(4);
   const [chosen, setChosen] = useState<CubeId[] | null>(null);
   const [miracle, setMiracle] = useState(false);
@@ -82,6 +88,9 @@ export function PotentialTab() {
   // Prime cube on a weapon (main potential): which line 1 is kept.
   const [primeFirst, setPrimeFirst] = useState<"a" | "b" | "i">("a");
   const [convText, setConvText] = useStored<ConvText>("ev:statConv", CONV_TEXT_DEFAULT);
+  // Conversion inputs are detail most people never touch: closed until asked for (user, 2026-11-10).
+  const [convOpen, setConvOpen] = useState(false);
+  const convChanged = (Object.keys(CONV_TEXT_DEFAULT) as (keyof ConvText)[]).some((k) => (convText[k] ?? "") !== CONV_TEXT_DEFAULT[k]);
   const [customMin, setCustomMin] = useState("");
   const [prices, setPrices] = useState<Record<string, string>>({});
 
@@ -117,15 +126,28 @@ export function PotentialTab() {
   const sumTargets: { label: string; sub: string; goal: SumGoal }[] = useMemo(() => {
     if (!refRows) return [];
     if (target === "stat") {
-      const chips = statTargets(refRows).map((n) => ({ label: `${n}%`, sub: "이상", goal: { type: "stat", min: n, conv, attack } as SumGoal }));
+      const chips = statTargets(refRows, mainStat).map((n) => ({ label: `${n}%`, sub: "이상", goal: { type: "stat", min: n, conv, attack, main: mainStat } as SumGoal }));
       const own = parseNum(customMin, 0);
-      return own > 0 ? [...chips, { label: `${own}%`, sub: "직접", goal: { type: "stat", min: own, conv, attack } as SumGoal }] : chips;
+      return own > 0 ? [...chips, { label: `${own}%`, sub: "직접", goal: { type: "stat", min: own, conv, attack, main: mainStat } as SumGoal }] : chips;
     }
     if (target === "cool") return [2, 3, 4, 5, 6].map((n) => ({ label: `−${n}초`, sub: "이상", goal: { type: "cool", min: n } as SumGoal }));
     if (target === "crit") return [1, 2, 3].map((n) => ({ label: `${n}줄`, sub: best.cd ? `+${best.cd * n}%` : "", goal: { type: "crit", lines: n } as SumGoal }));
     return [1, 2, 3].map((n) => ({ label: `${n}줄`, sub: "이상", goal: { type: "drop", lines: n } as SumGoal }));
-  }, [refRows, target, best.cd, conv, attack, customMin]);
+  }, [refRows, target, best.cd, conv, attack, customMin, mainStat]);
   const tIdx = Math.min(targetIdx, Math.max(0, sumTargets.length - 1));
+  const comboSpecial = target === "crit" ? "cd" : target === "cool" ? "cool" : null;
+  const comboGoal: SumGoal | null = comboSpecial ? { type: "combo", special: comboSpecial, lines: combo.lines, stat: combo.stat, main: mainStat } : null;
+  const comboRest = 3 - combo.lines - combo.stat;
+  const specialName = comboSpecial === "cd" ? "크뎀" : "쿨감";
+  const mainName = mainStat === "all" ? "올스탯" : mainStat === "hp" ? "HP" : "주스탯";
+  const comboText = [`${specialName} ${combo.lines}줄`, combo.stat ? `${mainName} ${combo.stat}줄` : "", comboRest ? `아무 옵션 ${comboRest}줄` : ""]
+    .filter(Boolean)
+    .join(" + ");
+  const setComboPart = (k: "lines" | "stat", v: number) => {
+    const next = { ...combo, [k]: v };
+    if (next.lines < 1 || next.stat < 0 || next.lines + next.stat > 3) return;
+    setCombo(next);
+  };
 
   const isV3 = min.a === 0 && min.b === 0 && min.i === 0 && min.v === 3;
   const weaponGoal: WeaponGoal = { attack, ied, min, tier: kind === "main" ? tier : "v3" };
@@ -134,7 +156,7 @@ export function PotentialTab() {
   const soulNeed = soulRows ? addWeaponNeed(soulRows, attack) : 0;
 
   // Line 1 a prime cube keeps: the best value of what the goal is after.
-  const firstCat: Record<string, string> = { stat: "str", cool: "cool", crit: "cd", drop: "drop" };
+  const firstCat: Record<string, string> = { stat: mainStat, cool: "cool", crit: "cd", drop: "drop" };
   function primeFirstLabel(rows: ReturnType<typeof lineTables>): string {
     if (!rows) return "";
     const top = bestValues([rows[0]]);
@@ -144,7 +166,7 @@ export function PotentialTab() {
       return `${name} ${top[cat] ?? 0}%`;
     }
     const cat = firstCat[target];
-    const name = { str: "주스탯", cool: "쿨감", cd: "크뎀", drop: "드롭률" }[cat] ?? "";
+    const name = { str: "주스탯", all: "올스탯", hp: "HP", cool: "쿨감", cd: "크뎀", drop: "드롭률" }[cat] ?? "";
     return `${name} ${top[cat] ?? 0}${cat === "cool" ? "초" : "%"}`;
   }
 
@@ -160,7 +182,7 @@ export function PotentialTab() {
     if (!rows) return 0;
     if (weaponLike)
       return kind === "add" ? addWeaponChance(rows, attack, addGoal, prime) : weaponChance(rows, weaponGoal, prime ? primeLine : undefined);
-    const g = sumTargets[tIdx]?.goal;
+    const g = comboGoal ?? sumTargets[tIdx]?.goal;
     if (!g) return 0;
     if (!prime) return sumChance(rows, g);
     const cat = firstCat[target];
@@ -210,13 +232,13 @@ export function PotentialTab() {
         ? `${slot.label} · ${GRADE_LABEL[grade]} → ${GRADE_LABEL[NEXT_GRADE[grade]!]}`
         : `${slot.label} · 이미 레전드리`
       : soul
-        ? `${GRADE_LABEL[grade]} 소울 · 증폭 ${soulStage}단계 · ${ADD_GOALS.find((g) => g.id === addGoal)!.label(soulNeed, attack === "atk" ? "공" : "마")}`
+        ? `${GRADE_LABEL[grade]} 소울 · 증폭 ${soulStage}단계 · ${ADD_GOALS.find((g) => g.id === addGoal)!.label(soulNeed, "공/마")}`
         : weaponLike && kind === "add"
-          ? `에디셔널 ${GRADE_LABEL[grade]} ${slot.label} · ${ADD_GOALS.find((g) => g.id === addGoal)!.label(21, attack === "atk" ? "공" : "마")}`
+          ? `에디셔널 ${GRADE_LABEL[grade]} ${slot.label} · ${ADD_GOALS.find((g) => g.id === addGoal)!.label(21, "공/마")}`
           : weaponLike
           ? `${GRADE_LABEL[grade]} ${slot.label} · ${
               [
-                min.a ? `${attack === "atk" ? "공" : "마"} ${min.a}줄` : "",
+                min.a ? `${"공/마"} ${min.a}줄` : "",
                 min.b ? `보공 ${min.b}줄` : "",
                 min.i ? `방무 ${min.i}줄` : "",
                 min.v ? `유효 ${min.v}줄${ied ? "" : " (방무 제외)"}` : "",
@@ -224,9 +246,11 @@ export function PotentialTab() {
                 .filter(Boolean)
                 .join(" + ") || "아무 줄"
             }${weaponGoal.tier === "v3" ? "" : ` · ${TIERS.find((t) => t.id === weaponGoal.tier)!.label}`}`
-          : `${GRADE_LABEL[grade]} ${slot.label} · ${extraOptions.find((o) => o.id === target)!.label} ${sumTargets[tIdx]?.label ?? ""} ${sumTargets[tIdx]?.sub ?? ""}`;
+          : comboGoal
+            ? `${GRADE_LABEL[grade]} ${slot.label} · ${comboText}`
+            : `${GRADE_LABEL[grade]} ${slot.label} · ${extraOptions.find((o) => o.id === target)!.label} ${sumTargets[tIdx]?.label ?? ""} ${sumTargets[tIdx]?.sub ?? ""}`;
 
-  const attackName = attack === "atk" ? "공격력 %" : "마력 %";
+  const attackName = "공격력(마력) %";
   const steppers = (
     [
       ["a", `${attackName} 최소`, best[attack] ? `+${best[attack]}% 까지` : ""],
@@ -245,6 +269,7 @@ export function PotentialTab() {
           value={group}
           onChange={(g) => {
             setGroup(g);
+            setCombo({ lines: 1, stat: 1 });
             const first = SLOTS.find((s) => s.group === g)!;
             setSlotId(first.id);
             setChosen(null);
@@ -260,6 +285,7 @@ export function PotentialTab() {
               type="button"
               aria-pressed={s.id === slotId}
               onClick={() => {
+                setCombo({ lines: 1, stat: 1 });
                 setSlotId(s.id);
                 // Gloves are usually rolled for critical damage.
                 setExtra(s.id === "gloves" ? "crit" : "stat");
@@ -332,24 +358,12 @@ export function PotentialTab() {
 
         {goal === "opt" && weaponLike && optGrade && (
           <div className="flex flex-col gap-2.5 rounded-lg border border-border bg-muted/40 p-3">
-            <Label
-              aside={
-                <Segment
-                  label="공격력 또는 마력"
-                  value={attack}
-                  onChange={setAttack}
-                  options={[
-                    { id: "atk", label: "공격력" },
-                    { id: "matk", label: "마력" },
-                  ]}
-                  className="w-36"
-                />
-              }
-            >
+            <Label>
               노리는 줄
             </Label>
             {kind === "main" && (
-              <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+              <div className="flex flex-wrap gap-1.5 [&>*]:min-w-[4.5rem] [&>*]:flex-1">
+                {/* Rows always full: chips grow to share each row (5 in one row on desktop, 3 + 2 on phones). */}
                 {TIERS.map((t) => {
                   const rows = lineTables("black", optGrade, slotId, level);
                   const p = rows ? weaponChance(rows, { attack, ied, min: { a: 0, b: 0, i: 0, v: 3 }, tier: t.id }) : 0;
@@ -393,7 +407,7 @@ export function PotentialTab() {
                           addGoal === g.id ? "border-primary bg-primary-soft text-primary-text" : "border-border"
                         )}
                       >
-                        <b className="text-[13px]">{g.label(need, attack === "atk" ? "공" : "마")}</b>
+                        <b className="text-[13px]">{g.label(need, "공/마")}</b>
                         <span className="font-num text-[11px] text-muted-foreground">{pct(p)}</span>
                       </button>
                     );
@@ -409,7 +423,7 @@ export function PotentialTab() {
                     value={primeLine}
                     onChange={setPrimeFirst}
                     options={[
-                      { id: "a" as const, label: attack === "atk" ? "공격력" : "마력" },
+                      { id: "a" as const, label: "공격력(마력)" },
                       ...(best.boss ? [{ id: "b" as const, label: "보공" }] : []),
                       { id: "i" as const, label: "방무" },
                     ]}
@@ -473,46 +487,122 @@ export function PotentialTab() {
             >
               {slot.label} · 노릴 옵션 · Lv.{level}
             </Label>
-            {target === "stat" && (
+            {(target === "stat" || comboSpecial) && (
               <Segment
-                label="공격력 또는 마력"
-                value={attack}
-                onChange={setAttack}
+                label="주스탯 종류"
+                value={mainStat}
+                onChange={(m) => {
+                  setMainStat(m);
+                  setTargetIdx(1);
+                }}
                 options={[
-                  { id: "atk", label: "공격력 줄 환산" },
-                  { id: "matk", label: "마력 줄 환산" },
+                  { id: "str", label: "일반" },
+                  { id: "all", label: "제논 · 올스탯" },
+                  { id: "hp", label: "데벤 · HP" },
                 ]}
               />
             )}
-            <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-5">
-              {sumTargets.map((t, i) => (
-                <button
-                  key={t.label}
-                  type="button"
-                  aria-pressed={i === tIdx}
-                  onClick={() => setTargetIdx(i)}
-                  className={cn("flex flex-col items-start rounded-lg border px-2.5 py-1.5", i === tIdx ? "border-primary bg-primary-soft text-primary-text" : "border-border")}
-                >
-                  <b className="font-num text-[13px]">{t.label}</b>
-                  <span className="text-[11px] text-muted-foreground">{t.sub}</span>
-                </button>
-              ))}
-            </div>
+            {/* No 공격력 / 마력 choice here: in the official table the flat attack and magic lines have the same values and
+                chances on every slot (188 pairs checked 2026-11-10), so the result is the same either way. */}
+            {/* One row, split evenly by however many targets there are (4 presets + an own target). */}
+            {comboSpecial ? (
+              <div className="flex flex-col gap-2">
+                {(
+                  [
+                    ["lines", `${specialName} 줄`, comboSpecial === "cd" ? "크리티컬 데미지 % · 값 상관없이" : "재사용 대기시간 감소 · 값 상관없이"],
+                    ["stat", `${mainName} 줄`, "값 상관없이"],
+                  ] as const
+                ).map(([k, label, note]) => (
+                  <div key={k} className="flex items-center justify-between gap-2">
+                    <span className="flex min-w-0 flex-col">
+                      <b className="text-[13px]">{label}</b>
+                      <span className="text-[11px] text-muted-foreground">{note}</span>
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <button
+                        type="button"
+                        aria-label={`${label} 줄이기`}
+                        onClick={() => setComboPart(k, combo[k] - 1)}
+                        className="flex size-8 items-center justify-center rounded-md border border-border"
+                      >
+                        <Minus className="size-3.5" aria-hidden="true" />
+                      </button>
+                      <b className="w-6 text-center font-num">{combo[k]}</b>
+                      <button
+                        type="button"
+                        aria-label={`${label} 늘리기`}
+                        onClick={() => setComboPart(k, combo[k] + 1)}
+                        className="flex size-8 items-center justify-center rounded-md border border-border"
+                      >
+                        <Plus className="size-3.5" aria-hidden="true" />
+                      </button>
+                    </span>
+                  </div>
+                ))}
+                <span className="text-[11px] text-muted-foreground">
+                  {comboRest ? `나머지 ${comboRest}줄은 아무 옵션이어도 됨` : "3줄 모두 지정"} · 합쳐서 3줄까지
+                </span>
+              </div>
+            ) : (
+              <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${Math.max(1, sumTargets.length)}, minmax(0, 1fr))` }}>
+                {sumTargets.map((t, i) => (
+                  <button
+                    key={t.label}
+                    type="button"
+                    aria-pressed={i === tIdx}
+                    onClick={() => setTargetIdx(i)}
+                    className={cn("flex flex-col items-start rounded-lg border px-2.5 py-1.5", i === tIdx ? "border-primary bg-primary-soft text-primary-text" : "border-border")}
+                  >
+                    <b className="font-num text-[13px]">{t.label}</b>
+                    <span className="text-[11px] text-muted-foreground">{t.sub}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {/* Shown for every main-stat type (Codex review): e.g. HP 21 % (12 + 9) is not one of the chips. */}
             {target === "stat" && (
+              <span className="inline-flex flex-wrap items-center gap-1.5 text-[12px] font-semibold">
+                목표 직접
+                <NumberField
+                  label={mainStat === "str" ? "주스탯 환산 목표 직접 입력" : `${mainStat === "all" ? "올스탯" : "HP"} 목표 직접 입력`}
+                  value={customMin}
+                  onChange={(t) => {
+                    setCustomMin(t);
+                    if (parseNum(t, 0) > 0) setTargetIdx(99);
+                  }}
+                  decimal
+                  suffix="%"
+                  inputClassName="h-8 w-20 text-xs"
+                />
+                <span className="font-normal text-muted-foreground">이상</span>
+              </span>
+            )}
+            {target === "stat" && mainStat === "str" && (
               <div className="flex flex-col gap-2 rounded-md border border-border bg-card p-2.5">
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <b className="text-[12px]">환산 기준</b>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setConvOpen((o) => !o)}
+                    aria-expanded={convOpen}
+                    className="flex items-center gap-1 text-[12px] font-bold"
+                  >
+                    <ChevronDown className={cn("size-3.5 transition-transform", !convOpen && "-rotate-90")} aria-hidden="true" />
+                    환산 기준
+                    {!convOpen && <span className="font-normal text-muted-foreground">· {convChanged ? "바꾼 값 사용 중" : "기본값"}</span>}
+                  </button>
                   <a href="https://maplescouter.com" target="_blank" rel="noreferrer" className="text-[11px] text-primary-text underline underline-offset-2">
                     maplescouter 세부 스펙 효율
                   </a>
                 </div>
+                {convOpen && (
+                <>
                 <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
                   {(
                     [
                       ["level", "캐릭터 레벨", "", ""],
                       ["v9", "렙당+2 = 주스탯", "%", `렙당+1 = ${conv.lvstr.toFixed(2)}%`],
                       ["cd3", "크뎀 3% = 주스탯", "%", ""],
-                      ["atk1", `${attack === "atk" ? "공격력" : "마력"} 1 = 주스탯`, "", ""],
+                      ["atk1", "공격력(마력) 1 = 주스탯", "", ""],
                       ["all1", "올스탯 1% = 주스탯", "", ""],
                     ] as const
                   ).map(([k, label, unit, hint]) => (
@@ -537,21 +627,8 @@ export function PotentialTab() {
                     기본값으로
                   </button>
                 </span>
-                <span className="inline-flex flex-wrap items-center gap-1.5 text-[12px] font-semibold">
-                  목표 직접
-                  <NumberField
-                    label="주스탯 환산 목표 직접 입력"
-                    value={customMin}
-                    onChange={(t) => {
-                      setCustomMin(t);
-                      if (parseNum(t, 0) > 0) setTargetIdx(99);
-                    }}
-                    decimal
-                    suffix="%"
-                    inputClassName="h-8 w-20 text-xs"
-                  />
-                  <span className="font-normal text-muted-foreground">이상</span>
-                </span>
+                </>
+                )}
               </div>
             )}
           </div>
@@ -559,20 +636,7 @@ export function PotentialTab() {
 
         {goal === "opt" && soul && (
           <div className="flex flex-col gap-2.5 rounded-lg border border-border bg-muted/40 p-3">
-            <Label
-              aside={
-                <Segment
-                  label="공격력 또는 마력"
-                  value={attack}
-                  onChange={setAttack}
-                  options={[
-                    { id: "atk", label: "공격력" },
-                    { id: "matk", label: "마력" },
-                  ]}
-                  className="w-36"
-                />
-              }
-            >
+            <Label>
               소울 증폭 단계
             </Label>
             <Segment
@@ -596,7 +660,7 @@ export function PotentialTab() {
                       addGoal === g.id ? "border-primary bg-primary-soft text-primary-text" : "border-border"
                     )}
                   >
-                    <b className="text-[13px]">{g.label(soulNeed, attack === "atk" ? "공" : "마")}</b>
+                    <b className="text-[13px]">{g.label(soulNeed, "공/마")}</b>
                     <span className="font-num text-[11px] text-muted-foreground">{pct(p)}</span>
                   </button>
                 );

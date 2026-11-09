@@ -157,7 +157,7 @@ export const navGroups: NavGroup[] = [
         href: "/spec",
         icon: ShieldAlert,
         card: { title: "숨은 스펙업", description: "닉네임으로 놓친 스펙 찾기" },
-        ready: false,
+        ready: true,
       },
       {
         slug: "boss",

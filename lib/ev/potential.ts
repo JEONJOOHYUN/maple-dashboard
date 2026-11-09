@@ -249,18 +249,63 @@ export function convFromScouter(s: { level: number; v9: number; cd3: number; atk
   };
 }
 
+/**
+ * Which line is the main stat: "str" = any single main stat (STR stands in), "all" = Xenon (all stat %),
+ * "hp" = Demon Avenger (max HP %). The official table gives all stat / HP their own values and chances
+ * (e.g. hat Lv.200 legendary line 1: STR 12 % at 9.76 %, all stat 9 % at 7.32 %, HP 12 % at 9.76 %).
+ * For Xenon and Demon Avenger only that line counts; the maplescouter conversions are for single-stat classes.
+ */
+export type MainStat = "str" | "all" | "hp";
+
 export type SumGoal =
-  | { type: "stat"; min: number; conv?: StatConv; attack?: "atk" | "matk" }
+  | { type: "stat"; min: number; conv?: StatConv; attack?: "atk" | "matk"; main?: MainStat }
   | { type: "cool"; min: number }
   | { type: "crit"; lines: number }
+  | ComboGoal
   | { type: "drop"; lines: number };
+
+/**
+ * Gloves / hats (user, 2026-11-10): at least `lines` lines of the special option (crit damage on gloves, cooldown
+ * on hats, any value) plus at least `stat` main stat lines (any value); the rest can be anything.
+ * e.g. gloves 크뎀 1 + 주스탯 1 = 2.16 % on a Lv.200 legendary black cube.
+ */
+export type ComboGoal = { type: "combo"; special: "cd" | "cool"; lines: number; stat: number; main?: MainStat };
+
+export function comboChance(rows: Row[][], goal: ComboGoal): number {
+  const main = goal.main ?? "str";
+  const per = rows.map((line) => {
+    let sp = 0;
+    let st = 0;
+    for (const r of line) {
+      if (r[0] === goal.special) sp += r[2];
+      else if (r[0] === main) st += r[2];
+    }
+    return { sp, st, other: Math.max(0, 1 - sp - st) };
+  });
+  let total = 0;
+  const walk = (i: number, sp: number, st: number, p: number) => {
+    if (p === 0) return;
+    if (i === per.length) {
+      if (sp >= goal.lines && st >= goal.stat) total += p;
+      return;
+    }
+    const l = per[i];
+    walk(i + 1, sp + 1, st, p * l.sp);
+    walk(i + 1, sp, st + 1, p * l.st);
+    walk(i + 1, sp, st, p * l.other);
+  };
+  walk(0, 0, 0, 1);
+  return total;
+}
 
 /** Armor · accessories. Main stat = STR % plus other lines turned into main stat % by goal.conv (STR stands in for any main stat). */
 export function sumChance(rows: Row[][], goal: SumGoal): number {
+  if (goal.type === "combo") return comboChance(rows, goal);
   const lines = rows.map((line) =>
     tokens(line, (r) => {
       if (goal.type === "stat") {
-        const v = statValue(r, goal.conv ?? NO_CONV, goal.attack ?? "atk");
+        const main = goal.main ?? "str";
+        const v = main === "str" ? statValue(r, goal.conv ?? NO_CONV, goal.attack ?? "atk") : r[0] === main ? r[1] : 0;
         return v > 0 ? { cat: "s", value: v, own: false } : null;
       }
       if (goal.type === "cool") return r[0] === "cool" ? { cat: "c", value: r[1], own: false } : null;
@@ -296,8 +341,8 @@ function statValue(r: Row, conv: StatConv, attack: "atk" | "matk"): number {
 }
 
 /** Main-stat sum targets for this table: 3 × best, … 3 × second best (e.g. 36 · 33 · 30 · 27 at Lv.200). */
-export function statTargets(rows: Row[][]): number[] {
-  const vals = [...new Set(rows.flat().filter((r) => r[0] === "str").map((r) => r[1]))].sort((a, b) => b - a);
+export function statTargets(rows: Row[][], main: MainStat = "str"): number[] {
+  const vals = [...new Set(rows.flat().filter((r) => r[0] === main).map((r) => r[1]))].sort((a, b) => b - a);
   if (vals.length === 0) return [];
   const [hi, lo = hi] = vals;
   return [...new Set([lo * 3, hi + lo * 2, hi * 2 + lo, hi * 3])].sort((a, b) => a - b);

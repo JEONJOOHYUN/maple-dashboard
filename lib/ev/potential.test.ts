@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { averageTries } from "./luck.ts";
-import { NO_CONV, SOUL_EXTRA, addWeaponChance, bestValues, convFromScouter, fixFirstLine, gradeUp, lineTables, resetMeso, soulChance, statTargets, sumChance, weaponChance, type WeaponGoal } from "./potential.ts";
+import { NO_CONV, SOUL_EXTRA, addWeaponChance, comboChance, bestValues, convFromScouter, fixFirstLine, gradeUp, lineTables, resetMeso, soulChance, statTargets, sumChance, weaponChance, type WeaponGoal } from "./potential.ts";
 
 const near = (actual: number, expected: number, tolerance: number, label: string) =>
   assert.ok(Math.abs(actual - expected) <= tolerance, `${label}: ${actual} is not within ${tolerance} of ${expected}`);
@@ -144,4 +144,45 @@ test("soul +@ = all stat, main stat %, damage, boss (official table has damage 8
   const soul = lineTables("soul", "legendary", "soul", 4)!;
   near(addWeaponChance(soul, "atk", "a21", false, SOUL_EXTRA), 0.004684, 0.000001, "soul atk 14%");
   near(addWeaponChance(soul, "atk", "a21x", false, SOUL_EXTRA), 0.000893, 0.000001, "soul atk 14% + @");
+});
+
+test("Xenon (all stat %) and Demon Avenger (HP %) use their own lines, values and chances", () => {
+  const hat = lineTables("black", "legendary", "hat", 200)!;
+  assert.equal(Math.max(...statTargets(hat, "str")), 36);
+  assert.equal(Math.max(...statTargets(hat, "all")), 27, "all stat tops at 9 % per line");
+  assert.equal(Math.max(...statTargets(hat, "hp")), 36);
+  // Three top lines: all stat 9 % lines are rarer than STR 12 % lines.
+  const str3 = sumChance(hat, { type: "stat", min: 36 });
+  const all3 = sumChance(hat, { type: "stat", min: 27, main: "all" });
+  assert.ok(all3 < str3, `all ${all3} < str ${str3}`);
+  // Only the class's own line counts: STR lines do nothing for Xenon.
+  assert.ok(sumChance(hat, { type: "stat", min: 12, main: "all" }) < sumChance(hat, { type: "stat", min: 12 }));
+  // Additional potential: HP 11 % lines (5.0 %) are likelier than STR 8 % lines (3.3 %).
+  const add = lineTables("white", "legendary", "hat", 200)!;
+  assert.equal(Math.max(...statTargets(add, "hp")), 33);
+  assert.ok(sumChance(add, { type: "stat", min: 11, main: "hp" }) > sumChance(add, { type: "stat", min: 8, conv: NO_CONV }));
+});
+
+test("gloves / hats: special-option lines + main stat lines, the rest any option (option B, 2026-11-10)", () => {
+  const gloves = lineTables("black", "legendary", "gloves", 200)!;
+  const g = (lines: number, stat: number) => comboChance(gloves, { type: "combo", special: "cd", lines, stat });
+  // Same as the hand calculation shown on the design board (Lv.200 legendary black cube).
+  assert.equal(+(g(1, 0) * 100).toFixed(2), 12.24);
+  assert.equal(+(g(1, 1) * 100).toFixed(3), 2.16);
+  assert.equal(+(g(2, 0) * 100).toFixed(3), 0.258);
+  assert.equal(+(g(1, 2) * 100).toFixed(3), 0.105);
+  assert.equal(+(g(2, 1) * 100).toFixed(4), 0.0235);
+  assert.equal(+(g(3, 0) * 100).toFixed(4), 0.001);
+  // More lines asked → never easier.
+  assert.ok(g(1, 0) > g(1, 1) && g(1, 1) > g(1, 2) && g(2, 0) > g(2, 1) && g(2, 1) > g(3, 0));
+  // sumChance routes combo goals to comboChance.
+  assert.equal(sumChance(gloves, { type: "combo", special: "cd", lines: 1, stat: 1 }), g(1, 1));
+  // Hats: cooldown lines.
+  const hat = lineTables("black", "legendary", "hat", 200)!;
+  const h1 = comboChance(hat, { type: "combo", special: "cool", lines: 1, stat: 0 });
+  const h11 = comboChance(hat, { type: "combo", special: "cool", lines: 1, stat: 1 });
+  assert.ok(h1 > h11 && h11 > 0);
+  // Prime cube keeps line 1 = crit damage → one crit line is certain.
+  const primeRows = lineTables("prime", "legendary", "gloves", 200);
+  if (primeRows) assert.equal(+comboChance(fixFirstLine(primeRows, "cd", bestValues([primeRows[0]]).cd ?? 0), { type: "combo", special: "cd", lines: 1, stat: 0 }).toFixed(6), 1);
 });

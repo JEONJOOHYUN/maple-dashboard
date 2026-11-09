@@ -11,7 +11,8 @@ maple-dashboard/
     page.tsx                 # 홈 — 비회원 "이번 주" + 내 수익 소개 + 도구 카드(lib/nav.ts)
     [tool]/page.tsx          # 아직 없는 도구·로그인의 "준비 중" 페이지(generateStaticParams, 그 밖은 404)
     globals.css
-    icon.jpg / apple-icon.jpg / opengraph-image.jpg  # 버섯 마스코트 브랜딩
+    icon.png (512) / apple-icon.png (180)  # 2026-11-09 새 버섯 아이콘(배경 #1D1C19, 원본 1024px C:/dev/_work/maple-icon/, git 밖)
+    opengraph-image.jpg      # 링크 미리보기 그림 — 아직 옛 버섯 마스코트
     actions/
       workers.ts             # addWorker, renameWorker, deleteWorker
     settlement/
@@ -23,6 +24,7 @@ maple-dashboard/
     ev/page.tsx               # 기댓값 계산기 → components/ev/ev-calculator.tsx (5탭)
     mvp/page.tsx              # MVP 계산기 → components/mvp/mvp-calculator.tsx
     pinball/page.tsx          # 핀볼 추첨 → components/pinball/pinball-game.tsx
+    spec/page.tsx             # 숨은 스펙업(서버): ?name= → lib/spec/load.ts getSpec → components/spec/spec-check.tsx
     admin/
       page.tsx                 # 쿠키 체크 → 로그인 폼 or 대시보드
       actions.ts                # adminLogin/adminLogout, updateLog, updateSettlement
@@ -39,6 +41,7 @@ maple-dashboard/
     activity-calendar.tsx        # 일별 조각/메소 아이콘 달력, 월별 합계
     ev/                       # 기댓값 탭 5개(starforce · potential · flame · soul · ability) + ui.tsx(칩 · 세그먼트 · 결과 카드 등 공용)
     mvp/ · pinball/           # MVP · 핀볼 화면
+    spec/spec-check.tsx       # 숨은 스펙업 검색 · 결과(배지 열고 닫기, 놓친 스펙 · 참고 목록)
   lib/
     supabase.ts               # supabase 클라이언트 + Worker/HuntingLog/Settlement 타입
     queries.ts                  # getWorkers(), getWorkerData(workerId), workerTag() — unstable_cache 래핑
@@ -51,6 +54,8 @@ maple-dashboard/
     ev/                               # 기댓값 계산 함수(starforce · potential · flame · soul · ability · luck) + *.test.ts, data/(공식 확률표 JSON), defaults.ts(가격 기본값 + 날짜)
     mvp.ts (+ test)                   # MVP 등급 · 주차(목~수, KST) · 충전 계획 · 되팔기 효율
     pinball/                          # lazygyu roulette 엔진(MIT, LICENSE 사본) 정리본 + 우리 코스 stage.ts
+    nexon/api.ts                      # 넥슨 Open API 서버 전용 호출(NEXON_API_KEY, 호출 간격 220ms, 429 한 번 재시도, 오류 종류 noKey · notFound · quota · failed)
+    spec/                             # 숨은 스펙업: check.ts(규칙 · 보스 프리셋 판별, 순수 함수) + test, load.ts(API 15회 → 3시간 캐시), data/classes.json(직업별 기준, 만드는 법 _work/maple-spec-probe)
     use-stored.ts / use-now.ts        # 비회원 브라우저 저장(localStorage) / 30초 시계
     empty-module.ts                   # box2d-wasm 의 fs·path 를 브라우저에서 비우는 별칭(next.config.ts)
   components/ui/             # shadcn/ui 컴포넌트 (button, input, badge, alert-dialog) — 직접 수정 가능

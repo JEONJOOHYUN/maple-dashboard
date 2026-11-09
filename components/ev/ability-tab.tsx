@@ -509,7 +509,8 @@ function Step({
     <div className="flex flex-col gap-1.5">
       <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1.5">
         <span className="flex items-start gap-2 text-[13px]">
-          <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary font-num text-[11px] font-bold text-primary-foreground">
+          {/* Plain font: the Maplestory number font sits off-center vertically inside a 20px circle. */}
+          <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] leading-none font-bold text-primary-foreground tabular-nums">
             {n}
           </span>
           <b className="leading-5">{title}</b>
