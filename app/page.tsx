@@ -2,7 +2,9 @@ import Link from "next/link";
 import { ArrowRight, Sun, Wallet } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
+import { ThemeChip } from "@/components/sunday/sunday-view";
 import { navGroups, type NavItem } from "@/lib/nav";
+import { getSundayPageData } from "@/lib/sunday/view";
 import { cn } from "@/lib/utils";
 
 const incomeFeatures = [
@@ -30,9 +32,15 @@ const incomeSteps = [
   { title: "확인 · 저장", description: "읽은 숫자를 보고 저장" },
 ];
 
+// The Sunday card depends on the clock (Friday notice, Sunday rollover), so re-render hourly.
+export const revalidate = 3600;
+
 const primaryButton = cn(buttonVariants(), "h-[42px] rounded-lg px-[18px] text-sm font-bold");
 
 export default function Home() {
+  const sunday = getSundayPageData(new Date());
+  const recorded = sunday.thisWeek.recorded;
+  const topThemes = [...sunday.prediction.themes].sort((a, b) => b.p - a.p).slice(0, 2);
   return (
     <div className="flex flex-col gap-4 lg:gap-[22px]">
       {/* This week: guest state (login arrives in stage 3). */}
@@ -64,10 +72,28 @@ export default function Home() {
           <Sun className="size-[18px]" aria-hidden="true" />
         </span>
         <span className="flex min-w-[180px] flex-1 flex-col gap-0.5">
-          <span className="text-xs text-muted-foreground">오늘 썬데이 메이플</span>
-          <b className="text-sm">썬데이 혜택 모아 보기 준비 중</b>
+          <span className="text-xs text-muted-foreground">
+            썬데이 메이플 · {recorded ? `${sunday.thisWeek.isToday ? "오늘" : "이번 주"} ${sunday.thisWeek.label}` : `${sunday.prediction.label} 예측`}
+          </span>
+          {recorded ? (
+            <span className="flex flex-wrap items-center gap-1.5">
+              <b className="text-sm">{recorded.title}</b>
+              {recorded.themes.map((id) => (
+                <ThemeChip key={id} id={id} />
+              ))}
+            </span>
+          ) : (
+            <b className="flex flex-wrap gap-x-1.5 text-sm break-keep">
+              <span>{sunday.prediction.headline ?? "뚜렷한 테마 없음"}</span>
+              {topThemes.map((t) => (
+                <span key={t.id} className="whitespace-nowrap">
+                  · {t.label} {Math.round(t.p * 100)}%
+                </span>
+              ))}
+            </b>
+          )}
         </span>
-        <span className="text-xs font-semibold text-primary-text">준비 중 →</span>
+        <span className="text-xs font-semibold text-primary-text">자세히 →</span>
       </Link>
 
       <section className="flex flex-col gap-4 rounded-lg border border-primary bg-card p-5 lg:p-7">

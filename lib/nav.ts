@@ -147,8 +147,8 @@ export const navGroups: NavGroup[] = [
         short: "썬데이 메이플",
         href: "/sunday",
         icon: Sun,
-        card: { title: "썬데이 메이플", description: "이번 주 썬데이와 다음 혜택 예측" },
-        ready: false,
+        card: { title: "썬데이 메이플", description: "이번 주 썬데이 · 다음 썬데이 테마 예측" },
+        ready: true,
       },
       {
         slug: "spec",
