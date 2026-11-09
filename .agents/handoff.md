@@ -15,13 +15,13 @@
 ## 현재 상태 (2026-11-09, 2단계 진행 중)
 
 - 운영(`main`): 마지막 푸시 `c60f794`(2026-11-01 Next 16.4.3 보안 업데이트), 마지막 기능 변경 `cb497ac`(2026-09-18). 운영 사이트는 개편 전 모양 그대로.
-- 개편(`redesign` 브랜치, 푸시 안 함): 0단계 `bfcbcc7` · 1단계 `6e2eb10` 커밋. **2단계 공개 도구 3개(기댓값 · MVP · 핀볼) 완성, 전부 미커밋 — 커밋은 사용자 확인 후**. 썬데이 · 숨은 스펙업은 아직(넥슨 키 `NEXON_API_KEY` 는 2026-11-09 `.env.local` 에 들어옴).
+- 개편(`redesign` 브랜치, 푸시 안 함): 0단계 `bfcbcc7` · 1단계 `6e2eb10` 커밋. **2단계 공개 도구 3개(기댓값 · MVP · 핀볼) 완성, `0d85727` 커밋(2026-11-09)**. 썬데이 · 숨은 스펙업은 아직(넥슨 키 `NEXON_API_KEY` 는 2026-11-09 `.env.local` 에 들어옴).
 - `vendor/` 는 `.gitignore`·tsconfig `exclude`·eslint `globalIgnores` 로 뺌(2026-11-08) — 원본은 이 PC 에만 두는 참고용, 광고 코드·인물 그림을 공개 저장소에 올리지 않으려고.
 - 2026-11-01 Next 16.3.1 → 16.4.3 + `npm audit fix`(Next.js 10월 보안 업데이트 — Server Actions DoS 등, 이 앱은 Server Actions 를 써서 해당). 남은 audit 경고는 보통·낮음뿐(대부분 shadcn CLI 경유).
 
 ## 다음 할 일 (2026-11-09 세션 끝)
 
-1. **커밋**(`redesign`, 사용자 확인 후 · 푸시 안 함) — 2단계 전부 + 어빌리티 4단계 칩 + 이 문서 정리. lint · build · 테스트 44개 통과.
+1. ~~커밋~~ 완료 `0d85727`(2026-11-09, 푸시 안 함). `AGENTS.md`(next dev 자동 생성)는 커밋 안 함.
 2. **설명 문구 전부 줄이기**(2026-11-09 사용자 요청 · 동의, 토큰 리필 뒤): 어빌리티처럼 "~해요" 없이 명사형 + 화살표("재설정 · 잠금 · 목표 수치"). 대상 = 스타포스 · 잠재 · 추옵 · 소울 · MVP · 핀볼 화면 문구. 계산은 안 건드림. 사용자가 "렌더링이 너무 오래 걸린다"고 함 → 개발 서버 탓인지 빌드본(`next start -p 3011`)에서 재 보고, 빌드본도 느리면 어빌리티 `abilityPlan` 계산 시간을 잴 것(아직 안 잼).
 3. 썬데이 메이플(명세 §4-10) · 숨은 스펙업(§4-11) — 넥슨 키 있음.
 4. 3단계 회원·권한(아래 "개편 단계").
@@ -51,7 +51,7 @@
 
 - **0단계 문서 정리** — 완료(2026-11-08, `bfcbcc7`): 명세·design.md 에 11개 답 반영, 메이플스토리 서체 라이선스 확인(명세 §2 "글꼴").
 - **1단계 화면만 A안 + 글꼴 + 분배금 계산기 개편** — 완료, `redesign` 브랜치 커밋 `6e2eb10`(2026-11-08). 토큰 `globals.css`, 메뉴 정의 `lib/nav.ts`, 없는 기능은 `app/[tool]/page.tsx` "준비 중", 글꼴 = Pretendard + 큰 숫자만 메이플 서체(`font-num`), Clarity `components/clarity.tsx`. 상세·과정·함정(구글 한글 글꼴 `preload: false` 등) 원문은 [history.md](history.md) "개편 1단계".
-- **2단계 공개 도구(로그인 없이)** — 기댓값 · MVP · 핀볼 완료(미커밋), 썬데이 · 숨은 스펙업 남음. 차수별 기록 원문은 [history.md](history.md) "개편 2단계 세션 기록".
+- **2단계 공개 도구(로그인 없이)** — 기댓값 · MVP · 핀볼 완료(`0d85727`), 썬데이 · 숨은 스펙업 남음. 차수별 기록 원문은 [history.md](history.md) "개편 2단계 세션 기록".
   - **기댓값 계산기** `/ev`(스타포스 · 잠재 · 추옵 · 소울 · 어빌리티 5탭). 계산 `lib/ev/*.ts`, 테스트 `npm test`(= `node --test`, 44개). 데이터 `lib/ev/data/potential.json`(넥슨 공식 큐브 옵션표, GetSearchProbList) · `ability.json`(공식 어빌리티 옵션표), 기본값 `lib/ev/defaults.ts`(날짜와 함께). 출처·검증은 명세 §4-7 · §4-8 · §4-9. 확률표 다시 받는 스크립트 `C:/dev/_work/maple-ev-data/`(git 밖, README 에 순서).
   - **MVP 계산기** `/mvp` = **C안(효율 순위판) 확정**(시안 https://claude.ai/artifact/LPEC3cM7S9A1Ae4fAKjALf). 계산 `lib/mvp.ts`(`sellRoute` · `creditPlan` 배낭 DP, 600만 원 넘으면 근삿값 `route.approx`), 저장 키 `mvp:settings2`.
   - **핀볼 추첨** `/pinball` = `vendor/roulette` 엔진을 `lib/pinball/` 로 옮김(광고 · 커뮤니티 맵 · 녹화 · 인물 그림 등 뺌, 원본 `LICENSE` 사본). 코스 = 원본 맵 "Wheel of fortune" 하나(MIT 출처 표기, 광고판만 뺌, `stage.ts`), 물리 = 새 의존성 `box2d-wasm@7.0.0`(Zlib), 구슬 = 색깔 공.
