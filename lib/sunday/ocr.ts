@@ -3,6 +3,7 @@
 // orange text on yellow panels ("50% 할인") is dropped. Details: C:/dev/_work/sunday-ocr-test/README.md
 import sharp from "sharp";
 import { PaddleOcrService, V5_KOREAN_MOBILE_MODEL } from "ppu-paddle-ocr";
+import type { OcrLine } from "./match";
 
 let service: Promise<PaddleOcrService> | null = null;
 
@@ -30,11 +31,11 @@ function getService(): Promise<PaddleOcrService> {
   return service;
 }
 
-/** Reads all text in one notice image, line by line. */
-export async function readNoticeImage(image: ArrayBuffer): Promise<string> {
+/** Reads one notice image into text lines, top to bottom (words on one visual row joined by a space). */
+export async function readNoticeImage(image: ArrayBuffer): Promise<OcrLine[]> {
   const gray = await sharp(Buffer.from(image)).grayscale().normalize().png().toBuffer();
   const ocr = await getService();
   const bytes = gray.buffer.slice(gray.byteOffset, gray.byteOffset + gray.byteLength) as ArrayBuffer;
   const result = await ocr.recognize(bytes);
-  return result.text;
+  return result.lines.map((line) => ({ t: line.map((w) => w.text).join(" ") }));
 }

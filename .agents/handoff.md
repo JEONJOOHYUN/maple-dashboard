@@ -24,7 +24,12 @@
    **OCR 시험(2026-11-10, 10장 · 혜택 50개)**: PaddleOCR 한국어 v5(ppu-paddle-ocr, 흑백 전처리) 50/50 · 장당 약 1.2초, tesseract.js 45/50, EasyOCR 못 돌림. 전체 167주(혜택 556개)도 Paddle 548개(98.6%), 진짜 읽기 실수는 2주뿐이고 나머지는 매칭 규칙(묶음 공지 · 챌린저스 전용 · TIP 오탐) 문제. 결과 · 코드 `C:/dev/_work/sunday-ocr-test/README.md`.
    **결정(2026-11-10 사용자)**: PaddleOCR + 흑백 전처리, Vercel Cron. 자동 결과는 바로 확정하지 않고 숫자 빠짐 · 낮은 유사도 · 처음 보는 혜택 · 묶음 공지는 "확인 필요".
    **진행**: 1) OCR 경로 `app/api/cron/sunday/route.ts`(지금은 `?img=` 이미지 하나 읽기만) + `lib/sunday/ocr.ts`, 로컬 `next start` 로 확인(첫 실행 3.3초 · 다음 0.2초), Codex 리뷰 지적 없음.
-   `CRON_SECRET` 등록됨(2026-11-10 사용자, Vercel Production + Preview, `.env.local` 에도). 다음: Preview 에서 실제로 읽히는지 확인 → 공지 찾기 · 매칭 규칙 · Supabase 표.
+   `CRON_SECRET` 등록됨(2026-11-10 사용자, Vercel Production + Preview, `.env.local` 에도). 커밋 `16c42b8` 푸시, Preview 빌드 성공 · 실제 공지 읽기 확인(2026-11-10, 첫 실행 7.7초, 혜택 4개 모두).
+   **2단계 완료(2026-11-10 커밋)**: Cron 경로 = 이번 주 공지 찾기(`lib/sunday/notice.ts` · `notice-parse.ts`) → 이미지 OCR(`ocr.ts`, 줄 단위) → 매칭(`match.ts`, 기록 안 함 목록 `ignored.ts`) → 결과 JSON(`auto-update.ts`). 저장은 아직 없음. `?sunday=` 로 다른 주 조회 가능.
+   채점 `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON eval-match.mjs --leave-one-out`(`C:/dev/_work/sunday-ocr-test/bench`, 줄 데이터 `results/lines-all.json`): 167주 중 자동 145 · **자동인데 틀림 0** · 확인 필요 22, 혜택 하나 숨김 시험 559번 중 그냥 저장 0. `match.test.ts` 가 규칙마다 실제 OCR 한 주(`match.fixtures.json`)로 고정.
+   기록 수정: 2026-07-19 를 공식 이미지대로 솔 에르다 타임 세부 4개로(인벤 날짜별 목록이 한 줄로 줄임, 종류별 목록은 "사냥 솔 에르다 3배" 빠뜨림) — `_work/maple-sunday-data/src/checks.json` `fixes` + `build.mjs` 가 적용(백업 `checks.backup-2026-11-10.json`). 예측 고정 점수 그대로.
+   Codex 리뷰(기본 모델, `16c42b8` 포함) 지적 2개 반영: 괄호 속 숫자("(30분)")도 검증, 날짜 줄을 못 읽어도 챌린저스 구역 자르기. 재확인 approve.
+   남은 일: 넥슨 목록은 진행 · 예정 이벤트만 주고 끝난 공지 본문은 400 — **금요일 공지가 목록에 바로 뜨는지 첫 금요일(2026-11-13)에 확인 필요**. 그다음 3단계 Supabase 표 · Cron 등록 · "확인 필요" 처리 화면(공지 없음 `notice: null` 을 "혜택 없음"으로 저장하지 않게).
    함정: Cron 은 HTTP 경로만 부를 수 있어 "API route 없음" 규칙의 예외. onnxruntime 본체(`libonnxruntime.so.1`)는 파일 추적에 안 잡혀 `next.config.ts` `outputFileTracingIncludes` 로 넣음(빼면 Vercel 에서 실패). 모델은 `~/.cache` 대신 메모리로 받음(Vercel 은 홈 폴더 쓰기 불가). 함수 크기 로컬 89MB(Linux 추정 약 120MB, 한도 250MB), 다른 페이지 · 브라우저 코드에는 OCR 파일 없음.
    **사용자 결정 필요**: 서버 전용 쓰기 키(service role) 등록 · 마이그레이션 SQL 실행(사용자) — 3단계 준비와 같이.
    **그 전까지(A)**: 금요일 공지 뒤 사용자가 "썬데이 추가해" → 공지 이미지 읽고 `C:/dev/_work/maple-sunday-data/src/new-weeks.json` 에 추가 → `node scripts/build.mjs C:/dev/maple-dashboard/lib/sunday/data 2023-08-27` → `npm test` → 커밋. 안 하면 화면에 "기록 n주 밀림" 경고 · 예측 정확도 떨어짐.

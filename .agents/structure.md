@@ -60,6 +60,7 @@ maple-dashboard/
     nexon/api.ts                      # 넥슨 Open API 서버 전용 호출(NEXON_API_KEY, 호출 간격 220ms, 429 한 번 재시도, 오류 종류 noKey · notFound · quota · failed)
     spec/                             # 숨은 스펙업: check.ts(규칙 · 보스 프리셋 판별, 순수 함수) + test, load.ts(API 15회 → 3시간 캐시), data/classes.json(직업별 기준, 만드는 법 _work/maple-spec-probe)
     sunday/                           # 썬데이: bundles.ts(묶음 · 테마 3개), history.ts(기록 읽기 · 한국 시간 날짜), predict.ts(예측) + test, view.ts(화면 데이터), data/history.json · benefits.json(만드는 법 _work/maple-sunday-data)
+                                      # 자동 갱신(서버): notice.ts(넥슨 공지 찾기) · notice-parse.ts + test, ocr.ts(PaddleOCR), match.ts(글자 → 혜택, "확인 필요") + test · match.fixtures.json, ignored.ts(기록 안 함), auto-update.ts(묶음) ← app/api/cron/sunday/route.ts
     use-stored.ts / use-now.ts        # 비회원 브라우저 저장(localStorage) / 30초 시계
     empty-module.ts                   # box2d-wasm 의 fs·path 를 브라우저에서 비우는 별칭(next.config.ts)
   components/ui/             # shadcn/ui 컴포넌트 (button, input, badge, alert-dialog) — 직접 수정 가능

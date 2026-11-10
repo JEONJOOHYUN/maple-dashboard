@@ -1,11 +1,11 @@
 // Weekly Sunday Maple update, called by Vercel Cron (Authorization: Bearer CRON_SECRET).
 // A route handler is required here because Cron can only call an HTTP path.
-// Current stage: OCR probe only (reads one official notice image and returns its text).
-import { readNoticeImage } from "@/lib/sunday/ocr";
+// Current stage: reads this week's notice and returns the matched benefits; saving comes with the Supabase table.
+// `?sunday=YYYY-MM-DD` reads another Sunday, but NEXON lists only ongoing/upcoming events (Friday ~ Sunday).
+import { readSunday } from "@/lib/sunday/auto-update";
+import { upcomingSunday } from "@/lib/sunday/history";
 
 export const maxDuration = 300;
-
-const IMAGE_HOST = "https://lwi.nexon.com/";
 
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
@@ -14,14 +14,15 @@ export async function GET(request: Request) {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const img = new URL(request.url).searchParams.get("img");
-  if (!img || !img.startsWith(IMAGE_HOST)) {
-    return Response.json({ error: `img must start with ${IMAGE_HOST}` }, { status: 400 });
+  const asked = new URL(request.url).searchParams.get("sunday");
+  if (asked && !/^\d{4}-\d{2}-\d{2}$/.test(asked)) {
+    return Response.json({ error: "sunday must be YYYY-MM-DD" }, { status: 400 });
   }
-
-  const started = Date.now();
-  const res = await fetch(img, { cache: "no-store" });
-  if (!res.ok) return Response.json({ error: `image ${res.status}` }, { status: 502 });
-  const text = await readNoticeImage(await res.arrayBuffer());
-  return Response.json({ ms: Date.now() - started, text });
+  const sunday = asked ?? upcomingSunday(new Date());
+  try {
+    return Response.json(await readSunday(sunday));
+  } catch (e) {
+    console.error("sunday cron failed", e);
+    return Response.json({ sunday, error: e instanceof Error ? e.message : String(e) }, { status: 502 });
+  }
 }
