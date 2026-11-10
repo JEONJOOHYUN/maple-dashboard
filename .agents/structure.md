@@ -8,10 +8,10 @@
 maple-dashboard/
   app/
     layout.tsx              # 루트 레이아웃: Pretendard(fonts/Pretendard CSS import) + 메이플스토리 서체(숫자 전용 font-num), ThemeProvider, SideNav + SiteHeader, Clarity
-    page.tsx                 # 홈 — 비회원 "이번 주" + 내 수익 소개 + 도구 카드(lib/nav.ts)
+    page.tsx                 # 홈 — 비회원 "이번 주" + 썬데이 카드(lib/sunday/view.ts, 1시간마다 다시 계산) + 내 수익 소개 + 도구 카드(lib/nav.ts)
     [tool]/page.tsx          # 아직 없는 도구·로그인의 "준비 중" 페이지(generateStaticParams, 그 밖은 404)
     globals.css
-    icon.png (512) / apple-icon.png (180)  # 2026-11-09 새 버섯 아이콘(배경 #1D1C19, 원본 1024px C:/dev/_work/maple-icon/, git 밖)
+    icon.png (512, 배경 투명 · 버섯만) / apple-icon.png (180, 정사각형 배경 #1D1C19)  # 2026-11-10 새 버섯 아이콘. 원본 1254px C:/dev/_work/maple-icon/icon-source.png(git 밖)
     opengraph-image.jpg      # 링크 미리보기 그림 — 아직 옛 버섯 마스코트
     actions/
       workers.ts             # addWorker, renameWorker, deleteWorker
@@ -25,6 +25,7 @@ maple-dashboard/
     mvp/page.tsx              # MVP 계산기 → components/mvp/mvp-calculator.tsx
     pinball/page.tsx          # 핀볼 추첨 → components/pinball/pinball-game.tsx
     spec/page.tsx             # 숨은 스펙업(서버): ?name= → lib/spec/load.ts getSpec → components/spec/spec-check.tsx
+    sunday/page.tsx           # 썬데이 메이플(서버, revalidate 3600): lib/sunday/view.ts getSundayPageData → components/sunday/sunday-view.tsx
     admin/
       page.tsx                 # 쿠키 체크 → 로그인 폼 or 대시보드
       actions.ts                # adminLogin/adminLogout, updateLog, updateSettlement
@@ -34,7 +35,8 @@ maple-dashboard/
   components/
     side-nav.tsx              # 데스크톱 왼쪽 메뉴(lg 이상)
     site-header.tsx            # 머리줄(경로 · 테마 · 로그인) + 모바일 묶음 탭/아래 탭
-    brand.tsx / page-header.tsx / clarity.tsx
+    brand.tsx                 # 로고 = public/brand-mark.png(app/icon.png 96px 사본, 정적 import + unoptimized) + 사이트 이름
+    page-header.tsx / clarity.tsx
     worker-tabs.tsx            # 부주 선택 탭 + "+ 부주 추가" 인라인 폼
     theme-provider.tsx / theme-toggle.tsx
     icon-value.tsx              # 아이콘+숫자 표시 헬퍼
@@ -42,6 +44,7 @@ maple-dashboard/
     ev/                       # 기댓값 탭 5개(starforce · potential · flame · soul · ability) + ui.tsx(칩 · 세그먼트 · 결과 카드 등 공용)
     mvp/ · pinball/           # MVP · 핀볼 화면
     spec/spec-check.tsx       # 숨은 스펙업 검색 · 결과(배지 열고 닫기, 놓친 스펙 · 참고 목록)
+    sunday/sunday-view.tsx    # 썬데이 화면(서버 컴포넌트만): 이번 주 · 다음 썬데이 테마 확률 · 3개 · 혜택별 확률(테마별 묶음) · 최근 썬데이, ThemeChip(홈도 씀)
   lib/
     supabase.ts               # supabase 클라이언트 + Worker/HuntingLog/Settlement 타입
     queries.ts                  # getWorkers(), getWorkerData(workerId), workerTag() — unstable_cache 래핑
@@ -56,6 +59,7 @@ maple-dashboard/
     pinball/                          # lazygyu roulette 엔진(MIT, LICENSE 사본) 정리본 + 우리 코스 stage.ts
     nexon/api.ts                      # 넥슨 Open API 서버 전용 호출(NEXON_API_KEY, 호출 간격 220ms, 429 한 번 재시도, 오류 종류 noKey · notFound · quota · failed)
     spec/                             # 숨은 스펙업: check.ts(규칙 · 보스 프리셋 판별, 순수 함수) + test, load.ts(API 15회 → 3시간 캐시), data/classes.json(직업별 기준, 만드는 법 _work/maple-spec-probe)
+    sunday/                           # 썬데이: bundles.ts(묶음 · 테마 3개), history.ts(기록 읽기 · 한국 시간 날짜), predict.ts(예측) + test, view.ts(화면 데이터), data/history.json · benefits.json(만드는 법 _work/maple-sunday-data)
     use-stored.ts / use-now.ts        # 비회원 브라우저 저장(localStorage) / 30초 시계
     empty-module.ts                   # box2d-wasm 의 fs·path 를 브라우저에서 비우는 별칭(next.config.ts)
   components/ui/             # shadcn/ui 컴포넌트 (button, input, badge, alert-dialog) — 직접 수정 가능

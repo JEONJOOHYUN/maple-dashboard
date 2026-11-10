@@ -1,8 +1,6 @@
 # maple-dashboard — 프로젝트 핸드오프 문서
 
-메이플스토리 부주(mule) 사냥 수익 정산 및 누적 대시보드. 여러 메이플 관련 도구를
-탭으로 얹을 수 있게 설계된 독립 Next.js 프로젝트. (기존 포트폴리오 프로젝트는
-`C:\dev\portfolio`로 분리되어 있고, 이 프로젝트와는 완전히 별개.)
+메이플스토리 도구 모음(내 수익 · 계산기 · 정보 도우미) — 전면 개편 중인 독립 Next.js 프로젝트. (포트폴리오 `C:\dev\portfolio` 와는 별개.)
 
 - GitHub: https://github.com/JEONJOOHYUN/maple-dashboard (public)
 - Vercel: 프로젝트 `maple-dashboard`, 배포 URL https://maple-dashboard-eta.vercel.app
@@ -10,117 +8,92 @@
   (약 1주 미사용 시 자동 일시정지됨 — 오랜만에 접속하면 첫 요청이 느릴 수 있음)
 
 > 지금 상태·결정·함정만 둔다. 디렉터리 구조·DB 스키마는 [structure.md](structure.md), 작업 규칙은 [../CLAUDE.md](../CLAUDE.md).
-> 지난 기록 원문(1단계 과정, 2단계 1~14차 세션 기록, 디자인 단계 과정, 개편 전 앱 설명)은 [history.md](history.md). 2026-11-09 정리 전 원본 `C:\dev\_backup\maple-handoff-2026-11-09\`.
+> 지난 기록 원문은 [history.md](history.md)(1단계 과정, 2단계 세션 기록 · 도구 상세, 디자인 과정, 개편 전 앱, 2026-11-10 정리분). 정리 전 원본 `C:\dev\_backup\handoff-2026-11-10\`.
 
-## 현재 상태 (2026-11-09, 2단계 진행 중)
+## 현재 상태 (2026-11-10)
 
-- 운영(`main`): 마지막 푸시 `c60f794`(2026-11-01 Next 16.4.3 보안 업데이트), 마지막 기능 변경 `cb497ac`(2026-09-18). 운영 사이트는 개편 전 모양 그대로.
-- 개편(`redesign` 브랜치, 푸시 안 함): 0단계 `bfcbcc7` · 1단계 `6e2eb10` 커밋. **2단계 공개 도구 3개(기댓값 · MVP · 핀볼) 완성, `0d85727` 커밋(2026-11-09)**. 썬데이 · 숨은 스펙업은 아직(넥슨 키 `NEXON_API_KEY` 는 2026-11-09 `.env.local` 에 들어옴).
-- `vendor/` 는 `.gitignore`·tsconfig `exclude`·eslint `globalIgnores` 로 뺌(2026-11-08) — 원본은 이 PC 에만 두는 참고용, 광고 코드·인물 그림을 공개 저장소에 올리지 않으려고.
-- 2026-11-01 Next 16.3.1 → 16.4.3 + `npm audit fix`(Next.js 10월 보안 업데이트 — Server Actions DoS 등, 이 앱은 Server Actions 를 써서 해당). 남은 audit 경고는 보통·낮음뿐(대부분 shadcn CLI 경유).
+- 운영(`main`): 개편 전 모양 그대로. 마지막 푸시 `c60f794`(2026-11-01 Next 16.4.3 보안 업데이트).
+- 개편(`redesign`): 0단계 `bfcbcc7` · 1단계 `6e2eb10` · 2단계 공개 도구 **다섯 개 모두 완료** — 기댓값 · MVP · 핀볼(`0d85727`), 숨은 스펙업(`cb8cb42`), 썬데이(`27e4bdc`). 로고 = 앱 아이콘(`26e26ec`).
+  **원격(`origin/redesign`)보다 8커밋 앞섬, 푸시 안 함.** 푸시는 사용자가 "푸시해"라고 할 때만.
+- Vercel 환경변수 `NEXON_API_KEY` 등록됨(2026-11-10, Secret, Production + Preview, 사용자).
+- `vendor/` 는 git 밖(`.gitignore` · tsconfig `exclude` · eslint `globalIgnores`) — 핀볼 원본 참고용, 광고 코드 · 인물 그림을 공개 저장소에 안 올림.
 
-## 다음 할 일 (2026-11-09 세션 끝)
+## 다음 할 일
 
-1~3. 끝남(원문 history "2026-11-09 다음 할 일 정리"): 2단계 커밋 · 푸시(`main` 합치기는 3단계 뒤), 화면 문구 = 짧은 명사형 + 화살표(사용자 선호), 숨은 스펙업 데이터 파일 · 보스 프리셋 규칙 · 어빌 기준(명세 §4-11).
-4. **숨은 스펙업 `/spec` 완성(2026-11-09, `cb8cb42`)** — 메뉴에서 열림(`lib/nav.ts` ready). 닉네임 → 서버에서 넥슨 API 15회(순서대로) → 규칙 검사 → 3시간 캐시(`RULES_VERSION` 을 올리면 옛 캐시 안 씀). 테스트 56개, 3011 빌드본 크롬 확인(흑소 = 빠진 것 없음 · 데몬10세기 12개 · 광선 2개 · 없는 닉네임 · 375px 다크/라이트). Codex 리뷰(기본 모델) 지적 5개 반영 + 집중 확인 1개 → 칭호는 **지금 낀 칭호만 봄**(2026-11-09 2차: 화면 = 분류 제목 → 빠진 것 → 필요한 상세만, 뻔한 안내 문구 없앰(사용자), 심볼 = 성장치로 올릴 수 있는데 메소 안 낸 레벨까지의 비용 · 스탯 표(maplescouter 체납과 일치, `lib/spec/symbol.ts` · `data/symbols.json`), 아티팩트 크리티컬 확률 = 보스용(사용자), API 14회를 220ms 간격 큐로 겹쳐 보내 첫 조회 5.3초 → 3.2초 · 캐시 0.01초, 테스트 59개)(`title_preset1~3` 은 장비 프리셋과 무관 — 4명 모두 1번에만 칭호, Codex 제안과 다르게 감).
-   남은 것: **배포 전 Vercel 환경변수 `NEXON_API_KEY` 등록(사용자)**, 하루 한도 "가까우면 안내"(인스턴스마다 세는 건 못 믿음 → 3단계 DB 에 카운터 표, 지금은 한도 넘으면 안내만), 보약 찾는 방식, 유니온 프리셋, 5차 공용 코어 목록(스파이더 인 미러 · 크레스트 오브 더 솔라 · 바디 오브 스틸 · 에르다 노바 · 에르다의 의지 — Claude 판단, `check.ts` BOSS_COMMON_CORES).
-4-1. **다음 세션 먼저(2026-11-09 사용자 요청, 아직 안 함)** — 숨은 스펙업 · 잠재 탭 변경까지 **`cb8cb42` 커밋(2026-11-10, 푸시 안 함)**. 앱 아이콘 jpg → png 바꿈은 이 세션 작업이 아니라 커밋에서 뺌(확인 필요).
-   ① 조회 속도: 넥슨 API 에 묶어 받는 엔드포인트 없음. 2026-11-09 사용자 결정으로 캐릭터 카드의 유니온 · 아티팩트 · 전투력 칸과 그 호출(`character/stat` · `user/union`) 삭제 → 13회, 첫 조회 2.9초(전투력은 보스 세팅이 아닌 현재 세팅 값이라 뺌, 무릉은 원래 안 부름). 더 줄이려면 결과 나눠 보여 주기 · 넥슨 서비스 키(사용자와 정하기).
-   ② ~~특수 직업 잠재~~ 완료(2026-11-10): 잠재 탭 주스탯 목표에 "일반 / 제논 · 올스탯 / 데벤 · HP"(`MainStat`, 저장 `ev:mainStat`). 공식 표의 올스탯 · HP 줄 값과 확률을 그대로 씀(모자 Lv.200 첫 줄: STR 12% 9.76% · 올스탯 9% 7.32% · HP 12% 9.76%, 에디 HP 11% 5.0% vs STR 8% 3.3%). 제논 · 데벤은 그 줄만 세고 maplescouter 환산은 일반 직업만(제논의 STR · DEX · LUK% 단독 줄을 얼마로 칠지는 정하지 않음 — 지금 0). Codex 지적(목표 직접 입력이 숨겨짐) 반영.
-   ③ ~~원 숫자 정렬~~ 완료: 어빌리티 단계 원 숫자를 메이플 서체 → 기본 글꼴(크롬 확인).
-   ④ 잠재 탭 공격력 / 마력 선택 칸 3곳(무기 · 방어구 환산 · 소울) 삭제(2026-11-10 사용자) — 공식 표에서 공 · 마 줄 188쌍이 값 · 확률 모두 같아 결과가 같음, 표시는 "공/마" · "공격력(마력)". 같은 날 옵션 띄우기 칩을 줄마다 꽉 차게(주스탯 % = 한 줄 균등, 무기 = 늘어나는 칩, 폰 3 + 2). "환산 기준"(maplescouter 세부 스펙 입력)은 기본 접힘, 제목 옆에 "기본값 / 바꾼 값 사용 중" 표시(사용자).
-4-2. ~~장갑 · 모자 목표~~ **B안으로 완료(2026-11-10)**: 시안 https://claude.ai/artifact/BbPoBg1YuWeb6NFK459DZd . 장갑(크뎀) · 모자(쿨감) 노릴 옵션 = "크뎀/쿨감 줄 − + · 주스탯 줄 − +"(합 3줄까지, 나머지는 "아무 옵션 n줄"), 윗잠 · 에디 둘 다. 계산 `comboChance`(줄마다 특수 · 주스탯 · 나머지 확률로 3줄 조합, 값 상관없이), 장비 · 묶음 바꾸면 1줄 + 주스탯 1줄로 초기화. 테스트 60개(시안 숫자 6개 일치), 크롬 확인, Codex 집중 확인 지적 없음. 에디 크뎀 1% 줄은 안 셈(3% 이상만, 2026-11-10 사용자 · `minSpecial`, 에디 장갑 크뎀1+주스탯1 0.547% → 0.273%, 윗잠은 8%뿐이라 그대로). 열린 질문: 주스탯 줄에 낮은 값(9% 등)도 셀지(지금 셈). 같은 날 주스탯 목표 칩 = `practicalTargets`(줄마다 1% 이상 나오는 값 · 환산 포함으로 만든 3줄 합, 최대 절반 이상, 윗잠 3% · 에디 2% 간격): 에디 방어구 12~20(전엔 18~24, 22 · 24 는 0.02% 줄 필요), 윗잠 21~33(36 뺌, 셋째 줄 12% 0.5%), 장갑 탭 이름 "효율 환산"(크뎀 8% = 주스탯 31.7% → 칩 45 · 49 · 52 · 63 · 72), 데벤 에디 HP 16 · 19 · 27. Codex 지적 없음. − + 칸 설명은 "값 상관없이" 대신 그 표의 최저값(예: 주스탯 9% 이상 · 올스탯 6% 이상 · 재사용 대기시간 −1초 이상 · 크리티컬 데미지 3% 이상). 환산 기준의 크뎀 칸 = 윗잠 "크뎀 8% = 주스탯" · 에디 "크뎀 3% = 주스탯" + 아래 "크뎀 1% = n%"(저장은 cd3 그대로, 8% 칸에 쓴 값은 cd8 로 따로 둠).
-5. **다음 = 썬데이 메이플(명세 §4-10)**. 순서: ① ~~지난 썬데이 기록 데이터 파일~~ **완료(2026-11-10, 커밋 안 함)**: `lib/sunday/data/history.json`(511개 날짜 2017-03-12 ~ 2026-11-08, 한 줄에 한 주 — date · event · special · notice(공식 공지 번호) · items[{name, tags?, time?}] · none? · src · check) + `benefits.json`(혜택 원문 이름 104개 → group 47묶음 · 횟수 · 처음/마지막). 출처 = 인벤 2304/47579(20563 이어받음, ~2026-07-26) + 공식 공지 이미지(이후 15주). 사실 확인: 공식 이미지 74주 대조 전부 일치, 공식 숨은 글자 243주 일치, 미확인 194주(2019-04-28 이전 111주 · 이미지뿐인 2024-11~2026-07 약 70주). 공식 공지의 숨은 글자는 틀린 곳이 있음(이미지가 맞음). 만드는 스크립트 · 원본 · 과정 `C:/dev/_work/maple-sunday-data/README.md`(git 밖). 함정: 현상금 · 불꽃늑대는 2025-06 뒤 안 나옴(트레져 헌터로 바뀜) → 예측에서 단종 처리 필요, 2024-03-31 은 4-01 먼데이, 2023-01-12~18 은 날마다 혜택(`day`). maplessunday(달력 API · 적중 기록)와 대조: 2023-08 이후 167주 중 155주 같음, 나머지는 그쪽 표기 누락 · 오류(공식 이미지로 확인). 그쪽 성적 TOP3 24/27 · 1위 13/27(2026-05-10 ~ 11-08) = 우리 예측의 비교 기준, 예측 단위는 묶음(룬+콤보킬, 몬컬+모몽+엘몹, 샤이닝 = 한 묶음). 데이터 시작 시점 사용자와 논의 중(Claude 추천 2023-08-27 — 그 뒤로 주당 혜택 2.1 → 3.2개, 주기 짧아짐).
-   **② 예측 시험(2026-11-10, `_work/maple-sunday-data/exp/`, 프로젝트 코드 아님)**: 사용자 요청 = 자주 같이 나오는 혜택은 묶음, "강화데이 · 사냥데이" 테마도 알려 주기. 묶음(같이 나온 비율 100%): 룬 = 룬 버프 + 콤보킬 + 룬 재등장 + 룬 지속시간, 몬컬 = 컬렉션 + 모몽 + 엘몹, 현상금 + 불꽃늑대(단종), 트레져 = 경험치 + 등장, 샤이닝 · 솔 에르다 타임 = 태그 묶음. 테마 = 강화(스타포스류 · 주흔 · 어빌 · 소울 · 미라클 · HEXA) / 사냥(룬 · 몬파 · 트레져 · 솔 에르다 · 몬컬) / 선물.
-   발견: 샤이닝 · 미라클 주엔 사냥 혜택이 거의 없음(14주 중 1 · 9주 중 1), 샤이닝 다음 주는 14번 중 11번 사냥 주, 큰 날 연속은 1번뿐(2026-06-28 미라클 → 07-05 샤이닝). 샤이닝 · 미라클을 "큰 날" 하나로 보면 간격 22번 중 18번이 2~4주. 결과(27주 = maplessunday 적중 기록 주, 그쪽 TOP3 24 · 1위 13 / 무작위 TOP3 10): 시안의 "지난 주 ÷ 평균 주기" 순위 5~7(폐기), 빈도 19 · 12, 주기 hazard × 최근 빈도 22 · 12, **두 단계(큰 날 확률 → 평일 주 묶음) 2025-03-23 시작 22 · 13**(최근 52주 34/52). 시작일은 2025-03 > 2023-08 > 전체(묶음 순위 기준). 테마는 "사냥 혜택 나올 확률 · 강화 혜택 나올 확률" 따로가 맞음(27주 맞힘 17 · 18, 상수보다 Brier 낮음 0.21 vs 0.24) — "이번 주 ○○데이" 하나로 찍기는 늘 사냥 찍기보다 못함. 2차 시험(같은 날): 업데이트 · 쇼케이스 일정은 큰 날과 관계 약함(안 씀). **v3 = 큰 날 하나의 주기 → 샤이닝/미라클 나누기 → 평일 주 묶음(hazard × 최근 빈도) + 보여 줄 3개는 종류(큰 날 · 사냥 · 강화)별 하나씩**, 학습 2025-03-23 부터: 27주 22/27 · 52주 38/52(가장 좋음). 머신러닝(로지스틱 회귀, JS 직접 구현) 27주 20 · 52주 36 — 섞기 하면 더 나빠짐, 데이터가 작아 지금은 통계가 나음. 27주에서 maplessunday 와 2주 차이는 우연 범위. 시험 코드 `exp/v3.mjs` · `diversify.mjs`.
-   **③ 화면 완료(2026-11-10, 커밋 안 함)**: `/sunday`(메뉴 ready) + 홈 썬데이 카드. 코드 `lib/sunday/`(bundles · history · predict(v3 이식) · view, 테스트 `predict.test.ts` 8개 — 백테스트 38/52 · 22/27 고정) · `components/sunday/sunday-view.tsx`(서버 컴포넌트만) · `app/sunday/page.tsx`. 둘 다 `revalidate = 3600`(금요일 10시 공지 · 일요일 바뀜 반영). 데이터 파일은 2023-08-27 부터만(사용자: 옛날 것 빼기), 학습은 2025-03-23 부터.
-   테마 3개 = 스타포스 / 옵션 강화(미라클 · 어빌 · 소울 · 주흔 · HEXA — "강화"는 스타포스와 헷갈리고 "잠재·어빌"은 애매하다고 사용자 지적 → 모두 옵션 · 스탯이라 "옵션 강화", Claude 추천 · 사용자 확인 전) / 사냥. 2개(강화 · 사냥)는 강화가 66% 주에 나와 정보가 없고, 4개(경험치 · 재화 분리)는 서로 50% 겹쳐 뺌. 테마 확률은 "테마마다 나올 확률"(합이 100% 넘음 — 화면에 적음). 화면에 "큰 날" 같은 내부 용어 · 계산 방식 설명 문장 쓰지 않기(사용자). 아래 목록은 테마별로 묶고 순위 번호 없음 + "3개에 포함" 표시(위의 3개와 번호가 달라 헷갈린다는 사용자 지적). 3개를 "테마마다 1위"로 바꾸는 안은 52주 38 → 35로 떨어져 안 씀.
-   Codex 리뷰(gpt-6.1-sol) 지적 1개(테마 확률 중복 계산) 반영 · 집중 확인 approve. 크롬 3011 빌드본 데스크톱 · 375px iframe 다크/라이트, 가로 넘침 없음.
-   **④ 다음(사용자가 일어나서, 2026-11-10 결정)**: 매주 자동 갱신 C = 금요일 10시(KST) 사이트가 스스로 → Vercel Cron(Hobby 는 그 시간 안 아무 때 · 재시도 없음 → 12시쯤 예비 실행) → 넥슨 공지 API 로 썬데이 공지 찾기 → 이미지 글자 읽기(tesseract.js 무료 vs Claude API 정확 · 키 필요 — 사용자 결정) → 아는 혜택 이름과 맞추기, 처음 보는 혜택은 "확인 필요" → Supabase 표에 저장. 필요: 서버 전용 쓰기 키(service role, 사용자가 등록) · 마이그레이션 SQL(사용자 실행) — 3단계 준비와 같이. 그 전까지는 A = 금요일 뒤 Claude 에게 "썬데이 추가해"(공지 이미지 읽고 `_work/maple-sunday-data` new-weeks.json → build → 테스트 → 커밋). prettier 는 안 깜(화면 줄바꿈과 무관, 넣으려면 파일 정리 때 모양만 바꾸는 커밋으로 따로).
-   **남은 것**: 새 주 기록은 손으로 추가(`_work/maple-sunday-data` new-weeks.json → build → 커밋 · 배포), 안 하면 "기록 n주 밀림" 경고 · 예측 정확도 떨어짐 → 3단계 DB 또는 자동화 검토. 넥슨 공지 API 로 "공지 올라옴" 감지는 안 넣음(금요일 10시 이후엔 이벤트 목록 링크만).(혜택별 "마지막 등장 후 n주일 때 이번 주 확률") ③ 화면(시안 `Sunday.dc.html`, 홈 "이번 주" 아래 작은 카드). 사용자(2026-11-10): 지금은 통계, 나중에 머신러닝을 붙일 수 있게 데이터 파일 모양을 정함(약 300주라 ML 이득은 작을 수 있음 → 나중에 둘 다 돌려 적중률 비교).
-   배포 상태(2026-11-10): Vercel 에 `NEXON_API_KEY` 등록(Secret, Production + Preview, 사용자). `redesign` 은 원격보다 6커밋 앞섬(푸시 안 함), 운영 `main` 은 개편 전 그대로. **새 파일은 처음부터 기능별 폴더 규칙대로**(화면 `app/<경로>/page.tsx` 는 얇게, 부품 `components/<기능>/`, 계산 · 데이터 · 테스트 `lib/<기능>/`).
-6. 3단계 회원·권한(아래 "개편 단계").
-6. **파일 정리 — 3단계에서 옛 코드를 지운 직후, `main` 합치기 전에 한 번에**(2026-11-09 사용자 결정, 승인한 항목만): 위 규칙으로 옮기기(`lib/mvp.ts` · `settlement-math` · `boss-split-math` · `split-image` → `lib/<기능>/`, `settlement-client.tsx` · 분배금 화면 본문 → `components/<기능>/`), `lib/` 바로 아래는 공용만, 핀볼 엔진 `lib/pinball/` → `lib/third-party/roulette/`, `AGENTS.md` 를 `.gitignore` 에, `project-spec.md`(75KB) 끝난 기능 history 로, `structure.md` 새 구조로. 위치 · import 만 바꾸고 로직은 그대로, 별도 커밋.
+1. **썬데이 매주 자동 갱신(C) — 사용자가 원함(2026-11-10)**: 금요일 10시(KST) 사이트가 스스로 → Vercel Cron(Hobby 는 그 시간 안 아무 때 · 재시도 없음 → 12시쯤 예비 실행) → 넥슨 공지 API 로 썬데이 공지 찾기 → 공지 이미지 글자 읽기 → 아는 혜택 이름과 맞추기(처음 보는 혜택은 "확인 필요") → Supabase 표에 저장.
+   **사용자 결정 필요**: 글자 읽기 방식(tesseract.js 무료 · 정확도 시험 필요 vs Claude API 정확 · 키 · 주 1회 소액), 서버 전용 쓰기 키(service role) 등록 · 마이그레이션 SQL 실행(사용자) — 3단계 준비와 같이.
+   **그 전까지(A)**: 금요일 공지 뒤 사용자가 "썬데이 추가해" → 공지 이미지 읽고 `C:/dev/_work/maple-sunday-data/src/new-weeks.json` 에 추가 → `node scripts/build.mjs C:/dev/maple-dashboard/lib/sunday/data 2023-08-27` → `npm test` → 커밋. 안 하면 화면에 "기록 n주 밀림" 경고 · 예측 정확도 떨어짐.
+2. **3단계 회원·권한**(아래 "개편 단계").
+3. **파일 정리 — 3단계에서 옛 코드를 지운 직후, `main` 합치기 전에 한 번에**(2026-11-09 사용자 결정, 승인한 항목만): `lib/mvp.ts` · `settlement-math` · `boss-split-math` · `split-image` → `lib/<기능>/`, `settlement-client.tsx` · 분배금 화면 본문 → `components/<기능>/`, `lib/` 바로 아래는 공용만, 핀볼 엔진 `lib/pinball/` → `lib/third-party/roulette/`, `AGENTS.md` 를 `.gitignore` 에, `project-spec.md`(78KB) 끝난 기능 history 로, `structure.md` 새 구조로. 위치 · import 만 바꾸고 로직은 그대로, 별도 커밋. prettier 를 넣고 싶으면 이때 모양만 바꾸는 커밋으로 따로(지금은 안 씀).
+- 숨은 스펙업 남은 것: 하루 한도 "가까우면 안내"(3단계 DB 카운터 표), 보약 찾는 방식, 유니온 프리셋, 5차 공용 코어 목록(`check.ts` BOSS_COMMON_CORES, Claude 판단), 조회 더 빠르게(결과 나눠 보여 주기 · 넥슨 서비스 키 — 사용자와 정하기).
+- **확인 필요(사용자)**: 썬데이 테마 이름 "옵션 강화"(Claude 추천), 추옵 탭 환산 기본값(올스탯1%=10 · 공1=4)을 잠재 탭 maplescouter 환산에 맞출지, MVP 크레딧 적립 5%(maple-mvp.com 기준), 에디 방어구 주스탯 합에 9레벨당 · 공 정수를 안 세는 부분, 잠재 장갑 · 모자의 주스탯 줄에 낮은 값(9% 등)도 셀지(지금 셈).
+- **새 파일은 기능별 폴더 규칙대로**: 화면 `app/<경로>/page.tsx` 는 얇게, 부품 `components/<기능>/`, 계산 · 데이터 · 테스트 `lib/<기능>/`.
+
+## 도구별 요점 (상세 · 수치는 history "2026-11-10 정리", 명세 §4)
+
+- **기댓값** `/ev`(스타포스 · 잠재 · 추옵 · 소울 · 어빌리티 5탭): 계산 `lib/ev/*.ts`, 공식 확률표 `lib/ev/data/potential.json` · `ability.json`(다시 받기 `C:/dev/_work/maple-ev-data/`), 기본값 `lib/ev/defaults.ts`.
+  사용자 결정: 서큘레이터 개수 = (1 − P) ÷ P, 천장 = N번 연속 실패 뒤 다음 번 확정, 메소를 항상 먼저, 정해진 재설정 비용은 글자만, 방어구 · 장신구 주스탯 목표 = maplescouter 환산(`ev:statConv`), 잠재 공 · 마 선택 칸 없음(두 줄 확률 같음), 특수 직업 = 일반 / 제논 · 올스탯 / 데벤 · HP(`ev:mainStat`), 장갑 · 모자 = 크뎀/쿨감 줄 − + · 주스탯 줄 − +(`comboChance`).
+- **MVP** `/mvp` = C안 효율 순위판(`lib/mvp.ts`, 저장 `mvp:settings2`).
+- **핀볼** `/pinball` = `lib/pinball/`(원본 lazygyu/roulette MIT, 코스 "Wheel of fortune", 물리 `box2d-wasm@7.0.0`).
+- **숨은 스펙업** `/spec`: 닉네임 → 서버에서 넥슨 API 13회(220ms 간격 큐) → 규칙 검사(`lib/spec/check.ts`, 직업 데이터 `lib/spec/data/classes.json`) → 3시간 캐시(`RULES_VERSION` 올리면 옛 캐시 안 씀). 칭호는 지금 낀 칭호만.
+- **썬데이** `/sunday` + 홈 카드: 데이터 `lib/sunday/data/history.json`(2023-08-27 ~, 사용자: 옛날 것 빼기) · `benefits.json`, 예측 `lib/sunday/predict.ts`(샤이닝 · 미라클 주기 → 나머지 묶음 hazard × 최근 빈도, 학습 2025-03-23 ~, 3개는 종류별로 섞어 고름 → 최근 52주 38/52, maplessunday 27주 24 vs 우리 22), 테스트가 이 점수를 고정.
+  테마 3개 = 스타포스 / 옵션 강화 / 사냥, "테마마다 나올 확률"(합이 100% 넘음). 묶음 = 늘 같이 나오는 혜택(룬 + 콤보킬 + 룬 재등장, 몬컬 + 모몽 + 엘몹 등, `lib/sunday/bundles.ts`). 페이지 · 홈은 `revalidate = 3600`.
+  데이터를 다시 만드는 스크립트 · 출처 · 사실 확인 기록은 `C:/dev/_work/maple-sunday-data/README.md`(git 밖), 예측 시험 코드 `exp/`.
+- 비회원 저장 = `lib/use-stored.ts`(localStorage, 실패하면 메모리), 시계 = `lib/use-now.ts`.
+
+## 결정 · 함정
+
+- **화면 문구(사용자)**: 짧은 명사형 + 화살표, "~해요" 없이. 계산 방식 같은 뻔한 설명 · 내부 용어("큰 날" 등) 넣지 않기.
+- **넥슨 그림**: 원본 게임 그림은 공개 저장소 · 사이트에 안 씀(brain `wiki/research/nexon-ip-guide.md`), 장비 그림 = Open API 아이콘 주소. 표기 "MapleStory © NEXON Korea · Data based on NEXON Open API · 비공식" = 데스크톱 사이드 메뉴 맨 아래, 모바일 페이지 끝.
+- **로고** = 앱 아이콘 사본 `public/brand-mark.png`(96px, `components/brand.tsx` 정적 import + unoptimized). **`app/icon.png` 를 바꾸면 사본도 다시 만들기**: `node -e "require(\"sharp\")(\"app/icon.png\").resize(96,96).png({compressionLevel:9}).toFile(\"public/brand-mark.png\")"`.
+- box2d-wasm 의 Emscripten 코드가 `require('fs')` 를 품어 `next.config.ts` `turbopack.resolveAlias`(fs · path → `lib/empty-module.ts`, browser 만). 이 설정을 바꾼 뒤 개발 서버가 다시 읽지 않아 **페이지가 무한 새로고침** → 개발 서버를 껐다 켜기.
+- 한 폴더에 `next dev` 는 하나만 → 확인용은 `next build` 후 `next start -p 3011`. 백그라운드로 켠 3011 은 작업 중지로 안 꺼짐 → 포트를 잡은 PID 를 찾아 끄기. **빌드를 다시 하면 3011 도 껐다 켜기.**
+- JSON import 는 `with { type: "json" }`(node --test 에 필요). 크롬 창을 375로 줄여도 `innerWidth` 가 안 바뀜 → 같은 출처 페이지에 375px iframe 을 넣어 확인.
+- **`npx` 로 프로젝트에 없는 도구를 부르지 않기**: `npx node` · `npx prettier` 가 새 판을 내려받아 실행함(2026-11-10, prettier 가 파일 모양을 바꿔 되돌림). 테스트는 `npm test`.
+- Next 이미지 최적화: 주소가 같으면 브라우저가 예전 그림을 캐시에서 씀 → 바뀌는 그림은 정적 import(내용 해시 주소).
 
 ## 전면 개편 계획 → [project-spec.md](project-spec.md)
 
 - 순서: 디자인 3안(아티팩트) → 사용자가 고른 안으로 화면 → 회원·권한 → 기능 추가. 코드·DB 는 안을 고른 뒤에.
-- 2026-11-07 브라우저로 mefit 스케줄러·cngtech 보스 도우미·Open API 스케줄러/확률 조회 확인, 결과는 명세 §2~4.
-  핵심: 스케줄러·확률 API 는 **키 주인 계정 데이터만** → 숙제·강화 기록은 사용자 본인 API 키 필요. 스케줄러에 완료 여부 있음(14일까지),
-  스타포스 기록엔 메소 비용·아이템 레벨이 없어 비용을 직접 계산해야 함.
-- **디자인: A안(메보스형) 확정(2026-11-07)** — 이후 A안만 고친다. 캔버스 https://claude.ai/artifact/2ECnKh4QSJB2znjRYUV7kk
-  상세(화면 목록·props·결정·참고 사이트·함정)와 명세와 다른 곳 11개(2026-11-08 답함)는 [design.md](design.md).
-  요약: 메뉴 = 홈 / 내 메이플(내 수익·숙제·보스 수익·강화 기록·알림) / 계산기(분배금·기댓값·MVP) / 정보 · 도우미(썬데이·숨은 스펙업·보스 도우미) / 놀이(핀볼) — 2026-11-08 묶음,
-  캐릭터 검색 없음(숨은 스펙업만 예외), 로그인 = 아이디 또는 API 키, 로그인 상태 4가지(비회원 / 비회원 + 키 / 아이디만 / 키 있음),
-  숙제 현황 = 캐릭터 수 요약 + 캐릭터 목록(최대 36) → 선택 캐릭터의 보스 표(파티원·가격)·일일·주간, 보스 수익·가격 설정,
-  강화 기록 5가지 보기, 아이콘 = lucide-react(캐릭터·아이템 그림만 Open API 이미지), 달력·요일 표기는 전부 일~토(2026-11-08 바꿈, 예외 없음 — design.md).
-- **디자인 끝(2026-11-08 사용자)** — design.md 대기 목록 11개 답을 명세에 반영함(0단계). 시안 수정 끝 = 캔버스 Version 71.
-  2026-11-08 시안 추가·변경 요지: 중심 기능 = **내 수익**(부주 정산은 캔버스 "보관", 화면 문구에 "부주" 안 씀), 새 공개 도구 기댓값 · MVP · 핀볼 · 썬데이 · 숨은 스펙업, 보스 도우미 대상 = 카링·흉성·림보·발드릭스·유피테르. 과정 원문은 history "디자인 단계 과정 기록", 상세 design.md.
-- **캔버스 고치는 방법(다음 세션용)**: Artifact `read`(url + `paths`)로 `project/*.dc.html` 을 scratchpad 에 받아 고치고, 같은 `url` + `root` 로 게시(보드 위치·크기를 바꾸면 `project/canvas.json` 도 다시 읽고 같이).
-  고친 뒤 검사: `node C:/dev/_work/maple-canvas/scripts/check-dc.mjs <받은 project 폴더>`(모든 {{ }} 가 채워지는지 · 화면 블록 하나만 켜지는지), `tags.mjs <파일들>`(태그 짝). `flame.mjs` = 추옵 공식 확률 계산 예.
-  눈으로 확인: 크롬으로 캔버스를 열고 보드 클릭 → 확대 메뉴(▾) "Zoom to selection" → 보드 PLAY → "Play full screen" → Fill.
-- 핀볼 원본: 사용자가 github.com/lazygyu/roulette ZIP 을 `vendor/roulette/` 에 풀어 둠(받은 그대로). 라이선스 검토는 명세 §4-7, brain `wiki/research/marble-roulette-license.md`.
+- 2026-11-07 확인: 스케줄러·확률 API 는 **키 주인 계정 데이터만** → 숙제·강화 기록은 사용자 본인 API 키 필요. 스케줄러에 완료 여부 있음(14일까지), 스타포스 기록엔 메소 비용·아이템 레벨이 없어 비용을 직접 계산해야 함.
+- **디자인: A안(메보스형) 확정(2026-11-07), 디자인 끝(2026-11-08, 캔버스 Version 71)** — 캔버스 https://claude.ai/artifact/2ECnKh4QSJB2znjRYUV7kk , 상세 [design.md](design.md).
+  메뉴 = 홈 / 내 메이플(내 수익·숙제·보스 수익·강화 기록·알림) / 계산기(분배금·기댓값·MVP) / 정보 · 도우미(썬데이·숨은 스펙업·보스 도우미) / 놀이(핀볼). 캐릭터 검색 없음(숨은 스펙업만 예외), 로그인 = 아이디 또는 API 키, 로그인 상태 4가지, 아이콘 = lucide-react, 달력·요일 표기는 전부 일~토.
+  중심 기능 = **내 수익**(화면 문구에 "부주" 안 씀), 보스 도우미 대상 = 카링·흉성·림보·발드릭스·유피테르.
+- **캔버스 고치는 방법**: Artifact `read`(url + `paths`)로 `project/*.dc.html` 을 받아 고치고, 같은 `url` + `root` 로 게시(보드 위치·크기를 바꾸면 `project/canvas.json` 도). 검사 `node C:/dev/_work/maple-canvas/scripts/check-dc.mjs <project 폴더>` · `tags.mjs <파일들>`. 눈으로 확인: 보드 클릭 → "Zoom to selection" → PLAY → "Play full screen".
 - 개편 전 보안 구멍(관리자 확인 없는 액션, 쿠키에 비밀번호 원문)은 명세 §5, 아직 열림 → 3단계에서 옛 관리자 방식을 통째로 없애며 닫는다.
-- **2026-11-08 사용자 결정**: 기존 데이터는 옮기지 않고 새로 시작(백업 `C:\dev\_backup\maple-db-2026-11-08\`, git 밖). 옛 관리자 방식(`/admin`·`ADMIN_PASSWORD`·관리자 쿠키·액션)은 통째로 없앰, 운영용 관리자 기능은 지금 안 만듦(명세 §1·§5).
+- **2026-11-08 사용자 결정**: 기존 데이터는 옮기지 않고 새로 시작(백업 `C:\dev\_backup\maple-db-2026-11-08\`, git 밖). 옛 관리자 방식(`/admin`·`ADMIN_PASSWORD`·관리자 쿠키·액션)은 통째로 없앰.
 
 ## 개편 단계 (2026-11-08 사용자 지시 — 단계마다 보고하고 멈춤, 사용자가 "다음"이라고 하면 진행)
 
-- **0단계 문서 정리** — 완료(2026-11-08, `bfcbcc7`): 명세·design.md 에 11개 답 반영, 메이플스토리 서체 라이선스 확인(명세 §2 "글꼴").
-- **1단계 화면만 A안 + 글꼴 + 분배금 계산기 개편** — 완료, `redesign` 브랜치 커밋 `6e2eb10`(2026-11-08). 토큰 `globals.css`, 메뉴 정의 `lib/nav.ts`, 없는 기능은 `app/[tool]/page.tsx` "준비 중", 글꼴 = Pretendard + 큰 숫자만 메이플 서체(`font-num`), Clarity `components/clarity.tsx`. 상세·과정·함정(구글 한글 글꼴 `preload: false` 등) 원문은 [history.md](history.md) "개편 1단계".
-- **2단계 공개 도구(로그인 없이)** — 기댓값 · MVP · 핀볼 완료(`0d85727`), 썬데이 · 숨은 스펙업 남음. 차수별 기록 원문은 [history.md](history.md) "개편 2단계 세션 기록".
-  - **기댓값 계산기** `/ev`(스타포스 · 잠재 · 추옵 · 소울 · 어빌리티 5탭). 계산 `lib/ev/*.ts`, 테스트 `npm test`(= `node --test`, 44개). 데이터 `lib/ev/data/potential.json`(넥슨 공식 큐브 옵션표, GetSearchProbList) · `ability.json`(공식 어빌리티 옵션표), 기본값 `lib/ev/defaults.ts`(날짜와 함께). 출처·검증은 명세 §4-7 · §4-8 · §4-9. 확률표 다시 받는 스크립트 `C:/dev/_work/maple-ev-data/`(git 밖, README 에 순서).
-  - **MVP 계산기** `/mvp` = **C안(효율 순위판) 확정**(시안 https://claude.ai/artifact/LPEC3cM7S9A1Ae4fAKjALf). 계산 `lib/mvp.ts`(`sellRoute` · `creditPlan` 배낭 DP, 600만 원 넘으면 근삿값 `route.approx`), 저장 키 `mvp:settings2`.
-  - **핀볼 추첨** `/pinball` = `vendor/roulette` 엔진을 `lib/pinball/` 로 옮김(광고 · 커뮤니티 맵 · 녹화 · 인물 그림 등 뺌, 원본 `LICENSE` 사본). 코스 = 원본 맵 "Wheel of fortune" 하나(MIT 출처 표기, 광고판만 뺌, `stage.ts`), 물리 = 새 의존성 `box2d-wasm@7.0.0`(Zlib), 구슬 = 색깔 공.
-  - 비회원 저장 = `lib/use-stored.ts`(localStorage, 실패하면 메모리), 시계 = `lib/use-now.ts`.
-  - 기댓값 어빌리티 계산 방식 · 사이트 대조(starforce.gg 등 8곳) 원문은 history "2026-11-09 다음 할 일 정리".
-  - **사용자 결정**: 서큘레이터 개수 = (1 − P) ÷ P(ygh · chuchu 는 1 ÷ P — 수학적으로 맞는 쪽이 신뢰가 감), 천장 = N번 연속 실패 뒤 다음 번 확정(`gradeUp` cap = 보장 횟수 + 1), 메소를 항상 먼저(큰 숫자 · 정렬 · 운 칸), 정해진 재설정 비용은 입력 칸 없이 글자만,
-    에디 재설정 · 화이트 에디셔널 큐브는 한 줄(`upAlt`), 방어구 · 장신구 주스탯 목표 = maplescouter 환산(`STAT_CONV_DEFAULT`, 저장 `ev:statConv`), 메소마켓 기본 2,100메포, 명성치 가격 = 5,000당 "만" 입력(기본 200).
-  - **넥슨 그림(2026-11-09, brain `wiki/research/nexon-ip-guide.md`)**: 원본 게임 그림은 공개 저장소 · 사이트에 안 씀 → 소울 그림 · starforce.gg PNG 는 `C:\dev\_backup\maple-nexon-art-2026-11-09\` 로 옮김. 장비 그림 = Open API 아이콘 주소(`STAR_ITEMS[].icons`, 키 없이 열림). 표기 "MapleStory © NEXON Korea · Data based on NEXON Open API · 비공식" = 데스크톱 사이드 메뉴 맨 아래, 모바일 페이지 끝.
-  - **확인 필요(사용자)**: 추옵 탭 환산 기본값(올스탯1%=10 · 공1=4)을 잠재 탭 maplescouter 환산에 맞출지, MVP 크레딧 적립 5%(maple-mvp.com 기준), 에디 방어구 주스탯 합에 9레벨당 · 공 정수를 안 세는 부분이 maplescouter 환산 반영 뒤에도 남았는지.
-  - **함정**: box2d-wasm 의 Emscripten 코드가 `require('fs')` 를 품어 `next.config.ts` `turbopack.resolveAlias`(fs · path → `lib/empty-module.ts`, browser 만). 이 설정을 바꾼 뒤 개발 서버(3001)가 다시 읽지 않아 **페이지가 무한 새로고침** → 개발 서버를 껐다 켜야 함.
-    한 폴더에 `next dev` 는 하나만(두 번째는 "Another next dev server" 로 꺼짐) → 확인용은 `next build` 후 `next start -p 3011`. 백그라운드 `npx next start` 를 작업 중지로 끄면 node 자식이 남아 3011 을 계속 잡음(2026-11-09) → 명령줄을 확인하고 그 PID 를 끈다.
-    JSON import 는 `with { type: "json" }`(node --test 에 필요). 크롬 창 크기를 375로 줄여도 `innerWidth` 가 안 바뀜 → 같은 출처 페이지에 375px iframe 을 넣어 확인.
-  - 남은 도구: **썬데이 메이플**(§4-10, 공지 API + 지난 기록 데이터 파일), **숨은 스펙업**(§4-11, 우리 서버 키로 캐릭터 조회 → 키 환경변수 · `lib/nexon/` · 캐시 · 하루 한도 안내, 규칙은 데이터 파일).
+- **0단계 문서 정리** — 완료(`bfcbcc7`).
+- **1단계 화면 A안 + 글꼴 + 분배금 계산기** — 완료(`6e2eb10`). 토큰 `globals.css`, 메뉴 `lib/nav.ts`, 없는 기능 = `app/[tool]/page.tsx` "준비 중", 글꼴 = Pretendard + 큰 숫자만 메이플 서체(`font-num`), Clarity `components/clarity.tsx`. 과정 · 함정 원문 history "개편 1단계".
+- **2단계 공개 도구(로그인 없이)** — 완료(위 "도구별 요점").
 - **3단계 회원·권한**(명세 §1·§5): 냠냠과 같은 Supabase 프로젝트 → 전체 인증 설정·`nyamnyam` 스키마 안 건드림, 가입 = 서버 `auth.admin.createUser` + `app_metadata.app = "maple"`, 로그인은 그 계정만, service role 서버 전용.
   아이디 로그인(가상 이메일)·API 키 로그인(ouid). 새 테이블 `user_id NOT NULL` + RLS `auth.uid() = user_id`. 옛 public 테이블·트리거·함수 삭제는 새 사이트 배포 때(SQL 은 실행 전에 보여 줌).
   옛 관리자 방식 삭제. 대시보드 설정·키 입력은 사용자가(할 일 목록으로 줌). 개인정보처리방침 페이지(Clarity 수집 내용 포함, 캡처 이미지는 서버로 안 보냄·비회원 키는 브라우저에만도 적기). Codex 리뷰 기본 모델.
 - **4단계 로그인 뒤 기능**(기능마다 보고하고 멈춤): ① **내 수익**(로그인만, API 키 없이도 — 캡처 읽기는 브라우저 Tesseract.js) → ② API 키 등록·암호화 저장(여러 개) →
   ③ 숙제 → ④ 보스 수익(비회원 이번 주 조회 = 브라우저 직접 호출, CORS 확인 포함) → ⑤ 홈 "이번 주" → ⑥ 강화 기록 → ⑦ 알림 → ⑧ 보스 패턴 도우미.
-  (내 수익을 맨 앞에 둔 건 Claude 판단 — 순서는 사용자가 바꿀 수 있음.)
-  넥슨 API 는 서버에서만, 하루 1,000건 제한이라 캐시, "Data based on NEXON Open API" 표기, 저장한 데이터는 30일 안에 갱신.
+  (내 수익을 맨 앞에 둔 건 Claude 판단 — 순서는 사용자가 바꿀 수 있음.) 넥슨 API 는 서버에서만, 하루 1,000건 제한이라 캐시, "Data based on NEXON Open API" 표기, 저장한 데이터는 30일 안에 갱신.
 
 ## 기술 스택
 
-- Next.js 16.4.3 (App Router, Turbopack), React 19.2.8, TypeScript
-- Tailwind CSS v4 (`@custom-variant dark (&:where(.dark, .dark *))`), `next-themes` (다크모드)
-- 글꼴 = Pretendard(`fonts/Pretendard/`) + 큰 숫자만 메이플스토리 서체(`fonts/Maplestory/`, `font-num`) — 1단계에서 Paperlogy 를 바꿈.
-- **shadcn/ui** (style `base-nova`, Base UI 기반) — `components.json`, `components/ui/*`에 소스가
-  복사되는 방식. 클래스 병합은 `cn` 패키지(`lib/utils.ts`가 re-export). 새 컴포넌트는
-  `npx shadcn@latest add <name>`으로 추가.
-  주의 1: `shadcn init`이 `app/globals.css`와 `app/layout.tsx`를 덮어쓰면서 Geist 폰트를
-  넣어버렸던 적이 있다. shadcn CLI를 다시 돌릴 때는 두 파일의 diff를 꼭 확인하세요.
-  주의 2 (다크모드 버그): `globals.css`에서 **`:root`(라이트)가 반드시 `.dark`보다 먼저**
-  와야 합니다. 두 셀렉터는 명시도가 같아서 순서가 뒤집히면 `.dark`가 `:root`에 덮여
-  다크모드에서 배경/글자색이 라이트 값 그대로 남습니다 (shadcn init이 실제로 이 순서를
-  뒤집어 놓은 적 있음).
-- Supabase(Postgres) — `@supabase/supabase-js`, **서버 사이드에서만** 사용 (Server Components / Server Actions).
-  `SUPABASE_URL` / `SUPABASE_ANON_KEY` (NEXT_PUBLIC_ 접두어 아님 — 클라이언트에 노출 안 됨)
-- 데이터 mutation은 전부 Server Actions(`"use server"`)로만 처리. 클라이언트 fetch/API route 없음.
-- 캐싱: `unstable_cache`로 읽기 캐시 + `updateTag`로 Server Action 안에서 즉시 무효화
-  (Cache Components 신모델이 아니라 "Previous Model" 유지 — 영향 범위를 좁게 가져가기 위한 의도적 선택)
-- Vercel 함수 리전 `icn1` 고정(`vercel.json`) — 미국 리전에서 서울 Supabase 를 부르면 느렸음(해결 과정은 history).
+- Next.js 16.4.3 (App Router, Turbopack), React 19.2.8, TypeScript. 이 Next 버전은 학습 데이터보다 최신 → `node_modules/next/dist/docs/` 를 직접 참고.
+- Tailwind CSS v4 (`@custom-variant dark (&:where(.dark, .dark *))`), `next-themes` (다크모드).
+- 글꼴 = Pretendard(`fonts/Pretendard/`) + 큰 숫자만 메이플스토리 서체(`fonts/Maplestory/`, `font-num`).
+- **shadcn/ui** (style `base-nova`, Base UI 기반) — `components/ui/*`, 새 컴포넌트는 `npx shadcn@latest add <name>`.
+  주의: `shadcn init` 이 `app/globals.css` · `app/layout.tsx` 를 덮어쓴 적 있음(Geist 폰트) → CLI 뒤 두 파일 diff 확인. `globals.css` 에서 **`:root`(라이트)가 반드시 `.dark` 보다 먼저**(명시도가 같아 순서가 뒤집히면 다크모드가 라이트 색으로 남음).
+- Supabase(Postgres) — `@supabase/supabase-js`, **서버에서만**(Server Components / Server Actions), `SUPABASE_URL` / `SUPABASE_ANON_KEY`(NEXT_PUBLIC_ 아님). 데이터 변경은 전부 Server Actions, 클라이언트 fetch/API route 없음.
+- 캐싱: `unstable_cache` + `updateTag`("Previous Model" 유지, 의도적 선택). 시간에 따라 바뀌는 페이지는 `export const revalidate = 3600`(썬데이 · 홈).
+- Vercel 함수 리전 `icn1` 고정(`vercel.json`).
 - 환경변수(`.env.local`, gitignored, 값은 출력 · 커밋 · 문서 기록 금지): `SUPABASE_URL` · `SUPABASE_ANON_KEY` · `ADMIN_PASSWORD`(3단계 운영 배포 뒤 삭제) · `NEXON_API_KEY`. 키 이름은 `.env.local.example`.
-- 이 Next 버전은 학습 데이터보다 최신이라 `node_modules/next/dist/docs/`를 직접 참고해야 함 (AGENTS.md 참고)
 
 ## 개편 전 앱(옛 코드, 3단계에서 삭제 예정)
 
-- 부주 정산 `/settlement`(메뉴에서만 빠짐, 주소로 들어가면 옛 모양) · 관리자 `/admin` · 정산 계산 `lib/settlement-math.ts` · 캐시 `lib/queries.ts`. 설명 원문은 [history.md](history.md) "개편 전 앱 설명".
+- 부주 정산 `/settlement`(메뉴에서만 빠짐) · 관리자 `/admin` · 정산 계산 `lib/settlement-math.ts` · 캐시 `lib/queries.ts`. 설명 원문은 history "개편 전 앱 설명".
 - 보스 분배금 계산 `lib/boss-split-math.ts`(chuchu.gg 산식)는 1단계에서 새 화면으로 옮겨 계속 씀.
 
-## 세션 기록
+## 세션 기록 (자세한 원문은 history)
 
-- 2026-11-08: 0단계 · 1단계 커밋, 2단계 기댓값 · MVP · 핀볼(상세 history).
-- 2026-11-10: 로고 = 앱 아이콘(버섯, `app/icon.png` 512px 투명 → `public/brand-mark.png` 96px 사본, `components/brand.tsx` next/image 정적 import(주소에 내용 해시 → 예전 캐시 안 씀) + unoptimized(최적화가 32px 에서 색을 바래게 함)). **아이콘 바꾸면 brand-mark 도 다시 만들기**: `node -e "require(\"sharp\")(\"app/icon.png\").resize(96,96).png({compressionLevel:9}).toFile(\"public/brand-mark.png\")"`. 같은 날 사용자가 아이콘을 키운 판(단풍잎 · 핸드폰 크게)으로 바꿈 — icon.png · apple-icon.png · brand-mark 반영 확인.
-- 2026-11-10: 썬데이 지난 기록 데이터 파일(`lib/sunday/data/`, 출처 인벤 47579 + 공식 이미지, 74주 이미지 대조 일치).
-- 2026-11-09(밤): 숨은 스펙업 데이터 파일(48직업) · 보스 프리셋 규칙(maplescouter 대조) · 어빌 기준(레레레 종결 / 실전) · `/spec` 화면 완성.
-- 2026-11-09: 2단계 1~14차 수정(상세 history), 어빌리티 4단계 "뜬 옵션" 칩 + `afterTwo[].resets`(테스트 44개, 크롬 3011 빌드본 데스크톱 다크 · 375px iframe 다크 · 라이트, 넘침 없음), 어빌리티 안내 문구를 명사형 화살표로 줄임(사용자: "~해요" 없이 "재설정 · 잠금 · 목표 수치" 식, 예 "서큘레이터로 목표 수치 → 잠금 → 고급 재설정", 제목 "가장 싼 순서", "n억 절약"), Codex 집중 리뷰(gpt-6.1-sol) 지적 1개(계산 조건이 바뀌어도 ④ 선택이 남음) 반영 · 크롬 재확인(지적 그대로라 다시 리뷰 생략), handoff 34KB → 정리(원문 history).
+- 2026-11-08: 0단계 · 1단계 커밋, 2단계 기댓값 · MVP · 핀볼.
+- 2026-11-09: 2단계 1~14차 수정, 어빌리티 "뜬 옵션" 칩, 숨은 스펙업 데이터 · 규칙 · `/spec` 화면.
+- 2026-11-10: 잠재 탭 개선 커밋, 썬데이 지난 기록 데이터 · 예측 시험 · `/sunday` 화면(`27e4bdc`), 로고 = 앱 아이콘(`26e26ec`), handoff 30KB → 정리(원문 history "2026-11-10 정리").
