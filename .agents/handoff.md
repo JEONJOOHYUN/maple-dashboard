@@ -21,7 +21,12 @@
 ## 다음 할 일
 
 1. **썬데이 매주 자동 갱신(C) — 사용자가 원함(2026-11-10)**: 금요일 10시(KST) 사이트가 스스로 → Vercel Cron(Hobby 는 그 시간 안 아무 때 · 재시도 없음 → 12시쯤 예비 실행) → 넥슨 공지 API 로 썬데이 공지 찾기 → 공지 이미지 글자 읽기 → 아는 혜택 이름과 맞추기(처음 보는 혜택은 "확인 필요") → Supabase 표에 저장.
-   **사용자 결정 필요**: 글자 읽기 방식(tesseract.js 무료 · 정확도 시험 필요 vs Claude API 정확 · 키 · 주 1회 소액), 서버 전용 쓰기 키(service role) 등록 · 마이그레이션 SQL 실행(사용자) — 3단계 준비와 같이.
+   **OCR 시험(2026-11-10, 10장 · 혜택 50개)**: PaddleOCR 한국어 v5(ppu-paddle-ocr, 흑백 전처리) 50/50 · 장당 약 1.2초, tesseract.js 45/50, EasyOCR 못 돌림. 전체 167주(혜택 556개)도 Paddle 548개(98.6%), 진짜 읽기 실수는 2주뿐이고 나머지는 매칭 규칙(묶음 공지 · 챌린저스 전용 · TIP 오탐) 문제. 결과 · 코드 `C:/dev/_work/sunday-ocr-test/README.md`.
+   **결정(2026-11-10 사용자)**: PaddleOCR + 흑백 전처리, Vercel Cron. 자동 결과는 바로 확정하지 않고 숫자 빠짐 · 낮은 유사도 · 처음 보는 혜택 · 묶음 공지는 "확인 필요".
+   **진행**: 1) OCR 경로 `app/api/cron/sunday/route.ts`(지금은 `?img=` 이미지 하나 읽기만) + `lib/sunday/ocr.ts`, 로컬 `next start` 로 확인(첫 실행 3.3초 · 다음 0.2초), Codex 리뷰 지적 없음.
+   `CRON_SECRET` 등록됨(2026-11-10 사용자, Vercel Production + Preview, `.env.local` 에도). 다음: Preview 에서 실제로 읽히는지 확인 → 공지 찾기 · 매칭 규칙 · Supabase 표.
+   함정: Cron 은 HTTP 경로만 부를 수 있어 "API route 없음" 규칙의 예외. onnxruntime 본체(`libonnxruntime.so.1`)는 파일 추적에 안 잡혀 `next.config.ts` `outputFileTracingIncludes` 로 넣음(빼면 Vercel 에서 실패). 모델은 `~/.cache` 대신 메모리로 받음(Vercel 은 홈 폴더 쓰기 불가). 함수 크기 로컬 89MB(Linux 추정 약 120MB, 한도 250MB), 다른 페이지 · 브라우저 코드에는 OCR 파일 없음.
+   **사용자 결정 필요**: 서버 전용 쓰기 키(service role) 등록 · 마이그레이션 SQL 실행(사용자) — 3단계 준비와 같이.
    **그 전까지(A)**: 금요일 공지 뒤 사용자가 "썬데이 추가해" → 공지 이미지 읽고 `C:/dev/_work/maple-sunday-data/src/new-weeks.json` 에 추가 → `node scripts/build.mjs C:/dev/maple-dashboard/lib/sunday/data 2023-08-27` → `npm test` → 커밋. 안 하면 화면에 "기록 n주 밀림" 경고 · 예측 정확도 떨어짐.
 2. **3단계 회원·권한**(아래 "개편 단계").
 3. **파일 정리 — 3단계에서 옛 코드를 지운 직후, `main` 합치기 전에 한 번에**(2026-11-09 사용자 결정, 승인한 항목만): `lib/mvp.ts` · `settlement-math` · `boss-split-math` · `split-image` → `lib/<기능>/`, `settlement-client.tsx` · 분배금 화면 본문 → `components/<기능>/`, `lib/` 바로 아래는 공용만, 핀볼 엔진 `lib/pinball/` → `lib/third-party/roulette/`, `AGENTS.md` 를 `.gitignore` 에, `project-spec.md`(78KB) 끝난 기능 history 로, `structure.md` 새 구조로. 위치 · import 만 바꾸고 로직은 그대로, 별도 커밋. prettier 를 넣고 싶으면 이때 모양만 바꾸는 커밋으로 따로(지금은 안 씀).
