@@ -1,8 +1,12 @@
+import Image from "next/image";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+// Static import: the URL carries a content hash, so a new icon is never served from an old browser cache.
+import brandMark from "@/public/brand-mark.png";
 
-/** Orange square logo mark + site name (redesign A). */
+/** App icon (mushroom, same picture as app/icon.png) + site name. public/brand-mark.png is a 96px copy so the logo stays light. */
 export function Brand({ compact = false, className }: { compact?: boolean; className?: string }) {
+  const size = compact ? 28 : 32;
   return (
     <Link
       href="/"
@@ -12,26 +16,8 @@ export function Brand({ compact = false, className }: { compact?: boolean; class
         className
       )}
     >
-      <span
-        className={cn(
-          "flex shrink-0 items-center justify-center bg-primary text-primary-foreground",
-          compact ? "size-7 rounded-[7px]" : "size-8 rounded-lg"
-        )}
-      >
-        <svg
-          width={compact ? 15 : 18}
-          height={compact ? 15 : 18}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={compact ? 2.4 : 2.2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          <path d="M12 2l2.2 4.6 4.8-1.4-1.6 4.6 4.6 2.2-4.6 2.2 1.6 4.6-4.8-1.4L12 22l-2.2-4.6-4.8 1.4 1.6-4.6L2 12l4.6-2.2L5 5.2l4.8 1.4z" />
-        </svg>
-      </span>
+      {/* unoptimized: the 96px file is already small, and the optimizer washed its colours out at 32px */}
+      <Image src={brandMark} alt="" width={size} height={size} priority unoptimized className="shrink-0" />
       메이플 대시보드
     </Link>
   );

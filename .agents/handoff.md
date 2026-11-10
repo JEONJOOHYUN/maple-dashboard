@@ -120,6 +120,7 @@
 ## 세션 기록
 
 - 2026-11-08: 0단계 · 1단계 커밋, 2단계 기댓값 · MVP · 핀볼(상세 history).
+- 2026-11-10: 로고 = 앱 아이콘(버섯, `app/icon.png` 512px 투명 → `public/brand-mark.png` 96px 사본, `components/brand.tsx` next/image 정적 import(주소에 내용 해시 → 예전 캐시 안 씀) + unoptimized(최적화가 32px 에서 색을 바래게 함)). **아이콘 바꾸면 brand-mark 도 다시 만들기**: `node -e "require(\"sharp\")(\"app/icon.png\").resize(96,96).png({compressionLevel:9}).toFile(\"public/brand-mark.png\")"`. 같은 날 사용자가 아이콘을 키운 판(단풍잎 · 핸드폰 크게)으로 바꿈 — icon.png · apple-icon.png · brand-mark 반영 확인.
 - 2026-11-10: 썬데이 지난 기록 데이터 파일(`lib/sunday/data/`, 출처 인벤 47579 + 공식 이미지, 74주 이미지 대조 일치).
 - 2026-11-09(밤): 숨은 스펙업 데이터 파일(48직업) · 보스 프리셋 규칙(maplescouter 대조) · 어빌 기준(레레레 종결 / 실전) · `/spec` 화면 완성.
 - 2026-11-09: 2단계 1~14차 수정(상세 history), 어빌리티 4단계 "뜬 옵션" 칩 + `afterTwo[].resets`(테스트 44개, 크롬 3011 빌드본 데스크톱 다크 · 375px iframe 다크 · 라이트, 넘침 없음), 어빌리티 안내 문구를 명사형 화살표로 줄임(사용자: "~해요" 없이 "재설정 · 잠금 · 목표 수치" 식, 예 "서큘레이터로 목표 수치 → 잠금 → 고급 재설정", 제목 "가장 싼 순서", "n억 절약"), Codex 집중 리뷰(gpt-6.1-sol) 지적 1개(계산 조건이 바뀌어도 ④ 선택이 남음) 반영 · 크롬 재확인(지적 그대로라 다시 리뷰 생략), handoff 34KB → 정리(원문 history).
