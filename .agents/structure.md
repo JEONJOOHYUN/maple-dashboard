@@ -60,7 +60,8 @@ maple-dashboard/
     nexon/api.ts                      # 넥슨 Open API 서버 전용 호출(NEXON_API_KEY, 호출 간격 220ms, 429 한 번 재시도, 오류 종류 noKey · notFound · quota · failed)
     spec/                             # 숨은 스펙업: check.ts(규칙 · 보스 프리셋 판별, 순수 함수) + test, load.ts(API 15회 → 3시간 캐시), data/classes.json(직업별 기준, 만드는 법 _work/maple-spec-probe)
     sunday/                           # 썬데이: bundles.ts(묶음 · 테마 3개), history.ts(기록 읽기 · 한국 시간 날짜), predict.ts(예측) + test, view.ts(화면 데이터), data/history.json · benefits.json(만드는 법 _work/maple-sunday-data)
-                                      # 자동 갱신(서버): notice.ts(넥슨 공지 찾기) · notice-parse.ts + test, ocr.ts(PaddleOCR), match.ts(글자 → 혜택, "확인 필요") + test · match.fixtures.json, ignored.ts(기록 안 함), auto-update.ts(묶음) ← app/api/cron/sunday/route.ts
+                                      # 자동 갱신(서버): notice.ts(넥슨 공지 찾기) · notice-parse.ts + test, ocr.ts(CLOVA OCR 호출) · ocr-lines.ts(글자 상자 → 줄) + test, match.ts(줄 → 혜택, "확인 필요") + test · match.fixtures.json, ignored.ts(기록 안 함), auto-update.ts(읽기 묶음),
+                                      # 저장: stored.ts(저장 규칙) + test, store.ts(sunday_weeks 쓰기 · 실행 기록), live.ts(화면용 읽기) ← app/api/cron/sunday/route.ts
     use-stored.ts / use-now.ts        # 비회원 브라우저 저장(localStorage) / 30초 시계
     empty-module.ts                   # box2d-wasm 의 fs·path 를 브라우저에서 비우는 별칭(next.config.ts)
   components/ui/             # shadcn/ui 컴포넌트 (button, input, badge, alert-dialog) — 직접 수정 가능
@@ -73,6 +74,7 @@ maple-dashboard/
       003_add_incentive_meso.sql # settlements.incentive_meso 컬럼 추가
       004_add_fragment_sales.sql # fragment_sales 테이블 추가 (조각 → 메소 전환 기록)
       005_add_log_entries.sql    # log_entries 테이블 + hunting_logs_audit 트리거 (일일 기록 변경 이력)
+      006_add_sunday_weeks.sql   # sunday_weeks(썬데이 자동 갱신 결과) + sunday_cron_runs(Cron 실행 기록), 권한(GRANT) 명시
   vercel.json                # {"regions": ["icn1"]} — Supabase와 같은 리전 고정
   .env.local                 # 실제 값 (gitignored)
   .env.local.example          # 키 이름만 문서화 (플레이스홀더)
@@ -151,6 +153,8 @@ create policy "Allow all access to settlements" on settlements for all using (tr
   덮어쓰는 구조라 "언제 얼마를 더했는지"가 남지 않던 문제를 보완한 것이며, 앱·관리자
   페이지·SQL 어디서 바꾸든 모두 기록됩니다. 조회 실패해도 페이지가 깨지지 않도록
   `getWorkerData`에서 비치명적으로 처리합니다.
+- `sunday_weeks`(006, 2026-11-10 실행): 썬데이 한 주 = 한 행(`sunday` 가 키). `status` auto · confirmed 만 공개(누구나 읽기), review 는 서버 전용 키만. 쓰기는 서버 전용 키만(`lib/sunday/store.ts`). 열 설명은 SQL 파일 주석.
+- `sunday_cron_runs`(006): Cron 실행 한 번 = 한 행(언제 · 어느 주 · 결과 · 걸린 시간). 읽기 · 쓰기 모두 서버 전용 키만.
 - `settlements`: **메소 → 현금 정산** 스냅샷 — 그 시점의 시세/현금화 비율/정산한 순수 메소/
   인센티브/합계 메소/KRW 환산액을 기록. `fragment_count`, `fee_meso`는 조각 판매가 분리되기
   전(2026-09-04 이전) 행과의 호환용이며 새 정산은 0으로 저장됩니다.

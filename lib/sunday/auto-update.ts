@@ -1,10 +1,10 @@
-// Weekly Sunday Maple update (server only): find this week's notice → OCR its images → match known benefits.
-// Saving to Supabase and the review screen come in the next stage; for now the Cron route returns the result.
+// Weekly Sunday Maple update (server only): OCR the images of this week's notice → match known benefits.
+// The Cron route finds the notice (notice.ts) and saves the reading with store.ts (sunday_weeks).
 import benefits from "./data/benefits.json" with { type: "json" };
 import history from "./data/history.json" with { type: "json" };
 import { IGNORED_TITLES } from "./ignored";
 import { knownBenefits, matchNotice, type NoticeMatch, type OcrLine } from "./match";
-import { findSundayNotice, type SundayNotice } from "./notice";
+import type { SundayNotice } from "./notice";
 import { readNoticeImage } from "./ocr";
 
 const KNOWN = knownBenefits(
@@ -16,14 +16,16 @@ export type SundayReading = {
   sunday: string;
   notice: Omit<SundayNotice, "images"> | null;
   images: string[];
+  /** Everything OCR read, kept with a stored week so a review can see it. */
+  lines: OcrLine[];
   ms: number;
 } & NoticeMatch;
 
-export async function readSunday(sunday: string): Promise<SundayReading> {
+/** One OCR call per image of the notice (see ocr.ts for the monthly free quota). No notice: an empty reading. */
+export async function readSunday(sunday: string, notice: SundayNotice | null): Promise<SundayReading> {
   const started = Date.now();
-  const notice = await findSundayNotice(sunday);
   if (!notice) {
-    return { sunday, notice: null, images: [], items: [], review: [], sundays: [], ms: Date.now() - started };
+    return { sunday, notice: null, images: [], lines: [], items: [], review: [], sundays: [], ms: Date.now() - started };
   }
   const lines: OcrLine[] = [];
   for (const url of notice.images) {
@@ -33,5 +35,5 @@ export async function readSunday(sunday: string): Promise<SundayReading> {
   }
   const match = matchNotice(lines, sunday, KNOWN, IGNORED_TITLES);
   const { images, ...rest } = notice;
-  return { sunday, notice: rest, images, ...match, ms: Date.now() - started };
+  return { sunday, notice: rest, images, lines, ...match, ms: Date.now() - started };
 }

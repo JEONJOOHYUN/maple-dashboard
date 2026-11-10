@@ -197,3 +197,23 @@ ADMIN_PASSWORD=
 - 2026-11-10: 썬데이 지난 기록 데이터 파일(`lib/sunday/data/`, 출처 인벤 47579 + 공식 이미지, 74주 이미지 대조 일치).
 - 2026-11-09(밤): 숨은 스펙업 데이터 파일(48직업) · 보스 프리셋 규칙(maplescouter 대조) · 어빌 기준(레레레 종결 / 실전) · `/spec` 화면 완성.
 - 2026-11-09: 2단계 1~14차 수정(상세 history), 어빌리티 4단계 "뜬 옵션" 칩 + `afterTwo[].resets`(테스트 44개, 크롬 3011 빌드본 데스크톱 다크 · 375px iframe 다크 · 라이트, 넘침 없음), 어빌리티 안내 문구를 명사형 화살표로 줄임(사용자: "~해요" 없이 "재설정 · 잠금 · 목표 수치" 식, 예 "서큘레이터로 목표 수치 → 잠금 → 고급 재설정", 제목 "가장 싼 순서", "n억 절약"), Codex 집중 리뷰(gpt-6.1-sol) 지적 1개(계산 조건이 바뀌어도 ④ 선택이 남음) 반영 · 크롬 재확인(지적 그대로라 다시 리뷰 생략), handoff 34KB → 정리(원문 history).
+
+
+## 2026-11-10 정리 (2) — 썬데이 자동 갱신 진행 기록 (handoff "다음 할 일" 1번에서 옮김, 원문)
+
+1. **썬데이 매주 자동 갱신(C) — 사용자가 원함(2026-11-10)**: 금요일 10시(KST) 사이트가 스스로 → Vercel Cron(Hobby 는 그 시간 안 아무 때 · 재시도 없음 → 12시쯤 예비 실행) → 넥슨 공지 API 로 썬데이 공지 찾기 → 공지 이미지 글자 읽기 → 아는 혜택 이름과 맞추기(처음 보는 혜택은 "확인 필요") → Supabase 표에 저장.
+   **OCR 시험(2026-11-10, 10장 · 혜택 50개)**: PaddleOCR 한국어 v5(ppu-paddle-ocr, 흑백 전처리) 50/50 · 장당 약 1.2초, tesseract.js 45/50, EasyOCR 못 돌림. 전체 167주(혜택 556개)도 Paddle 548개(98.6%), 진짜 읽기 실수는 2주뿐이고 나머지는 매칭 규칙(묶음 공지 · 챌린저스 전용 · TIP 오탐) 문제. 결과 · 코드 `C:/dev/_work/sunday-ocr-test/README.md`.
+   **결정(2026-11-10 사용자)**: PaddleOCR + 흑백 전처리, Vercel Cron. 자동 결과는 바로 확정하지 않고 숫자 빠짐 · 낮은 유사도 · 처음 보는 혜택 · 묶음 공지는 "확인 필요".
+   **진행**: 1) OCR 경로 `app/api/cron/sunday/route.ts`(지금은 `?img=` 이미지 하나 읽기만) + `lib/sunday/ocr.ts`, 로컬 `next start` 로 확인(첫 실행 3.3초 · 다음 0.2초), Codex 리뷰 지적 없음.
+   `CRON_SECRET` 등록됨(2026-11-10 사용자, Vercel Production + Preview, `.env.local` 에도). 커밋 `16c42b8` 푸시, Preview 빌드 성공 · 실제 공지 읽기 확인(2026-11-10, 첫 실행 7.7초, 혜택 4개 모두).
+   **2단계 완료(2026-11-10 커밋)**: Cron 경로 = 이번 주 공지 찾기(`lib/sunday/notice.ts` · `notice-parse.ts`) → 이미지 OCR(`ocr.ts`, 줄 단위) → 매칭(`match.ts`, 기록 안 함 목록 `ignored.ts`) → 결과 JSON(`auto-update.ts`). 저장은 아직 없음. `?sunday=` 로 다른 주 조회 가능.
+   채점 `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON eval-match.mjs --leave-one-out`(`C:/dev/_work/sunday-ocr-test/bench`, 줄 데이터 `results/lines-all.json`): 167주 중 자동 145 · **자동인데 틀림 0** · 확인 필요 22, 혜택 하나 숨김 시험 559번 중 그냥 저장 0. `match.test.ts` 가 규칙마다 실제 OCR 한 주(`match.fixtures.json`)로 고정.
+   기록 수정: 2026-07-19 를 공식 이미지대로 솔 에르다 타임 세부 4개로(인벤 날짜별 목록이 한 줄로 줄임, 종류별 목록은 "사냥 솔 에르다 3배" 빠뜨림) — `_work/maple-sunday-data/src/checks.json` `fixes` + `build.mjs` 가 적용(백업 `checks.backup-2026-11-10.json`). 예측 고정 점수 그대로.
+   Codex 리뷰(기본 모델, `16c42b8` 포함) 지적 2개 반영: 괄호 속 숫자("(30분)")도 검증, 날짜 줄을 못 읽어도 챌린저스 구역 자르기. 재확인 approve.
+   남은 일: 넥슨 목록은 진행 · 예정 이벤트만 주고 끝난 공지 본문은 400 — **금요일 공지가 목록에 바로 뜨는지 첫 금요일(2026-11-13)에 확인 필요**.
+   **저장 단계 작업 중(미커밋, lint · build · 테스트 90 통과)**: `006_add_sunday_weeks.sql`(sunday_weeks: auto · review · confirmed, 공개 행만 누구나 읽기 / sunday_cron_runs: 실행 기록) · `lib/supabase-admin.ts`(서버 전용 키) · `lib/sunday/stored.ts`(저장 규칙 + test) · `store.ts`(쓰기 · 실행 기록) · `live.ts`(화면은 기록 + 표, DB 실패 시 기록만) · Cron 경로 저장 · `vercel.json` Cron 주 20번.
+   **사용자 대기**: SQL 실행, `SUPABASE_SERVICE_ROLE_KEY` 등록(Vercel Production + Preview Sensitive · `.env.local`). 그다음 시험 행으로 화면 · 비공개 확인 → 지우기 → Codex 리뷰(기본 모델) → 커밋.
+   결정(2026-11-10 사용자): 공개 시각 = 업로드 시각 기록 160개(`_work/maple-sunday-data/src/upload-times.json`) 중 86% 10:00(대개 금, 공휴일 앞 수 · 목) → Cron 수 · 목 · 금 10 · 11 · 13 · 15 · 18 · 20시대 + 토 · 일 10시대(안전망), 월 · 화 없음 — 업로드 요일 금 126 · 목 23 · 수 5 · 월 1, 가장 늦은 업로드 19:20(대개 목요일 저녁), 주 20번. 저장된 주는 DB 한 번 보고 끝. Hobby 는 그 1시간 안 아무 때나라 실행 기록으로 몇 주 지켜보고, 늦으면 cron-job.org(무료, 1분 간격 · 헤더 가능 · **30초 제한** → 그때 `after()` 로 바로 답하게). "확인 필요" 주는 회원 기능 전까지 대화로 처리(사용자 "썬데이 확인해" → 이미지 · 읽은 글자 보여 주고 승인하면 서버 키로 확정). Cron 은 Production 에서만 돌아 `main` 합친 뒤부터 자동.
+   함정: Cron 은 HTTP 경로만 부를 수 있어 "API route 없음" 규칙의 예외. onnxruntime 본체(`libonnxruntime.so.1`)는 파일 추적에 안 잡혀 `next.config.ts` `outputFileTracingIncludes` 로 넣음(빼면 Vercel 에서 실패). 모델은 `~/.cache` 대신 메모리로 받음(Vercel 은 홈 폴더 쓰기 불가). 함수 크기 로컬 89MB(Linux 추정 약 120MB, 한도 250MB), 다른 페이지 · 브라우저 코드에는 OCR 파일 없음.
+   **사용자 결정 필요**: 서버 전용 쓰기 키(service role) 등록 · 마이그레이션 SQL 실행(사용자) — 3단계 준비와 같이.
+   **그 전까지(A)**: 금요일 공지 뒤 사용자가 "썬데이 추가해" → 공지 이미지 읽고 `C:/dev/_work/maple-sunday-data/src/new-weeks.json` 에 추가 → `node scripts/build.mjs C:/dev/maple-dashboard/lib/sunday/data 2023-08-27` → `npm test` → 커밋. 안 하면 화면에 "기록 n주 밀림" 경고 · 예측 정확도 떨어짐.

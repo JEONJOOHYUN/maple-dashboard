@@ -14,24 +14,22 @@
 
 - 운영(`main`): 개편 전 모양 그대로. 마지막 푸시 `c60f794`(2026-11-01 Next 16.4.3 보안 업데이트).
 - 개편(`redesign`): 0단계 `bfcbcc7` · 1단계 `6e2eb10` · 2단계 공개 도구 **다섯 개 모두 완료** — 기댓값 · MVP · 핀볼(`0d85727`), 숨은 스펙업(`cb8cb42`), 썬데이(`27e4bdc`). 로고 = 앱 아이콘(`26e26ec`).
-  **원격(`origin/redesign`)보다 8커밋 앞섬, 푸시 안 함.** 푸시는 사용자가 "푸시해"라고 할 때만.
+  원격과 같음(`cf0bcb9` 까지 푸시, 2026-11-10). 푸시는 사용자가 "푸시해"라고 할 때만.
 - Vercel 환경변수 `NEXON_API_KEY` 등록됨(2026-11-10, Secret, Production + Preview, 사용자).
 - `vendor/` 는 git 밖(`.gitignore` · tsconfig `exclude` · eslint `globalIgnores`) — 핀볼 원본 참고용, 광고 코드 · 인물 그림을 공개 저장소에 안 올림.
 
 ## 다음 할 일
 
-1. **썬데이 매주 자동 갱신(C) — 사용자가 원함(2026-11-10)**: 금요일 10시(KST) 사이트가 스스로 → Vercel Cron(Hobby 는 그 시간 안 아무 때 · 재시도 없음 → 12시쯤 예비 실행) → 넥슨 공지 API 로 썬데이 공지 찾기 → 공지 이미지 글자 읽기 → 아는 혜택 이름과 맞추기(처음 보는 혜택은 "확인 필요") → Supabase 표에 저장.
-   **OCR 시험(2026-11-10, 10장 · 혜택 50개)**: PaddleOCR 한국어 v5(ppu-paddle-ocr, 흑백 전처리) 50/50 · 장당 약 1.2초, tesseract.js 45/50, EasyOCR 못 돌림. 전체 167주(혜택 556개)도 Paddle 548개(98.6%), 진짜 읽기 실수는 2주뿐이고 나머지는 매칭 규칙(묶음 공지 · 챌린저스 전용 · TIP 오탐) 문제. 결과 · 코드 `C:/dev/_work/sunday-ocr-test/README.md`.
-   **결정(2026-11-10 사용자)**: PaddleOCR + 흑백 전처리, Vercel Cron. 자동 결과는 바로 확정하지 않고 숫자 빠짐 · 낮은 유사도 · 처음 보는 혜택 · 묶음 공지는 "확인 필요".
-   **진행**: 1) OCR 경로 `app/api/cron/sunday/route.ts`(지금은 `?img=` 이미지 하나 읽기만) + `lib/sunday/ocr.ts`, 로컬 `next start` 로 확인(첫 실행 3.3초 · 다음 0.2초), Codex 리뷰 지적 없음.
-   `CRON_SECRET` 등록됨(2026-11-10 사용자, Vercel Production + Preview, `.env.local` 에도). 커밋 `16c42b8` 푸시, Preview 빌드 성공 · 실제 공지 읽기 확인(2026-11-10, 첫 실행 7.7초, 혜택 4개 모두).
-   **2단계 완료(2026-11-10 커밋)**: Cron 경로 = 이번 주 공지 찾기(`lib/sunday/notice.ts` · `notice-parse.ts`) → 이미지 OCR(`ocr.ts`, 줄 단위) → 매칭(`match.ts`, 기록 안 함 목록 `ignored.ts`) → 결과 JSON(`auto-update.ts`). 저장은 아직 없음. `?sunday=` 로 다른 주 조회 가능.
-   채점 `node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON eval-match.mjs --leave-one-out`(`C:/dev/_work/sunday-ocr-test/bench`, 줄 데이터 `results/lines-all.json`): 167주 중 자동 145 · **자동인데 틀림 0** · 확인 필요 22, 혜택 하나 숨김 시험 559번 중 그냥 저장 0. `match.test.ts` 가 규칙마다 실제 OCR 한 주(`match.fixtures.json`)로 고정.
-   기록 수정: 2026-07-19 를 공식 이미지대로 솔 에르다 타임 세부 4개로(인벤 날짜별 목록이 한 줄로 줄임, 종류별 목록은 "사냥 솔 에르다 3배" 빠뜨림) — `_work/maple-sunday-data/src/checks.json` `fixes` + `build.mjs` 가 적용(백업 `checks.backup-2026-11-10.json`). 예측 고정 점수 그대로.
-   Codex 리뷰(기본 모델, `16c42b8` 포함) 지적 2개 반영: 괄호 속 숫자("(30분)")도 검증, 날짜 줄을 못 읽어도 챌린저스 구역 자르기. 재확인 approve.
-   남은 일: 넥슨 목록은 진행 · 예정 이벤트만 주고 끝난 공지 본문은 400 — **금요일 공지가 목록에 바로 뜨는지 첫 금요일(2026-11-13)에 확인 필요**. 그다음 3단계 Supabase 표 · Cron 등록 · "확인 필요" 처리 화면(공지 없음 `notice: null` 을 "혜택 없음"으로 저장하지 않게).
-   함정: Cron 은 HTTP 경로만 부를 수 있어 "API route 없음" 규칙의 예외. onnxruntime 본체(`libonnxruntime.so.1`)는 파일 추적에 안 잡혀 `next.config.ts` `outputFileTracingIncludes` 로 넣음(빼면 Vercel 에서 실패). 모델은 `~/.cache` 대신 메모리로 받음(Vercel 은 홈 폴더 쓰기 불가). 함수 크기 로컬 89MB(Linux 추정 약 120MB, 한도 250MB), 다른 페이지 · 브라우저 코드에는 OCR 파일 없음.
-   **사용자 결정 필요**: 서버 전용 쓰기 키(service role) 등록 · 마이그레이션 SQL 실행(사용자) — 3단계 준비와 같이.
+1. **썬데이 매주 자동 갱신(C) — 저장 단계 작업 중(미커밋)**: Vercel Cron → `app/api/cron/sunday/route.ts` → 넥슨 공지 API 로 이번 주 공지 찾기(`notice.ts`) → 이미지 글자 읽기(`ocr.ts`) → 아는 혜택과 맞추기(`match.ts`, 모르면 "확인 필요") → `sunday_weeks` 저장(`store.ts`, 규칙 `stored.ts`) → 화면(`live.ts`, 기록 + 표 · DB 실패 시 기록만).
+   - **글자 읽기 = 네이버 CLOVA OCR(2026-11-10 사용자 결정, PaddleOCR 에서 교체)**: General 도메인 월 100회 무료(이미지 1장 = 1회). 주소는 API Gateway 자동 연동으로 나온 것(`…apigw.ntruss.com…`) — 콘솔의 다른 주소는 사설 IP 라 밖에서 안 열림. API Gateway 는 호출 월 100만 건 · 전송 1GB 까지 무료, "API 캐시" 꺼짐 확인(사용자). 줄은 글자 상자로 직접 묶고 줄 높이 `h` 를 같이 줌(`ocr-lines.ts`). `ppu-paddle-ocr` · `onnxruntime-node` · `next.config.ts` OCR 설정은 뺌. 실제 코드로 1장 확인(1.3초).
+   - **채점(2026-11-10, CLOVA 로 읽은 75주)**: 자동 71 · **자동인데 틀림 0** · 확인 필요 4(2023-09-24 · 2023-10-01 · 2024-07-28 · 2025-01-12, 배치가 특이한 옛 공지), 혜택 하나 숨김 시험 272번 중 그냥 저장 0. 2025-11-09 ~ 2026-11-08 53주는 전부 자동 · 일치. **나머지 92주는 CLOVA 로 아직 안 읽힘**(무료 횟수 — 다음 달 `run-clova.mjs`). 방법 · 명령 `C:/dev/_work/sunday-ocr-test/README.md`.
+   - 규칙 추가(`match.ts`): 맞춘 제목 높이의 70% 미만인 줄은 새 혜택 후보에서 제외, "N주차" 줄에서 구역 끊기, "1+1 스타포스 강화" 표 머리 · "확률 · 60%" 칸 제외. 테스트 자료 `match.fixtures.json` 은 CLOVA 줄(`pick-fixtures.mjs`).
+   - 무료 횟수 지키기: "확인 필요"로 저장된 주는 공지 번호 · 이미지가 같으면 다시 읽지 않음(실행 기록 `review-unchanged`). `?dry=1` 은 저장은 안 해도 호출은 씀. 2026-11 사용 82회(시험), 남은 18회.
+   - **DB 실행 · 확인 끝(2026-11-11)**: 006 실행됨(사용자). 실제 DB 시험 행으로 13가지 확인 후 삭제(방문자 키는 공개 주 읽기만, 서버 키는 두 표 쓰기, 공개된 주는 안 덮어씀), 공개 행은 `/sunday` · 홈에 반영되고 확인 필요 행은 영향 없음. 환경 변수 `SUPABASE_SERVICE_ROLE_KEY`(새 secret 키) · `CLOVA_OCR_URL` · `CLOVA_OCR_SECRET` · `NEXON_API_KEY` 는 `.env.local` 과 Vercel Production + Preview 에 있음(이름만 확인). **남은 것**: 푸시(사용자 "푸시해") → 2026-11-13 공지로 Preview 에서 전체 흐름 확인.
+   - **DB 검토 반영(2026-11-10, 사용자 승인 A · D · E · F · G · H, Codex 재확인 approve)**: 006 에 revoke / grant · 정책 `to anon, authenticated` · `public.` 명시, `supabase-admin.ts` 에 `server-only`(꾸러미 설치 없이 Next 가 처리), Cron 주소는 개발 서버에서도 헤더 필수 + `timingSafeEqual`, 저장은 insert → 충돌 시 `status = review` 일 때만 update(`stored.ts` `writeOnce`). 안 고친 것: C 공개 행의 모든 열 노출(승인 안 받음).
+   - Cron 일정(`vercel.json`, 주 20번, 2026-11-10 사용자 결정): 수 · 목 · 금 10 · 11 · 13 · 15 · 18 · 20시대 + 토 · 일 10시대(근거는 `route.ts` 주석 · history). 저장된 주는 DB 한 번 보고 끝. Hobby 는 그 1시간 안 아무 때나라 `sunday_cron_runs` 로 지켜보고, 늦으면 외부 알람(cron-job.org 30초 제한 / Cloudflare Workers Cron — 미정). Production 에서만 돌아 `main` 합친 뒤부터 자동.
+   - 확인 필요: 금요일 공지가 넥슨 목록에 바로 뜨는지 첫 금요일(2026-11-13)에 확인(끝난 공지 본문은 400). "확인 필요" 주는 회원 기능 전까지 대화로 처리("썬데이 확인해").
+   - 함정: Cron 은 HTTP 경로만 부를 수 있어 "API route 없음" 규칙의 예외. 지난 과정 원문은 history "2026-11-10 정리 (2)".
    **그 전까지(A)**: 금요일 공지 뒤 사용자가 "썬데이 추가해" → 공지 이미지 읽고 `C:/dev/_work/maple-sunday-data/src/new-weeks.json` 에 추가 → `node scripts/build.mjs C:/dev/maple-dashboard/lib/sunday/data 2023-08-27` → `npm test` → 커밋. 안 하면 화면에 "기록 n주 밀림" 경고 · 예측 정확도 떨어짐.
 2. **3단계 회원·권한**(아래 "개편 단계").
 3. **파일 정리 — 3단계에서 옛 코드를 지운 직후, `main` 합치기 전에 한 번에**(2026-11-09 사용자 결정, 승인한 항목만): `lib/mvp.ts` · `settlement-math` · `boss-split-math` · `split-image` → `lib/<기능>/`, `settlement-client.tsx` · 분배금 화면 본문 → `components/<기능>/`, `lib/` 바로 아래는 공용만, 핀볼 엔진 `lib/pinball/` → `lib/third-party/roulette/`, `AGENTS.md` 를 `.gitignore` 에, `project-spec.md`(78KB) 끝난 기능 history 로, `structure.md` 새 구조로. 위치 · import 만 바꾸고 로직은 그대로, 별도 커밋. prettier 를 넣고 싶으면 이때 모양만 바꾸는 커밋으로 따로(지금은 안 씀).
@@ -106,4 +104,5 @@
 
 - 2026-11-08: 0단계 · 1단계 커밋, 2단계 기댓값 · MVP · 핀볼.
 - 2026-11-09: 2단계 1~14차 수정, 어빌리티 "뜬 옵션" 칩, 숨은 스펙업 데이터 · 규칙 · `/spec` 화면.
+- 2026-11-10(밤): 썬데이 글자 읽기를 CLOVA OCR 로 교체 · 매칭 규칙 보강 · 저장 단계(미커밋), handoff 20KB → 정리(원문 history "2026-11-10 정리 (2)").
 - 2026-11-10: 잠재 탭 개선 커밋, 썬데이 지난 기록 데이터 · 예측 시험 · `/sunday` 화면(`27e4bdc`), 로고 = 앱 아이콘(`26e26ec`), handoff 30KB → 정리(원문 history "2026-11-10 정리").

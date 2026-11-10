@@ -5,7 +5,10 @@
 //  - "챌린저스 월드 전용" blocks sit at the end of a section and are not recorded → cut from there on
 //  - a benefit title is a whole line (or two wrapped lines); matching inside long body text gives false hits
 //  - digits decide variants ("경험치 2배" vs "3배"); a title whose digits do not agree is never accepted
+// Since 2026-11-10 the lines come from CLOVA OCR (ocr.ts), which also gives each line its height. Checked on
+// 75 weeks: titles are printed about twice as tall as notes, table cells and item tooltips.
 
+/** `h`: height of the line in pixels (tallest word box). Optional: without it the height rule is skipped. */
 export type OcrLine = { t: string; h?: number };
 
 export type KnownBenefit = { name: string; tags?: string[] };
@@ -29,17 +32,22 @@ export const TAG_HEADINGS = ["샤이닝 스타포스 타임", "솔 에르다 타
 const LINE_MIN = 0.8; // whole-line similarity to accept a title
 const PART_MIN = 0.75; // a line that covers most of a longer title
 const LOOSE_MIN = 0.88; // substring similarity that only earns a review note
+// An unclaimed line counts as a possible new benefit only when it is at least this tall next to the titles
+// already matched in the same notice. Notes and tooltips that merely end like a title are far smaller.
+const TITLE_HEIGHT_MIN = 0.7;
 
 const DATE_LINE = /이벤트\s*기간.*?(\d{4})\s*년\s*(\d{1,2})\s*월\s*(\d{1,2})\s*일/;
+// "2주차": banner that opens the next week of a multi-week notice, printed above that week's heading and date line.
+const WEEK_LINE = /^\s*\d\s*주\s*차\s*$/;
 // The first letter is often misread (챔/첼/헬/캘린저스), so it is left out.
 const CHALLENGERS = /린저스\s*월드\s*전용/;
 // Benefit titles end like this; body sentences end in "~니다". (Line height did not separate titles across designs.)
 // "배" without a digit catches titles whose number OCR dropped ("트레져 헌터 경험치 배").
 const TITLE_END = /(할인|배|증가|지급|감소|\d+%|강화|누적|타임)$/;
 // Fixed notice furniture, table cells and notes that end like a title but are never a benefit.
-const FURNITURE = /이벤트기간|SUNDAYMAPLE|메이플스토리|바로가기|궁금하다면|SPECIAL|TIP|폭풍|확률표|혜택|평일클리어|기본경험치.*\d+%$|^기본경험치의\d+배$|일요일경험치|승급될확률|단계씩/;
+const FURNITURE = /이벤트기간|SUNDAYMAPLE|메이플스토리|바로가기|궁금하다면|SPECIAL|TIP|폭풍|확률표|혜택|평일클리어|기본경험치.*\d+%$|^기본경험치의\d+배$|일요일경험치|승급될확률|단계씩|1\+1스타포스강화/;
 const NOTE_START = /^\s*[·•*※\-ㆍ]/;
-const TABLE_CELL = /:\s*\d|\d\.\d+%/; // "1성 몬스터 등록 확률: 60%", "0.1996%"
+const TABLE_CELL = /[:·]\s*\d|\d\.\d+%/; // "1성 몬스터 등록 확률: 60%" (the colon is sometimes read as "·"), "0.1996%"
 const SENTENCE_END = /(니다|[.)])\s*$/;
 
 /** Matching key: no short parenthetical notes, only Hangul / letters / digits / % / +, upper case. */
@@ -102,6 +110,9 @@ function sectionFor(lines: OcrLine[], sunday: string): { lines: OcrLine[]; sunda
     if (k < 0) return { lines: [], sundays, found: false };
     const end = starts.slice(k + 1).find((s) => s.date !== sunday)?.i ?? lines.length;
     part = lines.slice(starts[k].i, end);
+    // The next week's banner and heading come before its date line: stop at the banner.
+    const banner = part.findIndex((l) => WEEK_LINE.test(l.t));
+    if (banner > 0) part = part.slice(0, banner);
   }
   // Applies with or without a date line (Codex review 2026-11-10: a missed date line kept the challengers block).
   const cut = part.findIndex((l) => CHALLENGERS.test(l.t.replace(/\s+/g, " ")));
@@ -109,7 +120,7 @@ function sectionFor(lines: OcrLine[], sunday: string): { lines: OcrLine[]; sunda
   return { lines: part, sundays, found: true };
 }
 
-type Segment = { key: string; text: string; from: number; to: number };
+type Segment = { key: string; text: string; from: number; to: number; h?: number };
 
 /**
  * `ignored`: titles that appear in Sunday notices but are deliberately not recorded (event-linked rewards such as
@@ -124,9 +135,12 @@ export function matchNotice(lines: OcrLine[], sunday: string, known: KnownBenefi
   const segs: Segment[] = [];
   part.forEach((l, i) => {
     const one = matchKey(l.t);
-    if (one) segs.push({ key: one, text: l.t.trim(), from: i, to: i });
+    if (one) segs.push({ key: one, text: l.t.trim(), from: i, to: i, h: l.h });
     const next = part[i + 1];
-    if (next && one) segs.push({ key: one + matchKey(next.t), text: `${l.t.trim()} ${next.t.trim()}`, from: i, to: i + 1 });
+    if (next && one) {
+      const h = l.h && next.h ? Math.max(l.h, next.h) : (l.h ?? next.h);
+      segs.push({ key: one + matchKey(next.t), text: `${l.t.trim()} ${next.t.trim()}`, from: i, to: i + 1, h });
+    }
   });
 
   const names = [
@@ -220,15 +234,19 @@ export function matchNotice(lines: OcrLine[], sunday: string, known: KnownBenefi
     if (NOTE_START.test(text) || TABLE_CELL.test(text) || unopened || (key.match(/%/g) ?? []).length >= 2) return false;
     return !TAG_HEADINGS.some((h) => sim(matchKey(h), key) >= LINE_MIN);
   };
+  // Height of the titles matched in this notice (median); a line much smaller is a note, a table cell or a tooltip.
+  const heights = picked.map((p) => p.seg.h).filter((h): h is number => !!h).sort((a, b) => a - b);
+  const titleHeight = heights.length ? heights[Math.floor(heights.length / 2)] : null;
+  const tooSmall = (...ls: OcrLine[]) => titleHeight !== null && ls.every((l) => !!l.h && l.h < titleHeight * TITLE_HEIGHT_MIN);
   for (let i = 0; i < part.length; i++) {
-    if (used.has(i)) continue;
+    if (used.has(i) || tooSmall(part[i])) continue;
     const one = part[i].t.trim();
     if (titleLike(one)) {
       review.push({ kind: "unknown", line: one });
       continue;
     }
     const next = part[i + 1];
-    if (next && !used.has(i + 1) && !NOTE_START.test(one) && !SENTENCE_END.test(one) && titleLike(`${one} ${next.t.trim()}`)) {
+    if (next && !used.has(i + 1) && !tooSmall(next) && !NOTE_START.test(one) && !SENTENCE_END.test(one) && titleLike(`${one} ${next.t.trim()}`)) {
       review.push({ kind: "unknown", line: `${one} ${next.t.trim()}` });
       i++;
     }

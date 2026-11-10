@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { ThemeChip } from "@/components/sunday/sunday-view";
 import { navGroups, type NavItem } from "@/lib/nav";
+import { loadSundayWeeks } from "@/lib/sunday/live";
 import { getSundayPageData } from "@/lib/sunday/view";
 import { cn } from "@/lib/utils";
 
@@ -37,8 +38,8 @@ export const revalidate = 3600;
 
 const primaryButton = cn(buttonVariants(), "h-[42px] rounded-lg px-[18px] text-sm font-bold");
 
-export default function Home() {
-  const sunday = getSundayPageData(new Date());
+export default async function Home() {
+  const sunday = getSundayPageData(new Date(), await loadSundayWeeks());
   const recorded = sunday.thisWeek.recorded;
   const topThemes = [...sunday.prediction.themes].sort((a, b) => b.p - a.p).slice(0, 2);
   return (

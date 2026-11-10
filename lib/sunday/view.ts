@@ -1,5 +1,5 @@
 import { THEMES, bundleLabel, bundleTheme, isBigBundle, type ThemeId } from "./bundles.ts";
-import { HISTORY_RANGE, SUNDAYS, addWeeks, dateLabel, kstDate, noticeUrl, upcomingSunday, type SundayWeek } from "./history.ts";
+import { SUNDAYS, addWeeks, dateLabel, kstDate, noticeUrl, upcomingSunday, type SundayWeek } from "./history.ts";
 import { predictSunday, themesOf, type BundleOdds } from "./predict.ts";
 
 export type WeekView = {
@@ -89,6 +89,6 @@ export function getSundayPageData(now: Date, weeks: SundayWeek[] = SUNDAYS): Sun
       missingWeeks: p.missingWeeks,
     },
     recent: recent.map(weekView),
-    dataEnd: HISTORY_RANGE[1],
+    dataEnd: weeks.at(-1)?.date ?? "",
   };
 }
