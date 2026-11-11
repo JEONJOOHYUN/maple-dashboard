@@ -31,7 +31,7 @@ export type SpecRaw = {
   };
   propensity: { charisma_level?: number; sensibility_level?: number; insight_level?: number; willingness_level?: number };
   artifact: { union_artifact_effect?: { name: string; level: number }[]; union_artifact_remain_ap?: number };
-  equipment: Record<string, unknown> & { preset_no?: number; title?: Title };
+  equipment: Record<string, unknown> & { preset_no?: number; title?: Title; title_preset1?: Title; title_preset2?: Title; title_preset3?: Title };
   hyper: Record<string, unknown> & { use_preset_no?: string | number };
   link: Record<string, unknown>;
   ability: Record<string, unknown> & { preset_no?: number };
@@ -64,7 +64,10 @@ export const SPEC_DATA = classesJson as unknown as Data;
 
 // Boss-relevant 5th job common cores (Claude's pick, 2026-11-09): the damage / bind / survival ones maplescouter also warns about.
 // Movement and party-buff cores (로프 커넥트, 쓸만한 …) are left out.
-const BOSS_COMMON_CORES = ["스파이더 인 미러", "크레스트 오브 더 솔라", "바디 오브 스틸", "에르다 노바", "에르다의 의지"];
+const BOSS_COMMON_CORES = ["스파이더 인 미러", "크레스트 오브 더 솔라", "에르다 노바", "에르다의 의지"];
+// 바디 오브 스틸 is a warrior-only core: other classes cannot have it (청운적운 · 귤민 have none, 푸소 does; user, 2026-11-11).
+const WARRIOR_CORE = "바디 오브 스틸";
+const WARRIOR_CLASSES = new Set(["히어로", "팔라딘", "다크나이트", "소울마스터", "미하일", "블래스터", "데몬슬레이어", "데몬어벤져", "아란", "카이저", "아델", "제로", "렌"]);
 const HP_CLASS = "데몬어벤져";
 const TITLE_WARN_DAYS = 14;
 
@@ -264,9 +267,22 @@ export function checkSpec(raw: SpecRaw, now: Date = new Date(), data: Data = SPE
   }
   if ((raw.artifact.union_artifact_remain_ap ?? 0) > 0) add("유니온 아티팩트", `AP ${raw.artifact.union_artifact_remain_ap} 남음`);
 
-  // Title: the one equipped now. title_preset1~3 do not follow equipment presets (2026-11-09: 흑소 · 광선 · 청운적운 ·
-  // 데몬10세기 all have the title only in title_preset1 whatever equipment preset they use), so they are not used.
-  const title = raw.equipment.title ?? null;
+  // Title: title_preset1~3 do not follow equipment presets (2026-11-09: 흑소 · 광선 · 청운적운 · 데몬10세기 keep it in
+  // title_preset1 whatever equipment preset they use), so the boss title may sit in any of them while a hunting title
+  // (e.g. 쑥쑥 새싹) is on right now. A boss title in any title preset counts; otherwise the one equipped now is reported.
+  const titles = [raw.equipment.title, raw.equipment.title_preset1, raw.equipment.title_preset2, raw.equipment.title_preset3].filter(
+    (t): t is NonNullable<Title> => !!t?.title_name,
+  );
+  // Days left before the title (or its option) runs out; Infinity = no expiry. The boss title that lasts longest wins,
+  // so an expired copy in one preset does not hide a good one in another.
+  const daysLeft = (t: NonNullable<Title>) =>
+    Math.min(
+      ...[t.date_expire, t.date_option_expire].map((at) =>
+        !at ? Infinity : at === "expired" ? -1 : Math.ceil((new Date(at).getTime() - now.getTime()) / 86_400_000),
+      ),
+    );
+  const bossTitles = titles.filter((t) => /보스 몬스터/.test(t.title_description ?? ""));
+  const title = bossTitles.sort((a, b) => daysLeft(b) - daysLeft(a))[0] ?? titles[0] ?? null;
   if (!title?.title_name) {
     add("칭호", "미장착");
   } else {
@@ -281,7 +297,8 @@ export function checkSpec(raw: SpecRaw, now: Date = new Date(), data: Data = SPE
   // 5th job (V matrix)
   const cores = raw.vmatrix.character_v_core_equipment ?? [];
   const coreLv = (name: string) => cores.find((c) => c.v_core_name === name)?.v_core_level ?? 0;
-  const lowCommon = BOSS_COMMON_CORES.filter((n) => coreLv(n) < data.common.vCoreMin);
+  const commonCores = WARRIOR_CLASSES.has(cls) ? [...BOSS_COMMON_CORES.slice(0, 2), WARRIOR_CORE, ...BOSS_COMMON_CORES.slice(2)] : BOSS_COMMON_CORES;
+  const lowCommon = commonCores.filter((n) => coreLv(n) < data.common.vCoreMin);
   if (lowCommon.length) add("5차 공용 코어", `${data.common.vCoreMin}레벨 미만 ${lowCommon.length}개`, lowCommon.map((n) => `${n} ${coreLv(n)}`).join(" · "));
   const zeroBoost = cores.filter((c) => c.v_core_type === "강화 코어" && c.v_core_level === 0);
   if (zeroBoost.length) add("5차 강화 코어", `0레벨 ${zeroBoost.length}개`, zeroBoost.map((c) => c.v_core_name).join(" · "));

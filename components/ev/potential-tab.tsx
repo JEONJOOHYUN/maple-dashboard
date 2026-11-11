@@ -35,6 +35,7 @@ import { type MainStat,
   type WeaponGoal,
 } from "@/lib/ev/potential";
 import { cn } from "@/lib/utils";
+import { koreanUnits } from "@/lib/format";
 
 const GROUPS = [
   { id: "wpn", label: "무기" },
@@ -235,7 +236,7 @@ export function PotentialTab() {
       const fixed = auto !== null && !c.fixFirst;
       const typed = parseNum(prices[c.id] ?? "", 0) * 1e8;
       const price = fixed ? (auto as number) : typed > 0 ? typed : auto ?? 0;
-      const cost = (n: number) => (price > 0 ? `${eok(n * price)} 메소` : `${n.toLocaleString("ko-KR")}번`);
+      const cost = (n: number) => (price > 0 ? `${eok(n * price)} 메소` : `${koreanUnits(n)}번`);
       if (goal === "grade") {
         const next = NEXT_GRADE[grade];
         if (!next) return { cube: c, p: 0, cap: 0, price, auto, fixed, cost, note: "이미 최고 등급" };

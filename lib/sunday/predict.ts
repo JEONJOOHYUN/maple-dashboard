@@ -2,7 +2,10 @@
 // 1) shining / miracle are one "big day" cycle (gaps 2~4 weeks in 18 of 22 cases) -> P(big day) from that gap, then split
 //    by each one's own gap; 2) other bundles: gap hazard x recent frequency, learned on non-big weeks; 3) the 3 shown
 //    picks cover different kinds, because hunting bundles all miss together on a big day.
-// Last 52 weeks: 38/52 Sundays had one of the 3 picks (maplessunday's published record: 24/27 on its 27 weeks, ours 22/27).
+// Last 52 weeks: 38/52 Sundays had one of the first 3 picks (maplessunday's published record: 24/27 on its 27 weeks,
+// ours 22/27). Five picks are shown since 2026-11-11 (user): 45/52 and 27/27 — the misses were mostly a second hunting
+// benefit at rank 2~4. 551 other models (ML, longer history, cycle scores) did not beat this one out of sample
+// (C:/dev/_work/maple-sunday-data/exp/m2-table.txt).
 import { THEMES, bundleTheme, isBigBundle, type ThemeId } from "./bundles.ts";
 import type { SundayWeek } from "./history.ts";
 import { weekIndex } from "./history.ts";
@@ -12,6 +15,8 @@ export const TRAIN_START = "2025-03-23";
 const HAZARD_K = 3; // pseudo-count pulling small samples toward the base rate
 const HALF_LIFE = 26; // weeks, for "how often lately"
 const ACTIVE_WEEKS = 52; // not seen for a year = discontinued
+const PICKS = 5; // shown picks
+const KINDS_FIRST = 3; // the first picks cover different kinds
 
 type Has = (w: SundayWeek) => boolean;
 
@@ -68,7 +73,7 @@ export type BundleOdds = {
 export type SundayPrediction = {
   date: string;
   ranked: BundleOdds[];
-  /** The 3 shown picks: best of each kind (big day / hunting / enhancing), then by score. */
+  /** The 5 shown picks: best of each kind (big day / hunting / enhancing) first, then by score. */
   picks: string[];
   themes: Record<ThemeId, number>;
   /** Sundays between the last recorded one and the target that are missing from the data (predictions get worse). */
@@ -122,12 +127,12 @@ export function predictSunday(weeks: SundayWeek[], date: string, start = TRAIN_S
   const picks: string[] = [];
   const used = new Set<string>();
   for (const r of ranked) {
-    if (picks.length === 3) break;
+    if (picks.length === KINDS_FIRST) break;
     if (used.has(kindOf(r.id))) continue;
     picks.push(r.id);
     used.add(kindOf(r.id));
   }
-  for (const r of ranked) if (picks.length < 3 && !picks.includes(r.id)) picks.push(r.id);
+  for (const r of ranked) if (picks.length < PICKS && !picks.includes(r.id)) picks.push(r.id);
 
   // P(theme shows up) = its big day (shining -> starforce, miracle -> enhance) + regular week x P(any of its bundles | regular).
   // Big days and regular weeks exclude each other, so the regular part is combined before multiplying by P(regular) once.
@@ -148,4 +153,35 @@ export function predictSunday(weeks: SundayWeek[], date: string, start = TRAIN_S
 export function themesOf(week: SundayWeek): ThemeId[] {
   const set = new Set([...week.bundles].map(bundleTheme).filter((x): x is ThemeId => !!x));
   return THEMES.map((x) => x.id).filter((id) => set.has(id));
+}
+
+export type BigDayWindow = {
+  id: string;
+  /** Last Sunday it came (null = never in the training window). */
+  last: string | null;
+  /** The usual gap: the 3-week-wide range that holds the most past gaps, and how many of them. */
+  minWeeks: number;
+  maxWeeks: number;
+  covered: number;
+  total: number;
+  /** Weeks from the last one to the target Sunday. */
+  sinceWeeks: number;
+};
+
+/**
+ * When the next big day (shining / miracle) is due: its last date plus the usual gap.
+ * The gap is loose (shining 3~11 weeks since 2025-03, 4~6 in 8 of 13), so this is a range, not a date.
+ */
+export function bigDayWindow(weeks: SundayWeek[], id: string, date: string, start = TRAIN_START): BigDayWindow | null {
+  const t = weekIndex(date);
+  const seen = weeks.filter((w) => w.date >= start && w.date < date && w.bundles.has(id));
+  if (seen.length < 4) return null;
+  const gaps = seen.slice(1).map((w, i) => w.t - seen[i].t);
+  let best = { lo: gaps[0], n: 0 };
+  for (let lo = Math.min(...gaps); lo <= Math.max(...gaps); lo++) {
+    const n = gaps.filter((g) => g >= lo && g <= lo + 2).length;
+    if (n > best.n) best = { lo, n };
+  }
+  const last = seen[seen.length - 1];
+  return { id, last: last.date, minWeeks: best.lo, maxWeeks: best.lo + 2, covered: best.n, total: gaps.length, sinceWeeks: t - last.t };
 }

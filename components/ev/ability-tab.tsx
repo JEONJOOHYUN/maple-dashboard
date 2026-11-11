@@ -27,11 +27,10 @@ import {
 } from "@/lib/ev/ability";
 import { CREDIT_SHOP } from "@/lib/ev/defaults";
 import { cn } from "@/lib/utils";
+import { koreanUnits } from "@/lib/format";
 
-const fameText = (f: number) =>
-  f >= 1e4
-    ? `${Math.round(f / 1e4).toLocaleString("ko-KR")}만`
-    : Math.round(f).toLocaleString("ko-KR");
+// Fame to the nearest 만 ("6,385만", "1억 1,054만").
+const fameText = (f: number) => (f >= 1e4 ? koreanUnits(Math.round(f / 1e4) * 1e4) : koreanUnits(f));
 
 export function AbilityTab() {
   const [presetId, setPresetId] = useState("pbs");

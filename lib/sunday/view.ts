@@ -1,6 +1,6 @@
 import { THEMES, bundleLabel, bundleTheme, isBigBundle, type ThemeId } from "./bundles.ts";
 import { SUNDAYS, addWeeks, dateLabel, kstDate, noticeUrl, upcomingSunday, type SundayWeek } from "./history.ts";
-import { predictSunday, themesOf, type BundleOdds } from "./predict.ts";
+import { bigDayWindow, predictSunday, themesOf, type BundleOdds } from "./predict.ts";
 
 export type WeekView = {
   date: string;
@@ -17,6 +17,21 @@ export type WeekView = {
 
 export type OddsView = BundleOdds & { label: string; theme: ThemeId | null };
 
+/** "다음 샤이닝 스타포스 타임 11월 29일 ~ 12월 13일": the usual gap added to the last time it came. */
+export type BigDayView = {
+  id: string;
+  label: string;
+  /** Date range (labels) the usual gap points at; the range is over when `overdue`. */
+  from: string;
+  to: string;
+  overdue: boolean;
+  /** "보통 4~6주 간격" */
+  gap: string;
+  /** "지난 13번 중 8번" */
+  record: string;
+  lastLabel: string;
+};
+
 export type SundayPageData = {
   thisWeek: { date: string; label: string; isToday: boolean; announced: boolean; recorded: WeekView | null };
   prediction: {
@@ -27,6 +42,7 @@ export type SundayPageData = {
     headline: string | null;
     picks: OddsView[];
     ranked: OddsView[];
+    bigDays: BigDayView[];
     missingWeeks: number;
   };
   recent: WeekView[];
@@ -84,8 +100,26 @@ export function getSundayPageData(now: Date, weeks: SundayWeek[] = SUNDAYS): Sun
       label: dateLabel(target),
       themes,
       headline: top.p >= HEADLINE_P ? `${top.day} 유력` : null,
-      picks: p.picks.map((id) => odds(p.ranked.find((r) => r.id === id)!)),
+      // Shown from the most likely down (the model picks one per kind first, so its own order is not by chance).
+      picks: p.picks.map((id) => odds(p.ranked.find((r) => r.id === id)!)).sort((x, y) => y.p - x.p),
       ranked: p.ranked.filter((r) => r.p >= 0.02).map(odds),
+      bigDays: ["shining", "miracle"].flatMap((id) => {
+        const w = bigDayWindow(weeks, id, target);
+        if (!w?.last) return [];
+        const to = addWeeks(w.last, w.maxWeeks);
+        return [
+          {
+            id,
+            label: bundleLabel(id),
+            from: dateLabel(addWeeks(w.last, w.minWeeks)),
+            to: dateLabel(to),
+            overdue: target > to,
+            gap: `보통 ${w.minWeeks}~${w.maxWeeks}주 간격`,
+            record: `지난 ${w.total}번 중 ${w.covered}번`,
+            lastLabel: dateLabel(w.last),
+          },
+        ];
+      }),
       missingWeeks: p.missingWeeks,
     },
     recent: recent.map(weekView),

@@ -123,7 +123,7 @@ test("each rule fires", () => {
   raw.skill0.character_skill = raw.skill0.character_skill!.filter((s) => !["연합의 의지", "영웅의 메아리", "고급 무기 제련"].includes(s.skill_name));
   raw.skill0.character_skill.find((s) => s.skill_name === "여제의 축복")!.skill_level = 24;
   raw.propensity.charisma_level = 80;
-  raw.vmatrix.character_v_core_equipment!.find((c) => c.v_core_name === "바디 오브 스틸")!.v_core_level = 4;
+  raw.vmatrix.character_v_core_equipment!.find((c) => c.v_core_name === "에르다 노바")!.v_core_level = 4;
   raw.vmatrix.character_v_core_equipment = raw.vmatrix.character_v_core_equipment!.filter((c) => c.v_core_type !== "특수 코어");
   raw.hyper.hyper_stat_preset_1_remain_point = 7;
   raw.hyperPassive.character_skill![0].skill_level = 0;
@@ -242,4 +242,47 @@ test("artifact: crit rate counts as a boss effect, non-boss names are short", ()
   raw.artifact.union_artifact_effect!.find((e) => /방어율 무시/.test(e.name))!.level = 0;
   const m = checkSpec(raw).misses.find((x) => x.cat === "유니온 아티팩트")!;
   assert.deepEqual(m.detail, ["부족: 방어율 무시 Lv.0", "보스에 안 쓰는 효과: 메소 획득량 Lv.10"]);
+});
+
+test("title: a boss title kept in a title preset counts while a hunting title is on (user, 2026-11-11)", () => {
+  const raw = base();
+  raw.equipment.title = { title_name: "쑥쑥 새싹", title_description: "경험치 획득량 +10%" };
+  raw.equipment.title_preset1 = { title_name: "쑥쑥 새싹", title_description: "경험치 획득량 +10%" };
+  raw.equipment.title_preset2 = { title_name: "보스 칭호", title_description: "보스 몬스터 데미지 +10%" };
+  assert.equal(checkSpec(raw).misses.find((m) => m.cat === "칭호"), undefined);
+  // No boss title anywhere: the one equipped now is named.
+  raw.equipment.title_preset2 = null;
+  const miss = checkSpec(raw).misses.find((m) => m.cat === "칭호")!;
+  assert.equal(miss.what, "보스 데미지 없음");
+  // The preset title's expiry is the one that matters.
+  raw.equipment.title_preset3 = { title_name: "보스 칭호", title_description: "보스 몬스터 데미지 +10%", date_option_expire: "expired" };
+  assert.deepEqual(checkSpec(raw).misses.filter((m) => m.cat === "칭호").map((m) => m.what), ["옵션 만료"]);
+});
+
+test("바디 오브 스틸 is only asked of warriors (user, 2026-11-11)", () => {
+  const raw = base();
+  raw.vmatrix.character_v_core_equipment = raw.vmatrix.character_v_core_equipment!.filter((c) => c.v_core_name !== "바디 오브 스틸");
+  const cores = (cls: string) => {
+    raw.basic.character_class = cls;
+    return checkSpec(raw).misses.find((m) => m.cat === "5차 공용 코어");
+  };
+  assert.equal(cores("아크메이지(썬,콜)"), undefined);
+  assert.equal(cores("메르세데스"), undefined);
+  assert.ok(cores("데몬슬레이어")?.detail?.join(" ").includes("바디 오브 스틸"));
+  assert.ok(cores("히어로")?.detail?.join(" ").includes("바디 오브 스틸"));
+});
+
+test("title: a usable boss title beats an expired or expiring copy in another preset (Codex review)", () => {
+  const raw = base();
+  const now = new Date("2026-11-09T00:00:00+09:00");
+  raw.equipment.title = { title_name: "쑥쑥 새싹", title_description: "경험치 획득량 +10%" };
+  raw.equipment.title_preset1 = { title_name: "보스 칭호", title_description: "보스 몬스터 데미지 +10%", date_option_expire: "expired" };
+  raw.equipment.title_preset2 = { title_name: "보스 칭호 2", title_description: "보스 몬스터 데미지 +10%" };
+  assert.equal(checkSpec(raw, now).misses.find((m) => m.cat === "칭호"), undefined);
+  // Expiring soon in one preset, permanent in another: nothing to report.
+  raw.equipment.title_preset1 = { title_name: "보스 칭호", title_description: "보스 몬스터 데미지 +10%", date_option_expire: "2026-11-12T00:00+09:00" };
+  assert.equal(checkSpec(raw, now).misses.find((m) => m.cat === "칭호"), undefined);
+  // Only expiring ones: the one that lasts longest is the one reported.
+  raw.equipment.title_preset2 = { title_name: "보스 칭호 2", title_description: "보스 몬스터 데미지 +10%", date_option_expire: "2026-11-15T00:00+09:00" };
+  assert.deepEqual(checkSpec(raw, now).misses.filter((m) => m.cat === "칭호").map((m) => m.what), ["옵션 만료 6일 남음"]);
 });

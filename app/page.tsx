@@ -65,6 +65,15 @@ export default async function Home() {
               ))}
             </b>
           )}
+          {sunday.prediction.bigDays.length > 0 && (
+            <span className="flex flex-wrap gap-x-2 text-xs text-muted-foreground">
+              {sunday.prediction.bigDays.map((d) => (
+                <span key={d.id} className="whitespace-nowrap">
+                  {d.label.replace(" 타임", "")} {d.overdue ? "나올 때 지남" : `${d.from} ~ ${d.to}`}
+                </span>
+              ))}
+            </span>
+          )}
         </span>
         <span className="text-xs font-semibold text-primary-text">자세히 →</span>
       </Link>

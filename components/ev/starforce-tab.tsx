@@ -10,6 +10,7 @@ import {
   Segment,
   Switch,
   eok,
+  avg,
   parseNum,
 } from "@/components/ev/ui";
 import {
@@ -36,6 +37,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { koreanUnits } from "@/lib/format";
 
 const EVENTS: { id: StarEvent; label: string }[] = [
   { id: "none", label: "기본" },
@@ -147,10 +149,10 @@ export function StarforceTab() {
 
   const money = (meso: number) =>
     unit === "won"
-      ? `${Math.round((meso / 1e8) * rate).toLocaleString("ko-KR")}원`
+      ? `${koreanUnits((meso / 1e8) * rate)}원`
       : eok(meso);
   const won = (meso: number) =>
-    `${Math.round((meso / 1e8) * rate).toLocaleString("ko-KR")}원`;
+    `${koreanUnits((meso / 1e8) * rate)}원`;
   const condText = (o: StarOptions) =>
     [
       EVENTS.find((e) => e.id === o.event)!.label,
@@ -266,7 +268,7 @@ export function StarforceTab() {
                       <TooltipTrigger
                         render={<button type="button" />}
                         aria-pressed={item === it.id}
-                        aria-label={`${it.name} · 노작값 ${it.spareEok}억`}
+                        aria-label={`${it.name} · 노작값 ${eok(it.spareEok * 1e8)}`}
                         onClick={() => pickItem(it.id)}
                         className={cn(
                           "flex h-11 min-w-11 items-center justify-center gap-0.5 rounded-lg border px-1.5 transition-colors",
@@ -303,7 +305,7 @@ export function StarforceTab() {
               <b>{itemName}</b>
               <span className="text-muted-foreground">
                 {" "}
-                · Lv.{level} · 노작값 {spareText || 0}억
+                · Lv.{level} · 노작값 {eok(parseNum(spareText, 0) * 1e8)}
               </span>
             </span>
             <div className="flex flex-wrap items-center gap-2">
@@ -503,10 +505,10 @@ export function StarforceTab() {
                       {money(r.meso * mult)}
                     </td>
                     <td className="py-2 text-right font-num">
-                      {r.destroys.toFixed(2)}
+                      {avg(r.destroys, 2)}
                     </td>
                     <td className="py-2 text-right font-num">
-                      {r.tries.toFixed(1)}
+                      {avg(r.tries, 1)}
                     </td>
                     <td className="py-1 text-right">
                       <button
@@ -586,10 +588,10 @@ export function StarforceTab() {
                         {money(c.meso * mult)}
                       </td>
                       <td className="py-2 text-right font-num">
-                        {c.destroys.toFixed(2)}
+                        {avg(c.destroys, 2)}
                       </td>
                       <td className="py-2 text-right font-num">
-                        {c.tries.toFixed(1)}
+                        {avg(c.tries, 1)}
                       </td>
                       <td className="py-1 text-right">
                         <button
@@ -615,10 +617,10 @@ export function StarforceTab() {
                       {money(sum.meso * mult)}
                     </td>
                     <td className="py-2 text-right font-num">
-                      {sum.destroys.toFixed(2)}
+                      {avg(sum.destroys, 2)}
                     </td>
                     <td className="py-2 text-right font-num">
-                      {sum.tries.toFixed(1)}
+                      {avg(sum.tries, 1)}
                     </td>
                     <td />
                   </tr>

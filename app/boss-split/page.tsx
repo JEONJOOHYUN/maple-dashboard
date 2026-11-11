@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { Copy, ImageIcon, Info, Plus, X } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
-import { computeBossSplit } from "@/lib/boss-split-math";
+import { MESO_MARKET_FEE_RATE, computeBossSplit } from "@/lib/boss-split-math";
 import { formatKoreanMeso, formatNumber } from "@/lib/format";
 import { handleMesoInput } from "@/lib/meso-input";
 import { renderSplitImage } from "@/lib/split-image";
@@ -30,6 +30,8 @@ const PERCENT_COLS: Record<number, string> = {
   6: "grid-cols-3 sm:grid-cols-6",
 };
 const NOTE = "파티원 금액 = 받는 사람이 다시 낼 수수료 포함";
+const MARKET_PCT = MESO_MARKET_FEE_RATE * 100;
+const CROSS_NOTE = `타 서버 = 메소마켓에서 메이플포인트로 바꿔 건넴 · 수수료 ${MARKET_PCT}% 추가`;
 
 type Item = { id: string; grossMeso: number };
 type ImageState = "idle" | "working" | "copied" | "saved" | "error";
@@ -61,6 +63,8 @@ export default function BossSplitPage() {
   const [names, setNames] = useState<string[]>(DEFAULT_NAMES);
   // number | "" so an emptied field stays empty instead of snapping back to 0.
   const [percents, setPercents] = useState<(number | "")[]>(() => [50, 50, 0, 0, 0, 0]);
+  // Party members on another server: the leader moves their share through the meso market (1 % more).
+  const [otherServer, setOtherServer] = useState<boolean[]>(() => Array(MAX_MEMBERS).fill(false));
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [imageState, setImageState] = useState<ImageState>("idle");
 
@@ -83,23 +87,30 @@ export default function BossSplitPage() {
       computeBossSplit(
         isValidSplit ? netMeso : 0,
         sharePercents.map((p) => p / 100),
-        feeRate
+        feeRate,
+        otherServer
       ),
-    [isValidSplit, netMeso, sharePercents, feeRate]
+    [isValidSplit, netMeso, sharePercents, feeRate, otherServer]
   );
+  const anyOtherServer = otherServer.slice(1, count).some(Boolean);
 
   // Leader keeps finalMeso; everyone else is handed beforeMeso (their share plus the fee they pay again).
+  // Other server: beforeMeso is what the leader sells on the meso market, handedMeso what is handed over there.
   const cards = shares.map((share, index) => {
+    const cross = index > 0 && otherServer[index];
     const amount = index === 0 ? share.finalMeso : share.beforeMeso;
     return {
       index,
+      cross,
       name: names[index] || DEFAULT_NAMES[index],
       pctLabel: `${Math.round(sharePercents[index] * 10) / 10}%`,
       amount,
       role:
         index === 0
           ? "실수령 기준 잔여 · 내가 갖는 몫"
-          : `전달 금액 (수수료 포함) · 받는 몫 ${formatNumber(share.finalMeso)}`,
+          : cross
+            ? `메소마켓에 팔 금액 (수수료 ${MARKET_PCT}% 포함) · 타 서버에서 전달 ${formatNumber(share.handedMeso)} · 받는 몫 ${formatNumber(share.finalMeso)}`
+            : `전달 금액 (수수료 포함) · 받는 몫 ${formatNumber(share.finalMeso)}`,
     };
   });
   const hasResult = isValidSplit && netMeso > 0;
@@ -138,7 +149,7 @@ export default function BossSplitPage() {
     setImageState("working");
     const data = {
       summary: `판매가 ${formatKoreanMeso(totalGrossMeso, { spaced: true }).replace(" 메소", "")} · 수수료 ${feePercent}% · ${count}명`,
-      note: NOTE,
+      note: anyOtherServer ? `${NOTE} · ${CROSS_NOTE}` : NOTE,
       cards: cards.map((c) => ({
         name: c.name,
         pctLabel: c.pctLabel,
@@ -333,6 +344,19 @@ export default function BossSplitPage() {
                   />
                   <span className="shrink-0 rounded-full bg-muted px-2 py-px text-xs font-bold">{card.pctLabel}</span>
                 </span>
+                {highlight && (
+                  <button
+                    type="button"
+                    aria-pressed={card.cross}
+                    onClick={() => setOtherServer((prev) => prev.map((v, j) => (j === card.index ? !v : v)))}
+                    className={cn(
+                      "inline-flex h-8 items-center rounded-full border px-3 text-xs font-semibold outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                      card.cross ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-muted-foreground hover:border-primary/60"
+                    )}
+                  >
+                    타 서버{card.cross ? ` · 메소마켓 ${MARKET_PCT}%` : ""}
+                  </button>
+                )}
                 <span
                   className={cn(
                     "max-w-full font-num text-[26px] leading-tight font-bold break-all tabular-nums sm:text-[30px]",
@@ -367,7 +391,8 @@ export default function BossSplitPage() {
 
         <p className="flex items-start justify-center gap-1.5 text-center text-xs leading-relaxed text-muted-foreground">
           <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-          {NOTE} · &quot;금액 복사&quot; = 숫자만
+          {NOTE}
+          {anyOtherServer ? ` · ${CROSS_NOTE}` : ""} · &quot;금액 복사&quot; = 숫자만
         </p>
 
         <div className="flex flex-col items-center gap-1.5 border-t border-border pt-3.5">

@@ -111,7 +111,8 @@ export function SundayView({ data }: { data: SundayPageData }) {
           기록 · 넥슨 썬데이 메이플 공지, 인벤 역대 썬데이메이플 정리 <span className="whitespace-nowrap">(2023-08 ~ {data.dataEnd})</span>
         </li>
         <li>예측 · 2025-03 스타포스 개편 이후 기록의 주기 통계</li>
-        <li>적중 · 최근 52주 중 38주는 고른 3개 안에 실제 혜택 포함</li>
+        <li>적중 · 최근 52주 중 45주는 고른 5개 안에 실제 혜택 포함</li>
+        <li>큰 날 예상 시기 · 지난번 + 평소 간격, 간격이 일정하지 않아 범위로 표시</li>
         <li>넥슨과 무관한 참고용 예측</li>
       </ul>
     </div>
@@ -216,7 +217,7 @@ function Prediction({ prediction }: { prediction: SundayPageData["prediction"] }
           );
         })}
       </ul>
-      <b className="mt-1 text-[13px]">나올 만한 혜택 3개</b>
+      <b className="mt-1 text-[13px]">나올 만한 혜택 5개</b>
       <ol className="flex flex-col gap-2">
         {prediction.picks.map((o, i) => (
           <li key={o.id} className="grid grid-cols-[24px_minmax(0,1fr)_auto] items-center gap-2.5 rounded-lg bg-card px-3 py-2.5">
@@ -229,6 +230,24 @@ function Prediction({ prediction }: { prediction: SundayPageData["prediction"] }
           </li>
         ))}
       </ol>
+      {prediction.bigDays.length > 0 && (
+        <>
+          <b className="mt-1 text-[13px]">큰 날 예상 시기</b>
+          <ul className="flex flex-col gap-2">
+            {prediction.bigDays.map((d) => (
+              <li key={d.id} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 rounded-lg bg-card px-3 py-2.5">
+                <span className="flex min-w-0 flex-col gap-0.5">
+                  <b className="text-sm">{d.label}</b>
+                  <span className="text-xs text-muted-foreground">
+                    지난번 {d.lastLabel} · {d.gap} ({d.record})
+                  </span>
+                </span>
+                <b className="font-num text-[15px] whitespace-nowrap text-primary-text">{d.overdue ? "나올 때 지남" : `${d.from} ~ ${d.to}`}</b>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </div>
   );
 }

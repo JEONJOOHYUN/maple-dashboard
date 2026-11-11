@@ -6,7 +6,7 @@ import { SPEC_DATA, checkSpec, type SpecRaw, type SpecResult } from "@/lib/spec/
 
 export const SPEC_CACHE_SECONDS = 3 * 60 * 60;
 // Bump when check.ts rules change so cached results from older rules are not served.
-const RULES_VERSION = "8";
+const RULES_VERSION = "9";
 
 type Loaded = { ok: true; result: SpecResult; at: number } | { ok: false; kind: "notFound" };
 

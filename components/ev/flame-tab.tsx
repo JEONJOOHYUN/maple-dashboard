@@ -5,6 +5,7 @@ import { Chip, Label, NumberField, Panel, Segment, count, eok, parseNum, pct } f
 import { FLAMES, armorChance, bestWeaponGrade, weaponChance, DEFAULT_HP_WEIGHTS, DEFAULT_WEIGHTS } from "@/lib/ev/flame";
 import { averageTries, triesAt } from "@/lib/ev/luck";
 import { cn } from "@/lib/utils";
+import { koreanUnits } from "@/lib/format";
 
 export function FlameTab() {
   const [equip, setEquip] = useState<"weapon" | "armor">("weapon");
@@ -197,7 +198,7 @@ export function FlameTab() {
                   .map((q, i) => {
                     const n = triesAt(best.p, q);
                     const label = ["운 좋으면", "절반은", "운 나쁘면"][i];
-                    return Number.isFinite(bestMeso) ? `${label} ${eok(n * priceOf(best.id))}` : `${label} ${n.toLocaleString("ko-KR")}개`;
+                    return Number.isFinite(bestMeso) ? `${label} ${eok(n * priceOf(best.id))}` : `${label} ${koreanUnits(n)}개`;
                   })
                   .join(" · ")}
               </span>

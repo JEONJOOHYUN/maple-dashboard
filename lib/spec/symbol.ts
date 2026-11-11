@@ -4,6 +4,7 @@
 // Costs: data/symbols.json (per-level upgrade meso, in-game values as of 2026-10-25; totals checked against the source page).
 // Stats (checked on API responses 2026-11-09): arcane main stat = 100 × (Lv + 2), force 10 × (Lv + 2);
 // authentic main stat = 200 × Lv + 300, force 10 × Lv; Demon Avenger HP = 21 × main stat. Grand authentic stats unverified → cost only.
+import { koreanUnits } from "../format.ts";
 import symbolsJson from "./data/symbols.json" with { type: "json" };
 
 type Costs = Record<string, number[]>;
@@ -86,6 +87,8 @@ export function symbolGaps(symbols: SymbolIn[]): SymbolGap[] {
 
 /** 7,920,000,000 → "79억 2,000만", 670,000 → "67만". */
 export function koreanMeso(n: number): string {
+  // From 1조 the unit changes again ("1조 2,345억").
+  if (n >= 9999.5e8) return koreanUnits(n);
   const eok = Math.floor(n / 1e8);
   const man = Math.round((n % 1e8) / 1e4);
   if (eok && man) return `${eok.toLocaleString("ko-KR")}억 ${man.toLocaleString("ko-KR")}만`;

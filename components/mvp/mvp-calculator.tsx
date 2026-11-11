@@ -24,10 +24,11 @@ import {
 import { useNow } from "@/lib/use-now";
 import { useStored } from "@/lib/use-stored";
 import { cn } from "@/lib/utils";
+import { koreanUnits } from "@/lib/format";
 
 const man = (won: number) => `${(Math.round(won / 1000) / 10).toLocaleString("ko-KR")}만`;
-const won = (v: number) => `${Math.round(v).toLocaleString("ko-KR")}원`;
-const num = (v: number) => Math.round(v).toLocaleString("ko-KR");
+const won = (v: number) => `${koreanUnits(v, Infinity)}원`;
+const num = (v: number) => koreanUnits(v, Infinity);
 const md = (day: string) => `${Number(day.slice(5, 7))}/${Number(day.slice(8, 10))}`;
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 const mdw = (day: string) => `${md(day)}(${DOW[new Date(`${day}T00:00:00Z`).getUTCDay()]})`;
@@ -219,7 +220,7 @@ export function MvpCalculator() {
     const out: { text: string; sub?: string }[] = [];
     out.push({ text: `충전: ${chargeText || "—"} (현금 ${won(plan.pay)})` });
     for (const it of r.items) out.push({ text: `${it.name} × ${num(it.count)} → 경매장 → ${won(it.won)}` });
-    if (r.mm.cash) out.push({ text: `메소마켓: ${num(r.mm.cash)}포인트 → ${num(r.mm.eok)}억 → ${won(r.mm.won)}` });
+    if (r.mm.cash) out.push({ text: `메소마켓: ${num(r.mm.cash)}포인트 → ${koreanUnits(r.mm.eok * 1e8)} 메소 → ${won(r.mm.won)}` });
     if (r.gift.cash) out.push({ text: `캐시 ${man(r.gift.cash)} 선물 → ${won(r.gift.won)}` });
     if (market.useCredit && r.mode !== "gift" && r.credit.total > 0) {
       const buys = r.credit.buys.map((b) => `${b.name} × ${b.count}`).join(" · ");

@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { LUCK_LEVELS, triesAt } from "@/lib/ev/luck";
+import { koreanUnits } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 /** Card section used by every calculator tab. */
@@ -178,7 +179,7 @@ export function LuckRow({ p, cap = 0, cost, unit = "번" }: { p: number; cap?: n
     <div className="grid grid-cols-3 gap-2">
       {LUCK_LEVELS.map((l) => {
         const n = triesAt(p, l.q, cap);
-        const tries = Number.isFinite(n) ? `${n.toLocaleString("ko-KR")}${unit}` : "—";
+        const tries = Number.isFinite(n) ? `${koreanUnits(n)}${unit}` : "—";
         // Meso first when there is a price; the count goes underneath.
         return cost && Number.isFinite(n) ? <LuckBox key={l.q} label={l.label} value={cost(n)} sub={tries} /> : <LuckBox key={l.q} label={l.label} value={tries} />;
       })}
@@ -206,17 +207,32 @@ export function pct(x: number): string {
   return `${v < 0.1 ? v.toFixed(4) : v.toFixed(2)}%`;
 }
 
-/** 억 · 만 short label for meso. */
+/**
+ * Meso label in Korean units (만 · 억 · 조 · 경 change every 10,000):
+ * under 1억 "6,341만", under 1조 "9.15억" / "5,062억", from 1조 "21조 5,107억".
+ */
 export function eok(meso: number): string {
   if (!Number.isFinite(meso)) return "—";
   if (meso === 0) return "0";
+  const abs = Math.abs(meso);
+  if (abs < 1e4) return Math.round(meso).toLocaleString("ko-KR");
+  if (abs < 9999.5e4) return `${Math.round(meso / 1e4).toLocaleString("ko-KR")}만`;
   const e = meso / 1e8;
-  if (Math.abs(e) >= 1000) return `${Math.round(e).toLocaleString("ko-KR")}억`;
-  if (Math.abs(e) >= 1) return `${(Math.round(e * 100) / 100).toLocaleString("ko-KR")}억`;
-  return `${Math.round(meso / 1e4).toLocaleString("ko-KR")}만`;
+  if (abs < 999.995e8) return `${(Math.round(e * 100) / 100).toLocaleString("ko-KR")}억`;
+  if (abs < 9999.5e8) return `${Math.round(e).toLocaleString("ko-KR")}억`;
+  return koreanUnits(meso);
 }
 
+/** Averages in tables (destroys · tries): fixed decimals with commas, Korean units from 10,000. */
+export function avg(n: number, digits: number): string {
+  if (!Number.isFinite(n)) return "—";
+  if (n >= 9999.5) return koreanUnits(n);
+  return n.toLocaleString("ko-KR", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+}
+
+/** Tries · items: one decimal under 100, Korean units from 10,000 ("3만 8,136번"). */
 export function count(n: number, unit = "번"): string {
   if (!Number.isFinite(n)) return "—";
+  if (n >= 9999.5) return koreanUnits(n) + unit;
   return `${(n >= 100 ? Math.round(n) : Math.round(n * 10) / 10).toLocaleString("ko-KR")}${unit}`;
 }

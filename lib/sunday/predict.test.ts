@@ -3,7 +3,7 @@ import { test } from "node:test";
 import benefits from "./data/benefits.json" with { type: "json" };
 import { BUNDLES, bundleOf } from "./bundles.ts";
 import { SUNDAYS, addWeeks, dateLabel, upcomingSunday } from "./history.ts";
-import { predictSunday, themesOf } from "./predict.ts";
+import { bigDayWindow, predictSunday, themesOf } from "./predict.ts";
 
 const groupOf = new Map(benefits.map((b) => [b.name, b.group]));
 
@@ -30,7 +30,7 @@ function backtest(from: string, to: string) {
   for (const w of SUNDAYS.filter((x) => x.date >= from && x.date <= to && x.bundles.size)) {
     const p = predictSunday(SUNDAYS, w.date);
     n++;
-    if (p.picks.some((id) => w.bundles.has(id))) top3++;
+    if (p.picks.slice(0, 3).some((id) => w.bundles.has(id))) top3++;
   }
   return { top3, n };
 }
@@ -41,8 +41,8 @@ test("backtest: last 52 weeks 38/52, maplessunday's 27 weeks 22/27", () => {
 
 test("prediction shape: picks cover different kinds, probabilities stay in 0..1", () => {
   const p = predictSunday(SUNDAYS, "2026-11-15");
-  assert.equal(p.picks.length, 3);
-  assert.equal(new Set(p.picks).size, 3);
+  assert.equal(p.picks.length, 5);
+  assert.equal(new Set(p.picks).size, 5);
   for (const r of p.ranked) assert.ok(r.p >= 0 && r.p <= 1, r.id);
   for (const v of Object.values(p.themes)) assert.ok(v >= 0 && v <= 1);
   assert.equal(p.missingWeeks, 0);
@@ -90,4 +90,25 @@ test("page data: recorded week, Friday notice time, stale data", async () => {
   const nov1 = sat.recent.find((w) => w.date === "2026-11-01")!;
   assert.equal(nov1.title, "샤이닝 스타포스 타임");
   assert.ok(nov1.detail.includes("파괴 확률"));
+});
+
+test("five shown picks: 45/52 over the last year, 27/27 on maplessunday's 27 weeks", () => {
+  const hits = (from: string, to: string) => {
+    const weeks = SUNDAYS.filter((x) => x.date >= from && x.date <= to && x.bundles.size);
+    return [weeks.filter((w) => predictSunday(SUNDAYS, w.date).picks.some((id) => w.bundles.has(id))).length, weeks.length];
+  };
+  assert.deepEqual(hits("2025-11-16", "2026-11-08"), [45, 52]);
+  assert.deepEqual(hits("2026-05-10", "2026-11-08"), [27, 27]);
+});
+
+test("big day window: last time + the usual gap (shining 4~6 weeks in 8 of 13 gaps since 2025-03)", () => {
+  const w = bigDayWindow(SUNDAYS, "shining", "2026-11-15")!;
+  assert.deepEqual({ last: w.last, min: w.minWeeks, max: w.maxWeeks, covered: w.covered, total: w.total, since: w.sinceWeeks }, { last: "2026-11-01", min: 4, max: 6, covered: 8, total: 13, since: 2 });
+  assert.equal(addWeeks(w.last!, w.minWeeks), "2026-11-29");
+  assert.equal(addWeeks(w.last!, w.maxWeeks), "2026-12-13");
+  const m = bigDayWindow(SUNDAYS, "miracle", "2026-11-15")!;
+  assert.equal(m.last, "2026-09-27");
+  assert.ok(m.covered >= 3 && m.total === 8);
+  // Too few appearances: no window.
+  assert.equal(bigDayWindow(SUNDAYS, "shining", "2025-06-01"), null);
 });
