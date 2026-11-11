@@ -30,7 +30,7 @@ export const metadata: Metadata = {
     default: "메이플 대시보드",
     template: "%s · 메이플 대시보드",
   },
-  description: "메이플스토리 내 수익 기록, 보스 분배금 · 강화 기댓값 계산기 모음",
+  description: "메이플스토리 분배금 · 기댓값 · MVP 계산기, 썬데이 예측 모음",
 };
 
 export default function RootLayout({
