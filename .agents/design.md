@@ -130,3 +130,7 @@
   결과 아래 새 "정산 내역" 표(날짜·정산 메소·계산 금액·준 금액, 더 준 줄은 준 금액 밑에 "인센티브 +n원") — 일일 사냥 기록 위.
   보스 도우미 보스 목록(2026-11-08 사용자 결정): 카링(선택됨) + 찬란한 흉성·림보·발드릭스·유피테르("안내 내용 정하는 중"), 옛 "다음 보스 준비 중" 칸 대신.
   확인 필요: 실제 사이트에 넥슨 그림(보스 일러스트)을 쓰려면 넥슨 2차 창작·Open API 이용 조건 확인. 위컴알(WzComparerR2)로 게임 파일에서 추출하는 방식은 Claude 가 실행하지 않음(사용자가 직접 뽑아 PNG 로 전달).
+
+## 캔버스 고치는 방법 (2026-11-11 handoff 에서 옮김)
+
+- **캔버스 고치는 방법**: Artifact `read`(url + `paths`)로 `project/*.dc.html` 을 받아 고치고, 같은 `url` + `root` 로 게시(보드 위치·크기를 바꾸면 `project/canvas.json` 도). 검사 `node C:/dev/_work/maple-canvas/scripts/check-dc.mjs <project 폴더>` · `tags.mjs <파일들>`. 눈으로 확인: 보드 클릭 → "Zoom to selection" → PLAY → "Play full screen".

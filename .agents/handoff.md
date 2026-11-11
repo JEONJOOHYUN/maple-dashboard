@@ -10,28 +10,35 @@
 > 지금 상태·결정·함정만 둔다. 디렉터리 구조·DB 스키마는 [structure.md](structure.md), 작업 규칙은 [../CLAUDE.md](../CLAUDE.md).
 > 지난 기록 원문은 [history.md](history.md)(1단계 과정, 2단계 세션 기록 · 도구 상세, 디자인 과정, 개편 전 앱, 2026-11-10 정리분). 정리 전 원본 `C:\dev\_backup\handoff-2026-11-10\`.
 
-## 현재 상태 (2026-11-10)
+## 현재 상태 (2026-11-11)
 
 - 운영(`main`): 개편 전 모양 그대로. 마지막 푸시 `c60f794`(2026-11-01 Next 16.4.3 보안 업데이트).
-- 개편(`redesign`): 0단계 `bfcbcc7` · 1단계 `6e2eb10` · 2단계 공개 도구 **다섯 개 모두 완료** — 기댓값 · MVP · 핀볼(`0d85727`), 숨은 스펙업(`cb8cb42`), 썬데이(`27e4bdc`). 로고 = 앱 아이콘(`26e26ec`).
-  원격과 같음(`cf0bcb9` 까지 푸시, 2026-11-10). 푸시는 사용자가 "푸시해"라고 할 때만.
-- Vercel 환경변수 `NEXON_API_KEY` 등록됨(2026-11-10, Secret, Production + Preview, 사용자).
+- 개편(`redesign`): 0 · 1단계, 2단계 공개 도구 다섯 개(기댓값 · MVP · 핀볼 · 숨은 스펙업 · 썬데이), 썬데이 자동 갱신 저장 단계까지. 원격과 같음(`2c09756` 까지 푸시, 2026-11-11). 푸시는 사용자가 "푸시해"라고 할 때만.
+- 로그인 작업 = 로컬 브랜치 `members`(`redesign` 위, 푸시 안 함). 아래 "다음 할 일" 2번.
+- Vercel 환경변수 `NEXON_API_KEY` · `SUPABASE_SERVICE_ROLE_KEY` · `CLOVA_OCR_URL` · `CLOVA_OCR_SECRET` 등록됨(Production + Preview, 이름만 확인).
 - `vendor/` 는 git 밖(`.gitignore` · tsconfig `exclude` · eslint `globalIgnores`) — 핀볼 원본 참고용, 광고 코드 · 인물 그림을 공개 저장소에 안 올림.
 
 ## 다음 할 일
 
-1. **썬데이 매주 자동 갱신(C) — 저장 단계 작업 중(미커밋)**: Vercel Cron → `app/api/cron/sunday/route.ts` → 넥슨 공지 API 로 이번 주 공지 찾기(`notice.ts`) → 이미지 글자 읽기(`ocr.ts`) → 아는 혜택과 맞추기(`match.ts`, 모르면 "확인 필요") → `sunday_weeks` 저장(`store.ts`, 규칙 `stored.ts`) → 화면(`live.ts`, 기록 + 표 · DB 실패 시 기록만).
-   - **글자 읽기 = 네이버 CLOVA OCR(2026-11-10 사용자 결정, PaddleOCR 에서 교체)**: General 도메인 월 100회 무료(이미지 1장 = 1회). 주소는 API Gateway 자동 연동으로 나온 것(`…apigw.ntruss.com…`) — 콘솔의 다른 주소는 사설 IP 라 밖에서 안 열림. API Gateway 는 호출 월 100만 건 · 전송 1GB 까지 무료, "API 캐시" 꺼짐 확인(사용자). 줄은 글자 상자로 직접 묶고 줄 높이 `h` 를 같이 줌(`ocr-lines.ts`). `ppu-paddle-ocr` · `onnxruntime-node` · `next.config.ts` OCR 설정은 뺌. 실제 코드로 1장 확인(1.3초).
-   - **채점(2026-11-10, CLOVA 로 읽은 75주)**: 자동 71 · **자동인데 틀림 0** · 확인 필요 4(2023-09-24 · 2023-10-01 · 2024-07-28 · 2025-01-12, 배치가 특이한 옛 공지), 혜택 하나 숨김 시험 272번 중 그냥 저장 0. 2025-11-09 ~ 2026-11-08 53주는 전부 자동 · 일치. **나머지 92주는 CLOVA 로 아직 안 읽힘**(무료 횟수 — 다음 달 `run-clova.mjs`). 방법 · 명령 `C:/dev/_work/sunday-ocr-test/README.md`.
-   - 규칙 추가(`match.ts`): 맞춘 제목 높이의 70% 미만인 줄은 새 혜택 후보에서 제외, "N주차" 줄에서 구역 끊기, "1+1 스타포스 강화" 표 머리 · "확률 · 60%" 칸 제외. 테스트 자료 `match.fixtures.json` 은 CLOVA 줄(`pick-fixtures.mjs`).
-   - 무료 횟수 지키기: "확인 필요"로 저장된 주는 공지 번호 · 이미지가 같으면 다시 읽지 않음(실행 기록 `review-unchanged`). `?dry=1` 은 저장은 안 해도 호출은 씀. 2026-11 사용 82회(시험), 남은 18회.
-   - **DB 실행 · 확인 끝(2026-11-11)**: 006 실행됨(사용자). 실제 DB 시험 행으로 13가지 확인 후 삭제(방문자 키는 공개 주 읽기만, 서버 키는 두 표 쓰기, 공개된 주는 안 덮어씀), 공개 행은 `/sunday` · 홈에 반영되고 확인 필요 행은 영향 없음. 환경 변수 `SUPABASE_SERVICE_ROLE_KEY`(새 secret 키) · `CLOVA_OCR_URL` · `CLOVA_OCR_SECRET` · `NEXON_API_KEY` 는 `.env.local` 과 Vercel Production + Preview 에 있음(이름만 확인). **남은 것**: 푸시(사용자 "푸시해") → 2026-11-13 공지로 Preview 에서 전체 흐름 확인.
-   - **DB 검토 반영(2026-11-10, 사용자 승인 A · D · E · F · G · H, Codex 재확인 approve)**: 006 에 revoke / grant · 정책 `to anon, authenticated` · `public.` 명시, `supabase-admin.ts` 에 `server-only`(꾸러미 설치 없이 Next 가 처리), Cron 주소는 개발 서버에서도 헤더 필수 + `timingSafeEqual`, 저장은 insert → 충돌 시 `status = review` 일 때만 update(`stored.ts` `writeOnce`). 안 고친 것: C 공개 행의 모든 열 노출(승인 안 받음).
-   - Cron 일정(`vercel.json`, 주 20번, 2026-11-10 사용자 결정): 수 · 목 · 금 10 · 11 · 13 · 15 · 18 · 20시대 + 토 · 일 10시대(근거는 `route.ts` 주석 · history). 저장된 주는 DB 한 번 보고 끝. Hobby 는 그 1시간 안 아무 때나라 `sunday_cron_runs` 로 지켜보고, 늦으면 외부 알람(cron-job.org 30초 제한 / Cloudflare Workers Cron — 미정). Production 에서만 돌아 `main` 합친 뒤부터 자동.
-   - 확인 필요: 금요일 공지가 넥슨 목록에 바로 뜨는지 첫 금요일(2026-11-13)에 확인(끝난 공지 본문은 400). "확인 필요" 주는 회원 기능 전까지 대화로 처리("썬데이 확인해").
-   - 함정: Cron 은 HTTP 경로만 부를 수 있어 "API route 없음" 규칙의 예외. 지난 과정 원문은 history "2026-11-10 정리 (2)".
+0. **지금 순서(2026-11-11 사용자 확정) — 새 세션은 여기부터**: 로그인 방식은 넥슨 답을 본 뒤 정하고, 그 전에 메인을 올린다.
+   1. ~~로그인 코드 보관~~ — 완료(2026-11-11): 로그인 작업 = 브랜치 `members`(`redesign` 위 커밋 1개, 로컬만). `redesign` 에는 문서와 `007` 만. 이어 갈 때 `git switch members` → `git rebase redesign`(그때 `/privacy` 가 있어 Codex 지적 "방침 링크 404"가 풀림).
+   2. **메인 올릴 준비(`redesign`)**: 옛 관리자 코드 삭제(`app/admin` · `app/actions/workers.ts` · `app/settlement` · `lib/queries.ts` · `lib/settlement-math.ts` · 쓰는 곳 없는 부품, 명세 §5) + `008` 옛 표 삭제 SQL(파일만, 실행은 배포 때 보여 주고) → 개인정보처리방침 `/privacy`(Clarity, 캡처는 서버로 안 보냄, 비회원 키는 브라우저에만) → 헤더 로그인 버튼 숨김 · 홈의 로그인 카드와 "내 수익 소개"를 준비 중으로 정리 → lint · build · 브라우저 확인 → Codex → 보고 → **`main` 합치기는 사용자 결정**. 합친 뒤 사용자: Vercel `ADMIN_PASSWORD` 삭제, Production 환경 변수 확인.
+   3. **강화 기록 `/enhance`(로그인 없이, 키로 조회)**: chuchu.gg/starforce 방식. 키는 브라우저에만 기억 · 서버에 저장 안 함. 처음엔 스타포스 + 큐브만(공식 제공 가능 API), 잠재능력 재설정은 넥슨 답 뒤. 명세 §3-2 · §4-3 · 시안 `A-enhance`(5가지 보기). 브라우저 직접 호출(CORS) 가능 여부부터 확인, 지난 날짜는 다시 안 받게 브라우저에 저장. 끝나면 메인에 추가.
+   4. **보스 도우미**(카링부터, 명세 §4-4) → 메인에 추가.
+   5. **넥슨 답 뒤**: 로그인 방식 결정(후보 = 구글 주 + 아이디 보조 / API 키 로그인) → `members` 브랜치 이어서 → 내 수익 · 보스 수익 · 숙제 · 알림(매일 · 원하는 시각).
+   - 넥슨 문의 글 = `C:/dev/_work/maple/nexon-inquiry-2026-11-12.txt`(사용자가 2026-11-12 보냄 예정). 비밀번호 찾기: 아이디만으로는 방법 없음 → 구글 연결로 재설정하는 안을 Claude 가 추천, 사용자 결정 전.
+1. **썬데이 매주 자동 갱신 — 코드 끝**(`2c09756` 푸시 · Preview READY, 2026-11-11): Cron → 공지 찾기 → CLOVA OCR → 혜택 맞추기(모르면 "확인 필요") → `sunday_weeks` 저장 → 화면. 과정 · 채점 · 결정 원문 history "2026-11-11 정리".
+   - **남은 것**: 2026-11-13(금) 공지로 Preview 에서 전체 흐름 확인(사용자 "썬데이 확인해"), 그 공지가 넥슨 목록에 바로 뜨는지도. Cron(`vercel.json`, 주 20번)은 Production 에서만 → `main` 합친 뒤부터 자동, 늦으면 외부 알람(미정).
+   - CLOVA = 월 100회 무료(이미지 1장 = 1회), 2026-11 남은 18회. `?dry=1` 도 호출을 씀. 아직 안 읽은 옛 공지 92주는 다음 달 `run-clova.mjs`(`C:/dev/_work/sunday-ocr-test/README.md`).
+   - "확인 필요" 주는 회원 기능 전까지 대화로 처리(이미지 · 읽은 글자 보여 주고 승인하면 서버 키로 확정). 안 고친 검토 항목: C 공개 행의 모든 열 노출(승인 안 받음).
+   - 함정: Cron 은 HTTP 경로만 불러 "API route 없음" 규칙의 예외.
    **그 전까지(A)**: 금요일 공지 뒤 사용자가 "썬데이 추가해" → 공지 이미지 읽고 `C:/dev/_work/maple-sunday-data/src/new-weeks.json` 에 추가 → `node scripts/build.mjs C:/dev/maple-dashboard/lib/sunday/data 2023-08-27` → `npm test` → 커밋. 안 하면 화면에 "기록 n주 밀림" 경고 · 예측 정확도 떨어짐.
-2. **3단계 회원·권한**(아래 "개편 단계").
+2. **3단계 회원 — 로그인 코드는 `members` 에 보관, 넥슨 답 뒤 이어 감**: 시안 A안 https://claude.ai/artifact/V18FVp2aMS7Ykr5RuYjcaZ , `007` 실행됨(`nexon_accounts` · `rate_counters` · `counter_hit()`). 과정 원문 history "2026-11-11 정리".
+   - `members` 에 있는 것: `@supabase/ssr` 0.12.7, `proxy.ts`(`/login` · `/me` 만), `lib/auth/`, `app/login/`, `app/me/`(아이디 + 로그아웃), `components/auth/login-card.tsx`, 헤더 로그인 표시(쿠키 `maple_member`, 표시만), `.env.local.example` 의 `MAPLE_KEY_SECRET`. 가입 · 로그인 · 로그아웃 브라우저 확인됨.
+   - 결정(2026-11-11 사용자): RLS 에 `app = maple`, 아이디 4~20자 영문 소문자 · 숫자 · `_` / 비밀번호 8자 이상, 비밀번호 찾기 없음, 탈퇴 포함, 키는 AES-256-GCM 암호화 저장, 아이디는 `app_metadata.login_id`.
+   - **사용자 대기**: `members` 배포 전 Vercel `MAPLE_KEY_SECRET`(`.env.local` 과 같은 값) 등록, 시험 계정 `claude_test1` 삭제 여부, 구글 로그인 추가(Auth 설정이 냠냠과 공유).
+   - 넥슨 약관 제5조: 스타포스 · 큐브 조회 API 는 다른 사람에게 제공 가능(공지 2023-12-21 notice/2449064) → 강화 기록 근거 있음. 스케줄러 · ouid 는 미확인 → 넥슨 문의 답 대기.
+   - **함정: openapi.nexon.com 문서 화면(game/…)은 로그인 상태면 사용자 API 키 전체가 보임 → 열지 말 것**(공지 · 약관 화면은 안전).
 3. **파일 정리 — 3단계에서 옛 코드를 지운 직후, `main` 합치기 전에 한 번에**(2026-11-09 사용자 결정, 승인한 항목만): `lib/mvp.ts` · `settlement-math` · `boss-split-math` · `split-image` → `lib/<기능>/`, `settlement-client.tsx` · 분배금 화면 본문 → `components/<기능>/`, `lib/` 바로 아래는 공용만, 핀볼 엔진 `lib/pinball/` → `lib/third-party/roulette/`, `AGENTS.md` 를 `.gitignore` 에, `project-spec.md`(78KB) 끝난 기능 history 로, `structure.md` 새 구조로. 위치 · import 만 바꾸고 로직은 그대로, 별도 커밋. prettier 를 넣고 싶으면 이때 모양만 바꾸는 커밋으로 따로(지금은 안 씀).
 - 숨은 스펙업 남은 것: 하루 한도 "가까우면 안내"(3단계 DB 카운터 표), 보약 찾는 방식, 유니온 프리셋, 5차 공용 코어 목록(`check.ts` BOSS_COMMON_CORES, Claude 판단), 조회 더 빠르게(결과 나눠 보여 주기 · 넥슨 서비스 키 — 사용자와 정하기).
 - **확인 필요(사용자)**: 썬데이 테마 이름 "옵션 강화"(Claude 추천), 추옵 탭 환산 기본값(올스탯1%=10 · 공1=4)을 잠재 탭 maplescouter 환산에 맞출지, MVP 크레딧 적립 5%(maple-mvp.com 기준), 에디 방어구 주스탯 합에 9레벨당 · 공 정수를 안 세는 부분, 잠재 장갑 · 모자의 주스탯 줄에 낮은 값(9% 등)도 셀지(지금 셈).
@@ -62,26 +69,18 @@
 
 ## 전면 개편 계획 → [project-spec.md](project-spec.md)
 
-- 순서: 디자인 3안(아티팩트) → 사용자가 고른 안으로 화면 → 회원·권한 → 기능 추가. 코드·DB 는 안을 고른 뒤에.
 - 2026-11-07 확인: 스케줄러·확률 API 는 **키 주인 계정 데이터만** → 숙제·강화 기록은 사용자 본인 API 키 필요. 스케줄러에 완료 여부 있음(14일까지), 스타포스 기록엔 메소 비용·아이템 레벨이 없어 비용을 직접 계산해야 함.
 - **디자인: A안(메보스형) 확정(2026-11-07), 디자인 끝(2026-11-08, 캔버스 Version 71)** — 캔버스 https://claude.ai/artifact/2ECnKh4QSJB2znjRYUV7kk , 상세 [design.md](design.md).
   메뉴 = 홈 / 내 메이플(내 수익·숙제·보스 수익·강화 기록·알림) / 계산기(분배금·기댓값·MVP) / 정보 · 도우미(썬데이·숨은 스펙업·보스 도우미) / 놀이(핀볼). 캐릭터 검색 없음(숨은 스펙업만 예외), 로그인 = 아이디 또는 API 키, 로그인 상태 4가지, 아이콘 = lucide-react, 달력·요일 표기는 전부 일~토.
   중심 기능 = **내 수익**(화면 문구에 "부주" 안 씀), 보스 도우미 대상 = 카링·흉성·림보·발드릭스·유피테르.
-- **캔버스 고치는 방법**: Artifact `read`(url + `paths`)로 `project/*.dc.html` 을 받아 고치고, 같은 `url` + `root` 로 게시(보드 위치·크기를 바꾸면 `project/canvas.json` 도). 검사 `node C:/dev/_work/maple-canvas/scripts/check-dc.mjs <project 폴더>` · `tags.mjs <파일들>`. 눈으로 확인: 보드 클릭 → "Zoom to selection" → PLAY → "Play full screen".
 - 개편 전 보안 구멍(관리자 확인 없는 액션, 쿠키에 비밀번호 원문)은 명세 §5, 아직 열림 → 3단계에서 옛 관리자 방식을 통째로 없애며 닫는다.
 - **2026-11-08 사용자 결정**: 기존 데이터는 옮기지 않고 새로 시작(백업 `C:\dev\_backup\maple-db-2026-11-08\`, git 밖). 옛 관리자 방식(`/admin`·`ADMIN_PASSWORD`·관리자 쿠키·액션)은 통째로 없앰.
 
 ## 개편 단계 (2026-11-08 사용자 지시 — 단계마다 보고하고 멈춤, 사용자가 "다음"이라고 하면 진행)
 
-- **0단계 문서 정리** — 완료(`bfcbcc7`).
-- **1단계 화면 A안 + 글꼴 + 분배금 계산기** — 완료(`6e2eb10`). 토큰 `globals.css`, 메뉴 `lib/nav.ts`, 없는 기능 = `app/[tool]/page.tsx` "준비 중", 글꼴 = Pretendard + 큰 숫자만 메이플 서체(`font-num`), Clarity `components/clarity.tsx`. 과정 · 함정 원문 history "개편 1단계".
-- **2단계 공개 도구(로그인 없이)** — 완료(위 "도구별 요점").
-- **3단계 회원·권한**(명세 §1·§5): 냠냠과 같은 Supabase 프로젝트 → 전체 인증 설정·`nyamnyam` 스키마 안 건드림, 가입 = 서버 `auth.admin.createUser` + `app_metadata.app = "maple"`, 로그인은 그 계정만, service role 서버 전용.
-  아이디 로그인(가상 이메일)·API 키 로그인(ouid). 새 테이블 `user_id NOT NULL` + RLS `auth.uid() = user_id`. 옛 public 테이블·트리거·함수 삭제는 새 사이트 배포 때(SQL 은 실행 전에 보여 줌).
-  옛 관리자 방식 삭제. 대시보드 설정·키 입력은 사용자가(할 일 목록으로 줌). 개인정보처리방침 페이지(Clarity 수집 내용 포함, 캡처 이미지는 서버로 안 보냄·비회원 키는 브라우저에만도 적기). Codex 리뷰 기본 모델.
-- **4단계 로그인 뒤 기능**(기능마다 보고하고 멈춤): ① **내 수익**(로그인만, API 키 없이도 — 캡처 읽기는 브라우저 Tesseract.js) → ② API 키 등록·암호화 저장(여러 개) →
-  ③ 숙제 → ④ 보스 수익(비회원 이번 주 조회 = 브라우저 직접 호출, CORS 확인 포함) → ⑤ 홈 "이번 주" → ⑥ 강화 기록 → ⑦ 알림 → ⑧ 보스 패턴 도우미.
-  (내 수익을 맨 앞에 둔 건 Claude 판단 — 순서는 사용자가 바꿀 수 있음.) 넥슨 API 는 서버에서만, 하루 1,000건 제한이라 캐시, "Data based on NEXON Open API" 표기, 저장한 데이터는 30일 안에 갱신.
+- **0 · 1 · 2단계** — 완료(`bfcbcc7` · `6e2eb10` · 위 "도구별 요점"). 토큰 `globals.css`, 메뉴 `lib/nav.ts`, 없는 기능 = `app/[tool]/page.tsx` "준비 중", Clarity `components/clarity.tsx`. 1단계 과정 history "개편 1단계".
+- **3단계 회원·권한**(명세 §1·§5): 냠냠과 같은 Supabase → 전체 인증 설정 · `nyamnyam` 스키마 안 건드림, 가입 = 서버 `auth.admin.createUser` + `app_metadata.app = "maple"`, service role 서버 전용. 새 테이블 `user_id NOT NULL` + RLS. 옛 public 표 삭제 SQL 은 배포 때 보여 주고 실행. Codex 리뷰 기본 모델.
+- **4단계 로그인 뒤 기능**(기능마다 보고하고 멈춤, 2026-11-11 순서): ① 내 수익(캡처 읽기는 브라우저 Tesseract.js) → ② API 키 등록 → ⑥ 강화 기록 → 넥슨 답 뒤 ③ 숙제 · ④ 보스 수익 · ⑤ 홈 "이번 주" · ⑦ 알림 → ⑧ 보스 패턴. 넥슨 API 는 서버에서만, 하루 1,000건 제한이라 캐시, 저장 데이터는 30일 안에 갱신. 위 0번 순서가 우선.
 
 ## 기술 스택
 
@@ -102,7 +101,5 @@
 
 ## 세션 기록 (자세한 원문은 history)
 
-- 2026-11-08: 0단계 · 1단계 커밋, 2단계 기댓값 · MVP · 핀볼.
-- 2026-11-09: 2단계 1~14차 수정, 어빌리티 "뜬 옵션" 칩, 숨은 스펙업 데이터 · 규칙 · `/spec` 화면.
-- 2026-11-10(밤): 썬데이 글자 읽기를 CLOVA OCR 로 교체 · 매칭 규칙 보강 · 저장 단계(미커밋), handoff 20KB → 정리(원문 history "2026-11-10 정리 (2)").
-- 2026-11-10: 잠재 탭 개선 커밋, 썬데이 지난 기록 데이터 · 예측 시험 · `/sunday` 화면(`27e4bdc`), 로고 = 앱 아이콘(`26e26ec`), handoff 30KB → 정리(원문 history "2026-11-10 정리").
+- 2026-11-11(2): 로그인 코드를 `members` 로 보관, handoff 26KB → 정리(원문 history "2026-11-11 정리", 원본 `C:dev_backuphandoff-2026-11-11`), 메인 올릴 준비 시작.
+- 2026-11-11: 썬데이 저장 단계 푸시 · Preview 배포, 3단계 시작(계획 · 넥슨 약관 확인 · 로그인 시안 3안 → A안 · 007 SQL).
