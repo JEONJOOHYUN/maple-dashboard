@@ -31,7 +31,7 @@ export function SiteHeader() {
       </div>
 
       {/* Mobile: group tabs, then the tools inside the chosen group. */}
-      <nav aria-label="메뉴" className="flex w-full flex-col gap-1 lg:hidden">
+      <nav aria-label="메뉴" className="flex w-full flex-col gap-2 lg:hidden">
         <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pt-1 [scrollbar-width:none]">
           <GroupTab href="/" label="홈" active={isHome} />
           {navGroups.map((group) => (
@@ -44,7 +44,7 @@ export function SiteHeader() {
           ))}
         </div>
         {active && active.group.items.length > 1 && (
-          <div className="-mx-4 flex gap-1 overflow-x-auto px-4 [scrollbar-width:none]">
+          <div className="-mx-4 flex gap-2 overflow-x-auto px-4 [scrollbar-width:none]">
             {active.group.items.map((item) => {
               const on = item.slug === active.item.slug;
               return (
@@ -53,7 +53,7 @@ export function SiteHeader() {
                   href={item.href}
                   aria-current={on ? "page" : undefined}
                   className={cn(
-                    "flex h-[30px] shrink-0 items-center gap-1.5 rounded-full px-3 text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                    "flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[13px] outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
                     on ? "bg-primary-soft font-bold text-primary-text" : "text-muted-foreground"
                   )}
                 >

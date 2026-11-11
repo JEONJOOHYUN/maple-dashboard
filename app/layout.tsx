@@ -46,9 +46,10 @@ export default function RootLayout({
             <SideNav />
             <div className="flex min-w-0 flex-1 flex-col">
               <SiteHeader />
-              <main className="flex-1 px-4 pt-[18px] pb-7 lg:px-8 lg:pt-7 lg:pb-9">
-                <div className="mx-auto w-full max-w-6xl">{children}</div>
-                <footer className="mx-auto mt-10 flex w-full max-w-6xl flex-wrap items-center gap-x-4 gap-y-1 border-t border-border pt-4 text-[11px] text-muted-foreground">
+              {/* Column, so the footer sits at the bottom of the screen even when the page is short. */}
+              <main className="flex flex-1 flex-col px-4 pt-[18px] pb-7 lg:px-8 lg:pt-7 lg:pb-9">
+                <div className="mx-auto w-full max-w-6xl pb-10">{children}</div>
+                <footer className="mx-auto mt-auto flex w-full max-w-6xl flex-wrap items-center gap-x-4 gap-y-1 border-t border-border pt-4 text-[11px] text-muted-foreground">
                   <Link
                     href="/privacy"
                     className="py-1 text-xs font-semibold text-foreground underline-offset-2 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
