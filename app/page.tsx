@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { connection } from "next/server";
 import { ArrowRight, Sun, Wallet } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ThemeChip } from "@/components/sunday/sunday-view";
@@ -25,10 +26,10 @@ const incomeFeatures = [
   },
 ];
 
-// The Sunday card depends on the clock (Friday notice, Sunday rollover), so re-render hourly.
-export const revalidate = 3600;
-
+// The Sunday card depends on the clock (Monday 00:00 KST rollover, Friday notice), so the page renders per
+// request; the database rows are cached in lib/sunday/live.ts.
 export default async function Home() {
+  await connection();
   const sunday = getSundayPageData(new Date(), await loadSundayWeeks());
   const recorded = sunday.thisWeek.recorded;
   const topThemes = [...sunday.prediction.themes].sort((a, b) => b.p - a.p).slice(0, 2);
@@ -69,7 +70,7 @@ export default async function Home() {
             <span className="flex flex-wrap gap-x-2 text-xs text-muted-foreground">
               {sunday.prediction.bigDays.map((d) => (
                 <span key={d.id} className="whitespace-nowrap">
-                  {d.label.replace(" 타임", "")} {d.overdue ? "나올 때 지남" : `${d.from} ~ ${d.to}`}
+                  {d.label.replace(" 타임", "")} {d.overdue ? "나올 때 지남" : d.when}
                 </span>
               ))}
             </span>

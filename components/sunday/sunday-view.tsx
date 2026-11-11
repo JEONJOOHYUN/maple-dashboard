@@ -18,7 +18,7 @@ export function ThemeChip({ id, className }: { id: ThemeId; className?: string }
   );
 }
 
-/** Benefits grouped like the theme bars above (starforce / option / hunting / other), each group by probability. */
+/** Benefits grouped like the theme tiles above (starforce / option / hunting / other), each group by probability. */
 function groupByTheme(ranked: OddsView[]) {
   const groups: { key: string; label: string; icon: LucideIcon | null; items: OddsView[] }[] = THEMES.map((t) => ({
     key: t.id,
@@ -43,10 +43,13 @@ export function SundayView({ data }: { data: SundayPageData }) {
     <div className="flex flex-col gap-4 break-keep lg:gap-[22px]">
       <PageHeader title="썬데이 메이플" description="이번 주 혜택 · 다음 썬데이 테마와 혜택 예측(참고용)" />
 
-      <section className="grid grid-cols-1 overflow-hidden rounded-lg border border-primary bg-card lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
-        <ThisWeek week={thisWeek} last={recent.find((w) => w.date < thisWeek.date)} />
-        <Prediction prediction={prediction} />
-      </section>
+      {/* Full-width bands, so neither side runs empty before the notice (Mon 00:00 ~ Fri) or after it. */}
+      <div className="flex flex-col gap-3.5">
+        {thisWeek.recorded && <ThisWeekBand week={thisWeek} recorded={thisWeek.recorded} />}
+        <ThemeBand week={thisWeek} prediction={prediction} />
+        <PicksBand picks={prediction.picks} />
+        <Outlook bigDays={prediction.bigDays} last={thisWeek.recorded ? undefined : recent.find((w) => w.date < thisWeek.date)} />
+      </div>
 
       {prediction.missingWeeks > 0 && (
         <p className="flex items-start gap-2 rounded-lg border border-border bg-muted px-4 py-3 text-[13px] leading-relaxed">
@@ -73,7 +76,7 @@ export function SundayView({ data }: { data: SundayPageData }) {
                       <span className="flex flex-wrap items-center gap-1.5">
                         <b>{o.label}</b>
                         {picked.has(o.id) && (
-                          <span className="rounded-md bg-primary-soft px-1.5 text-[11px] font-semibold text-primary-text">3개에 포함</span>
+                          <span className="rounded-md bg-primary-soft px-1.5 text-[11px] font-semibold text-primary-text">5개에 포함</span>
                         )}
                       </span>
                       <span className="text-xs text-muted-foreground">{ago(o)}</span>
@@ -112,62 +115,146 @@ export function SundayView({ data }: { data: SundayPageData }) {
         </li>
         <li>예측 · 2025-03 스타포스 개편 이후 기록의 주기 통계</li>
         <li>적중 · 최근 52주 중 45주는 고른 5개 안에 실제 혜택 포함</li>
-        <li>큰 날 예상 시기 · 지난번 + 평소 간격, 간격이 일정하지 않아 범위로 표시</li>
+        <li>샤이닝 · 미라클 예상 · 지난번 + 평소 간격, 간격이 일정하지 않아 범위로 표시</li>
         <li>넥슨과 무관한 참고용 예측</li>
       </ul>
     </div>
   );
 }
 
-function ThisWeek({ week, last }: { week: SundayPageData["thisWeek"]; last?: WeekView }) {
-  const r = week.recorded;
+const BAND_TITLE = "font-num text-[28px] leading-tight font-bold lg:text-[32px] xl:text-[40px]";
+const EYEBROW = "inline-flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] font-bold text-primary-text";
+
+/** This Sunday's recorded benefits (shown once the notice is recorded). */
+function ThisWeekBand({ week, recorded: r }: { week: SundayPageData["thisWeek"]; recorded: WeekView }) {
   return (
-    <div className="flex flex-col gap-3.5 p-[18px] lg:p-6">
-      <span className="inline-flex items-center gap-2 text-[13px] font-bold text-primary-text">
-        <Sun className="size-4" aria-hidden="true" />
-        {week.isToday ? "오늘" : "이번 주"} · {week.label}
-        {r?.special && <span className="rounded-md border border-primary px-1.5 text-[11px]">스페셜</span>}
-      </span>
-      {r ? (
-        <>
-          <h2 className="font-num text-2xl leading-tight font-bold lg:text-[32px]">{r.title}</h2>
-          {r.themes.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {r.themes.map((id) => (
-                <ThemeChip key={id} id={id} />
-              ))}
-            </div>
-          )}
-          <ol className="flex flex-col gap-2">
-            {r.items.map((text, i) => (
-              <li key={text} className="flex items-baseline gap-2.5 text-sm leading-normal">
-                <b className="font-num text-primary-text">{String(i + 1).padStart(2, "0")}</b>
-                <span>{text}</span>
-              </li>
+    <section className="grid grid-cols-1 gap-4 rounded-lg border border-primary bg-card p-[18px] lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] lg:items-center lg:gap-6 lg:p-6">
+      <div className="flex flex-col gap-2.5">
+        <span className={EYEBROW}>
+          <Sun className="size-4" aria-hidden="true" />
+          {week.isToday ? "오늘" : "이번 주"} · {week.label}
+          {r.special && <span className="rounded-md border border-primary px-1.5 text-[11px]">스페셜</span>}
+        </span>
+        <h2 className={BAND_TITLE}>{r.title}</h2>
+        {(r.themes.length > 0 || r.noticeUrl) && (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            {r.themes.map((id) => (
+              <ThemeChip key={id} id={id} />
             ))}
-          </ol>
-          {r.noticeUrl && <NoticeLink href={r.noticeUrl} />}
-        </>
-      ) : (
-        <>
-          <h2 className="font-num text-2xl leading-tight font-bold lg:text-[32px]">{week.announced ? "공지 나옴 · 기록 전" : "금요일 오전 10시 공지"}</h2>
-          <p className="text-sm leading-relaxed text-muted-foreground">
-            {week.announced ? "혜택은 넥슨 이벤트 공지에서 확인 → 기록되면 여기에 표시" : "공지 전 → 오른쪽 예측 참고"}
-          </p>
-          {week.announced && <NoticeLink href={EVENT_LIST} />}
-          {last && (
-            <div className="mt-auto flex flex-col gap-1.5 rounded-lg bg-muted px-3.5 py-3">
-              <span className="text-xs text-muted-foreground">지난 썬데이 · {last.label}</span>
-              <span className="flex flex-wrap items-center gap-1.5">
-                <b className="text-sm">{last.title}</b>
-                {last.themes.map((id) => (
-                  <ThemeChip key={id} id={id} />
-                ))}
+            {r.noticeUrl && <NoticeLink href={r.noticeUrl} />}
+          </div>
+        )}
+      </div>
+      <ol className="flex flex-col gap-2">
+        {r.items.map((text, i) => (
+          <li key={text} className="flex items-baseline gap-2.5 rounded-lg bg-muted px-3.5 py-2.5 text-sm leading-normal lg:text-[15px]">
+            <b className="font-num text-primary-text">{String(i + 1).padStart(2, "0")}</b>
+            <span>{text}</span>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+/** Theme outlook for the predicted Sunday: this one until its notice is recorded, then the next. */
+function ThemeBand({ week, prediction }: { week: SundayPageData["thisWeek"]; prediction: SundayPageData["prediction"] }) {
+  const recorded = week.recorded != null;
+  const maxP = Math.max(...prediction.themes.map((t) => t.p));
+  return (
+    <section
+      className={cn(
+        "grid grid-cols-1 gap-4 rounded-lg border bg-card p-[18px] lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:gap-6 lg:p-6",
+        recorded ? "border-border" : "border-primary",
+      )}
+    >
+      <div className="flex flex-col gap-2.5">
+        {recorded ? (
+          <span className={EYEBROW}>다음 주 · {prediction.label} 예측</span>
+        ) : (
+          <span className={EYEBROW}>
+            <Sun className="size-4" aria-hidden="true" />
+            <span>
+              {week.isToday ? "오늘" : "이번 주"} · {week.label}
+            </span>
+            <span>· {week.announced ? "공지 나옴 · 기록 전" : "금요일 오전 10시 공지"}</span>
+          </span>
+        )}
+        <h2 className={BAND_TITLE}>{prediction.headline ?? "뚜렷한 테마 없음"}</h2>
+        <p className="text-[13px] leading-relaxed text-muted-foreground">테마마다 따로 낸 확률 · 같이 나오는 주가 많아 합은 100%를 넘음</p>
+        {!recorded && week.announced && <NoticeLink href={EVENT_LIST} />}
+      </div>
+      <ul className="grid grid-cols-3 gap-2 lg:grid-cols-[repeat(3,140px)] lg:gap-2.5 xl:grid-cols-[repeat(3,176px)]" aria-label="테마별 나올 확률">
+        {prediction.themes.map((t) => {
+          const Icon = THEME_ICON[t.id];
+          const top = t.p === maxP;
+          return (
+            <li key={t.id} className={cn("flex flex-col gap-2 rounded-lg border p-2.5 lg:p-4", top ? "border-primary bg-primary-soft" : "border-border bg-muted")}>
+              <span className="inline-flex items-center gap-1 text-xs font-semibold whitespace-nowrap lg:gap-1.5 lg:text-[13px]">
+                <Icon className={cn("size-3.5 shrink-0 lg:size-4", top ? "text-primary-text" : "text-muted-foreground")} aria-hidden="true" />
+                {t.label}
               </span>
-              <span className="text-xs leading-normal text-muted-foreground">{last.detail}</span>
-            </div>
-          )}
-        </>
+              <b className={cn("font-num text-[28px] leading-tight lg:text-4xl", top && "text-primary-text")}>{pct(t.p)}</b>
+              <span className="h-1.5 overflow-hidden rounded-full bg-card" aria-hidden="true">
+                <span className={cn("block h-full rounded-full", top ? "bg-primary" : "bg-muted-foreground/60")} style={{ width: pct(t.p) }} />
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
+/** The five likeliest benefits: a list on narrow screens, five cards in a row on wide ones. */
+function PicksBand({ picks }: { picks: OddsView[] }) {
+  return (
+    <section className="flex flex-col gap-3 rounded-lg border border-border bg-card p-[18px] lg:px-6 lg:py-5" aria-labelledby="sunday-picks">
+      <h2 id="sunday-picks" className="text-[15px] font-bold">
+        나올 만한 혜택 5개
+      </h2>
+      <ol className="grid grid-cols-1 gap-2 xl:grid-cols-5 xl:gap-2.5">
+        {picks.map((o, i) => (
+          <li
+            key={o.id}
+            className="grid grid-cols-[24px_minmax(0,1fr)_auto] items-center gap-2.5 rounded-lg bg-muted px-3 py-2.5 xl:grid-cols-[minmax(0,1fr)_auto] xl:content-start xl:items-baseline xl:gap-2 xl:p-3.5"
+          >
+            <b className="font-num text-lg text-primary-text">{i + 1}</b>
+            <span className="flex min-w-0 flex-col gap-0.5 xl:order-3 xl:col-span-2 xl:gap-1">
+              <b className="text-sm xl:min-h-10">{o.label}</b>
+              <span className="text-xs text-muted-foreground">{ago(o)}</span>
+            </span>
+            <b className="font-num text-[15px] xl:order-2 xl:text-xl">{pct(o.p)}</b>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+const OUTLOOK_CARD = "flex flex-col gap-1.5 rounded-lg border border-border bg-card px-[18px] py-4";
+
+/** When shining / miracle are due, plus last Sunday while this week's notice is not recorded yet. */
+function Outlook({ bigDays, last }: { bigDays: SundayPageData["prediction"]["bigDays"]; last?: WeekView }) {
+  const count = bigDays.length + (last ? 1 : 0);
+  if (!count) return null;
+  return (
+    <div className={cn("grid grid-cols-1 gap-3.5", count === 2 && "sm:grid-cols-2", count >= 3 && "md:grid-cols-3")}>
+      {bigDays.map((d) => (
+        <section key={d.id} className={OUTLOOK_CARD}>
+          <h2 className="text-xs font-normal text-muted-foreground">{d.label} 예상</h2>
+          <b className="font-num text-2xl leading-tight text-primary-text">{d.overdue ? "나올 때 지남" : d.when}</b>
+          <span className="text-xs leading-normal text-muted-foreground">
+            지난번 {d.lastLabel} · {d.gap} ({d.record})
+          </span>
+        </section>
+      ))}
+      {last && (
+        <section className={OUTLOOK_CARD}>
+          <h2 className="text-xs font-normal text-muted-foreground">지난 썬데이 · {last.label}</h2>
+          <b className="font-num text-2xl leading-tight">{last.title}</b>
+          <span className="text-xs leading-normal text-muted-foreground">{last.detail || "이벤트 연계 혜택만"}</span>
+        </section>
       )}
     </div>
   );
@@ -184,71 +271,6 @@ function NoticeLink({ href }: { href: string }) {
       넥슨 공지 보기
       <ExternalLink className="size-3.5" aria-hidden="true" />
     </a>
-  );
-}
-
-function Prediction({ prediction }: { prediction: SundayPageData["prediction"] }) {
-  const maxP = Math.max(...prediction.themes.map((t) => t.p));
-  return (
-    <div className="flex flex-col gap-3 bg-muted p-[18px] lg:p-6">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <b className="text-sm">{prediction.label} 예측</b>
-        <span className="text-xs font-semibold text-primary-text">{prediction.headline ?? "뚜렷한 테마 없음"}</span>
-      </div>
-      <span className="-mt-1 flex flex-col text-xs leading-relaxed text-muted-foreground">
-        <span>테마마다 따로 낸 나올 확률</span>
-        <span>같이 나오는 주가 많아 합은 100%를 넘음</span>
-      </span>
-      <ul className="flex flex-col gap-2" aria-label="테마별 나올 확률">
-        {prediction.themes.map((t) => {
-          const Icon = THEME_ICON[t.id];
-          const top = t.p === maxP;
-          return (
-            <li key={t.id} className="grid grid-cols-[100px_minmax(0,1fr)_40px] items-center gap-2.5 text-[13px]">
-              <span className="inline-flex items-center gap-1.5 font-semibold whitespace-nowrap">
-                <Icon className={cn("size-4", top ? "text-primary-text" : "text-muted-foreground")} aria-hidden="true" />
-                {t.label}
-              </span>
-              <span className="h-2 overflow-hidden rounded-full bg-card" aria-hidden="true">
-                <span className={cn("block h-full rounded-full", top ? "bg-primary" : "bg-muted-foreground/45")} style={{ width: pct(t.p) }} />
-              </span>
-              <b className="text-right font-num">{pct(t.p)}</b>
-            </li>
-          );
-        })}
-      </ul>
-      <b className="mt-1 text-[13px]">나올 만한 혜택 5개</b>
-      <ol className="flex flex-col gap-2">
-        {prediction.picks.map((o, i) => (
-          <li key={o.id} className="grid grid-cols-[24px_minmax(0,1fr)_auto] items-center gap-2.5 rounded-lg bg-card px-3 py-2.5">
-            <b className="font-num text-lg text-primary-text">{i + 1}</b>
-            <span className="flex min-w-0 flex-col gap-0.5">
-              <b className="text-sm">{o.label}</b>
-              <span className="text-xs text-muted-foreground">{ago(o)}</span>
-            </span>
-            <b className="font-num text-[15px]">{pct(o.p)}</b>
-          </li>
-        ))}
-      </ol>
-      {prediction.bigDays.length > 0 && (
-        <>
-          <b className="mt-1 text-[13px]">큰 날 예상 시기</b>
-          <ul className="flex flex-col gap-2">
-            {prediction.bigDays.map((d) => (
-              <li key={d.id} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 rounded-lg bg-card px-3 py-2.5">
-                <span className="flex min-w-0 flex-col gap-0.5">
-                  <b className="text-sm">{d.label}</b>
-                  <span className="text-xs text-muted-foreground">
-                    지난번 {d.lastLabel} · {d.gap} ({d.record})
-                  </span>
-                </span>
-                <b className="font-num text-[15px] whitespace-nowrap text-primary-text">{d.overdue ? "나올 때 지남" : `${d.from} ~ ${d.to}`}</b>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-    </div>
   );
 }
 

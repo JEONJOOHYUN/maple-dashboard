@@ -27,7 +27,7 @@ maple-dashboard/
     mvp/page.tsx              # MVP 계산기 → components/mvp/mvp-calculator.tsx
     pinball/page.tsx          # 핀볼 추첨 → components/pinball/pinball-game.tsx
     spec/page.tsx             # 숨은 스펙업(서버): ?name= → lib/spec/load.ts getSpec → components/spec/spec-check.tsx
-    sunday/page.tsx           # 썬데이 메이플(서버, revalidate 3600): lib/sunday/view.ts getSundayPageData → components/sunday/sunday-view.tsx
+    sunday/page.tsx           # 썬데이 메이플(서버, 요청마다 렌더링 — 월요일 0시 KST 전환): lib/sunday/view.ts getSundayPageData → components/sunday/sunday-view.tsx
     admin/
       page.tsx                 # 쿠키 체크 → 로그인 폼 or 대시보드
       actions.ts                # adminLogin/adminLogout, updateLog, updateSettlement
@@ -46,7 +46,7 @@ maple-dashboard/
     ev/                       # 기댓값 탭 5개(starforce · potential · flame · soul · ability) + ui.tsx(칩 · 세그먼트 · 결과 카드 등 공용)
     mvp/ · pinball/           # MVP · 핀볼 화면
     spec/spec-check.tsx       # 숨은 스펙업 검색 · 결과(배지 열고 닫기, 놓친 스펙 · 참고 목록)
-    sunday/sunday-view.tsx    # 썬데이 화면(서버 컴포넌트만): 이번 주 · 다음 썬데이 테마 확률 · 3개 · 혜택별 확률(테마별 묶음) · 최근 썬데이, ThemeChip(홈도 씀)
+    sunday/sunday-view.tsx    # 썬데이 화면(서버 컴포넌트만): 가로 띠(이번 주 혜택 · 테마 타일 · 혜택 5개 · 샤이닝/미라클 예상) · 혜택별 확률(테마별 묶음) · 최근 썬데이, ThemeChip(홈도 씀)
   lib/
     supabase.ts               # supabase 클라이언트 + Worker/HuntingLog/Settlement 타입
     queries.ts                  # getWorkers(), getWorkerData(workerId), workerTag() — unstable_cache 래핑

@@ -17,9 +17,10 @@
 // The header is required in every environment, the dev server included: the route writes to the real database
 // and spends OCR calls, so opening the URL by hand must not be enough (Codex review 2026-11-10).
 import { timingSafeEqual } from "node:crypto";
-import { revalidatePath } from "next/cache";
+import { revalidateTag } from "next/cache";
 import { readSunday } from "@/lib/sunday/auto-update";
 import { upcomingSunday } from "@/lib/sunday/history";
+import { SUNDAY_WEEKS_TAG } from "@/lib/sunday/live";
 import { findSundayNotice } from "@/lib/sunday/notice";
 import { alreadyDone, logRun, saveReading, waitingForReview } from "@/lib/sunday/store";
 import type { SaveDecision } from "@/lib/sunday/stored";
@@ -66,8 +67,8 @@ export async function GET(request: Request) {
       ? { action: "skip", reason: "dry-run" }
       : await saveReading(reading);
     if (saved.action === "write" && saved.status === "auto") {
-      revalidatePath("/sunday");
-      revalidatePath("/");
+      // The pages render per request and read the rows through this tag; the next visit reads the new week.
+      revalidateTag(SUNDAY_WEEKS_TAG, { expire: 0 });
     }
     await logRun(sunday, saved.action === "write" ? saved.status : saved.reason, Date.now() - started, reading.notice?.title);
     const { lines, ...rest } = reading;

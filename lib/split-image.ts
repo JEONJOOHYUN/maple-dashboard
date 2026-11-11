@@ -90,6 +90,8 @@ export async function renderSplitImage(data: SplitImageData): Promise<Blob> {
   const cols = data.cards.length === 4 ? 2 : Math.min(data.cards.length, 3);
   const rows = Math.ceil(data.cards.length / cols);
   const cardW = (WIDTH - PAD * 2 - GAP * (cols - 1)) / cols;
+  // A short last row (5 people = 3 + 2) sits in the middle, like the page.
+  const lastRowShift = ((rows * cols - data.cards.length) * (cardW + GAP)) / 2;
 
   // Measure role lines first so every card in the image gets the same, sufficient height.
   const measure = document.createElement("canvas").getContext("2d");
@@ -124,8 +126,9 @@ export async function renderSplitImage(data: SplitImageData): Promise<Blob> {
   // Cards
   const top = PAD + 32 + 18;
   data.cards.forEach((c, i) => {
-    const x = PAD + (i % cols) * (cardW + GAP);
-    const y = top + Math.floor(i / cols) * (CARD_H + GAP);
+    const row = Math.floor(i / cols);
+    const x = PAD + (i % cols) * (cardW + GAP) + (row === rows - 1 ? lastRowShift : 0);
+    const y = top + row * (CARD_H + GAP);
     const cx = x + cardW / 2;
 
     roundRect(ctx, x, y, cardW, CARD_H, 8);

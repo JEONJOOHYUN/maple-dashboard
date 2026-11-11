@@ -17,13 +17,12 @@ export type WeekView = {
 
 export type OddsView = BundleOdds & { label: string; theme: ThemeId | null };
 
-/** "다음 샤이닝 스타포스 타임 11월 29일 ~ 12월 13일": the usual gap added to the last time it came. */
+/** "다음 샤이닝 스타포스 타임 2 ~ 4주 후": the usual gap added to the last time it came. */
 export type BigDayView = {
   id: string;
   label: string;
-  /** Date range (labels) the usual gap points at; the range is over when `overdue`. */
-  from: string;
-  to: string;
+  /** Weeks the usual gap points at, counted in Sundays from the upcoming one; the range is over when `overdue`. */
+  when: string;
   overdue: boolean;
   /** "보통 4~6주 간격" */
   gap: string;
@@ -51,6 +50,14 @@ export type SundayPageData = {
 
 /** Theme probability needed before we call the week "○○데이 유력" (theme flags hit ~65% in backtests). */
 const HEADLINE_P = 0.6;
+
+/** Sundays counted from the upcoming one: 0 = "이번 주", 1 = "다음 주", then "n주 후". */
+const weekWord = (n: number) => (n <= 0 ? "이번 주" : n === 1 ? "다음 주" : `${n}주 후`);
+
+function weekRange(lo: number, hi: number): string {
+  if (lo >= hi) return weekWord(hi);
+  return lo >= 2 ? `${lo} ~ ${hi}주 후` : `${weekWord(lo)} ~ ${weekWord(hi)}`;
+}
 
 function weekTitle(w: SundayWeek, themes: ThemeId[]): string {
   const big = [...w.bundles].find(isBigBundle);
@@ -107,12 +114,13 @@ export function getSundayPageData(now: Date, weeks: SundayWeek[] = SUNDAYS): Sun
         const w = bigDayWindow(weeks, id, target);
         if (!w?.last) return [];
         const to = addWeeks(w.last, w.maxWeeks);
+        const weeksAhead = (date: string) => Math.round((Date.parse(date) - Date.parse(sunday)) / 604_800_000);
         return [
           {
             id,
             label: bundleLabel(id),
-            from: dateLabel(addWeeks(w.last, w.minWeeks)),
-            to: dateLabel(to),
+            // Sundays before the predicted one are already known, so the range starts there at the earliest.
+            when: weekRange(Math.max(weeksAhead(addWeeks(w.last, w.minWeeks)), weeksAhead(target)), weeksAhead(to)),
             overdue: target > to,
             gap: `보통 ${w.minWeeks}~${w.maxWeeks}주 간격`,
             record: `지난 ${w.total}번 중 ${w.covered}번`,

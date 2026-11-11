@@ -14,6 +14,8 @@
 
 - 운영(`main`) = `redesign` 과 같은 커밋. 2026-11-11 두 번 배포(개편판 `30d4f73`, 이어서 기댓값 계산기 수정). 되돌리기 = Vercel Rollback(단 `008` 로 옛 표가 없어 개편 전 화면은 못 살림).
 - 개편(`redesign`) = `main` 과 같은 커밋, 원격과 같음. 다음 작업도 `redesign` 에서 하고 끝나면 `main` 에 올림. 푸시 · `main` 합치기는 사용자가 말할 때만.
+- **2026-11-11 밤 배포분(운영 4번째, `main` 푸시 — lint · test · build · 브라우저 확인, Codex 리뷰 지적 없음)**. 운영에서 볼 것: 금요일 공지 저장 직후 화면 반영(`revalidateTag`), 월요일 0시 전환. 내용: ① 썬데이 위쪽 = **B안 가로 띠**(사용자 확정): 이번 주 혜택(기록 뒤에만) → 테마 타일 3개 → 혜택 5개(`xl` 부터 한 줄 카드, 그 아래는 목록) → "샤이닝 스타포스 타임 예상" · "미라클 타임 예상" · 지난 썬데이 카드(`components/sunday/sunday-view.tsx`). ② 예상 시기 = 날짜 범위 대신 "다음 주 · n주 후"(다가오는 일요일 = 이번 주, `lib/sunday/view.ts` `weekRange` · `BigDayView.when`), "큰 날" 문구 없앰(사용자). ③ **월요일 0시(KST) 전환**: `/` · `/sunday` 를 요청마다 렌더링(`await connection()`, `revalidate` 없앰 — 캐시된 페이지는 방문자가 적으면 월요일 첫 방문자에게 지난 일요일을 보여 줌), DB 행은 `lib/sunday/live.ts` `unstable_cache`(1시간, 태그 `sunday-weeks`), Cron 은 저장 뒤 `revalidateTag(…, { expire: 0 })`. 테스트 `lib/sunday/view.test.ts`. ④ 분배금 5명 = 3 + 2 아랫줄 가운데(화면 `FIVE_CARD` + 이미지 복사 `lastRowShift`). ⑤ "3개에 포함" → "5개에 포함".
+- 썬데이 배치 시안 https://claude.ai/artifact/JN9fZmaSavhep1Lkcygy58 (B 확정, 시안 속 문구 · "공지 전" 설명은 옛것 → 코드가 기준), 원본 `.design-tmp/sunday/`(`.git/info/exclude` 로 이 PC 에서만 git 제외).
 - 로그인 작업 = 로컬 브랜치 `members`(`redesign` 위, 푸시 안 함). 아래 "다음 할 일" 2번.
 - Vercel 환경변수 `NEXON_API_KEY` · `SUPABASE_SERVICE_ROLE_KEY` · `CLOVA_OCR_URL` · `CLOVA_OCR_SECRET` 등록됨(Production + Preview, 이름만 확인).
 - `vendor/` 는 git 밖(`.gitignore` · tsconfig `exclude` · eslint `globalIgnores`) — 핀볼 원본 참고용, 광고 코드 · 인물 그림을 공개 저장소에 안 올림.
@@ -58,7 +60,7 @@
 - **핀볼** `/pinball` = `lib/pinball/`(원본 lazygyu/roulette MIT, 코스 "Wheel of fortune", 물리 `box2d-wasm@7.0.0`).
 - **숨은 스펙업** `/spec`: 닉네임 → 서버에서 넥슨 API 13회(220ms 간격 큐) → 규칙 검사(`lib/spec/check.ts`, 직업 데이터 `lib/spec/data/classes.json`) → 3시간 캐시(`RULES_VERSION` 올리면 옛 캐시 안 씀). 칭호는 지금 낀 칭호만.
 - **썬데이** `/sunday` + 홈 카드: 데이터 `lib/sunday/data/history.json`(2023-08-27 ~, 사용자: 옛날 것 빼기) · `benefits.json`, 예측 `lib/sunday/predict.ts`(샤이닝 · 미라클 주기 → 나머지 묶음 hazard × 최근 빈도, 학습 2025-03-23 ~, 3개는 종류별로 섞어 고름 → 최근 52주 38/52, maplessunday 27주 24 vs 우리 22), 테스트가 이 점수를 고정.
-  테마 3개 = 스타포스 / 옵션 강화 / 사냥, "테마마다 나올 확률"(합이 100% 넘음). 묶음 = 늘 같이 나오는 혜택(룬 + 콤보킬 + 룬 재등장, 몬컬 + 모몽 + 엘몹 등, `lib/sunday/bundles.ts`). 페이지 · 홈은 `revalidate = 3600`.
+  테마 3개 = 스타포스 / 옵션 강화 / 사냥, "테마마다 나올 확률"(합이 100% 넘음). 묶음 = 늘 같이 나오는 혜택(룬 + 콤보킬 + 룬 재등장, 몬컬 + 모몽 + 엘몹 등, `lib/sunday/bundles.ts`). 페이지 · 홈은 요청마다 렌더링(DB 행만 1시간 캐시).
   데이터를 다시 만드는 스크립트 · 출처 · 사실 확인 기록은 `C:/dev/_work/maple-sunday-data/README.md`(git 밖), 예측 시험 코드 `exp/`.
 - 비회원 저장 = `lib/use-stored.ts`(localStorage, 실패하면 메모리), 시계 = `lib/use-now.ts`.
 
@@ -96,7 +98,7 @@
 - **shadcn/ui** (style `base-nova`, Base UI 기반) — `components/ui/*`, 새 컴포넌트는 `npx shadcn@latest add <name>`.
   주의: `shadcn init` 이 `app/globals.css` · `app/layout.tsx` 를 덮어쓴 적 있음(Geist 폰트) → CLI 뒤 두 파일 diff 확인. `globals.css` 에서 **`:root`(라이트)가 반드시 `.dark` 보다 먼저**(명시도가 같아 순서가 뒤집히면 다크모드가 라이트 색으로 남음).
 - Supabase(Postgres) — `@supabase/supabase-js`, **서버에서만**(Server Components / Server Actions), `SUPABASE_URL` / `SUPABASE_ANON_KEY`(NEXT_PUBLIC_ 아님). 데이터 변경은 전부 Server Actions, 클라이언트 fetch/API route 없음.
-- 캐싱: `unstable_cache` + `updateTag`("Previous Model" 유지, 의도적 선택). 시간에 따라 바뀌는 페이지는 `export const revalidate = 3600`(썬데이 · 홈).
+- 캐싱: `unstable_cache` + `updateTag`("Previous Model" 유지, 의도적 선택). 시간에 따라 바뀌는 페이지(썬데이 · 홈)는 `await connection()` 으로 요청마다 렌더링 + DB 행만 `unstable_cache`(2026-11-11, 월요일 0시 전환).
 - Vercel 함수 리전 `icn1` 고정(`vercel.json`).
 - 환경변수(`.env.local`, gitignored, 값은 출력 · 커밋 · 문서 기록 금지): `SUPABASE_URL` · `SUPABASE_ANON_KEY` · `ADMIN_PASSWORD`(코드에서 안 씀, 운영 배포 뒤 사용자가 삭제) · `NEXON_API_KEY`. 키 이름은 `.env.local.example`.
 

@@ -14,12 +14,18 @@ const COUNT_OPTIONS = [2, 3, 4, 5, 6] as const;
 const MAX_MEMBERS = 6;
 const DEFAULT_NAMES = ["파티장", "파티원 1", "파티원 2", "파티원 3", "파티원 4", "파티원 5"];
 // Cards per row by party size: 4 people read better as 2x2 than 3+1.
+// 5 people use half-width tracks (each card spans 2) so the short last row can sit in the middle.
 const GRID_COLS: Record<number, string> = {
   2: "sm:grid-cols-2",
   3: "sm:grid-cols-3",
   4: "sm:grid-cols-2",
-  5: "sm:grid-cols-2 lg:grid-cols-3",
+  5: "sm:grid-cols-4 lg:grid-cols-6",
   6: "sm:grid-cols-2 lg:grid-cols-3",
+};
+// 5 people: 2 + 2 + 1 on tablets and 3 + 2 on desktop, last row centered.
+const FIVE_CARD: Record<number, string> = {
+  3: "lg:col-start-2",
+  4: "sm:col-start-2 lg:col-start-auto",
 };
 // Percent inputs share the full width; small screens wrap to 2-3 per row.
 const PERCENT_COLS: Record<number, string> = {
@@ -327,6 +333,8 @@ export default function BossSplitPage() {
                 key={card.index}
                 className={cn(
                   "flex flex-col items-center gap-1.5 rounded-lg border px-4 pt-5 pb-4 text-center",
+                  count === 5 && "sm:col-span-2",
+                  count === 5 && FIVE_CARD[card.index],
                   highlight ? "border-primary bg-primary-soft" : "border-border bg-background"
                 )}
               >
