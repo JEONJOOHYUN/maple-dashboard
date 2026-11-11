@@ -1,26 +1,33 @@
 // Default values the user can change on the page. Prices move with patches and the market:
 // update them here together with the date.
-export const DEFAULTS_UPDATED = "2026-11-09";
+export const DEFAULTS_UPDATED = "2026-11-11";
 
 /** Star force items by level. Icons are Nexon Open API item icon codes (item_icon of character item-equipment, the same for every
  * character; found 2026-11-09 on 청운적운 · 푸소 · 귤민 incl. presets). Shown straight from Nexon, never stored here.
  * Job-specific gear uses one job as the picture (메이지 에테르넬 · 아스트라 아케인 실드 · 데스티니 스태프); 가디언 엔젤 링 uses
  * 여명의 가디언 엔젤 링 (same picture, user 2026-11-09). No icon = text.
- * spare price = 노작값 in 억 메소 (from the user, 2026-11-08). */
-export type StarItem = { id: string; name: string; icons: string[]; spareEok: number };
+ * spare price = 노작값 in 억 메소 (from the user, 2026-11-08; 블랙빈 · 트와일라이트 · 에스텔라 · 도미네이터 added 2026-11-11,
+ * icons from 푸소). 아케인셰이드 shows gloves · shoes · cape (user, 2026-11-11). */
+export type StarItem = { id: string; name: string; icons: string[]; spareEok: number; /** Item-specific cap below the level rule. */ maxStar?: number };
 export const STAR_ITEMS: { level: number; items: StarItem[] }[] = [
+  { level: 135, items: [
+    { id: "blackbean", name: "블랙빈 마크", icons: ["KEPAJFND"], spareEok: 1.5 },
+  ] },
   { level: 140, items: [
     { id: "mring", name: "마이스터 링", icons: ["KEODIHLE"], spareEok: 0.3 },
     { id: "dpendant", name: "데이브레이크 펜던트", icons: ["KEOAJDKC"], spareEok: 0.1 },
+    { id: "twilight", name: "트와일라이트 마크", icons: ["KEPDJALG"], spareEok: 0.005 },
+    { id: "dominator", name: "도미네이터 펜던트", icons: ["KEOAJGLB"], spareEok: 10.5 },
   ] },
   { level: 160, items: [
     { id: "gaen", name: "가디언 엔젤 링", icons: ["KEODIEPH"], spareEok: 0.15 },
+    { id: "estella", name: "에스텔라 이어링", icons: ["KEPBJENB"], spareEok: 0.0075 },
     { id: "loose", name: "루즈 컨트롤 머신 마크", icons: ["KEPDJBND"], spareEok: 11 },
     { id: "eye", name: "마력이 깃든 안대", icons: ["KEPAJFJJ"], spareEok: 26 },
     { id: "pain", name: "고통의 근원", icons: ["KEOAJDNB"], spareEok: 46 },
   ] },
   { level: 200, items: [
-    { id: "arcane", name: "아케인셰이드 장비", icons: ["KEOHJGHH", "KEOCJOKB", "KEPFIGLJ"], spareEok: 0.05 },
+    { id: "arcane", name: "아케인셰이드 장비", icons: ["KEPKJBHE", "KEPFIGLJ", "KEOCJOKB"], spareEok: 0.05 },
     { id: "dream", name: "몽환의 벨트", icons: ["KEOBJEOJ"], spareEok: 34 },
     { id: "commander", name: "커맨더 포스 이어링", icons: ["KEPBJEPH"], spareEok: 11 },
     { id: "terror", name: "거대한 공포", icons: ["KEODIEOH"], spareEok: 36 },
@@ -30,7 +37,8 @@ export const STAR_ITEMS: { level: number; items: StarItem[] }[] = [
   { level: 250, items: [
     { id: "eterArmor", name: "에테르넬 모자 · 상의 · 하의 · 견장", icons: ["KEPCOOGA", "KEPGJDNF", "KEPEJFGH", "KEOHJFPC"], spareEok: 0.1 },
     { id: "eterAcc", name: "에테르넬 장갑 · 신발 · 망토", icons: ["KEPKJAIA", "KEPFIBNB", "KEOCIDNF"], spareEok: 15 },
-    { id: "destiny", name: "데스티니 무기", icons: ["KEMKJFGG"], spareEok: 100 },
+    // The second-liberation Destiny weapon stops at 25 stars (user, 2026-11-11).
+    { id: "destiny", name: "데스티니 무기(2차)", icons: ["KEMKJFGG"], spareEok: 100, maxStar: 25 },
     { id: "whisper", name: "근원의 속삭임", icons: ["KEODIEKA"], spareEok: 500 },
     { id: "oath", name: "죽음의 맹세", icons: ["KEOAJDKG"], spareEok: 600 },
     { id: "nightmare", name: "황홀한 악몽", icons: ["KEODIEIB"], spareEok: 500 },

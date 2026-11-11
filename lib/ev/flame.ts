@@ -95,7 +95,8 @@ export function tierValues(level: number) {
   return {
     single: Math.floor((level >= 250 ? 220 : level) / 20) + 1,
     double: Math.floor(level / 40) + 1,
-    hp: Math.floor(level / 10) * 10 * 3,
+    // Lv.250 (에테르넬) counts as 233.33 for max HP: 700 per tier (tier 7 = 4,900).
+    hp: level >= 250 ? 700 : Math.floor(level / 10) * 10 * 3,
   };
 }
 

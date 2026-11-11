@@ -12,8 +12,8 @@
 
 ## 현재 상태 (2026-11-11)
 
-- 운영(`main`): 개편 전 모양 그대로. 마지막 푸시 `c60f794`(2026-11-01 Next 16.4.3 보안 업데이트).
-- 개편(`redesign`): 0 · 1단계, 2단계 공개 도구 다섯 개(기댓값 · MVP · 핀볼 · 숨은 스펙업 · 썬데이), 썬데이 자동 갱신 저장 단계까지. 원격과 같음(`2c09756` 까지 푸시, 2026-11-11). 푸시는 사용자가 "푸시해"라고 할 때만.
+- 운영(`main`) = `redesign` 과 같은 커밋. 2026-11-11 두 번 배포(개편판 `30d4f73`, 이어서 기댓값 계산기 수정). 되돌리기 = Vercel Rollback(단 `008` 로 옛 표가 없어 개편 전 화면은 못 살림).
+- 개편(`redesign`) = `main` 과 같은 커밋, 원격과 같음. 다음 작업도 `redesign` 에서 하고 끝나면 `main` 에 올림. 푸시 · `main` 합치기는 사용자가 말할 때만.
 - 로그인 작업 = 로컬 브랜치 `members`(`redesign` 위, 푸시 안 함). 아래 "다음 할 일" 2번.
 - Vercel 환경변수 `NEXON_API_KEY` · `SUPABASE_SERVICE_ROLE_KEY` · `CLOVA_OCR_URL` · `CLOVA_OCR_SECRET` 등록됨(Production + Preview, 이름만 확인).
 - `vendor/` 는 git 밖(`.gitignore` · tsconfig `exclude` · eslint `globalIgnores`) — 핀볼 원본 참고용, 광고 코드 · 인물 그림을 공개 저장소에 안 올림.
@@ -21,17 +21,20 @@
 ## 다음 할 일
 
 0. **지금 순서(2026-11-11 사용자 확정) — 새 세션은 여기부터**: 로그인 방식은 넥슨 답을 본 뒤 정하고, 그 전에 메인을 올린다.
-   1. ~~로그인 코드 보관~~ — 완료(2026-11-11): 로그인 작업 = 로컬 브랜치 `members`(`redesign` 위 커밋 1개). 이어 갈 때 `git switch members` → `git rebase redesign`.
-   2. **메인 올릴 준비(`redesign`) — 완료 · 커밋됨(2026-11-11, 푸시 안 함)**: 옛 관리자 · 정산 코드 삭제(목록 structure.md 맨 위), `008_drop_legacy_tables.sql`(파일만 — **새 코드가 운영에 배포된 뒤 실행**, 그 전에 실행하면 운영 옛 화면이 깨짐), 헤더 로그인 버튼 숨김, 홈 "이번 주 내 메이플" 카드 뺌 · 내 수익 소개 = 준비 중, `/privacy`(시안 https://claude.ai/artifact/WWpKwXWYNT5wsiSBFih1Jn = C 메인 + B 하단, 사용자 확정) + 모든 페이지 아래 방침 링크(`app/layout.tsx` footer).
-      - 방침에는 지금 있는 것만 적음(Clarity · 닉네임 조회 · Vercel 접속 기록 · 브라우저 저장). **`/enhance`(키) · 캡처 · 회원 기능을 열 때 방침부터 고치기.** 시행일 = `app/privacy/page.tsx` `EFFECTIVE_DATE`(**`main` 합치는 날로 바꾸기**), 연락처 = maplestorydashboard@gmail.com(사용자).
-      - 확인: lint · 테스트 101 · build · Codex(기본 모델, 지적 1건 = 닉네임 캐시 "3시간 뒤 삭제"가 실제와 다름 → 문구 고침), 3011 에서 `/privacy` 라이트 · 다크 · 375px · 홈, `/admin` · `/settlement` 404. `/login` 은 "준비 중" 자리 페이지로 남음(링크 없음), `ui/input` 은 `members` 가 써서 남김. 방침 사실 확인 출처는 history.
-      - 남은 것: `main` 합치기(사용자 결정, 시행일 바꾸기) → 합친 뒤 사용자: Vercel `ADMIN_PASSWORD` 삭제 · Production 환경 변수 확인 → 008 실행(Supabase MCP `execute_sql` 이 동작함 — 사용자가 말하면 SQL 보여 주고 Claude 가 실행 가능).
+   1. ~~로그인 코드 보관~~ — 완료: 로컬 브랜치 `members`(이어 갈 때 `git switch members` → `git rebase redesign`).
+   2. ~~메인 올리기~~ — 완료(2026-11-11 `main` 배포, `008` 실행됨 · 옛 표 5개 삭제). 원문 history "2026-11-11 메인 올리기".
+      - 방침: 지금 있는 것만 적음 → **`/enhance`(키) · 캡처 · 회원 기능을 열 때 방침부터 고치고 `EFFECTIVE_DATE`(지금 2026-11-11) 바꾸기.** 연락처 maplestorydashboard@gmail.com. 검증 기록 · 사실 확인 출처는 history "2026-11-11 메인 올리기".
+      - **남은 것**: 사용자: Vercel `ADMIN_PASSWORD` 삭제(코드에서 안 씀). 옛 데이터는 백업 `C:\dev\_backup\maple-db-2026-11-08\` 뿐(Rollback 으로 옛 화면 못 살림).
+   2-1. ~~기댓값 계산기 손보기~~ — 완료 · 운영 배포(2026-11-11). 원문 history "2026-11-11 기댓값 계산기 교차 검증".
+      - 들어간 것: 메뉴 "준비 중" 배지 / 잠재능력 **프리셋 · 직접** 모드(`components/ev/custom-goal.tsx`, `lib/ev/potential.ts` 끝 `OPTIONS` · `slotOptions` · `customChance`, 확정 시안 https://claude.ai/artifact/6uTiSnc6ymcDA1MmDJPpwm D 보드) / 확률표 옵션 52종 전부(`potential.json`, 스크립트 `C:/dev/_work/maple-ev-data/`) / 스타포스 장비 4종 추가 · 장비별 상한 `StarItem.maxStar`(데스티니 무기(2차) 25성).
+      - **다른 계산 사이트 7곳과 교차 검증**(starforce.gg · 메수라이브 · 추추지지 · msutils · mapletiptip · 인벤 글) = brain `wiki/research/maple-ev-crosscheck.md`, 다시 돌릴 스크립트 `C:/dev/_work/maple-ev-verify/`. 고친 것: 23성 이상 파괴 → 22성 복구를 골랐으면 22성으로 / 확정 복구 가격 = 공개된 표 값 / 주스탯 % 에 올스탯 % 더함(HP 제외) / 줄 수 제한(`enumerate` 공통) / 추옵 250제 HP 추당 700 / 어빌리티 레전 3줄 = 고급 재설정만 / 소울 잠재 1 · 3단계 표의 소수점 줄 누락.
+      - **사용자가 정한 정의(바꾸지 말 것)**: 방무 = 줄 수치 단순 합(30 + 40 = 70) · 소울 "공 + @" 는 공 3줄도 성공 · 썬데이는 명성치만 절반(메소 그대로) · 천장 = N번 실패 뒤 다음 번 확정 · 스타캐치 항상 적용 · 무기 추옵 보공 추당 2%. 레벨별 최대 별 = 5 / 8 / 10 / 15 / 20 / 30성(경계 95 · 108 · 118 · 128 · 138, 테스트로 고정).
    3. **강화 기록 `/enhance`(로그인 없이, 키로 조회)**: chuchu.gg/starforce 방식. 키는 브라우저에만 기억 · 서버에 저장 안 함. 처음엔 스타포스 + 큐브만(공식 제공 가능 API), 잠재능력 재설정은 넥슨 답 뒤. 명세 §3-2 · §4-3 · 시안 `A-enhance`(5가지 보기). 브라우저 직접 호출(CORS) 가능 여부부터 확인, 지난 날짜는 다시 안 받게 브라우저에 저장. 끝나면 메인에 추가.
    4. **보스 도우미**(카링부터, 명세 §4-4) → 메인에 추가.
    5. **넥슨 답 뒤**: 로그인 방식 결정(후보 = 구글 주 + 아이디 보조 / API 키 로그인) → `members` 브랜치 이어서 → 내 수익 · 보스 수익 · 숙제 · 알림(매일 · 원하는 시각).
    - 넥슨 문의 글 = `C:/dev/_work/maple/nexon-inquiry-2026-11-12.txt`(사용자가 2026-11-12 보냄 예정). 비밀번호 찾기: 아이디만으로는 방법 없음 → 구글 연결로 재설정하는 안을 Claude 가 추천, 사용자 결정 전.
 1. **썬데이 매주 자동 갱신 — 코드 끝**(`2c09756` 푸시 · Preview READY, 2026-11-11): Cron → 공지 찾기 → CLOVA OCR → 혜택 맞추기(모르면 "확인 필요") → `sunday_weeks` 저장 → 화면. 과정 · 채점 · 결정 원문 history "2026-11-11 정리".
-   - **남은 것**: 2026-11-13(금) 공지로 Preview 에서 전체 흐름 확인(사용자 "썬데이 확인해"), 그 공지가 넥슨 목록에 바로 뜨는지도. Cron(`vercel.json`, 주 20번)은 Production 에서만 → `main` 합친 뒤부터 자동, 늦으면 외부 알람(미정).
+   - **남은 것**: 2026-11-13(금) 공지로 Preview 에서 전체 흐름 확인(사용자 "썬데이 확인해"), 그 공지가 넥슨 목록에 바로 뜨는지도. Cron(`vercel.json`, 주 20번)은 Production 에서만 → 2026-11-11 `main` 배포로 켜짐(첫 실행 결과는 `sunday_cron_runs` 로 확인 필요), 늦으면 외부 알람(미정).
    - CLOVA = 월 100회 무료(이미지 1장 = 1회), 2026-11 남은 18회. `?dry=1` 도 호출을 씀. 아직 안 읽은 옛 공지 92주는 다음 달 `run-clova.mjs`(`C:/dev/_work/sunday-ocr-test/README.md`).
    - "확인 필요" 주는 회원 기능 전까지 대화로 처리(이미지 · 읽은 글자 보여 주고 승인하면 서버 키로 확정). 안 고친 검토 항목: C 공개 행의 모든 열 노출(승인 안 받음).
    - 함정: Cron 은 HTTP 경로만 불러 "API route 없음" 규칙의 예외.
@@ -40,7 +43,7 @@
    - **사용자 대기**: `members` 배포 전 Vercel `MAPLE_KEY_SECRET`(`.env.local` 과 같은 값) 등록, 시험 계정 `claude_test1` 삭제 여부, 구글 로그인 추가(Auth 설정이 냠냠과 공유).
    - 넥슨 약관 제5조: 스타포스 · 큐브 조회 API 는 다른 사람에게 제공 가능(공지 2023-12-21 notice/2449064) → 강화 기록 근거 있음. 스케줄러 · ouid 는 미확인 → 넥슨 문의 답 대기.
    - **함정: openapi.nexon.com 문서 화면(game/…)은 로그인 상태면 사용자 API 키 전체가 보임 → 열지 말 것**(공지 · 약관 화면은 안전).
-3. **파일 정리 — 3단계에서 옛 코드를 지운 직후, `main` 합치기 전에 한 번에**(2026-11-09 사용자 결정, 승인한 항목만): `lib/mvp.ts` · `settlement-math` · `boss-split-math` · `split-image` → `lib/<기능>/`, `settlement-client.tsx` · 분배금 화면 본문 → `components/<기능>/`, `lib/` 바로 아래는 공용만, 핀볼 엔진 `lib/pinball/` → `lib/third-party/roulette/`, `AGENTS.md` 를 `.gitignore` 에, `project-spec.md`(78KB) 끝난 기능 history 로, `structure.md` 새 구조로. 위치 · import 만 바꾸고 로직은 그대로, 별도 커밋. prettier 를 넣고 싶으면 이때 모양만 바꾸는 커밋으로 따로(지금은 안 씀).
+3. **파일 정리 — 아직 안 함**(2026-11-09 사용자 결정, 승인한 항목만 · 원래는 `main` 합치기 전 예정이었음, `settlement` 쪽은 2026-11-11 삭제로 해당 없음): `lib/mvp.ts` · `boss-split-math` · `split-image` → `lib/<기능>/`, 분배금 화면 본문 → `components/<기능>/`, 핀볼 엔진 → `lib/third-party/roulette/`, `AGENTS.md` 를 `.gitignore` 에, `project-spec.md` 정리, `structure.md` 새로. 로직은 그대로 · 별도 커밋. 원문 history "2026-11-11 잠재 직접 모드" 아래.
 - 숨은 스펙업 남은 것: 하루 한도 "가까우면 안내"(3단계 DB 카운터 표), 보약 찾는 방식, 유니온 프리셋, 5차 공용 코어 목록(`check.ts` BOSS_COMMON_CORES, Claude 판단), 조회 더 빠르게(결과 나눠 보여 주기 · 넥슨 서비스 키 — 사용자와 정하기).
 - **확인 필요(사용자)**: 썬데이 테마 이름 "옵션 강화"(Claude 추천), 추옵 탭 환산 기본값(올스탯1%=10 · 공1=4)을 잠재 탭 maplescouter 환산에 맞출지, MVP 크레딧 적립 5%(maple-mvp.com 기준), 에디 방어구 주스탯 합에 9레벨당 · 공 정수를 안 세는 부분, 잠재 장갑 · 모자의 주스탯 줄에 낮은 값(9% 등)도 셀지(지금 셈).
 - **새 파일은 기능별 폴더 규칙대로**: 화면 `app/<경로>/page.tsx` 는 얇게, 부품 `components/<기능>/`, 계산 · 데이터 · 테스트 `lib/<기능>/`.

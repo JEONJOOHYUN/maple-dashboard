@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { averageTries } from "./luck.ts";
-import { NO_CONV, SOUL_EXTRA, addWeaponChance, comboChance, practicalTargets, bestValues, convFromScouter, fixFirstLine, gradeUp, lineTables, resetMeso, soulChance, statTargets, sumChance, weaponChance, type WeaponGoal } from "./potential.ts";
+import { NO_CONV, OPTIONS, SOUL_EXTRA, addWeaponChance, customChance, slotOptions, comboChance, practicalTargets, bestValues, convFromScouter, fixFirstLine, gradeUp, lineTables, resetMeso, soulChance, statTargets, sumChance, weaponChance, type WeaponGoal } from "./potential.ts";
 
 const near = (actual: number, expected: number, tolerance: number, label: string) =>
   assert.ok(Math.abs(actual - expected) <= tolerance, `${label}: ${actual} is not within ${tolerance} of ${expected}`);
@@ -134,7 +134,8 @@ test("prime cubes keep line 1: matches maple.begchi.com and the dcinside post", 
   const heart = lineTables("black", "legendary", "heart", 200)!;
   near(1 / sumChance(top(heart, "str"), { type: "stat", min: 30 }), 42.72, 0.01, "prime heart 30%");
   const gloves = lineTables("black", "legendary", "gloves", 200)!;
-  near(1 / sumChance(top(gloves, "cd"), { type: "crit", lines: 2 }), 40.16, 0.01, "prime gloves 2 crit lines");
+  // begchi shows 40.16 with independent lines; a "쓸만한" skill on line 2 cannot repeat on line 3 (official cap), so 40.12.
+  near(1 / sumChance(top(gloves, "cd"), { type: "crit", lines: 2 }), 40.12, 0.01, "prime gloves 2 crit lines");
   const add = lineTables("white", "legendary", "weapon", 200)!;
   near(1 / addWeaponChance(add, "atk", "a21", true), 11.0, 0.05, "prime additional atk 21%");
   near(1 / addWeaponChance(add, "atk", "a3", true), 461.8, 0.1, "prime additional atk 30%");
@@ -218,4 +219,77 @@ test("target chips = realistic three-line sums, dense below the top (user, 2026-
   assert.ok(g.includes(63), "two crit lines");
   // Every chip has a real chance.
   for (const n of g) assert.ok(sumChance(gloves, { type: "stat", min: n, conv }) > 0);
+});
+
+test("custom goal: sums over the three lines, sets are alternatives", () => {
+  const rows = lineTables("black", "legendary", "weapon", 200)!;
+  // Same goal as "attack 3 lines" above (attack % total ≥ 30 = 0.0219792 % on mesu.live).
+  near(customChance(rows, [[{ cat: "atk", min: 30 }]]), 0.000219792, 0.000001, "attack total 30");
+  const bossAtk = customChance(rows, [[{ cat: "boss", min: 60 }, { cat: "atk", min: 9 }]]);
+  const atkBoss = customChance(rows, [[{ cat: "boss", min: 30 }, { cat: "atk", min: 18 }]]);
+  near(bossAtk, 0.001867, 0.000005, "boss 60 + attack 9");
+  near(atkBoss, 0.00118, 0.000005, "boss 30 + attack 18");
+  // The two sets cannot both happen in three lines, so "or" is the plain sum.
+  near(customChance(rows, [[{ cat: "boss", min: 60 }, { cat: "atk", min: 9 }], [{ cat: "boss", min: 30 }, { cat: "atk", min: 18 }]]), bossAtk + atkBoss, 1e-9, "either set");
+  assert.equal(customChance(rows, [[]]), 0);
+  assert.equal(customChance(rows, [[], [{ cat: "atk", min: 30 }]]), customChance(rows, [[{ cat: "atk", min: 30 }]]));
+  // An option the slot cannot roll never succeeds.
+  assert.equal(customChance(rows, [[{ cat: "cool", min: 1 }]]), 0);
+});
+
+test("slot options: only what the slot can roll, with reachable totals", () => {
+  const weapon = slotOptions(lineTables("black", "legendary", "weapon", 200)!);
+  const cats = weapon.map((o) => o.cat);
+  for (const c of ["boss", "ied", "atk", "matk", "dmg", "crit", "str", "all", "atkf"]) assert.ok(cats.includes(c), `weapon has ${c}`);
+  for (const c of ["cool", "drop", "cd", "sksharp", "hp"]) assert.ok(!cats.includes(c), `weapon has no ${c}`);
+  assert.deepEqual(weapon.find((o) => o.cat === "atk")!.sums, [9, 12, 18, 21, 24, 30, 33, 36]);
+  assert.deepEqual(weapon.find((o) => o.cat === "boss")!.sums.slice(0, 4), [30, 35, 40, 60]);
+  assert.ok(!slotOptions(lineTables("black", "legendary", "emblem", 200)!).some((o) => o.cat === "boss"), "emblems have no boss line");
+  const hat = slotOptions(lineTables("black", "legendary", "hat", 200)!);
+  assert.deepEqual(hat.find((o) => o.cat === "cool")!.sums, [1, 2, 3, 4, 5, 6]);
+  // Capped options only offer totals that can happen: a "쓸만한" skill once, 피격 후 무적시간 once.
+  assert.deepEqual(hat.find((o) => o.cat === "skdoor")!.sums, [1]);
+  for (const slot of ["hat", "top", "gloves", "shoes", "bottom", "overall"])
+    for (const o of slotOptions(lineTables("black", "legendary", slot, 200)!))
+      for (const sum of o.sums) assert.ok(customChance(lineTables("black", "legendary", slot, 200)!, [[{ cat: o.cat, min: sum }]]) > 0, `${slot} ${o.cat} ${sum} can happen`);
+  assert.ok(slotOptions(lineTables("black", "legendary", "gloves", 200)!).some((o) => o.cat === "sksharp"), "gloves can roll sharp eyes");
+  // Every option in the data has a label.
+  const known = new Set(OPTIONS.map((o) => o.cat));
+  for (const cube of ["black", "gold", "silver", "white"] as const)
+    for (const grade of ["unique", "legendary"] as const)
+      for (const slot of ["weapon", "sub", "emblem", "hat", "top", "gloves", "shoes", "ring", "heart"]) {
+        const rows = lineTables(cube, grade, slot, 200);
+        for (const r of rows?.flat() ?? []) assert.ok(known.has(r[0]), `${cube} ${grade} ${slot}: ${r[0]} has no label`);
+      }
+});
+
+test("custom goal follows mesu.live: all stat % counts for the four stats, capped options are not repeated", () => {
+  const pct = (cube: "black" | "white", grade: "unique" | "legendary", slot: string, level: number, sets: { cat: string; min: number }[][]) =>
+    customChance(lineTables(cube, grade, slot, level)!, sets) * 100;
+  // Numbers read from mesu.live/calc/potential on 2026-11-11.
+  near(pct("black", "legendary", "hat", 200, [[{ cat: "str", min: 33 }]]), 0.0240677431, 0.00001, "hat STR 33");
+  near(pct("black", "legendary", "earring", 200, [[{ cat: "str", min: 27 }]]), 0.5669008935, 0.0001, "earring STR 27");
+  near(pct("black", "unique", "top", 200, [[{ cat: "str", min: 21 }]]), 0.1679482535, 0.0001, "unique top STR 21");
+  near(pct("white", "legendary", "hat", 200, [[{ cat: "str", min: 14 }]]), 0.2973221735, 0.0001, "additional hat STR 14");
+  near(pct("black", "legendary", "gloves", 200, [[{ cat: "cd", min: 8 }, { cat: "str", min: 21 }]]), 0.04857156, 0.00002, "gloves crit damage + STR 21");
+  // Line caps ("쓸만한" skills once): the later lines are scaled up.
+  near(pct("black", "legendary", "hat", 200, [[{ cat: "cool", min: 4 }]]), 0.0625234153, 0.00002, "hat cooldown 4");
+  near(pct("black", "legendary", "gloves", 200, [[{ cat: "cd", min: 16 }]]), 0.258399003, 0.00005, "gloves crit damage 16");
+  // Max HP % is not raised by all stat %.
+  near(pct("black", "legendary", "top", 250, [[{ cat: "hp", min: 36 }]]), 0.024492953, 0.00001, "top HP 36");
+  // A "쓸만한" skill cannot come twice.
+  assert.equal(pct("black", "legendary", "gloves", 200, [[{ cat: "sksharp", min: 2 }]]), 0);
+  const hat = slotOptions(lineTables("black", "legendary", "hat", 200)!);
+  assert.equal(hat.find((o) => o.cat === "str")!.base, 9);
+  assert.ok(hat.find((o) => o.cat === "str")!.sums.includes(15), "STR 9 + all stat 6");
+});
+
+test("soul tables keep decimal values (증폭 1 · 3단계: 공격력 +1.5 % · +4.5 %), checked against mapletiptip 2026-11-11", () => {
+  for (const stage of [1, 2, 3, 4]) {
+    const rows = lineTables("soul", "legendary", "soul", stage)!;
+    near(addWeaponChance(rows, "atk", "a21", false, SOUL_EXTRA), 0.004684, 0.000001, `stage ${stage} attack goal`);
+    near(addWeaponChance(rows, "atk", "a3", false, SOUL_EXTRA), 0.000111, 0.000001, `stage ${stage} attack 3 lines`);
+  }
+  assert.ok(lineTables("soul", "legendary", "soul", 3)!.flat().some((r) => r[0] === "atk" && r[1] === 4.5), "stage 3 has attack 4.5 %");
+  assert.ok(lineTables("soul", "legendary", "soul", 1)!.flat().some((r) => r[0] === "atk" && r[1] === 1.5), "stage 1 has attack 1.5 %");
 });

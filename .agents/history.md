@@ -277,3 +277,30 @@ ADMIN_PASSWORD=
 ### 개인정보처리방침 사실 확인 (2026-11-11 handoff 에서 옮김, 원문)
 
       - 사실 확인(2026-11-11): Clarity 녹화 30일 · 집계 13개월(Microsoft Learn data-retention), 저장 위치는 공식 문서에 "Microsoft Azure"만 있고 지역 선택 없음 → 방침에 "미국 등". Vercel Hobby 런타임 로그 1시간(Vercel 문서) — 요금제를 바꾸면 방침도 고치기.
+
+## 2026-11-11 메인 올리기 (handoff 에서 옮김)
+
+- 확인: lint · 테스트 101 · build · Codex(기본 모델, 지적 1건 = 닉네임 캐시 "3시간 뒤 삭제"가 실제와 다름 → 문구 고침), 3011 에서 `/privacy` 라이트 · 다크 · 375px · 홈, `/admin` · `/settlement` 404. `/login` 은 "준비 중" 자리 페이지로 남음(링크 없음), `ui/input` 은 `members` 가 써서 남김. 방침 사실 확인 출처는 history.
+- 방침에는 지금 있는 것만 적음(Clarity · 닉네임 조회 · Vercel 접속 기록 · 브라우저 저장). **`/enhance`(키) · 캡처 · 회원 기능을 열 때 방침부터 고치기.** 시행일 = `app/privacy/page.tsx` `EFFECTIVE_DATE` = 2026-11-11(배포한 날, 방침을 고치면 같이 바꾸기), 연락처 = maplestorydashboard@gmail.com(사용자).
+- 운영 배포: `redesign` 푸시 → Preview READY → `main` 빨리 감기(`c60f794` → `30d4f73`) · 푸시 → Production READY. 운영 주소에서 메뉴 13개 200, `/admin` · `/settlement` · `/me` 404, Cron 401, `/privacy` · 홈 · 숨은 스펙업 조회 확인. 그 뒤 `008` 실행(백업 행 수 7 · 29 · 19 · 3 · 1 과 DB 일치 확인 후).
+
+- (handoff 원문) 1. ~~로그인 코드 보관~~ — 완료(2026-11-11): 로그인 작업 = 로컬 브랜치 `members`(`redesign` 위 커밋 1개). 이어 갈 때 `git switch members` → `git rebase redesign`.
+- (handoff 원문) 2. **메인 올리기 — 완료(2026-11-11 `main` 배포)**: 옛 관리자 · 정산 코드 삭제(목록 structure.md 맨 위), `008_drop_legacy_tables.sql`(**2026-11-11 실행됨** — 옛 표 5개 · 함수 삭제, 남은 public 표 = `nexon_accounts` · `rate_counters` · `sunday_cron_runs` · `sunday_weeks`), 헤더 로그인 버튼 숨김, 홈 "이번 주 내 메이플" 카드 뺌 · 내 수익 소개 = 준비 중, `/privacy`(시안 https://claude.ai/artifact/WWpKwXWYNT5wsiSBFih1Jn = C 메인 + B 하단, 사용자 확정) + 모든 페이지 아래 방침 링크(`app/layout.tsx` footer).
+
+## 2026-11-11 잠재 직접 모드 (handoff 에서 옮김)
+
+- 2-1. **잠재능력 "직접" 모드(`/ev` 잠재능력 탭) — 코드 끝 · 커밋 대기(2026-11-11)**: "노리는 옵션" = 프리셋(기존) / 직접. 직접 = 세트(게임 잠재 창 모양) 안에 옵션 최대 3개, 옵션마다 세 줄 합계 최소값을 − / + 로(그 표에서 나올 수 있는 합계만), 세트 여러 개 = 또는(처음 1세트, 최대 4). 옵션 목록 = 그 부위 · 등급 표에 있는 것만, 묶음 5개(공격 · 스탯 % · 스탯 + · 사냥 · 편의 · 방어 · 회복)로 정렬. 프라임 큐브 = 첫 옵션의 첫 줄 최고값 고정. 파일 `components/ev/custom-goal.tsx`, `lib/ev/potential.ts` 끝(`OPTIONS` · `slotOptions` · `customChance`). 시안 https://claude.ai/artifact/6uTiSnc6ymcDA1MmDJPpwm (확정 = D 보드: B 모양 + C 기능 + A 세트, 사용자 2026-11-11).
+- **확률 데이터 다시 받음(2026-11-11)**: 공식 표의 옵션 52종 전부를 `potential.json` 에 담음(전엔 17종만 · 크확 · 데미지 % · 쓸만한 스킬 등 빠져 있었음, 73KB → 110KB). 옛 데이터의 모든 행은 값 그대로(226개 표 비교, 차이 0). 숫자가 2개인 옵션 · 스킬 옵션은 값 1(줄 수로 셈). 장비의 정수 스탯 키는 `fstr` 등(소울의 `strf` 와 안 섞이게). 소울 표는 그대로(직접 모드 대상 아님). 스크립트 `C:/dev/_work/maple-ev-data/`(`analyze.mjs` = 옵션 이름 전체 목록, `raw/` 360개 보관).
+- **교차 검증(2026-11-11, starforce.gg · 메수라이브 · 추추지지 · 인벤 글)** 결과 = brain `wiki/research/maple-ev-crosscheck.md`, 스크립트 `C:/dev/_work/maple-ev-verify/`. 확률표 · 비용표 · 22성까지 스타포스 · 130제 · 추옵 방어구 · 어빌리티 표는 일치. **우리 쪽 차이 5건 — 사용자 결정 대기, 안 고침**: ① 23성 이상 파괴 = 우리는 12성, 두 사이트는 22성 복구 가능(+2~17%) ② 직접 모드 방무 = 단순 합(메수라이브는 곱연산, 26배) ③ 직접 모드 주스탯에 올스탯 % 안 더함(−2~73%) ④ 직접 모드 줄 수 제한 없음(쓸만한 스킬 최대 1줄 등, 0.2% 미만) ⑤ 추옵 250제 최대 HP 추당 750(메수라이브 · 나무위키 700). 미확인: 레벨별 최대 별(95~127제), 스타캐치 끔.
+- (handoff 원문, 파일 정리 항목) 3. **파일 정리 — 3단계에서 옛 코드를 지운 직후, `main` 합치기 전에 한 번에**(2026-11-09 사용자 결정, 승인한 항목만): `lib/mvp.ts` · `settlement-math` · `boss-split-math` · `split-image` → `lib/<기능>/`, `settlement-client.tsx` · 분배금 화면 본문 → `components/<기능>/`, `lib/` 바로 아래는 공용만, 핀볼 엔진 `lib/pinball/` → `lib/third-party/roulette/`, `AGENTS.md` 를 `.gitignore` 에, `project-spec.md`(78KB) 끝난 기능 history 로, `structure.md` 새 구조로. 위치 · import 만 바꾸고 로직은 그대로, 별도 커밋. prettier 를 넣고 싶으면 이때 모양만 바꾸는 커밋으로 따로(지금은 안 씀).
+
+## 2026-11-11 기댓값 계산기 교차 검증 (handoff 에서 옮김)
+
+- **커밋 대기(2026-11-11)**: 메뉴 "준비 중" 배지(`side-nav.tsx` · `site-header.tsx` 모바일 탭, `ready: false` 항목) — lint · build · 3011 데스크톱 라이트 · 다크 · 375px 확인, 화면 스타일만이라 Codex 생략.
+- 2-1. **잠재능력 "직접" 모드(`/ev` 잠재능력 탭) — 코드 끝 · 커밋 대기(2026-11-11)**: "노리는 옵션" = 프리셋(기존) / 직접. 직접 = 세트(게임 잠재 창 모양)에 옵션 최대 3개, 옵션마다 세 줄 합계 최소값을 − / + 로, 세트 여러 개 = 또는(처음 1세트, 최대 4), 옵션은 그 부위 표에 있는 것만 묶음 5개로 정렬. `components/ev/custom-goal.tsx`, `lib/ev/potential.ts` 끝(`OPTIONS` · `slotOptions` · `customChance`). 확정 시안 = https://claude.ai/artifact/6uTiSnc6ymcDA1MmDJPpwm 의 D 보드. 상세 history "2026-11-11 잠재 직접 모드".
+- 확률 데이터: 공식 표 옵션 52종 전부를 `potential.json` 에 담음(전엔 17종, 옛 행 값은 그대로). 새 키를 더하면 `OPTIONS` 에도 더하기(테스트가 잡음). 스크립트 `C:/dev/_work/maple-ev-data/`.
+- 확인: 테스트 103, lint · build, Codex(gpt-6.1-sol) 지적 없음, 3011 데스크톱 라이트 · 다크 · 375px.
+- **교차 검증(starforce.gg · 메수라이브 · 추추지지 · 인벤)** = brain `wiki/research/maple-ev-crosscheck.md`, 스크립트 `C:/dev/_work/maple-ev-verify/`(`sf-compare.mjs` · `pot-compare.mjs` 로 다시 대조). 나온 차이 5건 중 4건 고침(2026-11-11 사용자 결정, 커밋 대기): ① 23성 이상 파괴 = 22성 복구를 골랐으면 22성으로(22성 가격) ② 주스탯 % 목표에 올스탯 % 더함(HP 는 제외) ③ 줄 수 제한(쓸만한 스킬 · 피격 후 무적시간 1줄, 피격 % 무시 · 피격 무적 2줄 — `enumerate` 공통이라 프리셋에도 적용) ④ 추옵 250제 최대 HP 추당 700. **방무는 줄 수치 단순 합 그대로**(사용자: 잠재에 뜨는 값을 보여 주는 것이라 합이 맞음 — 메수라이브는 곱연산이라 그 한 건만 다름). 다시 대조: 잠재 60건 중 59건 0.05% 안, starforce.gg 14건 30성까지 0.1% 안.
+- 추가(2026-11-11): 확정 복구 가격 = 공개된 표 값(130~250제, 없는 레벨만 k·L³), 25 · 26성 = starforce.gg 14건 0.18% 안 · 독립 시뮬레이션 `sf-sim.mjs` 0.5% 안. **어빌리티 레전 3줄 = 고급 재설정만**(사용자 확인: 일반 재설정으로 1번 줄 못 맞춤). 레벨별 최대 별은 나무위키 표와 같음(~94제 5 · 95~107제 8 · 108~117제 10 · 118~127제 15 · 128~137제 20 · 138제 이상 30성, 테스트로 고정). 장비별 상한 = `StarItem.maxStar`: 데스티니 무기(2차) 25성(사용자 확인, 이름도 바꿈). 스타포스 장비 추가: 블랙빈 마크(135제 1.5억) · 트와일라이트 마크(0.005억) · 도미네이터 펜던트(10.5억) · 에스텔라 이어링(0.0075억), 아케인 그림 = 장갑 · 신발 · 망토. 아이콘 코드 찾기 `node --env-file=.env.local C:/dev/_work/maple-ev-verify/item-icons.mjs <닉네임> <이름 일부…>`(키는 출력 안 함).
+- 2차 검증(msutils · mapletiptip, 같은 brain 페이지): 프라임 큐브 62건 · 어빌리티 두 모드 38건 · 소울 증폭 · 소울 등급 올리기 일치. **소울 잠재 1 · 3단계 표에 소수점 수치 줄이 빠져 있던 것 고침**(`gensoul.mjs` 정규식, 데이터 다시 생성 · 테스트 추가). 사용자 확인(2026-11-11, 코드 변경 없음): 소울 "공 + @" 는 공 3줄도 성공, 썬데이는 고급 재설정 명성치만 절반(메소 그대로), 천장 = N번 실패 뒤 다음 번 확정.
+- 운영(`main`) = 개편판 `30d4f73`(2026-11-11 `redesign` 을 빨리 감기 · 푸시, Production READY). 운영 주소 확인: 메뉴 경로 전부 200, `/admin` · `/settlement` · `/me` 404, Cron 경로 인증 없이 401, `/privacy` · 홈 · 썬데이 표시, 숨은 스펙업 조회 동작(넥슨 키), 오류 기록 없음. 되돌리기 = Vercel 에서 이전 배포(`c60f794`)로 Rollback.

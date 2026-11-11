@@ -75,6 +75,6 @@ test("soul ether averages match mapletiptip", () => {
 test("flame values per tier follow the namu.wiki formulas", () => {
   assert.deepEqual(tierValues(200), { single: 11, double: 6, hp: 600 });
   // Lv.250 counts as 220 for single stats; HP drops the ones digit.
-  assert.deepEqual(tierValues(250), { single: 12, double: 7, hp: 750 });
+  assert.deepEqual(tierValues(250), { single: 12, double: 7, hp: 700 });
   assert.equal(tierValues(135).hp, 390);
 });

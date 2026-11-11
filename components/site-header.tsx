@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Brand } from "@/components/brand";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { Badge } from "@/components/ui/badge";
 import { findActive, navGroups } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
@@ -52,11 +53,16 @@ export function SiteHeader() {
                   href={item.href}
                   aria-current={on ? "page" : undefined}
                   className={cn(
-                    "flex h-[30px] shrink-0 items-center rounded-full px-3 text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                    "flex h-[30px] shrink-0 items-center gap-1.5 rounded-full px-3 text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
                     on ? "bg-primary-soft font-bold text-primary-text" : "text-muted-foreground"
                   )}
                 >
                   {item.short}
+                  {!item.ready && (
+                    <Badge variant="outline" className="h-[18px] px-1.5 text-[10px] font-medium text-muted-foreground">
+                      준비 중
+                    </Badge>
+                  )}
                 </Link>
               );
             })}

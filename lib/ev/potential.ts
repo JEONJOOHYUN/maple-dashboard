@@ -152,20 +152,33 @@ export function fixFirstLine(rows: Row[][], cat: string, value: number): Row[][]
   return [[[cat, value, 1, 1]], rows[1], rows[2]];
 }
 
-type Token = { key: string; p: number; cat: string; value: number; own: boolean };
+type Token = { key: string; p: number; cat: string; value: number; own: boolean; limit?: string };
+
+/**
+ * Options that cannot fill all three lines (official cube guide, same rule as mesu.live): "쓸만한" skills and
+ * 피격 후 무적시간 at most once, 피격 시 데미지 % 무시 and 피격 시 무적 at most twice. Once the cap is reached the option
+ * is left out of the later lines and the rest of that line is scaled up to 100 %.
+ */
+const LIMIT_CAP: Record<string, number> = { skill: 1, invtime: 1, ignp: 2, inv: 2 };
+function limitGroup(cat: string): string | undefined {
+  if (cat.startsWith("sk")) return "skill";
+  return cat in LIMIT_CAP ? cat : undefined;
+}
 
 /** Merge rows into tokens (rows that map to the same token add up) plus the "anything else" remainder. */
 function tokens(rows: Row[], map: (row: Row) => { cat: string; value: number; own: boolean } | null): Token[] {
   const merged = new Map<string, Token>();
   let used = 0;
   for (const row of rows) {
-    const t = map(row);
+    const limit = limitGroup(row[0]);
+    // Capped options stay as their own token even when the goal ignores them: they change the later lines.
+    const t = map(row) ?? (limit ? { cat: "x", value: 0, own: false } : null);
     if (!t) continue;
     used += row[2];
-    const key = `${t.cat}:${t.value}:${t.own ? 1 : 0}`;
+    const key = `${t.cat}:${t.value}:${t.own ? 1 : 0}:${limit ?? ""}`;
     const cur = merged.get(key);
     if (cur) cur.p += row[2];
-    else merged.set(key, { key, p: row[2], ...t });
+    else merged.set(key, { key, p: row[2], ...t, limit });
   }
   const list = [...merged.values()];
   list.push({ key: "x", p: Math.max(0, 1 - used), cat: "x", value: 0, own: false });
@@ -175,7 +188,33 @@ function tokens(rows: Row[], map: (row: Row) => { cat: string; value: number; ow
 /** Exact chance by enumerating the three independent lines. */
 function enumerate(lines: Token[][], ok: (a: Token, b: Token, c: Token) => boolean): number {
   let total = 0;
-  for (const a of lines[0]) for (const b of lines[1]) for (const c of lines[2]) if (ok(a, b, c)) total += a.p * b.p * c.p;
+  if (!lines.some((line) => line.some((t) => t.limit))) {
+    for (const a of lines[0]) for (const b of lines[1]) for (const c of lines[2]) if (ok(a, b, c)) total += a.p * b.p * c.p;
+    return total;
+  }
+  // Chance each capped group takes in a line (what is removed from that line once the group is full).
+  const share = lines.map((line) => {
+    const by: Record<string, number> = {};
+    for (const t of line) if (t.limit) by[t.limit] = (by[t.limit] ?? 0) + t.p;
+    return by;
+  });
+  const full = (group: string | undefined, picked: Token[]) => !!group && picked.filter((t) => t.limit === group).length >= LIMIT_CAP[group];
+  const scale = (line: number, picked: Token[]) => {
+    let removed = 0;
+    for (const group of Object.keys(share[line])) if (full(group, picked)) removed += share[line][group];
+    return removed < 1 ? 1 / (1 - removed) : 0;
+  };
+  for (const a of lines[0]) {
+    const sb = scale(1, [a]);
+    for (const b of lines[1]) {
+      if (full(b.limit, [a])) continue;
+      const sc = scale(2, [a, b]);
+      for (const c of lines[2]) {
+        if (full(c.limit, [a, b])) continue;
+        if (ok(a, b, c)) total += a.p * b.p * sb * c.p * sc;
+      }
+    }
+  }
   return total;
 }
 
@@ -437,4 +476,141 @@ export function addWeaponChance(rows: Row[][], attack: "atk" | "matk", goal: Add
 export function addWeaponNeed(rows: Row[][], attack: "atk" | "matk"): number {
   const values = [...new Set(rows.flat().filter((r) => r[0] === attack).map((r) => r[1]))].sort((a, b) => b - a);
   return (values[0] ?? 0) + (values[1] ?? values[0] ?? 0);
+}
+
+// ── Custom goal ("직접"): pick options that exist on the slot, each with a minimum over the three lines. ──
+
+export type OptionGroup = "atk" | "stat" | "flat" | "util" | "etc";
+export type OptionInfo = {
+  cat: string;
+  label: string;
+  group: OptionGroup;
+  /** "%" · "초" · "" = the values add up over lines; "줄" = the option only counts lines (no single number in the table). */
+  unit: "%" | "초" | "" | "줄";
+};
+
+export const OPTION_GROUPS: { id: OptionGroup; label: string }[] = [
+  { id: "atk", label: "공격" },
+  { id: "stat", label: "스탯 %" },
+  { id: "flat", label: "스탯 +" },
+  { id: "util", label: "사냥 · 편의" },
+  { id: "etc", label: "방어 · 회복" },
+];
+
+/** Every option in the official cube tables (52 names, checked 2026-11-11), in display order. */
+export const OPTIONS: OptionInfo[] = [
+  { cat: "boss", label: "보스 데미지", group: "atk", unit: "%" },
+  { cat: "ied", label: "방어율 무시", group: "atk", unit: "%" },
+  { cat: "atk", label: "공격력 %", group: "atk", unit: "%" },
+  { cat: "matk", label: "마력 %", group: "atk", unit: "%" },
+  { cat: "dmg", label: "데미지 %", group: "atk", unit: "%" },
+  { cat: "crit", label: "크리티컬 확률", group: "atk", unit: "%" },
+  { cat: "cd", label: "크리티컬 데미지", group: "atk", unit: "%" },
+  { cat: "atkf", label: "공격력 +", group: "atk", unit: "" },
+  { cat: "matkf", label: "마력 +", group: "atk", unit: "" },
+  { cat: "str", label: "STR %", group: "stat", unit: "%" },
+  { cat: "dex", label: "DEX %", group: "stat", unit: "%" },
+  { cat: "int", label: "INT %", group: "stat", unit: "%" },
+  { cat: "luk", label: "LUK %", group: "stat", unit: "%" },
+  { cat: "all", label: "올스탯 %", group: "stat", unit: "%" },
+  { cat: "hp", label: "최대 HP %", group: "stat", unit: "%" },
+  { cat: "mp", label: "최대 MP %", group: "stat", unit: "%" },
+  { cat: "fstr", label: "STR +", group: "flat", unit: "" },
+  { cat: "fdex", label: "DEX +", group: "flat", unit: "" },
+  { cat: "fint", label: "INT +", group: "flat", unit: "" },
+  { cat: "fluk", label: "LUK +", group: "flat", unit: "" },
+  { cat: "lvstr", label: "9레벨당 STR", group: "flat", unit: "" },
+  { cat: "lvdex", label: "9레벨당 DEX", group: "flat", unit: "" },
+  { cat: "lvint", label: "9레벨당 INT", group: "flat", unit: "" },
+  { cat: "lvluk", label: "9레벨당 LUK", group: "flat", unit: "" },
+  { cat: "fhp", label: "최대 HP +", group: "flat", unit: "" },
+  { cat: "fmp", label: "최대 MP +", group: "flat", unit: "" },
+  { cat: "drop", label: "아이템 드롭률", group: "util", unit: "%" },
+  { cat: "meso", label: "메소 획득량", group: "util", unit: "%" },
+  { cat: "cool", label: "쿨타임 감소", group: "util", unit: "초" },
+  { cat: "mpcost", label: "MP 소모 감소", group: "util", unit: "%" },
+  { cat: "sksharp", label: "쓸만한 샤프 아이즈", group: "util", unit: "줄" },
+  { cat: "skwind", label: "쓸만한 윈드 부스터", group: "util", unit: "줄" },
+  { cat: "skcombat", label: "쓸만한 컴뱃 오더스", group: "util", unit: "줄" },
+  { cat: "skbless", label: "쓸만한 어드밴스드 블레스", group: "util", unit: "줄" },
+  { cat: "skhyper", label: "쓸만한 하이퍼 바디", group: "util", unit: "줄" },
+  { cat: "skhaste", label: "쓸만한 헤이스트", group: "util", unit: "줄" },
+  { cat: "skdoor", label: "쓸만한 미스틱 도어", group: "util", unit: "줄" },
+  { cat: "speed", label: "이동속도 +", group: "util", unit: "" },
+  { cat: "jump", label: "점프력 +", group: "util", unit: "" },
+  { cat: "def", label: "방어력 %", group: "etc", unit: "%" },
+  { cat: "fdef", label: "방어력 +", group: "etc", unit: "" },
+  { cat: "heal", label: "HP 회복 효율", group: "etc", unit: "%" },
+  { cat: "ignp", label: "피격 데미지 % 무시", group: "etc", unit: "줄" },
+  { cat: "ignf", label: "피격 데미지 고정 무시", group: "etc", unit: "줄" },
+  { cat: "inv", label: "피격 시 무적", group: "etc", unit: "줄" },
+  { cat: "invtime", label: "피격 후 무적시간", group: "etc", unit: "초" },
+  { cat: "reflect", label: "피해 반사", group: "etc", unit: "줄" },
+  { cat: "atkhp", label: "공격 시 HP 회복", group: "etc", unit: "줄" },
+  { cat: "atkmp", label: "공격 시 MP 회복", group: "etc", unit: "줄" },
+  { cat: "killhp", label: "처치 시 HP 회복", group: "etc", unit: "줄" },
+  { cat: "killmp", label: "처치 시 MP 회복", group: "etc", unit: "줄" },
+  { cat: "steal", label: "오토스틸", group: "etc", unit: "줄" },
+];
+
+export type SlotOption = OptionInfo & {
+  /** Totals this option can reach over the three lines, low to high (never 0). */
+  sums: number[];
+  /** Lowest value of one line of this option itself: where the stepper starts. */
+  base: number;
+};
+
+/** Options these three line tables can roll, in display order, each with the totals it can reach. */
+export function slotOptions(rows: Row[][]): SlotOption[] {
+  const perLine = rows.map((line) => {
+    const by = new Map<string, Set<number>>();
+    for (const r of line) {
+      if (!by.has(r[0])) by.set(r[0], new Set());
+      by.get(r[0])!.add(r[1]);
+    }
+    return by;
+  });
+  return OPTIONS.flatMap((info) => {
+    if (!perLine.some((by) => by.has(info.cat))) return [];
+    const sums = new Set<number>();
+    // An all stat % line also raises each of the four stats.
+    const values = (by: Map<string, Set<number>>) => [0, ...(by.get(info.cat) ?? []), ...(ALL_STAT_CATS.has(info.cat) ? by.get("all") ?? [] : [])];
+    const [a, b, c] = perLine.map(values);
+    // Capped options (e.g. a "쓸만한" skill, once) cannot use more lines than their cap.
+    const cap = LIMIT_CAP[limitGroup(info.cat) ?? ""] ?? 3;
+    for (const x of a)
+      for (const y of b)
+        for (const z of c) {
+          const used = (x > 0 ? 1 : 0) + (y > 0 ? 1 : 0) + (z > 0 ? 1 : 0);
+          if (used > 0 && used <= cap) sums.add(x + y + z);
+        }
+    const own = perLine.flatMap((by) => [...(by.get(info.cat) ?? [])]);
+    return [{ ...info, sums: [...sums].sort((x, y) => x - y), base: Math.min(...own) }];
+  });
+}
+
+/** STR · DEX · INT · LUK %: all stat % lines count toward each of them (not max HP). */
+const ALL_STAT_CATS = new Set(["str", "dex", "int", "luk"]);
+
+/**
+ * One wanted option: its values over the three lines add up to `min` or more.
+ * Line values are added as shown on the item (ignore defense 30 % + 40 % = 70, not the in-game combined 58 %).
+ */
+export type CustomCond = { cat: string; min: number };
+
+/**
+ * Chance per try that at least one set is met (sets are "or"; the conditions inside a set are "and").
+ * Sets without a condition are skipped; no condition at all = 0.
+ */
+export function customChance(rows: Row[][], sets: CustomCond[][]): number {
+  const live = sets.filter((s) => s.length > 0);
+  if (!live.length) return 0;
+  const cats = new Set(live.flat().map((c) => c.cat));
+  if ([...cats].some((c) => ALL_STAT_CATS.has(c))) cats.add("all");
+  const lines = rows.map((line) => tokens(line, (r) => (cats.has(r[0]) ? { cat: r[0], value: r[1], own: false } : null)));
+  return enumerate(lines, (x, y, z) => {
+    const part = (t: Token, cat: string) => (t.cat === cat || (t.cat === "all" && ALL_STAT_CATS.has(cat)) ? t.value : 0);
+    const total = (cat: string) => part(x, cat) + part(y, cat) + part(z, cat);
+    return live.some((set) => set.every((c) => total(c.cat) >= c.min));
+  });
 }

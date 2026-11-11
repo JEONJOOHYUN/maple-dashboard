@@ -6,7 +6,9 @@
 // Rules modelled here
 // - A failed try keeps the star (no drops since the revamp). Destroy starts at 15.
 // - Destroyed at 15~22: either restore to that star ("확정 복구", N spare items + meso) or go back to 12
-//   with one spare item. Destroyed at 23 or more: back to 12 (restore only goes up to 22).
+//   with one spare item. Destroyed at 23 or more: restore is only sold up to 22, so with restore chosen at 22
+//   the item comes back at 22 for the 22-star price; otherwise back to 12
+//   (mesu.live source getRestoreTargetStar · starforce.gg numbers, checked 2026-11-11).
 // - Prevention ("파괴 방지") only for tries at 15, 16 and 17.
 // - Events (starforce.gg notes, 2026-11-08): 30 % off try cost, destroy -30 % only up to the 21→22 try,
 //   and Shining Star Force also -20 % on the restore price.
@@ -38,6 +40,22 @@ const RESTORE: Record<number, { items: number; k: number }> = {
   22: { items: 4, k: 3024 },
 };
 
+/**
+ * Restore meso (억) for stars 15~22 at the item levels that have a published price
+ * (namu.wiki table; the same numbers as mesu.live's restoreResourceTable, checked 2026-11-11).
+ * Lv.130 · 135 items stop at 20 stars, so they only have 15~19. Other levels use the k·L³ fit above.
+ */
+const RESTORE_EOK: Record<number, number[]> = {
+  130: [1.19, 2.87, 4.85, 11.03, 18.27],
+  135: [1.33, 3.21, 5.42, 12.31, 20.43],
+  140: [1.48, 3.58, 6.05, 13.74, 22.79, 40.15, 50.45, 82.9],
+  145: [1.65, 3.98, 6.71, 15.28, 25.4, 44.5, 56.05, 92.25],
+  150: [1.83, 4.41, 7.45, 16.89, 28.03, 49.44, 62.24, 101.79],
+  160: [2.22, 5.35, 9.03, 20.5, 34.02, 59.93, 75.31, 123.74],
+  200: [4.33, 10.44, 17.64, 40.05, 66.44, 117.06, 147.09, 241.68],
+  250: [8.46, 20.39, 34.46, 78.21, 129.77, 228.63, 287.28, 472.04],
+};
+
 export const PROTECT_STARS = [15, 16, 17] as const;
 export const RESTORE_STARS = [15, 16, 17, 18, 19, 20, 21, 22] as const;
 export const FLOOR_STAR = 12;
@@ -54,6 +72,8 @@ export type StarOptions = {
   mvp: MvpGrade;
   pcRoom: boolean;
   starCatch: boolean;
+  /** Item-specific cap when it is below the level rule (e.g. 데스티니 무기(2차) = 25). */
+  maxStar?: number;
   /** Price of one spare item (메소). Added for every spare used after a destroy. */
   spareMeso: number;
   /** "auto" = pick the cheapest choice per star; otherwise the stars the user chose. */
@@ -93,7 +113,9 @@ export function baseCost(level: number, star: number): number {
 
 export function restorePrice(level: number, star: number): { items: number; meso: number } | null {
   const r = RESTORE[star];
-  return r ? { items: r.items, meso: r.k * level ** 3 } : null;
+  if (!r) return null;
+  const eok = RESTORE_EOK[level]?.[star - 15];
+  return { items: r.items, meso: eok ? eok * 1e8 : r.k * level ** 3 };
 }
 
 /** Success and destroy chance for one try (star catch and the event applied). */
@@ -122,7 +144,7 @@ function tryCost(star: number, opt: StarOptions): number {
  * gives the policy with the lowest expected meso overall.
  */
 export function starSteps(opt: StarOptions): StarStep[] {
-  const max = maxStarFor(opt.level);
+  const max = Math.min(maxStarFor(opt.level), opt.maxStar ?? 30);
   const steps: StarStep[] = [];
   const climb = (from: number, to: number, key: "meso" | "destroys" | "tries") => {
     let sum = 0;
@@ -153,11 +175,21 @@ export function starSteps(opt: StarOptions): StarStep[] {
         destroys: (d * (1 + back.destroys)) / p,
         tries: (1 + d * back.tries) / p,
       };
-      if (opt.restore === "auto" || !wantRestore) choices.push(toFloor);
+      // Shining Star Force also takes 20 % off the restore price (starforce.gg event note).
+      const restoreSale = opt.event === "shining" ? 0.8 : 1;
+      // Above 22: comes back at 22 when restore is used there (the same trade-off as at 22, so the same choice).
+      const r22 = s > 22 && steps[22]?.restore ? restorePrice(opt.level, 22) : null;
+      if (r22) {
+        choices.push({
+          protect: false,
+          restore: false,
+          meso: (cost + d * (r22.meso * restoreSale + r22.items * opt.spareMeso + climb(22, s, "meso"))) / p,
+          destroys: (d * (1 + climb(22, s, "destroys"))) / p,
+          tries: (1 + d * climb(22, s, "tries")) / p,
+        });
+      } else if (opt.restore === "auto" || !wantRestore) choices.push(toFloor);
       if (wantRestore) {
         const r = restorePrice(opt.level, s)!;
-        // Shining Star Force also takes 20 % off the restore price (starforce.gg event note).
-        const restoreSale = opt.event === "shining" ? 0.8 : 1;
         choices.push({
           protect: false,
           restore: true,

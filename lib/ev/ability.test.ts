@@ -120,12 +120,14 @@ test("values: two options together → circulate them to the goal, lock, then re
   const pbs = abilityPlan(["pas", "boss", "stat"], "l3", opts);
   const pasBoss = pbs.afterTwo.find((a) => a.keys.join() === "pas,boss")!;
   assert.equal(pasBoss.action.kind, "circ");
-  assert.equal(pasBoss.action.method, "fame");
+  // Legendary lines 2 · 3 are rolled with the advanced reset to the end (user, 2026-11-11).
+  assert.equal(pasBoss.action.method, "advanced");
   // Boss 20 % is 10 % a roll; passive is always +1 → 10 circulators.
   assert.ok(Math.abs(pasBoss.action.circCount - 10) < 1e-9);
-  // Cheaper than "options first, all three values by circulator afterwards" (old plan: 394.86억).
-  const total = pbs.fame * 400 + pbs.meso + pbs.circ * 2.6e8;
-  assert.ok(total < 394.86e8, String(total));
+  // Not above chuchu.gg's fixed route for the same prices (branch-weighted 432.6억 at 2.2억 a circulator, 2026-11-11).
+  const cheap = abilityPlan(["pas", "boss", "stat"], "l3", { ...opts, values: { goal, circPrice: 2.2e8 } });
+  const total = cheap.fame * 400 + cheap.meso + cheap.circ * 2.2e8;
+  assert.ok(total <= 432.6e8 && total > 380e8, String(total));
   const cbh = abilityPlan(["cool", "boss", "hp"], "l3", opts);
   assert.ok(cbh.afterTwo.every((a) => a.action.kind === "circ"));
 });
@@ -148,8 +150,8 @@ test("second option: what is left after two lines (resets included) is less than
     const one = p.afterFirstLower.find((a) => a.key === two.keys[0])!;
     assert.ok(Number.isFinite(two.resets) && two.resets > 0, two.keys.join());
     assert.ok(two.resets < one.resets, two.keys.join());
-    // Two lines locked: only the last line is left, rerolled by fame resets.
-    assert.equal(two.meso, 0);
+    // Two lines locked: only the last line is left, rerolled by advanced resets (fame + meso).
+    assert.ok(two.meso > 0, two.keys.join());
   }
 });
 

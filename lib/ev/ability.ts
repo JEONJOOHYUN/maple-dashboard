@@ -264,7 +264,9 @@ export function abilityPlan(
   const fameMul = opts.sunday ? 0.5 : 1;
   const famePrice = Math.max(opts.famePricePerUnit, 1e-3);
   const circPrice = opts.values ? Math.max(opts.values.circPrice, 1) : 0;
-  const methods: Method[] = mode === "l3" ? ["fame", "advanced"] : ["fame"];
+  // Three legendary lines only come from the advanced reset, and a build with legendary lines 2 · 3 is rolled with it
+  // to the end (user, 2026-11-11; the same route as chuchu.gg). The fame reset is for L1+U2.
+  const methods: Method[] = mode === "l3" ? ["advanced"] : ["fame"];
   const gradeOf = (line: number) =>
     (mode === "l3" || line === 0 ? "legendary" : "unique") as
       "legendary" | "unique";

@@ -108,3 +108,17 @@ test("matches starforce.gg (컴언 Lv.200, Shining, no MVP / PC room, spare 190�
   assert.deepEqual(steps.filter((s) => s.protect).map((s) => s.star), [15, 16, 17]);
   assert.deepEqual(steps.filter((s) => s.restore).map((s) => s.star), [18]);
 });
+
+test("max star: level bands, and an item's own cap below them", () => {
+  const cases: [number, number][] = [[90, 5], [94, 5], [95, 8], [107, 8], [108, 10], [117, 10], [118, 15], [127, 15], [128, 20], [130, 20], [135, 20], [137, 20], [138, 30], [140, 30], [250, 30]];
+  for (const [level, max] of cases) assert.equal(maxStarFor(level), max, `Lv.${level}`);
+  const base: Omit<StarOptions, "level"> = { event: "none", mvp: "none", pcRoom: false, starCatch: true, spareMeso: 0, protect: [], restore: [] };
+  assert.equal(starSteps({ ...base, level: 135 }).length, 20);
+  assert.equal(starSteps({ ...base, level: 250 }).length, 30);
+  // 데스티니 무기(2차): Lv.250 but 25 stars at most; the steps below the cap do not change.
+  const capped = starSteps({ ...base, level: 250, maxStar: 25 });
+  assert.equal(capped.length, 25);
+  assert.equal(capped[24].meso, starSteps({ ...base, level: 250 })[24].meso);
+  // A cap above the level rule does nothing.
+  assert.equal(starSteps({ ...base, level: 130, maxStar: 25 }).length, 20);
+});

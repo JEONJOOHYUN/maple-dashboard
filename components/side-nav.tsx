@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Brand } from "@/components/brand";
+import { Badge } from "@/components/ui/badge";
 import { homeItem, navGroups, type NavItem } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
@@ -21,6 +22,11 @@ function SideLink({ item, active }: { item: NavItem; active: boolean }) {
     >
       <Icon className="size-[18px] shrink-0" aria-hidden="true" />
       {item.label}
+      {!item.ready && (
+        <Badge variant="outline" className="ml-auto h-[18px] px-1.5 text-[10px] font-medium text-muted-foreground">
+          준비 중
+        </Badge>
+      )}
     </Link>
   );
 }

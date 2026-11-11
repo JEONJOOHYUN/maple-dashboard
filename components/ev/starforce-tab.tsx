@@ -108,13 +108,16 @@ export function StarforceTab() {
     const it = findItem(id);
     if (it) setSpareText(String(it.spareEok));
   };
-  const maxStar = maxStarFor(level);
+  // Level rule (5 / 8 / 10 / 15 / 20 / 30 stars), lowered by the item's own cap when it has one.
+  const itemMax = item === CUSTOM ? undefined : findItem(item)?.maxStar;
+  const maxStar = Math.min(maxStarFor(level), itemMax ?? 30);
   const rate = parseNum(rateText, MESO_RATE_WON);
   const spareMeso = parseNum(spareText, 0) * 1e8;
 
   // Cheap (30 steps): recomputed every render, the React compiler memoizes it.
   const options: StarOptions = {
     level,
+    maxStar: itemMax,
     event,
     mvp,
     pcRoom,
@@ -322,7 +325,7 @@ export function StarforceTab() {
             </div>
             <span className="text-[11px] text-muted-foreground">
               Lv.{level} · 최대 {maxStar}성
-              {maxStar < 30 ? " (138레벨부터 30성)" : ""}
+              {itemMax && itemMax < maxStarFor(level) ? " (이 장비는 여기까지)" : maxStar < 30 ? " (140제부터 30성)" : ""}
             </span>
           </div>
 
@@ -394,10 +397,11 @@ export function StarforceTab() {
                     `추천 파괴 방지: ${recommended.protect.length ? starList(recommended.protect) : "안 함"}`,
                     `추천 확정 복구: ${recommended.restore.length ? starList(recommended.restore) : "안 함"}`,
                     `그 밖 파괴 → 노작 1개로 ${FLOOR_STAR}성 복구`,
+                    ...(recommended.restore.includes(22) ? ["23성 이상 파괴 → 22성으로 복구"] : []),
                   ]
                 : [
                     `고르지 않은 성 파괴 → 노작 1개로 ${FLOOR_STAR}성 복구`,
-                    "23성부터 확정 복구 없음",
+                    restore.includes(22) ? "23성 이상 파괴 → 22성으로 복구" : "23성 이상 파괴 → 22성 복구를 고르면 22성으로",
                   ]
               ).map((t) => (
                 <li key={t}>{t}</li>

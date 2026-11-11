@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { ChevronDown, Minus, Plus } from "lucide-react";
 import { Label, LuckRow, Note, NumberField, Panel, Segment, Switch, count, eok, parseNum, pct } from "@/components/ev/ui";
+import { CustomGoal, condText } from "@/components/ev/custom-goal";
 import { CREDIT_SHOP, STAT_CONV_DEFAULT } from "@/lib/ev/defaults";
 import { averageTries } from "@/lib/ev/luck";
 import { useStored } from "@/lib/use-stored";
@@ -13,6 +14,8 @@ import { type MainStat,
   SLOTS,
   bestValues,
   convFromScouter,
+  customChance,
+  slotOptions,
   fixFirstLine,
   gradeUp,
   SOUL_EXTRA,
@@ -25,6 +28,7 @@ import { type MainStat,
   weaponChance,
   type AddWeaponGoal,
   type CubeId,
+  type CustomCond,
   type Grade,
   type PotKind,
   type SumGoal,
@@ -69,6 +73,9 @@ export function PotentialTab() {
   const [kind, setKind] = useState<Exclude<PotKind, "soul">>("main");
   const [grade, setGrade] = useState<Grade>("legendary");
   const [goal, setGoal] = useState<"grade" | "opt">("opt");
+  // "옵션 띄우기": ready-made goals (프리셋) or options picked by hand (직접). Starts with one empty set.
+  const [mode, setMode] = useState<"preset" | "custom">("preset");
+  const [customSets, setCustomSets] = useState<CustomCond[][]>([[]]);
   // No 공격력 / 마력 choice: the official table gives attack and magic lines the same values and chances on every slot
   // (188 pairs checked 2026-11-10), so every result is the same; labels say "공/마".
   const attack: "atk" | "matk" = "atk";
@@ -125,6 +132,19 @@ export function PotentialTab() {
     [soul, kind, grade, slotId, level]
   );
   const best = refRows ? bestValues(refRows) : {};
+  const options = useMemo(() => (refRows ? slotOptions(refRows) : []), [refRows]);
+  // What was picked on another slot · grade may not exist here: drop it, and move totals to one this table can reach.
+  const sets = useMemo(
+    () =>
+      customSets.map((set) =>
+        set.flatMap((c) => {
+          const o = options.find((x) => x.cat === c.cat);
+          return o ? [{ cat: c.cat, min: o.sums.find((s) => s >= c.min) ?? o.sums[o.sums.length - 1] }] : [];
+        })
+      ),
+    [customSets, options]
+  );
+  const firstCond = sets.find((s) => s.length)?.[0];
   // Prime first line picked on a weapon may not exist on the slot now (emblems have no boss line).
   const primeLine = primeFirst === "b" && !best.boss ? "a" : primeFirst;
   const sumTargets: { label: string; sub: string; goal: SumGoal }[] = useMemo(() => {
@@ -161,6 +181,7 @@ export function PotentialTab() {
   const isV3 = min.a === 0 && min.b === 0 && min.i === 0 && min.v === 3;
   const weaponGoal: WeaponGoal = { attack, ied, min, tier: kind === "main" ? tier : "v3" };
   const optGrade = grade === "rare" || grade === "epic" ? null : grade;
+  const custom = goal === "opt" && !soul && !!optGrade && mode === "custom";
   const soulRows = soul ? lineTables("soul", grade, "soul", soulStage) : null;
   const soulNeed = soulRows ? addWeaponNeed(soulRows, attack) : 0;
 
@@ -189,6 +210,13 @@ export function PotentialTab() {
     if (prime && optGrade !== "legendary") return 0;
     const rows = lineTables(cube, optGrade, slotId, level);
     if (!rows) return 0;
+    if (custom) {
+      if (!firstCond) return 0;
+      if (!prime) return customChance(rows, sets);
+      // A prime cube keeps line 1: the best value of the first option picked.
+      const top = bestValues([rows[0]])[firstCond.cat];
+      return top ? customChance(fixFirstLine(rows, firstCond.cat, top), sets) : 0;
+    }
     if (weaponLike)
       return kind === "add" ? addWeaponChance(rows, attack, addGoal, prime) : weaponChance(rows, weaponGoal, prime ? primeLine : undefined);
     const g = comboGoal ?? sumTargets[tIdx]?.goal;
@@ -219,13 +247,23 @@ export function PotentialTab() {
       const p = optionChance(c.id);
       const note = c.fixFirst
         ? optGrade === "legendary"
-          ? `첫 줄 ${primeFirstLabel(lineTables(c.id, "legendary", slotId, level))} 고정 · 경매장 가격 기준`
+          ? custom
+            ? p
+              ? `첫 줄 ${condText(options.find((o) => o.cat === firstCond?.cat), bestValues([lineTables(c.id, "legendary", slotId, level)?.[0] ?? []])[firstCond?.cat ?? ""] ?? 0)} 고정 · 경매장 가격 기준`
+              : firstCond
+                ? "첫 줄에 안 뜨는 옵션"
+                : "옵션을 고르면 계산"
+            : `첫 줄 ${primeFirstLabel(lineTables(c.id, "legendary", slotId, level))} 고정 · 경매장 가격 기준`
           : "레전드리 전용"
         : !p
           ? soul
             ? ""
             : !optGrade
               ? "유니크 · 레전드리만 계산"
+              : custom
+                ? firstCond
+                  ? "이 방법으로는 안 뜨는 옵션"
+                  : "옵션을 고르면 계산"
               : `${GRADE_LABEL[optGrade]} 옵션 불가`
           : "";
       return { cube: c, p, cap: 0, price, auto, fixed, cost, note };
@@ -242,6 +280,13 @@ export function PotentialTab() {
         : `${slot.label} · 이미 레전드리`
       : soul
         ? `${GRADE_LABEL[grade]} 소울 · 증폭 ${soulStage}단계 · ${ADD_GOALS.find((g) => g.id === addGoal)!.label(soulNeed, "공/마")}`
+        : custom
+          ? `${kind === "add" ? "에디셔널 " : ""}${GRADE_LABEL[grade]} ${slot.label} · ${
+              sets
+                .filter((s) => s.length)
+                .map((s) => s.map((c) => condText(options.find((o) => o.cat === c.cat), c.min)).join(" + "))
+                .join(" 또는 ") || "옵션 고르기"
+            }`
         : weaponLike && kind === "add"
           ? `에디셔널 ${GRADE_LABEL[grade]} ${slot.label} · ${ADD_GOALS.find((g) => g.id === addGoal)!.label(21, "공/마")}`
           : weaponLike
@@ -365,7 +410,36 @@ export function PotentialTab() {
           ]}
         />
 
-        {goal === "opt" && weaponLike && optGrade && (
+        {goal === "opt" && !soul && optGrade && (
+          <Label
+            aside={
+              <Segment
+                label="옵션 고르는 방법"
+                value={mode}
+                onChange={setMode}
+                options={[
+                  { id: "preset", label: "프리셋" },
+                  { id: "custom", label: "직접" },
+                ]}
+                className="w-40"
+              />
+            }
+          >
+            노리는 옵션
+          </Label>
+        )}
+        {custom && (
+          <CustomGoal
+            options={options}
+            sets={sets}
+            onChange={setCustomSets}
+            chanceOf={(set) => (refRows ? customChance(refRows, [set]) : 0)}
+            slotLabel={slot.label}
+            gradeLabel={GRADE_LABEL[grade]}
+          />
+        )}
+
+        {goal === "opt" && weaponLike && optGrade && mode === "preset" && (
           <div className="flex flex-col gap-2.5 rounded-lg border border-border bg-muted/40 p-3">
             <Label>
               노리는 줄
@@ -476,7 +550,7 @@ export function PotentialTab() {
           </div>
         )}
 
-        {goal === "opt" && !weaponLike && !soul && optGrade && (
+        {goal === "opt" && !weaponLike && !soul && optGrade && mode === "preset" && (
           <div className="flex flex-col gap-2.5 rounded-lg border border-border bg-muted/40 p-3">
             <Label
               aside={
