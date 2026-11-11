@@ -21,8 +21,11 @@
 ## 다음 할 일
 
 0. **지금 순서(2026-11-11 사용자 확정) — 새 세션은 여기부터**: 로그인 방식은 넥슨 답을 본 뒤 정하고, 그 전에 메인을 올린다.
-   1. ~~로그인 코드 보관~~ — 완료(2026-11-11): 로그인 작업 = 브랜치 `members`(`redesign` 위 커밋 1개, 로컬만). `redesign` 에는 문서와 `007` 만. 이어 갈 때 `git switch members` → `git rebase redesign`(그때 `/privacy` 가 있어 Codex 지적 "방침 링크 404"가 풀림).
-   2. **메인 올릴 준비(`redesign`)**: 옛 관리자 코드 삭제(`app/admin` · `app/actions/workers.ts` · `app/settlement` · `lib/queries.ts` · `lib/settlement-math.ts` · 쓰는 곳 없는 부품, 명세 §5) + `008` 옛 표 삭제 SQL(파일만, 실행은 배포 때 보여 주고) → 개인정보처리방침 `/privacy`(Clarity, 캡처는 서버로 안 보냄, 비회원 키는 브라우저에만) → 헤더 로그인 버튼 숨김 · 홈의 로그인 카드와 "내 수익 소개"를 준비 중으로 정리 → lint · build · 브라우저 확인 → Codex → 보고 → **`main` 합치기는 사용자 결정**. 합친 뒤 사용자: Vercel `ADMIN_PASSWORD` 삭제, Production 환경 변수 확인.
+   1. ~~로그인 코드 보관~~ — 완료(2026-11-11): 로그인 작업 = 로컬 브랜치 `members`(`redesign` 위 커밋 1개). 이어 갈 때 `git switch members` → `git rebase redesign`.
+   2. **메인 올릴 준비(`redesign`) — 완료 · 커밋됨(2026-11-11, 푸시 안 함)**: 옛 관리자 · 정산 코드 삭제(목록 structure.md 맨 위), `008_drop_legacy_tables.sql`(파일만 — **새 코드가 운영에 배포된 뒤 실행**, 그 전에 실행하면 운영 옛 화면이 깨짐), 헤더 로그인 버튼 숨김, 홈 "이번 주 내 메이플" 카드 뺌 · 내 수익 소개 = 준비 중, `/privacy`(시안 https://claude.ai/artifact/WWpKwXWYNT5wsiSBFih1Jn = C 메인 + B 하단, 사용자 확정) + 모든 페이지 아래 방침 링크(`app/layout.tsx` footer).
+      - 방침에는 지금 있는 것만 적음(Clarity · 닉네임 조회 · Vercel 접속 기록 · 브라우저 저장). **`/enhance`(키) · 캡처 · 회원 기능을 열 때 방침부터 고치기.** 시행일 = `app/privacy/page.tsx` `EFFECTIVE_DATE`(**`main` 합치는 날로 바꾸기**), 연락처 = maplestorydashboard@gmail.com(사용자).
+      - 확인: lint · 테스트 101 · build · Codex(기본 모델, 지적 1건 = 닉네임 캐시 "3시간 뒤 삭제"가 실제와 다름 → 문구 고침), 3011 에서 `/privacy` 라이트 · 다크 · 375px · 홈, `/admin` · `/settlement` 404. `/login` 은 "준비 중" 자리 페이지로 남음(링크 없음), `ui/input` 은 `members` 가 써서 남김. 방침 사실 확인 출처는 history.
+      - 남은 것: `main` 합치기(사용자 결정, 시행일 바꾸기) → 합친 뒤 사용자: Vercel `ADMIN_PASSWORD` 삭제 · Production 환경 변수 확인 → 008 실행(Supabase MCP `execute_sql` 이 동작함 — 사용자가 말하면 SQL 보여 주고 Claude 가 실행 가능).
    3. **강화 기록 `/enhance`(로그인 없이, 키로 조회)**: chuchu.gg/starforce 방식. 키는 브라우저에만 기억 · 서버에 저장 안 함. 처음엔 스타포스 + 큐브만(공식 제공 가능 API), 잠재능력 재설정은 넥슨 답 뒤. 명세 §3-2 · §4-3 · 시안 `A-enhance`(5가지 보기). 브라우저 직접 호출(CORS) 가능 여부부터 확인, 지난 날짜는 다시 안 받게 브라우저에 저장. 끝나면 메인에 추가.
    4. **보스 도우미**(카링부터, 명세 §4-4) → 메인에 추가.
    5. **넥슨 답 뒤**: 로그인 방식 결정(후보 = 구글 주 + 아이디 보조 / API 키 로그인) → `members` 브랜치 이어서 → 내 수익 · 보스 수익 · 숙제 · 알림(매일 · 원하는 시각).
@@ -33,9 +36,7 @@
    - "확인 필요" 주는 회원 기능 전까지 대화로 처리(이미지 · 읽은 글자 보여 주고 승인하면 서버 키로 확정). 안 고친 검토 항목: C 공개 행의 모든 열 노출(승인 안 받음).
    - 함정: Cron 은 HTTP 경로만 불러 "API route 없음" 규칙의 예외.
    **그 전까지(A)**: 금요일 공지 뒤 사용자가 "썬데이 추가해" → 공지 이미지 읽고 `C:/dev/_work/maple-sunday-data/src/new-weeks.json` 에 추가 → `node scripts/build.mjs C:/dev/maple-dashboard/lib/sunday/data 2023-08-27` → `npm test` → 커밋. 안 하면 화면에 "기록 n주 밀림" 경고 · 예측 정확도 떨어짐.
-2. **3단계 회원 — 로그인 코드는 `members` 에 보관, 넥슨 답 뒤 이어 감**: 시안 A안 https://claude.ai/artifact/V18FVp2aMS7Ykr5RuYjcaZ , `007` 실행됨(`nexon_accounts` · `rate_counters` · `counter_hit()`). 과정 원문 history "2026-11-11 정리".
-   - `members` 에 있는 것: `@supabase/ssr` 0.12.7, `proxy.ts`(`/login` · `/me` 만), `lib/auth/`, `app/login/`, `app/me/`(아이디 + 로그아웃), `components/auth/login-card.tsx`, 헤더 로그인 표시(쿠키 `maple_member`, 표시만), `.env.local.example` 의 `MAPLE_KEY_SECRET`. 가입 · 로그인 · 로그아웃 브라우저 확인됨.
-   - 결정(2026-11-11 사용자): RLS 에 `app = maple`, 아이디 4~20자 영문 소문자 · 숫자 · `_` / 비밀번호 8자 이상, 비밀번호 찾기 없음, 탈퇴 포함, 키는 AES-256-GCM 암호화 저장, 아이디는 `app_metadata.login_id`.
+2. **3단계 회원 — 로그인 코드는 `members` 에 보관, 넥슨 답 뒤 이어 감**: 시안 A안 https://claude.ai/artifact/V18FVp2aMS7Ykr5RuYjcaZ , `007` 실행됨(`nexon_accounts` · `rate_counters` · `counter_hit()`). 들어 있는 파일 · 결정(아이디 규칙 · RLS · 키 암호화) · 과정 원문 history "2026-11-11 정리".
    - **사용자 대기**: `members` 배포 전 Vercel `MAPLE_KEY_SECRET`(`.env.local` 과 같은 값) 등록, 시험 계정 `claude_test1` 삭제 여부, 구글 로그인 추가(Auth 설정이 냠냠과 공유).
    - 넥슨 약관 제5조: 스타포스 · 큐브 조회 API 는 다른 사람에게 제공 가능(공지 2023-12-21 notice/2449064) → 강화 기록 근거 있음. 스케줄러 · ouid 는 미확인 → 넥슨 문의 답 대기.
    - **함정: openapi.nexon.com 문서 화면(game/…)은 로그인 상태면 사용자 API 키 전체가 보임 → 열지 말 것**(공지 · 약관 화면은 안전).
@@ -73,7 +74,7 @@
 - **디자인: A안(메보스형) 확정(2026-11-07), 디자인 끝(2026-11-08, 캔버스 Version 71)** — 캔버스 https://claude.ai/artifact/2ECnKh4QSJB2znjRYUV7kk , 상세 [design.md](design.md).
   메뉴 = 홈 / 내 메이플(내 수익·숙제·보스 수익·강화 기록·알림) / 계산기(분배금·기댓값·MVP) / 정보 · 도우미(썬데이·숨은 스펙업·보스 도우미) / 놀이(핀볼). 캐릭터 검색 없음(숨은 스펙업만 예외), 로그인 = 아이디 또는 API 키, 로그인 상태 4가지, 아이콘 = lucide-react, 달력·요일 표기는 전부 일~토.
   중심 기능 = **내 수익**(화면 문구에 "부주" 안 씀), 보스 도우미 대상 = 카링·흉성·림보·발드릭스·유피테르.
-- 개편 전 보안 구멍(관리자 확인 없는 액션, 쿠키에 비밀번호 원문)은 명세 §5, 아직 열림 → 3단계에서 옛 관리자 방식을 통째로 없애며 닫는다.
+- 개편 전 보안 구멍(명세 §5): `redesign` 에서는 옛 관리자 코드 삭제로 닫힘(2026-11-11). 운영(`main`)은 합칠 때까지 열려 있음.
 - **2026-11-08 사용자 결정**: 기존 데이터는 옮기지 않고 새로 시작(백업 `C:\dev\_backup\maple-db-2026-11-08\`, git 밖). 옛 관리자 방식(`/admin`·`ADMIN_PASSWORD`·관리자 쿠키·액션)은 통째로 없앰.
 
 ## 개편 단계 (2026-11-08 사용자 지시 — 단계마다 보고하고 멈춤, 사용자가 "다음"이라고 하면 진행)
@@ -92,14 +93,14 @@
 - Supabase(Postgres) — `@supabase/supabase-js`, **서버에서만**(Server Components / Server Actions), `SUPABASE_URL` / `SUPABASE_ANON_KEY`(NEXT_PUBLIC_ 아님). 데이터 변경은 전부 Server Actions, 클라이언트 fetch/API route 없음.
 - 캐싱: `unstable_cache` + `updateTag`("Previous Model" 유지, 의도적 선택). 시간에 따라 바뀌는 페이지는 `export const revalidate = 3600`(썬데이 · 홈).
 - Vercel 함수 리전 `icn1` 고정(`vercel.json`).
-- 환경변수(`.env.local`, gitignored, 값은 출력 · 커밋 · 문서 기록 금지): `SUPABASE_URL` · `SUPABASE_ANON_KEY` · `ADMIN_PASSWORD`(3단계 운영 배포 뒤 삭제) · `NEXON_API_KEY`. 키 이름은 `.env.local.example`.
+- 환경변수(`.env.local`, gitignored, 값은 출력 · 커밋 · 문서 기록 금지): `SUPABASE_URL` · `SUPABASE_ANON_KEY` · `ADMIN_PASSWORD`(코드에서 안 씀, 운영 배포 뒤 사용자가 삭제) · `NEXON_API_KEY`. 키 이름은 `.env.local.example`.
 
-## 개편 전 앱(옛 코드, 3단계에서 삭제 예정)
+## 개편 전 앱
 
-- 부주 정산 `/settlement`(메뉴에서만 빠짐) · 관리자 `/admin` · 정산 계산 `lib/settlement-math.ts` · 캐시 `lib/queries.ts`. 설명 원문은 history "개편 전 앱 설명".
+- 옛 부주 정산 · 관리자 코드는 2026-11-11 삭제(`redesign`). 설명 원문 history "개편 전 앱 설명", 옛 표 삭제 = `008`(운영 배포 뒤).
 - 보스 분배금 계산 `lib/boss-split-math.ts`(chuchu.gg 산식)는 1단계에서 새 화면으로 옮겨 계속 씀.
 
 ## 세션 기록 (자세한 원문은 history)
 
-- 2026-11-11(2): 로그인 코드를 `members` 로 보관, handoff 26KB → 정리(원문 history "2026-11-11 정리", 원본 `C:dev_backuphandoff-2026-11-11`), 메인 올릴 준비 시작.
+- 2026-11-11(2): 로그인 코드를 `members` 로 보관, handoff 26KB → 정리(원문 history "2026-11-11 정리", 원본 `C:dev_backuphandoff-2026-11-11`), 메인 올릴 준비(옛 코드 삭제 · 008 · 방침 · 홈 정리).
 - 2026-11-11: 썬데이 저장 단계 푸시 · Preview 배포, 3단계 시작(계획 · 넥슨 약관 확인 · 로그인 시안 3안 → A안 · 007 SQL).

@@ -2,10 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogIn } from "lucide-react";
 import { Brand } from "@/components/brand";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { buttonVariants } from "@/components/ui/button";
 import { findActive, navGroups } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
@@ -17,8 +15,8 @@ export function SiteHeader() {
     ? "홈"
     : active
       ? `${active.group.label} · ${active.item.label}`
-      : pathname === "/login"
-        ? "로그인"
+      : pathname === "/privacy"
+        ? "개인정보처리방침"
         : "";
 
   return (
@@ -26,16 +24,9 @@ export function SiteHeader() {
       <Brand compact className="lg:hidden" />
       <span className="hidden text-[13px] text-muted-foreground lg:inline">{crumb}</span>
 
+      {/* Login button stays hidden until member features ship (kept on the `members` branch). */}
       <div className="ml-auto flex items-center gap-2">
         <ThemeToggle />
-        {/* Login arrives in stage 3; until then this opens the "준비 중" page. */}
-        <Link
-          href="/login"
-          className={cn(buttonVariants(), "h-10 gap-1.5 rounded-lg px-4 text-sm font-bold")}
-        >
-          <LogIn className="size-4" aria-hidden="true" />
-          로그인
-        </Link>
       </div>
 
       {/* Mobile: group tabs, then the tools inside the chosen group. */}

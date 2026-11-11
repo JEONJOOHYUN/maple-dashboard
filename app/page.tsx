@@ -1,12 +1,10 @@
 import Link from "next/link";
 import { ArrowRight, Sun, Wallet } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { buttonVariants } from "@/components/ui/button";
 import { ThemeChip } from "@/components/sunday/sunday-view";
 import { navGroups, type NavItem } from "@/lib/nav";
 import { loadSundayWeeks } from "@/lib/sunday/live";
 import { getSundayPageData } from "@/lib/sunday/view";
-import { cn } from "@/lib/utils";
 
 const incomeFeatures = [
   {
@@ -27,16 +25,8 @@ const incomeFeatures = [
   },
 ];
 
-const incomeSteps = [
-  { title: "0으로 비우고 사냥", description: "메소 · 조각을 옮겨 두고 시작" },
-  { title: "캡처 붙여넣기", description: "끝나면 인벤토리 [기타] 탭을 Ctrl+V" },
-  { title: "확인 · 저장", description: "읽은 숫자를 보고 저장" },
-];
-
 // The Sunday card depends on the clock (Friday notice, Sunday rollover), so re-render hourly.
 export const revalidate = 3600;
-
-const primaryButton = cn(buttonVariants(), "h-[42px] rounded-lg px-[18px] text-sm font-bold");
 
 export default async function Home() {
   const sunday = getSundayPageData(new Date(), await loadSundayWeeks());
@@ -44,26 +34,8 @@ export default async function Home() {
   const topThemes = [...sunday.prediction.themes].sort((a, b) => b.p - a.p).slice(0, 2);
   return (
     <div className="flex flex-col gap-4 lg:gap-[22px]">
-      {/* This week: guest state (login arrives in stage 3). */}
-      <section className="flex flex-wrap items-center gap-4 rounded-lg border border-border bg-card px-5 py-[18px]">
-        <div className="flex min-w-[220px] flex-1 flex-col gap-1">
-          <h1 className="font-heading text-base font-bold">이번 주 내 메이플</h1>
-          <p className="text-[13px] leading-relaxed text-muted-foreground">
-            로그인하면 남은 숙제 · 내 수익 표시 · API 키만 넣어도 이번 주 보스 수익은 로그인 없이 확인
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link
-            href="/revenue"
-            className={cn(buttonVariants({ variant: "secondary" }), "h-[42px] rounded-lg border-border px-4 text-sm font-normal")}
-          >
-            API 키로 보스 수익만 보기
-          </Link>
-          <Link href="/login" className={primaryButton}>
-            로그인
-          </Link>
-        </div>
-      </section>
+      {/* The "이번 주 내 메이플" login card returns with member features (`members` branch). */}
+      <h1 className="sr-only">메이플 대시보드</h1>
 
       <Link
         href="/sunday"
@@ -97,20 +69,21 @@ export default async function Home() {
         <span className="text-xs font-semibold text-primary-text">자세히 →</span>
       </Link>
 
-      <section className="flex flex-col gap-4 rounded-lg border border-primary bg-card p-5 lg:p-7">
+      {/* Coming-soon preview: no start button or how-to steps until 내 수익 exists. */}
+      <section className="flex flex-col gap-4 rounded-lg border border-border bg-card p-5 lg:p-6">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="flex flex-col gap-1.5">
             <span className="inline-flex items-center gap-2 text-[13px] font-bold text-primary-text">
               <Wallet className="size-4" aria-hidden="true" />
               내 수익
             </span>
-            <h2 className="font-heading text-[22px] leading-snug font-bold lg:text-[26px]">
+            <h2 className="font-heading text-[20px] leading-snug font-bold lg:text-[22px]">
               오늘 번 메소, 캡처 한 장으로 기록
             </h2>
           </div>
-          <Link href="/income" className={primaryButton}>
-            내 수익 시작하기
-          </Link>
+          <Badge variant="outline" className="text-muted-foreground">
+            준비 중
+          </Badge>
         </div>
         <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
           {incomeFeatures.map((f) => (
@@ -120,17 +93,6 @@ export default async function Home() {
             </div>
           ))}
         </div>
-        <ol className="grid grid-cols-1 gap-2.5 lg:grid-cols-3">
-          {incomeSteps.map((s, i) => (
-            <li key={s.title} className="flex items-center gap-3 rounded-lg border border-border px-3.5 py-3">
-              <b className="font-num text-[22px] font-bold text-primary-text">{i + 1}</b>
-              <span className="flex flex-col gap-0.5">
-                <b className="text-sm">{s.title}</b>
-                <span className="text-xs text-muted-foreground">{s.description}</span>
-              </span>
-            </li>
-          ))}
-        </ol>
       </section>
 
       {navGroups.map((group) => {

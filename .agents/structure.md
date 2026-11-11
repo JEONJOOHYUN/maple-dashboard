@@ -2,6 +2,8 @@
 
 > handoff 에서 떼어 낸 참고 자료(2026-10-29). 파일·테이블을 바꾸면 여기도 고친다. 지금 상태는 [handoff.md](handoff.md).
 
+> **2026-11-11**: 옛 관리자 · 정산 코드를 지웠다 — `app/admin` · `app/actions` · `app/settlement` · `lib/queries.ts` · `lib/settlement-math.ts` · `lib/constants.ts` · `lib/date.ts` · `components/worker-tabs.tsx` · `icon-value.tsx` · `activity-calendar.tsx` · `ui/alert-dialog.tsx` · `public/meso.png` · `fragment.png`. 새로 생긴 것 = `app/privacy/page.tsx`, `supabase/migrations/008_drop_legacy_tables.sql`(옛 표 5개 삭제, 운영 배포 뒤 실행). 아래 목록 · 스키마의 해당 줄은 옛 내용이고, "파일 정리" 단계에서 새 구조로 다시 쓴다.
+
 ## 디렉터리 구조
 
 ```

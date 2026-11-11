@@ -268,3 +268,12 @@ ADMIN_PASSWORD=
 - 2026-11-09: 2단계 1~14차 수정, 어빌리티 "뜬 옵션" 칩, 숨은 스펙업 데이터 · 규칙 · `/spec` 화면.
 - 2026-11-10(밤): 썬데이 글자 읽기를 CLOVA OCR 로 교체 · 매칭 규칙 보강 · 저장 단계(미커밋), handoff 20KB → 정리(원문 history "2026-11-10 정리 (2)").
 - 2026-11-10: 잠재 탭 개선 커밋, 썬데이 지난 기록 데이터 · 예측 시험 · `/sunday` 화면(`27e4bdc`), 로고 = 앱 아이콘(`26e26ec`), handoff 30KB → 정리(원문 history "2026-11-10 정리").
+
+### 3단계 회원 요약 줄 (2026-11-11 handoff 에서 옮김, 원문)
+
+   - `members` 에 있는 것: `@supabase/ssr` 0.12.7, `proxy.ts`(`/login` · `/me` 만), `lib/auth/`, `app/login/`, `app/me/`(아이디 + 로그아웃), `components/auth/login-card.tsx`, 헤더 로그인 표시(쿠키 `maple_member`, 표시만), `.env.local.example` 의 `MAPLE_KEY_SECRET`. 가입 · 로그인 · 로그아웃 브라우저 확인됨.
+   - 결정(2026-11-11 사용자): RLS 에 `app = maple`, 아이디 4~20자 영문 소문자 · 숫자 · `_` / 비밀번호 8자 이상, 비밀번호 찾기 없음, 탈퇴 포함, 키는 AES-256-GCM 암호화 저장, 아이디는 `app_metadata.login_id`.
+
+### 개인정보처리방침 사실 확인 (2026-11-11 handoff 에서 옮김, 원문)
+
+      - 사실 확인(2026-11-11): Clarity 녹화 30일 · 집계 13개월(Microsoft Learn data-retention), 저장 위치는 공식 문서에 "Microsoft Azure"만 있고 지역 선택 없음 → 방침에 "미국 등". Vercel Hobby 런타임 로그 1시간(Vercel 문서) — 요금제를 바꾸면 방침도 고치기.

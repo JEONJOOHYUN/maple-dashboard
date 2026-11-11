@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import Link from "next/link";
 // Body and titles: Pretendard, official dynamic subset (92 unicode-range slices;
 // the browser fetches only the slices a page uses). License: fonts/Pretendard/LICENSE.txt
 import "../fonts/Pretendard/pretendardvariable-dynamic-subset.css";
@@ -47,10 +48,19 @@ export default function RootLayout({
               <SiteHeader />
               <main className="flex-1 px-4 pt-[18px] pb-7 lg:px-8 lg:pt-7 lg:pb-9">
                 <div className="mx-auto w-full max-w-6xl">{children}</div>
-                {/* Nexon IP guide · Open API terms ask for these notices (brain wiki/research/nexon-ip-guide.md). */}
-                <p className="mx-auto mt-10 w-full max-w-6xl text-[11px] text-muted-foreground lg:hidden">
-                  MapleStory © NEXON Korea · Data based on NEXON Open API · 넥슨과 무관한 비공식 팬 사이트
-                </p>
+                <footer className="mx-auto mt-10 flex w-full max-w-6xl flex-wrap items-center gap-x-4 gap-y-1 border-t border-border pt-4 text-[11px] text-muted-foreground">
+                  <Link
+                    href="/privacy"
+                    className="py-1 text-xs font-semibold text-foreground underline-offset-2 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
+                  >
+                    개인정보처리방침
+                  </Link>
+                  {/* Nexon IP guide · Open API terms ask for these notices (brain wiki/research/nexon-ip-guide.md).
+                      Desktop shows them at the bottom of the side menu instead. */}
+                  <span className="lg:hidden">
+                    MapleStory © NEXON Korea · Data based on NEXON Open API · 넥슨과 무관한 비공식 팬 사이트
+                  </span>
+                </footer>
               </main>
             </div>
           </div>
