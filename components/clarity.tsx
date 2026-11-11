@@ -9,8 +9,10 @@ export function Clarity() {
   // The id is inlined into a script, so accept only the plain id format.
   if (!/^[a-z0-9]{6,20}$/i.test(id)) return null;
 
+  // The id must not be "clarity": an element id becomes window.<id>, which
+  // would shadow the window.clarity queue function and stop Clarity starting.
   return (
-    <Script id="clarity" strategy="afterInteractive">
+    <Script id="ms-clarity" strategy="afterInteractive">
       {`(function(c,l,a,r,i,t,y){
 if(/^(localhost|127\\.0\\.0\\.1|\\[::1\\])$/.test(l.location.hostname))return;
 c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};

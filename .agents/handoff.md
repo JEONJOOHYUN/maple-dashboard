@@ -75,6 +75,7 @@
 - 한 폴더에 `next dev` 는 하나만 → 확인용은 `next build` 후 `next start -p 3011`. 백그라운드로 켠 3011 은 작업 중지로 안 꺼짐 → 포트를 잡은 PID 를 찾아 끄기. **빌드를 다시 하면 3011 도 껐다 켜기.**
 - JSON import 는 `with { type: "json" }`(node --test 에 필요). 크롬 창을 375로 줄여도 `innerWidth` 가 안 바뀜 → 같은 출처 페이지에 375px iframe 을 넣어 확인.
 - **`npx` 로 프로젝트에 없는 도구를 부르지 않기**: `npx node` · `npx prettier` 가 새 판을 내려받아 실행함(2026-11-10, prettier 가 파일 모양을 바꿔 되돌림). 테스트는 `npm test`.
+- **Clarity 가 운영에서 수집을 못 하고 있었음(2026-11-12 고침)**: `<Script id="clarity">` 의 id 가 `window.clarity` 로 노출돼 Clarity 전역 함수를 가림 → 태그만 받고 시작 안 함(대시보드 0건). id 를 `ms-clarity` 로. `next/script` id 는 라이브러리 전역 이름과 겹치지 않게. 확인법: 운영 페이지에서 `typeof window.clarity === "function"` + `clarity.ms/collect` 요청.
 - Next 이미지 최적화: 주소가 같으면 브라우저가 예전 그림을 캐시에서 씀 → 바뀌는 그림은 정적 import(내용 해시 주소).
 
 ## 전면 개편 계획 → [project-spec.md](project-spec.md)
