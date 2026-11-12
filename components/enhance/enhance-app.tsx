@@ -50,6 +50,7 @@ export function EnhanceApp() {
     forgetPace(account);
     try {
       localStorage.removeItem(`enhance:discount:${account}`);
+      localStorage.removeItem(`enhance:groupsSeen:${account}`);
     } catch {
       // nothing to remove
     }
@@ -67,7 +68,7 @@ export function EnhanceApp() {
     void clearEverything();
     // Every key's settings by their names, not by the list: a key used with "기억" off is in no list.
     try {
-      for (const k of Object.keys(localStorage)) if (k.startsWith("enhance:pace:") || k.startsWith("enhance:discount:")) localStorage.removeItem(k);
+      for (const k of Object.keys(localStorage)) if (k.startsWith("enhance:pace:") || k.startsWith("enhance:discount:") || k.startsWith("enhance:groupsSeen:")) localStorage.removeItem(k);
     } catch {
       // nothing to remove
     }

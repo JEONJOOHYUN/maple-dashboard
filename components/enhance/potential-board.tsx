@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactN
 import Link from "next/link";
 import { Package, Split } from "lucide-react";
 import { NumberField, eok, parseNum } from "@/components/ev/ui";
-import { BasisButton, BasisRow, ItemFilter, NO_ITEM_FILTER, PeriodBar, SyncBanners, ViewTabs, WorldChips, itemMatches, liveFilter, useGroupsOff, usePeriod, useSync } from "@/components/enhance/board-bits";
+import { BasisButton, BasisRow, ItemFilter, NO_ITEM_FILTER, PeriodBar, SyncBanners, ViewTabs, WorldStrip, itemMatches, liveFilter, useGroupsOff, useKnownGroups, usePeriod, useSync } from "@/components/enhance/board-bits";
 import { Card, Delta, Empty, Gauge, ItemIcon, Select, Tile } from "@/components/enhance/parts";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { useItemDict, type Rolled } from "@/components/enhance/use-item-dict";
@@ -513,6 +513,7 @@ export function PotentialBoard({ apiKey, account, onForget, switcher }: { apiKey
   }, [tries, rollsIn, from, to]);
   const worldOf = useWorldOf(apiKey, account, triesSnap.rows, triesSnap.at);
   const tallies = useMemo(() => groupTallies(inPeriod.map((e) => ({ world: worldOf(e.row.who, e.row.t), spent: e.cost }))), [inPeriod, worldOf]);
+  const groups = useKnownGroups(account, tallies);
   const entries = useMemo(() => inPeriod.filter((e) => !groupsOff.includes(worldGroup(worldOf(e.row.who, e.row.t)))), [inPeriod, worldOf, groupsOff]);
   const stats = useMemo(() => buildPotStats(entries, conv), [entries, conv]);
 
@@ -529,7 +530,6 @@ export function PotentialBoard({ apiKey, account, onForget, switcher }: { apiKey
         loading={loading}
         onRefresh={refresh}
         lead={switcher}
-        filters={<WorldChips tallies={tallies} off={groupsOff} onToggle={toggleGroup} />}
         aside={
           pricedUsed.length > 0 && (
             <BasisButton summary={pricedUsed.map((cube) => `${CUBE_SHORT[cube]} ${eok(prices[cube] ?? cubePriceDefault(cube))}`).join(" · ")}>
@@ -559,10 +559,19 @@ export function PotentialBoard({ apiKey, account, onForget, switcher }: { apiKey
       <SyncBanners snap={snap} unit="회" onRetry={refresh} onForget={onForget} />
 
       {stats.rolls === 0 ? (
-        snap.status === "done" && <Empty>{inPeriod.length > 0 ? "꺼 둔 월드의 기록만 있음" : "이 기간에 잠재능력 기록 없음"}</Empty>
+        snap.status === "done" &&
+        (inPeriod.length > 0 ? (
+          <Card>
+            <WorldStrip tallies={groups} off={groupsOff} onToggle={toggleGroup} />
+            <p className="px-5 py-10 text-center text-sm text-muted-foreground">꺼 둔 월드의 기록만 있음</p>
+          </Card>
+        ) : (
+          <Empty>이 기간에 잠재능력 기록 없음</Empty>
+        ))
       ) : (
         <>
           <Card>
+            <WorldStrip tallies={groups} off={groupsOff} onToggle={toggleGroup} />
             <div className="grid items-end gap-5 p-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] lg:p-7">
               <div className="flex flex-col gap-1.5">
                 <span className="text-[13px] text-muted-foreground">사용 메소 · {period.label}</span>

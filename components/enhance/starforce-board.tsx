@@ -2,7 +2,7 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 import { Segment, eok } from "@/components/ev/ui";
-import { BasisButton, BasisRow, PeriodBar, SyncBanners, Toggle, ViewTabs, WorldChips, useGroupsOff, usePeriod, useSync } from "@/components/enhance/board-bits";
+import { BasisButton, BasisRow, PeriodBar, SyncBanners, Toggle, ViewTabs, WorldStrip, useGroupsOff, useKnownGroups, usePeriod, useSync } from "@/components/enhance/board-bits";
 import { Card, Empty, SKIP_LABEL, signed, tone } from "@/components/enhance/parts";
 import { CalendarView, InsightView, ItemDialog, ItemsView, LogView } from "@/components/enhance/starforce-views";
 import { useItemDict, type Rolled } from "@/components/enhance/use-item-dict";
@@ -74,6 +74,7 @@ export function StarforceBoard({ apiKey, account, onForget, switcher }: { apiKey
     });
   }, [inPeriod, snap.found, overrides, dict, tracked, discount]);
   const tallies = useMemo(() => groupTallies(judged.map((e) => ({ world: e.row.world, spent: e.j.ok ? e.j.cost : 0 }))), [judged]);
+  const groups = useKnownGroups(account, tallies);
   const entries = useMemo(() => judged.filter((e) => !groupsOff.includes(worldGroup(e.row.world))), [judged, groupsOff]);
   const stats = useMemo(() => buildStats(entries), [entries]);
 
@@ -99,7 +100,6 @@ export function StarforceBoard({ apiKey, account, onForget, switcher }: { apiKey
         loading={loading}
         onRefresh={refresh}
         lead={switcher}
-        filters={<WorldChips tallies={tallies} off={groupsOff} onToggle={toggleGroup} />}
         aside={
           <BasisButton summary={`MVP ${MVPS.find((m) => m.id === discount.mvp)?.label ?? "없음"} · PC방 ${discount.pcRoom ? "켜짐" : "꺼짐"}`}>
             <div className="flex flex-col gap-1.5">
@@ -122,10 +122,19 @@ export function StarforceBoard({ apiKey, account, onForget, switcher }: { apiKey
       <SyncBanners snap={snap} unit="일" onRetry={refresh} onForget={onForget} />
 
       {stats.total === 0 ? (
-        snap.status === "done" && <Empty>{judged.length > 0 ? "꺼 둔 월드의 기록만 있음" : "이 기간에 스타포스 기록 없음"}</Empty>
+        snap.status === "done" &&
+        (judged.length > 0 ? (
+          <Card>
+            <WorldStrip tallies={groups} off={groupsOff} onToggle={toggleGroup} />
+            <p className="px-5 py-10 text-center text-sm text-muted-foreground">꺼 둔 월드의 기록만 있음</p>
+          </Card>
+        ) : (
+          <Empty>이 기간에 스타포스 기록 없음</Empty>
+        ))
       ) : (
         <>
           <Card>
+            <WorldStrip tallies={groups} off={groupsOff} onToggle={toggleGroup} />
             <div className="grid items-end gap-5 p-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] lg:p-7">
               <div className="flex flex-col gap-1.5">
                 {/* The meso spent is the big number, as on the potential board; the profit is one of the boxes (user, 2026-11-13). */}

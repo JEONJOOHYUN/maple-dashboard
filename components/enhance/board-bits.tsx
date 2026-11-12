@@ -1,7 +1,7 @@
 "use client";
 
 // What the star force board and the potential board share: the period, the sync wiring and its banners, the tab row.
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { AlertCircle, Loader2, RefreshCw, Search, SlidersHorizontal } from "lucide-react";
 import { Select } from "@/components/enhance/parts";
 import { eok } from "@/components/ev/ui";
@@ -10,7 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import type { ApiErrorKind } from "@/lib/enhance/client";
 import { addDays, kstDate } from "@/lib/enhance/kst";
 import type { HistorySync, SyncSnap } from "@/lib/enhance/sync";
-import { GROUP_LABEL, type GroupTally, type WorldGroup } from "@/lib/enhance/worlds";
+import { GROUP_LABEL, WORLD_GROUPS, type GroupTally, type WorldGroup } from "@/lib/enhance/worlds";
 import { useNow } from "@/lib/use-now";
 import { useStored } from "@/lib/use-stored";
 import { cn } from "@/lib/utils";
@@ -74,8 +74,8 @@ export function useSync<T extends { t: number; who: string; item: string }>(sync
 /**
  * Rows (user, 2026-11-13). First: `lead` (the star force · potential switch) on the left, when the records were
  * read and the refresh button on the right. Second, under the switch: the period buttons on the left, `aside` (the
- * "계산 기준" button) on the right. Third, under the period: `filters` (the world groups — a row that is only there
- * when the records are not all regular-world ones). The date fields come last.
+ * "계산 기준" button) on the right. The date fields come last. The world groups are not here: they are the top
+ * line of the summary card (WorldStrip).
  * Changing or forgetting the key is in the menu next to the page title.
  */
 export function PeriodBar({
@@ -84,7 +84,6 @@ export function PeriodBar({
   loading,
   onRefresh,
   lead,
-  filters,
   aside,
 }: {
   state: PeriodState;
@@ -92,7 +91,6 @@ export function PeriodBar({
   loading: boolean;
   onRefresh: () => void;
   lead?: ReactNode;
-  filters?: ReactNode;
   aside?: ReactNode;
 }) {
   const { period, setPeriod, custom, setCustom, today, oldest, from, to } = state;
@@ -130,7 +128,6 @@ export function PeriodBar({
         </div>
         {aside}
       </div>
-      {filters}
       {period === "custom" && (
         <div className="flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground">
           <input type="date" aria-label="시작일" value={custom.from || from} min={oldest} max={to} onChange={(e) => setCustom({ ...custom, from: e.target.value })} className={dateInput} />
@@ -150,19 +147,49 @@ export function useGroupsOff() {
   return [off, toggle] as const;
 }
 
+const NO_GROUPS: WorldGroup[] = [];
+
+/**
+ * The world groups to list for an account: the ones in the period on screen plus every group its records were ever
+ * seen in (kept in this browser, shared by the two boards). Without this the whole row went away when the period was
+ * made short enough to hold regular-world records only, and came back on a longer one (user, 2026-11-13: "월드는
+ * 어디갔어?"). A group with nothing in the period is listed with no amount.
+ */
+export function useKnownGroups(account: string, tallies: GroupTally[]): GroupTally[] {
+  const [seen, setSeen] = useStored<WorldGroup[]>(`enhance:groupsSeen:${account}`, NO_GROUPS);
+  useEffect(() => {
+    const fresh = tallies.map((t) => t.id).filter((id) => !seen.includes(id));
+    if (fresh.length > 0) setSeen((prev) => [...new Set([...prev, ...fresh])]);
+  }, [tallies, seen, setSeen]);
+  return useMemo(
+    () => WORLD_GROUPS.filter((id) => seen.includes(id) || tallies.some((t) => t.id === id)).map((id) => tallies.find((t) => t.id === id) ?? { id, n: 0, spent: 0 }),
+    [seen, tallies]
+  );
+}
+
 /** Nothing to tell apart when every record is a regular-world one. A seasonal or event group shows even alone:
  * that is how one sees what the records are, and the only place to leave them out. */
 export const worldsShown = (tallies: GroupTally[], off: WorldGroup[]) => !tallies.every((t) => t.id === "regular" && !off.includes(t.id));
 
 /**
- * 일반 · 챌린저스 · 버닝 · 이벤트: press to leave a group out of everything below. The same bordered group as the
- * period buttons above it, each with the meso it holds (no counts; user, 2026-11-13), so what was spent in a seasonal
- * or event world reads apart from the rest. A group that is switched off stays listed, so it can be switched back on.
+ * 일반 · 챌린저스 · 버닝 · 이벤트, as the top line of the summary card (user, 2026-11-13: they filter the numbers of
+ * that card, so that is where they are): press to leave a group out of everything below. Each shows the meso it
+ * holds (no counts), so what was spent in a seasonal or event world reads apart from the rest. A group that is
+ * switched off stays listed, so it can be switched back on. Nothing when there is nothing to tell apart.
  */
-export function WorldChips({ tallies, off, onToggle }: { tallies: GroupTally[]; off: WorldGroup[]; onToggle: (id: WorldGroup) => void }) {
+export function WorldStrip({ tallies, off, onToggle }: { tallies: GroupTally[]; off: WorldGroup[]; onToggle: (id: WorldGroup) => void }) {
   if (!worldsShown(tallies, off)) return null;
   return (
-    <div role="group" aria-label="월드" className="flex max-w-full flex-wrap gap-[3px] self-start rounded-lg border border-border p-[3px]">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border px-5 py-2.5 lg:px-7">
+      <span className="text-xs text-muted-foreground">월드</span>
+      <WorldChips tallies={tallies} off={off} onToggle={onToggle} />
+    </div>
+  );
+}
+
+function WorldChips({ tallies, off, onToggle }: { tallies: GroupTally[]; off: WorldGroup[]; onToggle: (id: WorldGroup) => void }) {
+  return (
+    <div role="group" aria-label="월드" className="flex max-w-full flex-wrap gap-[3px]">
       {tallies.map(({ id, spent }) => {
         const on = !off.includes(id);
         return (
