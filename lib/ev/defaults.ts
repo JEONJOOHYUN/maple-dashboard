@@ -50,8 +50,8 @@ export const itemImage = (code: string) => `https://open.api.nexon.com/static/ma
 /** Level for "목록에 없는 장비" when the page opens. */
 export const CUSTOM_LEVEL = 130;
 
-/** 1억 메소 = n원 (used to show won next to meso). */
-export const MESO_RATE_WON = 2900;
+/** 1억 메소 = n원 (used to show won next to meso). 1,500 = user, 2026-11-12 (the same as the MVP page). */
+export const MESO_RATE_WON = 1500;
 /** Spare item price for star force (억 메소). */
 export const SPARE_EOK = 10;
 /** Multipliers offered for "expected value × n". */

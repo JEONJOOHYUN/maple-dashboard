@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 export const metadata: Metadata = { title: "개인정보처리방침" };
 
 // Set to the day this version goes live on main.
-const EFFECTIVE_DATE = "2026-11-11";
+const EFFECTIVE_DATE = "2026-11-12";
 const CONTACT_EMAIL = "maplestorydashboard@gmail.com";
 
 const sections = [
@@ -19,7 +19,7 @@ const sections = [
 const processors = [
   { company: "Microsoft (Clarity)", job: "방문 기록 분석", place: "미국 등 (Microsoft Azure)" },
   { company: "Vercel", job: "호스팅 · 접속 기록", place: "미국 (함수 실행은 서울)" },
-  { company: "넥슨 (Open API)", job: "닉네임 조회", place: "한국" },
+  { company: "넥슨 (Open API)", job: "닉네임 조회 · 강화 기록 조회", place: "한국" },
 ];
 
 const list = "flex list-disc flex-col gap-1 pl-[18px] text-sm leading-relaxed";
@@ -60,6 +60,9 @@ export default function PrivacyPage() {
               <b>캐릭터 닉네임</b> (숨은 스펙업에 입력할 때): 넥슨 Open API 조회
             </li>
             <li>
+              <b>넥슨 Open API 키 · 강화 기록</b> (강화 기록에 키를 넣을 때): 브라우저에서 넥슨 서버로 바로 조회. 우리 서버로 안 보내고 저장 안 함
+            </li>
+            <li>
               <b>접속 기록</b> (자동 수집): IP · 요청 주소 · 시각 · 브라우저 → 오류 · 공격 확인
             </li>
           </ul>
@@ -70,6 +73,7 @@ export default function PrivacyPage() {
             <li>방문 기록: 녹화 30일 · 집계 13개월 뒤 Clarity 에서 삭제</li>
             <li>닉네임 조회 결과: 서버 임시 캐시. 3시간이 지나면 다음 조회 때 새 결과로 교체, 정해진 삭제 기한 없음 → 요청하면 삭제</li>
             <li>접속 기록: Vercel 에서 1시간 뒤 삭제 (현재 요금제 기준)</li>
+            <li>API 키 · 강화 기록: 우리 서버에 없음. 브라우저에 저장된 것은 강화 기록의 <b>키 · 기록 지우기</b> 버튼으로 삭제</li>
           </ul>
         </Section>
 
@@ -105,6 +109,9 @@ export default function PrivacyPage() {
             <li>
               계산기 설정 · 입력값: <b>이 브라우저에만</b> 저장, 서버로 안 보냄. 브라우저의 사이트 데이터 삭제로 지움
             </li>
+            <li>
+              강화 기록: API 키 (기억을 켰을 때) · 받은 기록 · 장비 레벨 / 노작 가격 입력값 = <b>이 브라우저에만</b> 저장
+            </li>
           </ul>
         </Section>
 
@@ -115,7 +122,7 @@ export default function PrivacyPage() {
         </Section>
 
         <Section index={6} {...sections[5]}>
-          <p className={text}>모든 접속 HTTPS. 서버 비밀 키는 서버에만.</p>
+          <p className={text}>모든 접속 HTTPS. 서버 비밀 키는 서버에만. 강화 기록 화면 · API 키 입력칸은 Clarity 녹화에서 가림.</p>
         </Section>
 
         <Section index={7} {...sections[6]}>
@@ -128,7 +135,7 @@ export default function PrivacyPage() {
               {CONTACT_EMAIL}
             </a>
           </p>
-          <p className={text}>회원 가입 · API 키 기능을 열기 전에 이 문서부터 고치고 시행일 표시.</p>
+          <p className={text}>회원 가입 기능을 열기 전에 이 문서부터 고치고 시행일 표시.</p>
         </Section>
       </article>
     </div>

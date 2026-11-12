@@ -89,9 +89,9 @@ export const navGroups: NavGroup[] = [
         short: "강화 기록",
         href: "/enhance",
         icon: Hammer,
-        card: { title: "강화 기록", description: "스타포스 · 큐브, 기댓값보다 얼마나?" },
+        card: { title: "강화 기록", description: "스타포스 · 잠재능력, 기댓값보다 얼마나?" },
         needs: "API 키",
-        ready: false,
+        ready: true,
       },
       {
         slug: "alerts",

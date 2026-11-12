@@ -23,6 +23,7 @@ maple-dashboard/
       actions.ts               # upsertLog, deleteLog, settleUp, deleteSettlement
     boss-split/
       page.tsx                # 보스 분배금 계산기 (DB 없음, 완전 클라이언트 사이드)
+    enhance/page.tsx          # 강화 기록 → components/enhance/enhance-app.tsx (브라우저에서만 동작, 상세 .agents/enhance.md)
     ev/page.tsx               # 기댓값 계산기 → components/ev/ev-calculator.tsx (5탭)
     mvp/page.tsx              # MVP 계산기 → components/mvp/mvp-calculator.tsx
     pinball/page.tsx          # 핀볼 추첨 → components/pinball/pinball-game.tsx
@@ -43,6 +44,7 @@ maple-dashboard/
     theme-provider.tsx / theme-toggle.tsx
     icon-value.tsx              # 아이콘+숫자 표시 헬퍼
     activity-calendar.tsx        # 일별 조각/메소 아이콘 달력, 월별 합계
+    enhance/                  # 강화 기록: enhance-app(키 관문) · key-gate · starforce-board(기간 · 요약 · 탭) · starforce-views(보기 4개 + 아이템 창) · potential-board(잠재능력 탭) · board-bits(두 보드 공용: 기간 · 받기 · 탭) · parts(공용 · 배지 · 선택 상자)
     ev/                       # 기댓값 탭 5개(starforce · potential · flame · soul · ability) + ui.tsx(칩 · 세그먼트 · 결과 카드 등 공용)
     mvp/ · pinball/           # MVP · 핀볼 화면
     spec/spec-check.tsx       # 숨은 스펙업 검색 · 결과(배지 열고 닫기, 놓친 스펙 · 참고 목록)
@@ -57,6 +59,7 @@ maple-dashboard/
     constants.ts                    # AUCTION_HOUSE_FEE_RATE = 0.03
     nav.ts                           # 메뉴 묶음·도구 목록(아이콘·홈 카드 문구·준비 중 여부) — 메뉴·홈이 공유
     ev/                               # 기댓값 계산 함수(starforce · potential · flame · soul · ability · luck) + *.test.ts, data/(공식 확률표 JSON), defaults.ts(가격 기본값 + 날짜)
+    enhance/                          # 강화 기록: 스타포스 parse · judge(손익) · stats(집계) · items(레벨 / 노작), 잠재능력 potential · pot-stats, kst + *.test.ts, 브라우저 전용 client(넥슨 직접 호출) · idb · sync
     mvp.ts (+ test)                   # MVP 등급 · 주차(목~수, KST) · 충전 계획 · 되팔기 효율
     pinball/                          # lazygyu roulette 엔진(MIT, LICENSE 사본) 정리본 + 우리 코스 stage.ts
     nexon/api.ts                      # 넥슨 Open API 서버 전용 호출(NEXON_API_KEY, 호출 간격 220ms, 429 한 번 재시도, 오류 종류 noKey · notFound · quota · failed)
@@ -166,3 +169,15 @@ create policy "Allow all access to settlements" on settlements for all using (tr
 누적 조각 = Σ logs.fragment_count − Σ fragment_sales.fragment_count − Σ settlements.fragment_count(구버전)
 누적 메소 = Σ logs.pure_meso + Σ fragment_sales.net_meso − Σ settlements.pure_meso
 ```
+
+## 기술 스택
+
+- Next.js 16.4.3 (App Router, Turbopack), React 19.2.8, TypeScript. 이 Next 버전은 학습 데이터보다 최신 → `node_modules/next/dist/docs/` 를 직접 참고.
+- Tailwind CSS v4 (`@custom-variant dark (&:where(.dark, .dark *))`), `next-themes` (다크모드).
+- 글꼴 = Pretendard(`fonts/Pretendard/`) + 큰 숫자만 메이플스토리 서체(`fonts/Maplestory/`, `font-num`).
+- **shadcn/ui** (style `base-nova`, Base UI 기반) — `components/ui/*`, 새 컴포넌트는 `npx shadcn@latest add <name>`.
+  주의: `shadcn init` 이 `app/globals.css` · `app/layout.tsx` 를 덮어쓴 적 있음(Geist 폰트) → CLI 뒤 두 파일 diff 확인. `globals.css` 에서 **`:root`(라이트)가 반드시 `.dark` 보다 먼저**(명시도가 같아 순서가 뒤집히면 다크모드가 라이트 색으로 남음).
+- Supabase(Postgres) — `@supabase/supabase-js`, **서버에서만**(Server Components / Server Actions), `SUPABASE_URL` / `SUPABASE_ANON_KEY`(NEXT_PUBLIC_ 아님). 데이터 변경은 전부 Server Actions, 클라이언트 fetch/API route 없음.
+- 캐싱: `unstable_cache` + `updateTag`("Previous Model" 유지, 의도적 선택). 시간에 따라 바뀌는 페이지(썬데이 · 홈)는 `await connection()` 으로 요청마다 렌더링 + DB 행만 `unstable_cache`(2026-11-11, 월요일 0시 전환).
+- Vercel 함수 리전 `icn1` 고정(`vercel.json`).
+- 환경변수(`.env.local`, gitignored, 값은 출력 · 커밋 · 문서 기록 금지): `SUPABASE_URL` · `SUPABASE_ANON_KEY` · `ADMIN_PASSWORD`(코드에서 안 씀, 운영 배포 뒤 사용자가 삭제) · `NEXON_API_KEY`. 키 이름은 `.env.local.example`.

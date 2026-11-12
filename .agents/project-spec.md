@@ -119,6 +119,7 @@
 - 큐브 필드: `id, character_name, date_create, cube_type, item_upgrade_result, miracle_time_flag, item_equipment_part, item_level,
   target_item, potential_option_grade, additional_potential_option_grade, upgrade_guarantee, upgrade_guarantee_count, before_potential_option[]…`
   (큐브는 `item_level` 있음). 소울 잠재는 2026-10-22 부터 미라클 타임 여부 포함.
+- **2026-11-12 실제 응답으로 확인**(스타포스 구현): 브라우저 직접 호출 가능(CORS), 하루 단위 조회 · 2년 전 같은 날까지, 파괴 기록은 before = after, `starcatch_result` 는 2026-03-19 스타캐치 삭제 뒤로 null(항상 적용으로 계산, 사용자 2026-11-12), `upgrade_item` = 메소 대신 쓴 강화 아이템. 큐브 3주치 531건은 `item_upgrade_result` 가 모두 "실패"(등급 상승 때 값은 확인 필요), `cube_type` 예: "메멘토 골드 큐브 (200제)" · "카르마 블랙 큐브". 구현 · 계산 방식 = [enhance.md](enhance.md).
 
 ## 4. 추가할 기능 (2026-11-07 사용자 요청, 2026-11-08 추가·변경)
 
