@@ -41,7 +41,8 @@ export default function RootLayout({
   return (
     <html lang="ko" suppressHydrationWarning className={maple.variable}>
       <body>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+        {/* Dark unless the visitor picked light with the toggle (user, 2026-11-12). The system setting is not followed. */}
+        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
           <div className="flex min-h-dvh">
             <SideNav />
             <div className="flex min-w-0 flex-1 flex-col">
