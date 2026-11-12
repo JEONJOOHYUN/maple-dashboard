@@ -31,9 +31,11 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# untouched third-party originals kept locally for reference (license review in .agents/project-spec.md 4-7)
+# untouched third-party originals kept locally for reference
 /vendor/
 
-# AI tool files: rewritten by next dev / local tool settings
+# AI tool files and working notes: kept on the developer machine only
 AGENTS.md
+CLAUDE.md
 .claude/
+.agents/
