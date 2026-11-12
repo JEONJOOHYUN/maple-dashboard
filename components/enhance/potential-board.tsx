@@ -12,7 +12,7 @@ import { useInsights, useWorldOf } from "@/components/enhance/use-worlds";
 import { itemIcon, type ItemInfo } from "@/lib/enhance/items";
 import { DAY, dayStart, kstFull, kstShort, kstStamp } from "@/lib/enhance/kst";
 import { buildPotStats, potEntries, potEntryKey, type PieceStat, type PotEntry } from "@/lib/enhance/pot-stats";
-import { PRICED_CUBES, cubePriceDefault, feeByInsight, pricedCube, trackPieces, type CubePrices, type PricedCube } from "@/lib/enhance/potential";
+import { PRICED_CUBES, cubePriceDefault, feeByInsight, trackPieces, type CubePrices, type PricedCube } from "@/lib/enhance/potential";
 import { PotentialSync, StarforceSync } from "@/lib/enhance/sync";
 import { groupTallies, worldGroup } from "@/lib/enhance/worlds";
 import { STAT_CONV_DEFAULT } from "@/lib/ev/defaults";
@@ -492,7 +492,6 @@ export function PotentialBoard({ apiKey, account, onForget, switcher }: { apiKey
     }
     return out;
   }, [priceText]);
-  const pricedUsed = useMemo(() => PRICED_CUBES.filter((cube) => snap.rows.some((r) => pricedCube(r) === cube)), [snap.rows]);
   const inPeriod = useMemo(() => {
     const start = dayStart(from);
     const end = dayStart(to) + DAY;
@@ -531,9 +530,11 @@ export function PotentialBoard({ apiKey, account, onForget, switcher }: { apiKey
         onRefresh={refresh}
         lead={switcher}
         aside={
-          pricedUsed.length > 0 && (
-            <BasisButton summary={pricedUsed.map((cube) => `${CUBE_SHORT[cube]} ${eok(prices[cube] ?? cubePriceDefault(cube))}`).join(" · ")}>
-              {pricedUsed.map((cube) => (
+          // Always there, for both cubes (user, 2026-11-13): shown only to those who had used one, nobody else
+          // could tell the price can be set.
+          (
+            <BasisButton summary={PRICED_CUBES.map((cube) => `${CUBE_SHORT[cube]} ${eok(prices[cube] ?? cubePriceDefault(cube))}`).join(" · ")}>
+              {PRICED_CUBES.map((cube) => (
                 <BasisRow key={cube} label={`${CUBE_NAME[cube]} 1개`}>
                   <NumberField
                     label={`${CUBE_NAME[cube]} 1개 가격 (억 메소)`}
