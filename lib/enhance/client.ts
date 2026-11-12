@@ -8,8 +8,10 @@
 import type { FoundItem } from "./items.ts";
 
 const BASE = "https://open.api.nexon.com/maplestory/v1";
-/** Service stage: at most 100 request starts a second, far under the 500 allowed (two tabs still fit). */
-const FAST_GAP_MS = 10;
+/** Service stage: at most this many request starts in any one second, half of the 500 allowed (the allowance is per application). */
+const FAST_PER_SECOND = 250;
+/** A refusal while this few requests were started in the last second can only be a development-stage key. */
+const SURELY_DEV = 100;
 /** Development stage: under 5 request starts a second. */
 const SLOW_GAP_MS = 230;
 
@@ -76,12 +78,24 @@ export function createApi(key: string, account?: string): Api {
   let slow = knownSlow(account);
   // One line for every request start (retries too), so a burst can never pass the pace of the key's stage.
   let last = 0;
+  /** When the requests of the last second or so were started. */
+  let started: number[] = [];
   let line: Promise<void> = Promise.resolve();
   const turn = () => {
     const mine = line.then(async () => {
-      const wait = last + (slow ? SLOW_GAP_MS : FAST_GAP_MS) - Date.now();
-      if (wait > 0) await sleep(wait);
+      if (slow) {
+        const wait = last + SLOW_GAP_MS - Date.now();
+        if (wait > 0) await sleep(wait);
+      }
+      // Counted over the last second rather than spaced by a few ms each: timers are too coarse for that.
+      for (;;) {
+        const now = Date.now();
+        started = started.filter((t) => now - t < 1000);
+        if (started.length < FAST_PER_SECOND) break;
+        await sleep(started[0] + 1001 - now);
+      }
       last = Date.now();
+      started.push(last);
     });
     line = mine;
     return mine;
@@ -104,10 +118,12 @@ export function createApi(key: string, account?: string): Api {
         const body = (await res.json().catch(() => null)) as { error?: { name?: string } } | null;
         const code = body?.error?.name ?? "";
         const kind = KINDS[code] ?? (res.status === 429 ? "quota" : "failed");
-        // A development-stage key: from here on its pace.
+        // Refused: from here on the development-stage pace. It is remembered for the key only when it cannot have
+        // been a service-stage key going over 500 a second (another tab fetching with the same key).
         if (kind === "quota" && !slow) {
           slow = true;
-          rememberSlow(account);
+          const now = Date.now();
+          if (started.filter((t) => now - t < 1000).length <= SURELY_DEV) rememberSlow(account);
         }
         // The per-second limit clears in a second (another tab may be calling too); the daily one does not,
         // so wait and try twice more before giving up.

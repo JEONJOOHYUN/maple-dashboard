@@ -17,7 +17,7 @@ const OPEN_TTL = 2 * 60_000;
 const EQUIP_TTL = DAY;
 const MAX_CHARACTERS = 30;
 // Days fetched at once. The request starts themselves are spaced by the client (see createApi), whatever this is.
-const WORKERS = 12;
+const WORKERS = 40;
 const EMIT_EVERY = 300;
 
 type Row = { t: number; who: string; item: string };

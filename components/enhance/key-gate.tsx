@@ -22,7 +22,7 @@ const ERRORS: Record<ApiErrorKind, string> = {
 // The order of NEXON's own registration page (마이 페이지 → 애플리케이션 등록, seen 2026-11-12).
 const STEPS = [
   <>
-    아래 <b>애플리케이션 등록</b> 열기 → 넥슨 계정 로그인
+    <b>애플리케이션 등록</b> 열기 → 넥슨 계정 로그인
   </>,
   <>
     약관 동의 → 게임 <b>메이플스토리</b> → <b>서비스 단계</b> 선택
@@ -202,6 +202,17 @@ export function KeyGate({ saved, onConnect, onForgetAll }: { saved: SavedKey[]; 
               <b className="font-num text-primary-text">0{i + 1}</b>
               <span>{step}</span>
             </p>
+            {i === 0 && (
+              <a
+                href={REGISTER_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ml-[30px] inline-flex items-center gap-1.5 self-start text-[13px] font-semibold text-primary-text outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                애플리케이션 등록 열기 (openapi.nexon.com)
+                <ExternalLink className="size-3.5" aria-hidden="true" />
+              </a>
+            )}
             {i === FILL_STEP && (
               <dl className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2.5 gap-y-2 rounded-md border border-border bg-card px-3 py-2.5 text-xs">
                 {FILL.map((f) => (
@@ -215,15 +226,6 @@ export function KeyGate({ saved, onConnect, onForgetAll }: { saved: SavedKey[]; 
             )}
           </Fragment>
         ))}
-        <a
-          href={REGISTER_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 self-start text-[13px] font-semibold text-primary-text outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
-        >
-          애플리케이션 등록 열기 (openapi.nexon.com)
-          <ExternalLink className="size-3.5" aria-hidden="true" />
-        </a>
         <p className="text-xs leading-relaxed text-muted-foreground">개발 단계로 받은 키도 가능 → 하루 1,000건 · 느리게 받음</p>
       </section>
     </div>
