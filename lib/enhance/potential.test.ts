@@ -193,6 +193,16 @@ test("gloves with crit damage and hats with cooldown: special lines plus main st
   const gRows = lineTables("black", "legendary", "gloves", 200)!;
   const cc = goalChance(gloves, "legendary", goalOf(["크리티컬 데미지 +8%", "크리티컬 데미지 +8%", "INT +12%"], false)!, NO_CONV)!;
   assert.deepEqual([cc.by, cc.p], ["크뎀 2줄 + INT 1줄", sumChance(gRows, { type: "combo", special: "cd", lines: 2, stat: 1, minSpecial: 3 })]);
+  // An all stat % line is a main stat line too, as on the calculator.
+  const withAll = goalChance(gloves, "legendary", goalOf(["크리티컬 데미지 +8%", "INT +9%", "올스탯 +6%"], false)!, NO_CONV)!;
+  assert.deepEqual([withAll.by, withAll.p], ["크뎀 1줄 + INT 2줄", sumChance(gRows, { type: "combo", special: "cd", lines: 1, stat: 2, minSpecial: 3 })]);
+  // Only all stat lines: an all-stat item (Xenon's). The calculator's "제논 · 올스탯" goal, where a main stat
+  // line does not count — so it is rarer than the same line count on a main stat item.
+  const onlyAll = goalChance(gloves, "legendary", goalOf(["크리티컬 데미지 +8%", "올스탯 +9%", "올스탯 +6%"], false)!, NO_CONV)!;
+  assert.deepEqual([onlyAll.by, onlyAll.p], ["크뎀 1줄 + 올스탯 2줄", sumChance(gRows, { type: "combo", special: "cd", lines: 1, stat: 2, main: "all", minSpecial: 3 })]);
+  assert.ok(onlyAll.p < withAll.p);
+  const hatAll = goalChance(row({ item_equipment_part: "모자", item_level: 200 }), "legendary", goalOf([COOL1, "올스탯 +9%", "올스탯 +6%"], false)!, NO_CONV)!;
+  assert.deepEqual([hatAll.by, hatAll.p], ["쿨감 1초 + 올스탯 2줄", sumChance(lineTables("black", "legendary", "hat", 200)!, { type: "combo", special: "cool", lines: 1, stat: 2, main: "all", minSum: 1 })]);
   const c = goalChance(gloves, "legendary", goalOf(["크리티컬 데미지 +8%", "방어력 +7%", "이동속도 +9"], false)!, NO_CONV)!;
   assert.deepEqual([c.by, c.p], ["크뎀 1줄", sumChance(gRows, { type: "combo", special: "cd", lines: 1, stat: 0, minSpecial: 3 })]);
   // Gloves without a crit damage line are plain armour.
@@ -203,9 +213,26 @@ test("gloves with crit damage and hats with cooldown: special lines plus main st
   const four = goalChance(hat, "legendary", goalOf([COOL2, COOL2, "방어력 +7%"], false)!, NO_CONV)!;
   assert.deepEqual([four.by, four.p], ["쿨감 4초", sumChance(hRows, { type: "cool", min: 4 })]);
   const mixed = goalChance(hat, "legendary", goalOf([COOL2, "INT +12%", "INT +9%"], false)!, NO_CONV)!;
-  assert.deepEqual([mixed.by, mixed.p], ["쿨감 2초 + INT 2줄", sumChance(hRows, { type: "combo", special: "cool", lines: 1, stat: 2, minSpecial: 2 })]);
-  const two = goalChance(hat, "legendary", goalOf([COOL2, COOL1, "INT +12%"], false)!, NO_CONV)!;
-  assert.deepEqual([two.by, two.p], ["쿨감 2줄 + INT 1줄", sumChance(hRows, { type: "combo", special: "cool", lines: 2, stat: 1, minSpecial: 1 })]);
+  assert.deepEqual([mixed.by, mixed.p], ["쿨감 2초 + INT 2줄", sumChance(hRows, { type: "combo", special: "cool", lines: 1, stat: 2, minSum: 2 })]);
+  // One −2초 line and two stat lines: asking for 2 seconds in total is the same thing as asking for a −2초 line.
+  near(mixed.p, sumChance(hRows, { type: "combo", special: "cool", lines: 1, stat: 2, minSpecial: 2 }), 1e-15, "2초 on one line");
+  // Cooldown on two lines is read by its total: −2초 · −1초 = 3 seconds, −2초 · −2초 = 4 seconds.
+  const three = goalChance(hat, "legendary", goalOf([COOL2, COOL1, "INT +12%"], false)!, NO_CONV)!;
+  assert.deepEqual([three.by, three.p], ["쿨감 3초 + INT 1줄", sumChance(hRows, { type: "combo", special: "cool", lines: 1, stat: 1, minSum: 3 })]);
+  const fourStat = goalChance(hat, "legendary", goalOf([COOL2, COOL2, "INT +12%"], false)!, NO_CONV)!;
+  assert.deepEqual([fourStat.by, fourStat.p], ["쿨감 4초 + INT 1줄", sumChance(hRows, { type: "combo", special: "cool", lines: 1, stat: 1, minSum: 4 })]);
+  // 3 seconds or more leaves out −1초 · −1초, which "two cooldown lines" let through; 4 seconds is harder still.
+  const twoLines = sumChance(hRows, { type: "combo", special: "cool", lines: 2, stat: 1, minSpecial: 1 });
+  assert.ok(fourStat.p < three.p && three.p < twoLines);
+  // 3 seconds with a stat line = −2초 · −1초 either way round, or −2초 · −2초, with the stat on the third line.
+  const p = (cat: string, value: number, i: number) => hRows[i].filter((r) => r[0] === cat && (cat !== "cool" || r[1] === value)).reduce((s, r) => s + r[2], 0);
+  const stat = (i: number) => p("int", 0, i) + p("all", 0, i);
+  let byHand = 0;
+  for (const s of [0, 1, 2]) {
+    const [a, b] = [0, 1, 2].filter((i) => i !== s);
+    byHand += stat(s) * (p("cool", 2, a) * p("cool", 1, b) + p("cool", 1, a) * p("cool", 2, b) + p("cool", 2, a) * p("cool", 2, b));
+  }
+  near(three.p, byHand, 1e-12, "쿨감 3초 + 주스탯 1줄, by hand");
 });
 
 test("accessories: drop rate and meso lines count together, next to the stat", () => {

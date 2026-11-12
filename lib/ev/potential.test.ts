@@ -187,13 +187,17 @@ test("Xenon (all stat %) and Demon Avenger (HP %) use their own lines, values an
 test("gloves / hats: special-option lines + main stat lines, the rest any option (option B, 2026-11-10)", () => {
   const gloves = lineTables("black", "legendary", "gloves", 200)!;
   const g = (lines: number, stat: number) => comboChance(gloves, { type: "combo", special: "cd", lines, stat });
-  // Same as the hand calculation shown on the design board (Lv.200 legendary black cube).
+  // Lv.200 legendary black cube. A main stat line = a main stat % line or an all stat % line (user, 2026-11-12;
+  // before that only the main stat's own line counted: 2.16 · 0.105 · 0.0235 %).
   assert.equal(+(g(1, 0) * 100).toFixed(2), 12.24);
-  assert.equal(+(g(1, 1) * 100).toFixed(3), 2.16);
+  assert.equal(+(g(1, 1) * 100).toFixed(3), 3.715);
   assert.equal(+(g(2, 0) * 100).toFixed(3), 0.258);
-  assert.equal(+(g(1, 2) * 100).toFixed(3), 0.105);
-  assert.equal(+(g(2, 1) * 100).toFixed(4), 0.0235);
+  assert.equal(+(g(1, 2) * 100).toFixed(3), 0.335);
+  assert.equal(+(g(2, 1) * 100).toFixed(4), 0.0422);
   assert.equal(+(g(3, 0) * 100).toFixed(4), 0.001);
+  // Xenon (all stat only) and demon avenger (HP only) count their own line, as before.
+  const own = (main: "all" | "hp") => +(comboChance(gloves, { type: "combo", special: "cd", lines: 1, stat: 1, main }) * 100).toFixed(3);
+  assert.deepEqual([own("all"), own("hp")], [1.721, 2.474]);
   // More lines asked → never easier.
   assert.ok(g(1, 0) > g(1, 1) && g(1, 1) > g(1, 2) && g(2, 0) > g(2, 1) && g(2, 1) > g(3, 0));
   // sumChance routes combo goals to comboChance.
@@ -212,7 +216,7 @@ test("additional gloves: crit damage 1 % lines do not count (3 % only, user 2026
   const add = lineTables("white", "legendary", "gloves", 200)!;
   const all = comboChance(add, { type: "combo", special: "cd", lines: 1, stat: 1 });
   const only3 = comboChance(add, { type: "combo", special: "cd", lines: 1, stat: 1, minSpecial: 3 });
-  assert.equal(+(only3 * 100).toFixed(4), 0.2733);
+  assert.equal(+(only3 * 100).toFixed(4), 0.5352);
   assert.ok(only3 < all);
   // Main potential has crit damage 8 % only: the threshold changes nothing there.
   const main = lineTables("black", "legendary", "gloves", 200)!;

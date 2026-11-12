@@ -266,7 +266,8 @@ export function statWorth(goal: Goal, conv: StatConv): number {
  *   three useful lines. Judging it by its hardest single line called it a 1-in-18 result (user, 2026-11-12);
  * - weapons, additional potential: attack % adding up to the top two values (21 %), with "+ @" when the third line
  *   is a main stat one, or three attack % lines;
- * - gloves with crit damage · hats with cooldown, main potential: that many special lines plus that many main stat lines;
+ * - gloves with crit damage, main potential: that many crit damage lines plus that many main stat lines;
+ *   hats with cooldown: that many seconds of cooldown in total plus that many main stat lines;
  * - armour and accessories with a main stat: the option's main stat % — the chance of any option with that much or more.
  *   Main potential is read the way players say it ("INT 30 %": stat % plus all stat %, one for one; user 2026-11-12).
  *   Additional potential mixes flat attack and "per 9 levels" lines, so those are converted: "INT 15.8 %급";
@@ -290,8 +291,12 @@ export function goalChance(row: Pick<PotRow, "part" | "level" | "meso" | "add" |
   const magic = weaponLike && pct("atk") !== pct("matk") ? pct("matk") > pct("atk") : goal.magic;
   const attack = magic ? "matk" : "atk";
   const count = (cat: string, min = 0) => goal.lines.filter(([c, v]) => c === cat && v >= min).length;
-  const statLines = goal.stat ? count(goal.stat) : 0;
-  const plusStat = statLines > 0 ? ` + ${LABEL[goal.stat]} ${statLines}줄` : "";
+  // Main stat lines the way the calculator counts them: an all stat % line is one too (user, 2026-11-12).
+  // With no main stat line at all the option is an all-stat one (Xenon's): then only all stat lines count, which
+  // is the calculator's "제논 · 올스탯" goal — a main stat line is not "this or better" for that item.
+  const statLines = (goal.stat ? count(goal.stat) : 0) + count("all");
+  const statMain = goal.stat || statLines === 0 ? ("str" as const) : ("all" as const);
+  const plusStat = statLines > 0 ? ` + ${goal.stat ? LABEL[goal.stat] : "올스탯"} ${statLines}줄` : "";
   const hit = (p: number, by: string) => (p > 0 ? { p, by } : null);
 
   if (weaponLike) {
@@ -326,16 +331,17 @@ export function goalChance(row: Pick<PotRow, "part" | "level" | "meso" | "add" |
   if (!row.add && slot === "gloves") {
     // Crit damage lines of 3 % or more, as on the calculator (the 1 % lines do not count).
     const crit = count("cd", 3);
-    if (crit > 0) return hit(sumChance(rows, { type: "combo", special: "cd", lines: crit, stat: statLines, minSpecial: 3 }), `크뎀 ${crit}줄${plusStat}`);
+    if (crit > 0) return hit(sumChance(rows, { type: "combo", special: "cd", lines: crit, stat: statLines, main: statMain, minSpecial: 3 }), `크뎀 ${crit}줄${plusStat}`);
   }
   if (!row.add && slot === "hat") {
     const cool = goal.lines.filter(([c]) => c === "cool").map(([, v]) => v);
     if (cool.length > 0) {
+      // Cooldown is read by its total seconds, with or without main stat lines: −2초 and −1초 is "쿨감 3초", and
+      // only options with 3 seconds or more count as this good. Counting lines called −2초 · −1초 and −2초 · −2초
+      // the same thing, and let −1초 · −1초 pass for the first (user, 2026-11-12).
       const seconds = cool.reduce((s, v) => s + v, 0);
-      const name = cool.length === 1 ? `쿨감 ${seconds}초` : `쿨감 ${cool.length}줄`;
-      // With no main stat line it is the plain "−n초" goal; with one, cooldown lines of at least the smallest one here.
       if (statLines === 0) return hit(sumChance(rows, { type: "cool", min: seconds }), `쿨감 ${seconds}초`);
-      return hit(sumChance(rows, { type: "combo", special: "cool", lines: cool.length, stat: statLines, minSpecial: Math.min(...cool) }), `${name}${plusStat}`);
+      return hit(sumChance(rows, { type: "combo", special: "cool", lines: 1, stat: statLines, main: statMain, minSum: seconds }), `쿨감 ${seconds}초${plusStat}`);
     }
   }
 

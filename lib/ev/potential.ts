@@ -349,18 +349,25 @@ export type SumGoal =
  * Gloves / hats (user, 2026-11-10): at least `lines` lines of the special option (crit damage on gloves, cooldown
  * on hats) of at least `minSpecial` (additional crit damage 1 % lines do not count: 3 % only, user 2026-11-10) plus at
  * least `stat` main stat lines (any value); the rest can be anything.
- * e.g. gloves 크뎀 1 + 주스탯 1 = 2.16 % on a Lv.200 legendary black cube.
+ * An all stat % line is a main stat line too (user, 2026-11-12: 올스탯 raises the main stat). Xenon (`main: "all"`)
+ * and demon avenger (`"hp"`) goals count their own line only.
  */
-export type ComboGoal = { type: "combo"; special: "cd" | "cool"; lines: number; stat: number; main?: MainStat; minSpecial?: number };
+/**
+ * `minSum` (optional) = the special lines' values add up to at least this, e.g. cooldown seconds in total:
+ * −2초 and −1초 on two lines is 3 seconds, and "this or better" then leaves out −1초 twice (user, 2026-11-12).
+ */
+export type ComboGoal = { type: "combo"; special: "cd" | "cool"; lines: number; stat: number; main?: MainStat; minSpecial?: number; minSum?: number };
 
 export function comboChance(rows: Row[][], goal: ComboGoal): number {
   const main = goal.main ?? "str";
+  const isStat = (cat: string) => cat === main || (main === "str" && cat === "all");
+  if (goal.minSum !== undefined) return comboSumChance(rows, goal, isStat, goal.minSum);
   const per = rows.map((line) => {
     let sp = 0;
     let st = 0;
     for (const r of line) {
       if (r[0] === goal.special && r[1] >= (goal.minSpecial ?? 0)) sp += r[2];
-      else if (r[0] === main) st += r[2];
+      else if (isStat(r[0])) st += r[2];
     }
     return { sp, st, other: Math.max(0, 1 - sp - st) };
   });
@@ -403,6 +410,34 @@ export function sumChance(rows: Row[][], goal: SumGoal): number {
 }
 
 /** One line's worth in main stat % (0 = not a main stat line). */
+/** comboChance() when the special lines are also asked for a total: each value of the special option is followed on its own. */
+function comboSumChance(rows: Row[][], goal: ComboGoal, isStat: (cat: string) => boolean, minSum: number): number {
+  const per = rows.map((line) => {
+    const special = new Map<number, number>();
+    let st = 0;
+    for (const r of line) {
+      if (r[0] === goal.special && r[1] >= (goal.minSpecial ?? 0)) special.set(r[1], (special.get(r[1]) ?? 0) + r[2]);
+      else if (isStat(r[0])) st += r[2];
+    }
+    const sp = [...special.values()].reduce((s, p) => s + p, 0);
+    return { special: [...special.entries()], st, other: Math.max(0, 1 - sp - st) };
+  });
+  let total = 0;
+  const walk = (i: number, sp: number, sum: number, st: number, p: number) => {
+    if (p === 0) return;
+    if (i === per.length) {
+      if (sp >= goal.lines && st >= goal.stat && sum >= minSum) total += p;
+      return;
+    }
+    const l = per[i];
+    for (const [value, chance] of l.special) walk(i + 1, sp + 1, sum + value, st, p * chance);
+    walk(i + 1, sp, sum, st + 1, p * l.st);
+    walk(i + 1, sp, sum, st, p * l.other);
+  };
+  walk(0, 0, 0, 0, 1);
+  return total;
+}
+
 function statValue(r: Row, conv: StatConv, attack: "atk" | "matk"): number {
   switch (r[0]) {
     case "str":

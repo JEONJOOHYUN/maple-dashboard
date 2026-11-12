@@ -588,8 +588,10 @@ export function PotentialTab() {
               <div className="flex flex-col gap-2">
                 {(
                   [
-                    ["lines", `${specialName} 줄`, comboSpecial === "cd" ? "크리티컬 데미지 3% 이상" : `재사용 대기시간 −${lowest("cool")}초 이상`],
-                    ["stat", `${mainName} 줄`, `${mainName} ${lowest(mainStat)}% 이상`],
+                    // Main potential has crit damage 8 % only; additional has 1 % and 3 %, and only 3 % counts.
+                    ["lines", `${specialName} 줄`, comboSpecial === "cd" ? (kind === "main" ? `크리티컬 데미지 ${lowest("cd")}%` : "크리티컬 데미지 3% 이상") : `재사용 대기시간 −${lowest("cool")}초 이상`],
+                    // An all stat % line raises the main stat too, so it counts as a main stat line (user, 2026-11-12).
+                    ["stat", `${mainName} 줄`, mainStat === "str" ? `주스탯 ${lowest("str")}% 이상 · 올스탯 포함` : `${mainName} ${lowest(mainStat)}% 이상`],
                   ] as const
                 ).map(([k, label, note]) => (
                   <div key={k} className="flex items-center justify-between gap-2">
