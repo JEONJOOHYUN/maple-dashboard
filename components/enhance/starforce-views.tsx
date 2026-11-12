@@ -3,12 +3,12 @@
 import { useRef, useState, type ReactNode } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, Package, Pencil } from "lucide-react";
 import { NumberField, Segment, eok, parseNum } from "@/components/ev/ui";
-import { CHIP, Card, Delta, Gauge, ItemIcon, SKIP_LABEL, Select, Tile, TryBadges, signed, signedShort, tone } from "@/components/enhance/parts";
+import { CHIP, Card, Delta, Empty, Gauge, ItemIcon, SKIP_LABEL, Select, Tile, TryBadges, signed, signedShort, tone } from "@/components/enhance/parts";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import type { ItemOverrides } from "@/lib/enhance/items";
 import { starAfter } from "@/lib/enhance/judge";
 import { dayStart, kstFull, kstShort, kstWeekday } from "@/lib/enhance/kst";
-import { entryKey, type Entry, type ItemStat, type Stats, type Tally } from "@/lib/enhance/stats";
+import { entryKey, reachedFloor, type Entry, type ItemStat, type Stats, type Tally } from "@/lib/enhance/stats";
 import { FLOOR_STAR } from "@/lib/ev/starforce";
 import { cn } from "@/lib/utils";
 
@@ -272,17 +272,23 @@ export function ItemsView({
   overrides,
   onOverrides,
   onOpen,
+  hideLow,
+  onHideLow,
 }: {
   stats: Stats;
   overrides: ItemOverrides;
   onOverrides: (next: ItemOverrides) => void;
   onOpen: (key: string) => void;
+  hideLow: boolean;
+  onHideLow: (v: boolean) => void;
 }) {
   const [sort, setSort] = useState<Sort>("spent");
   const [editing, setEditing] = useState("");
   // Items whose level is unknown come first: they are the ones waiting for an answer.
   const unknown = (it: ItemStat) => (it.info.level > 0 ? 0 : 1);
-  const items = [...stats.items].sort(
+  const items = stats.items
+    .filter((it) => !hideLow || reachedFloor(it))
+    .sort(
     (a, b) => unknown(b) - unknown(a) || (sort === "spent" ? b.spent - a.spent : sort === "delta" ? b.delta - a.delta : b.last - a.last) || b.tries - a.tries
   );
 
@@ -292,12 +298,19 @@ export function ItemsView({
         <b className="text-sm">
           아이템별 모아보기 <span className="font-medium text-muted-foreground">{items.length}개</span>
         </b>
-        <Select aria-label="정렬" value={sort} onChange={(e) => setSort(e.target.value as Sort)} className="bg-card">
-          <option value="spent">사용한 메소 순</option>
-          <option value="delta">손익 순</option>
-          <option value="recent">최근 강화 순</option>
-        </Select>
+        <span className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <label className="inline-flex items-center gap-1.5 text-[13px]">
+            <input type="checkbox" checked={hideLow} onChange={(e) => onHideLow(e.target.checked)} className="size-4 accent-primary" />
+            12성 미만 숨기기
+          </label>
+          <Select aria-label="정렬" value={sort} onChange={(e) => setSort(e.target.value as Sort)} className="bg-card">
+            <option value="spent">사용한 메소 순</option>
+            <option value="delta">손익 순</option>
+            <option value="recent">최근 강화 순</option>
+          </Select>
+        </span>
       </div>
+      {items.length === 0 && <Empty>12성 이상 아이템 없음</Empty>}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {items.map((it) => {
           const noLevel = it.info.level <= 0;

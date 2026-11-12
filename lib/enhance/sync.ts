@@ -1,7 +1,7 @@
 // Browser only. Keeps one kind of history (star force tries, or potential rolls) of one key up to date for a date
 // range: days already fetched come from IndexedDB, the rest is fetched newest first and saved as it arrives.
 // A day that is over never changes, so it is fetched once; today (and a day fetched before it was over) is refreshed.
-import { ApiError, createApi, fetchEquipment, fetchHistoryDay, type Api, type ApiErrorKind } from "./client.ts";
+import { ApiError, createApi, fetchCharacters, fetchEquipment, fetchHistoryDay, fetchInsight, type Api, type ApiErrorKind } from "./client.ts";
 import { idbAny, idbDeletePrefix, idbGet, idbPut, idbRange } from "./idb.ts";
 import { knownItem, type FoundItem } from "./items.ts";
 import { DAY, datesBetween, dayStart } from "./kst.ts";
@@ -241,6 +241,86 @@ export class PotentialSync extends HistorySync<PotRow> {
     });
     super(key, account, [source("pot", "history/potential", "potential_history"), source("cube", "history/cube", "cube_history")], (row, found) => !found[row.item]);
   }
+}
+
+/** Every star force try saved for a key, whatever period was fetched (the tries say which world a character was in). */
+export async function savedTries(account: string): Promise<SfRow[]> {
+  const saved = await idbRange<SavedDay<SfRow>>(dayKey(account, "sf", "0000-00-00"), dayKey(account, "sf", "9999-99-99"));
+  return saved.flatMap(([, day]) => day.rows);
+}
+
+type SavedCharacters = { at: number; worlds: Record<string, string>; ocids: Record<string, string> };
+const charactersKey = (account: string) => `${VERSION}|${account}|cw`;
+
+/** character/list calls under way, by key: the world lookup and the 통찰력 lookup start together and share one. */
+const listing = new Map<string, Promise<Pick<SavedCharacters, "worlds" | "ocids">>>();
+
+/**
+ * The account's characters (where each is now, and its id), asked at most once a day (one call). A failure answers
+ * with what was saved before, or nothing: this only refines the page, it must never fail it.
+ * The call is not tied to one caller's abort signal: it is shared, and it is a single small request.
+ */
+function accountCharacters(api: Api, account: string): Promise<Pick<SavedCharacters, "worlds" | "ocids">> {
+  const running = listing.get(account);
+  if (running) return running;
+  const work = (async () => {
+    const saved = await idbGet<Partial<SavedCharacters>>(charactersKey(account));
+    // A copy saved before the ids were kept counts as stale.
+    if (saved?.worlds && saved.ocids && saved.at && Date.now() - saved.at < DAY) return { worlds: saved.worlds, ocids: saved.ocids };
+    try {
+      const fresh = await fetchCharacters(api);
+      void idbPut(charactersKey(account), { at: Date.now(), ...fresh } satisfies SavedCharacters);
+      return fresh;
+    } catch {
+      return { worlds: saved?.worlds ?? {}, ocids: saved?.ocids ?? {} };
+    }
+  })().finally(() => listing.delete(account));
+  listing.set(account, work);
+  return work;
+}
+
+/** Character → the world it is in today. */
+export async function characterWorlds(key: string, account: string): Promise<Record<string, string>> {
+  return (await accountCharacters(createApi(key, account), account)).worlds;
+}
+
+type SavedInsights = Record<string, { at: number; level: number }>;
+const insightsKey = (account: string) => `${VERSION}|${account}|in`;
+
+/**
+ * 통찰력 level of these characters (one call each, at most once a day; it decides whether a cube on an item up to
+ * Lv.120 took a fee). A character that cannot be asked about — not in the account's list any more, the call
+ * failed — is left out: its fee then counts as waived.
+ */
+export async function characterInsights(key: string, account: string, names: string[], signal?: AbortSignal): Promise<Record<string, number>> {
+  const saved = (await idbGet<SavedInsights>(insightsKey(account))) ?? {};
+  const now = Date.now();
+  const out: Record<string, number> = {};
+  const stale: string[] = [];
+  for (const who of names) {
+    const had = Object.hasOwn(saved, who) ? saved[who] : undefined;
+    if (had) out[who] = had.level;
+    if (!had || now - had.at >= DAY) stale.push(who);
+  }
+  if (stale.length === 0) return out;
+  const api = createApi(key, account);
+  const { ocids } = await accountCharacters(api, account);
+  let changed = false;
+  for (const who of stale) {
+    const ocid = Object.hasOwn(ocids, who) ? ocids[who] : "";
+    if (!ocid) continue;
+    try {
+      out[who] = await fetchInsight(api, ocid, signal);
+      saved[who] = { at: now, level: out[who] };
+      changed = true;
+    } catch (e) {
+      if (signal?.aborted) break;
+      // The network, the quota, maintenance: the next ones would fail the same way. A bad key shows up elsewhere.
+      if (!(e instanceof ApiError) || e.kind !== "param") break;
+    }
+  }
+  if (changed) void idbPut(insightsKey(account), saved);
+  return out;
 }
 
 /** Remove the saved records of a key without building a sync for it. */

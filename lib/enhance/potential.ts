@@ -88,7 +88,7 @@ export function parsePotential(raw: RawPotential): PotRow | null {
 /** Grade the item had when the roll was paid for. */
 export const gradeBefore = (row: PotRow): Grade | null => (row.up && row.grade ? (LOWER[row.grade] ?? row.grade) : row.grade);
 
-/** Which option table and price a roll uses. Cash cubes have a table but no meso price. */
+/** Which option table a roll uses. */
 export function cubeOf(row: PotRow): CubeId | null {
   if (row.meso) return row.add ? "white" : "black";
   const name = row.type;
@@ -101,11 +101,37 @@ export function cubeOf(row: PotRow): CubeId | null {
   return null;
 }
 
-/** Meso paid for the roll (0 for cash cubes: their price is not meso). */
-export function rollMeso(row: PotRow): number {
+/** 통찰력 level from which the fee is waived: items up to Lv.70 at 60, up to Lv.120 at 90 (user, 2026-11-12; namu.wiki/w/잠재능력 agrees). */
+const INSIGHT_FREE_70 = 60;
+const INSIGHT_FREE_120 = 90;
+
+/**
+ * Meso a cube takes each time it is used ("감정 비용"), by the item's level L and the character's 통찰력:
+ * Lv.121 and up 20 L² always · Lv.71~120 2.5 L², free from 통찰력 90 · Lv.31~70 0.25 L², free from 통찰력 60 ·
+ * Lv.30 and under free. `insight` = the character's level today (the history has no level of its own), undefined
+ * when it is not known: then the fee counts as waived, as it is for most characters that roll cubes.
+ * Formula from the user; namu.wiki has 0.5 L² for Lv.31~70 — a few hundred meso a cube either way.
+ */
+export function cubeFee(level: number, insight?: number): number {
+  if (level >= 121) return level * level * 20;
+  if (insight === undefined) return 0;
+  if (level >= 71) return insight >= INSIGHT_FREE_120 ? 0 : Math.floor(level * level * 2.5);
+  if (level >= 31) return insight >= INSIGHT_FREE_70 ? 0 : Math.floor(level * level * 0.25);
+  return 0;
+}
+
+/** Whether what a cube roll costs depends on the character's 통찰력 (so the level is worth asking for). */
+export const feeByInsight = (row: PotRow) => !row.meso && row.level >= 31 && row.level <= 120 && row.type.includes("큐브");
+
+/**
+ * Meso paid for the roll: the reset's price, or the fee a cube takes (nothing for what is not a cube, e.g. 펄스 인핸서).
+ * `insight` = the 통찰력 level of the character that rolled, when known.
+ */
+export function rollMeso(row: PotRow, insight?: number): number {
+  if (row.level <= 0) return 0;
+  if (!row.meso) return row.type.includes("큐브") ? cubeFee(row.level, insight) : 0;
   const grade = gradeBefore(row);
-  if (!row.meso || !grade || row.level <= 0) return 0;
-  return resetMeso(row.add ? "white" : "black", grade, row.level) ?? 0;
+  return grade ? (resetMeso(row.add ? "white" : "black", grade, row.level) ?? 0) : 0;
 }
 
 // ── Option text → the calculator's category ──
@@ -335,6 +361,19 @@ export function goalChance(row: Pick<PotRow, "part" | "level" | "meso" | "add" |
     offer(customChance(rows, [[cond]]), condLabel(cond));
   }
   return best;
+}
+
+/**
+ * Chance per roll of every wanted total of the goal at once (보공 90 % and 공격력 10 % together). Not an average to
+ * show — asking for all of it calls a good option thousands of rolls rare — it only tells apart two options that
+ * goalChance() puts in the same class: 보공 45 · 45 + 공 10 and 공 13 + 보공 35 · 35 are both "three useful lines".
+ */
+export function goalExact(row: Pick<PotRow, "part" | "level" | "meso" | "add" | "type">, grade: Grade, goal: Goal): number | null {
+  const cube = cubeOf(row as PotRow);
+  const slot = slotOf(row.part);
+  const rows = cube && slot ? lineTables(cube, grade, slot, row.level) : null;
+  const p = rows ? customChance(rows, [goal.conds]) : 0;
+  return p > 0 ? p : null;
 }
 
 /**

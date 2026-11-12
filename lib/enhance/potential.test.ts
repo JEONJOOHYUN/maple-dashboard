@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { NO_CONV, addWeaponChance, convFromScouter, lineTables, resetMeso, sumChance, weaponChance } from "../ev/potential.ts";
 import { STAT_CONV_DEFAULT } from "../ev/defaults.ts";
 import { buildPotStats, potEntries } from "./pot-stats.ts";
-import { cubeOf, goalChance, goalOf, gradeBefore, optionToken, parsePotential, rollMeso, rollsToUp, slotOf, statWorth, trackPieces, upChance, upRolls, type PotRow, type RawPotential } from "./potential.ts";
+import { cubeFee, cubeOf, feeByInsight, goalChance, goalOf, gradeBefore, optionToken, parsePotential, rollMeso, rollsToUp, slotOf, statWorth, trackPieces, upChance, upRolls, type PotRow, type RawPotential } from "./potential.ts";
 
 const near = (actual: number, expected: number, tolerance: number, label: string) =>
   assert.ok(Math.abs(actual - expected) <= tolerance, `${label}: ${actual} is not within ${tolerance} of ${expected}`);
@@ -48,13 +48,46 @@ test("parse: meso reset, additional potential, cash cube and the grade before a 
   });
   assert.deepEqual([add.add, add.grade, add.before, add.after, cubeOf(add)], [true, "epic", ["마력 +10"], ["마력 +11"], "white"]);
   const cube = row({ potential_type: undefined, cube_type: "카르마 블랙 큐브" });
-  assert.deepEqual([cube.meso, cube.type, cubeOf(cube), rollMeso(cube)], [false, "카르마 블랙 큐브", "black", 0]);
+  assert.deepEqual([cube.meso, cube.type, cubeOf(cube)], [false, "카르마 블랙 큐브", "black"]);
   assert.equal(parsePotential({ id: "x" }), null);
 });
 
 test("price of a roll: the grade the item had when it was paid for", () => {
   assert.equal(rollMeso(row()), resetMeso("black", "legendary", 250));
   assert.equal(rollMeso(row({ item_upgrade_result: "성공", potential_option_grade: "유니크" })), resetMeso("black", "epic", 250));
+});
+
+test("a cube takes a fee by item level and the character's 통찰력", () => {
+  const levels = [250, 200, 160, 121, 120, 71, 70, 31, 30, 0];
+  const fees = (insight?: number) => levels.map((level) => cubeFee(level, insight));
+  // Lv.121 and up: 20 L² whatever the 통찰력. Below: 2.5 L² (Lv.71~120) · 0.25 L² (Lv.31~70) · free to Lv.30.
+  assert.deepEqual(fees(0), [1_250_000, 800_000, 512_000, 292_820, 36_000, 12_602, 1_225, 240, 0, 0]);
+  assert.deepEqual(fees(59), fees(0));
+  // 통찰력 60: items up to Lv.70 are free. 통찰력 90: up to Lv.120.
+  assert.deepEqual(fees(60), [1_250_000, 800_000, 512_000, 292_820, 36_000, 12_602, 0, 0, 0, 0]);
+  assert.deepEqual(fees(89), fees(60));
+  assert.deepEqual(fees(90), [1_250_000, 800_000, 512_000, 292_820, 0, 0, 0, 0, 0, 0]);
+  assert.deepEqual(fees(100), fees(90));
+  // Not known: counted as waived.
+  assert.deepEqual(fees(), fees(100));
+  const cube = (over: Partial<RawPotential> = {}) => row({ potential_type: undefined, cube_type: "카르마 블랙 큐브", ...over });
+  // Whatever the cube and the grade: the fee only looks at the level.
+  assert.equal(rollMeso(cube()), 1_250_000);
+  assert.equal(rollMeso(cube({ cube_type: "메멘토 브론즈 에디셔널 큐브 (200제)", item_level: 160 })), 512_000);
+  assert.equal(rollMeso(cube({ item_upgrade_result: "성공", potential_option_grade: "유니크", item_level: 200 })), 800_000);
+  // Not a cube (an item that sets the potential) and an unknown level: nothing.
+  assert.equal(rollMeso(cube({ cube_type: "펄스 인핸서", item_level: 130 })), 0);
+  assert.equal(rollMeso(cube({ item_level: undefined })), 0);
+  assert.equal(rollMeso(cube({ item_level: 120 })), 0);
+  assert.deepEqual([rollMeso(cube({ item_level: 120 }), 30), rollMeso(cube({ item_level: 120 }), 90), rollMeso(cube(), 0)], [36_000, 0, 1_250_000]);
+  assert.deepEqual([cube({ item_level: 120 }), cube({ item_level: 121 }), cube({ item_level: 30 }), row({ item_level: 100 }), cube({ cube_type: "펄스 인핸서", item_level: 100 })].map(feeByInsight), [true, false, false, false, false]);
+  // Per character: the one whose 통찰력 is known and low pays, the others do not.
+  const low = cube({ item_level: 100, character_name: "부캐" });
+  const high = cube({ item_level: 100, character_name: "본캐" });
+  const unknown = cube({ item_level: 100, character_name: "모름" });
+  const rolls = [low, high, unknown];
+  assert.deepEqual(potEntries(rolls, trackPieces(rolls), { 부캐: 0, 본캐: 100 }).map((e) => e.cost), [25_000, 0, 0]);
+  assert.deepEqual(potEntries(rolls, trackPieces(rolls)).map((e) => e.cost), [0, 0, 0]);
 });
 
 test("option lines map to the calculator's categories", () => {
@@ -298,6 +331,10 @@ test("stats: an option the item already had is not counted as won", () => {
   for (let i = 0; i < 10; i++) kept.push(row({ before_potential_option: good, after_potential_option: junk, date_create: at(i) }));
   const a = buildPotStats(potEntries(kept, trackPieces(kept)), NO_CONV).pieces[0];
   assert.deepEqual([a.option, a.goalBy, a.goalRolls, a.expected, a.delta], [["INT +13%", "INT +13%", "최대 MP +10%"], "", null, null, null]);
+  // The option it already had: INT 26 % or better, as the calculator counts it, for reading only.
+  assert.equal(a.keptBy, "INT 26%");
+  near(a.keptRolls!, 1 / sumChance(lineTables("black", "legendary", "shoes", 250)!, { type: "stat", min: 26 - 1e-9, conv: NO_CONV, attack: "matk" }), 1e-6, "kept average");
+  near(a.keptMeso!, a.keptRolls! * resetMeso("black", "legendary", 250)!, 1, "kept meso");
   assert.equal(a.phases[0].expected, null);
   assert.ok(a.spent > 0);
   // The same option, but one of these rolls produced it: it was won here, and the later rolls did not beat it.
@@ -306,4 +343,37 @@ test("stats: an option the item already had is not counted as won", () => {
   const b = buildPotStats(potEntries(won, trackPieces(won)), NO_CONV).pieces[0];
   assert.equal(b.goalBy, "INT 26%");
   assert.ok(b.goalRolls !== null && b.delta !== null);
+});
+
+test("stats: a better option of the same class as the old one counts as won (real rolls, 2026-09-30)", () => {
+  // 데스티니 데스페라도, 카르마 블랙 큐브: every roll started from 공 13 + 보공 35 · 35, the last batch offered
+  // 보공 45 · 45 + 공 10. Both are "three useful lines", so the chance is the same; the new one is the harder roll.
+  const weapon = { potential_type: undefined, cube_type: "카르마 블랙 큐브", item_equipment_part: "무기", target_item: "데스티니 데스페라도" };
+  const old = opt("공격력 +13%", "보스 몬스터 데미지 +35%", "보스 몬스터 데미지 +35%");
+  const better = opt("보스 몬스터 데미지 +45%", "보스 몬스터 데미지 +45%", "공격력 +10%");
+  const at = (n: number) => `2026-10-01T03:06:${String(n).padStart(2, "0")}.000+09:00`;
+  const rolls = [
+    row({ ...weapon, before_potential_option: old, after_potential_option: opt("LUK +13%", "STR +10%", "INT +10%"), date_create: at(23) }),
+    row({ ...weapon, before_potential_option: old, after_potential_option: opt("LUK +13%", "INT +10%", "보스 몬스터 데미지 +35%"), date_create: at(25) }),
+    row({ ...weapon, before_potential_option: old, after_potential_option: better, date_create: at(25) }),
+    row({ ...weapon, before_potential_option: old, after_potential_option: opt("LUK +13%", "DEX +10%", "크리티컬 확률 +10%"), date_create: at(25) }),
+  ];
+  const a = buildPotStats(potEntries(rolls, trackPieces(rolls)), NO_CONV).pieces[0];
+  assert.deepEqual([a.option, a.goalBy], [better.map((o) => o.value), "공 · 보공 3줄"]);
+  const table = lineTables("black", "legendary", "weapon", 250)!;
+  near(a.goalRolls!, 1 / weaponChance(table, { attack: "atk", ied: false, min: { a: 0, b: 0, i: 0, v: 3 }, tier: "v3" }), 1e-6, "average");
+  // The cubes cost their fee (Lv.250 = 1,250,000 each): spent, expected and profit are in that meso.
+  const fee = cubeFee(250);
+  assert.deepEqual([a.spent, a.resets, a.rolls, a.keptRolls], [4 * fee, 0, 4, null]);
+  near(a.expected!, a.goalRolls! * fee, 1, "expected");
+  near(a.delta!, a.expected! - a.spent, 1e-6, "profit");
+
+  // The other way round (the old option was the harder one, a weaker one of the same class came up): kept.
+  const back = [row({ ...weapon, before_potential_option: better, after_potential_option: old, date_create: at(30) })];
+  const b = buildPotStats(potEntries(back, trackPieces(back)), NO_CONV).pieces[0];
+  assert.deepEqual([b.option, b.goalBy, b.goalRolls], [better.map((o) => o.value), "", null]);
+  // Kept, so no bar and no profit — but what an option this good takes on average is there to read.
+  assert.deepEqual([b.expected, b.delta, b.keptBy], [null, null, "공 · 보공 3줄"]);
+  near(b.keptRolls!, a.goalRolls!, 1e-6, "average of the kept option");
+  near(b.keptMeso!, b.keptRolls! * fee, 1, "meso of the kept option");
 });

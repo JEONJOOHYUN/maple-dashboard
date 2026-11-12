@@ -23,6 +23,7 @@ maple-dashboard/
       actions.ts               # upsertLog, deleteLog, settleUp, deleteSettlement
     boss-split/
       page.tsx                # 보스 분배금 계산기 (DB 없음, 완전 클라이언트 사이드)
+    enhance/actions.ts        # 공용 아이템 사전 서버 액션: lookupItems · reportItems (아이템 사실만, 횟수 제한)
     enhance/page.tsx          # 강화 기록 → components/enhance/enhance-app.tsx (브라우저에서만 동작, 상세 .agents/enhance.md)
     ev/page.tsx               # 기댓값 계산기 → components/ev/ev-calculator.tsx (5탭)
     mvp/page.tsx              # MVP 계산기 → components/mvp/mvp-calculator.tsx
@@ -44,7 +45,7 @@ maple-dashboard/
     theme-provider.tsx / theme-toggle.tsx
     icon-value.tsx              # 아이콘+숫자 표시 헬퍼
     activity-calendar.tsx        # 일별 조각/메소 아이콘 달력, 월별 합계
-    enhance/                  # 강화 기록: enhance-app(키 관문) · key-gate · starforce-board(기간 · 요약 · 탭) · starforce-views(보기 4개 + 아이템 창) · potential-board(잠재능력 탭) · board-bits(두 보드 공용: 기간 · 받기 · 탭) · parts(공용 · 배지 · 선택 상자)
+    enhance/                  # 강화 기록: enhance-app(키 관문) · key-gate · starforce-board(기간 · 요약 · 탭) · starforce-views(보기 4개 + 아이템 창) · potential-board(잠재능력 탭) · board-bits(두 보드 공용: 기간 · 받기 · 탭) · parts(공용 · 배지 · 선택 상자) · use-item-dict(공용 아이템 사전 조회 · 올리기) · use-worlds(잠재능력 기록의 월드 추정)
     ev/                       # 기댓값 탭 5개(starforce · potential · flame · soul · ability) + ui.tsx(칩 · 세그먼트 · 결과 카드 등 공용)
     mvp/ · pinball/           # MVP · 핀볼 화면
     spec/spec-check.tsx       # 숨은 스펙업 검색 · 결과(배지 열고 닫기, 놓친 스펙 · 참고 목록)
@@ -59,7 +60,7 @@ maple-dashboard/
     constants.ts                    # AUCTION_HOUSE_FEE_RATE = 0.03
     nav.ts                           # 메뉴 묶음·도구 목록(아이콘·홈 카드 문구·준비 중 여부) — 메뉴·홈이 공유
     ev/                               # 기댓값 계산 함수(starforce · potential · flame · soul · ability · luck) + *.test.ts, data/(공식 확률표 JSON), defaults.ts(가격 기본값 + 날짜)
-    enhance/                          # 강화 기록: 스타포스 parse · judge(손익) · stats(집계) · items(레벨 / 노작), 잠재능력 potential · pot-stats, kst + *.test.ts, 브라우저 전용 client(넥슨 직접 호출) · idb · sync
+    enhance/                          # 강화 기록: 스타포스 parse · judge(손익) · stats(집계) · items(레벨 / 노작), 잠재능력 potential · pot-stats, kst + *.test.ts, 브라우저 전용 client(넥슨 직접 호출) · idb · sync · 공용 아이템 사전 dict(검사 · 올릴 것 고르기, 브라우저 · 서버 공용) + dict-server(서버 전용: item_dict 읽기 캐시 · 저장) · worlds(월드 3묶음 · 캐릭터가 그때 있던 월드) + test
     mvp.ts (+ test)                   # MVP 등급 · 주차(목~수, KST) · 충전 계획 · 되팔기 효율
     pinball/                          # lazygyu roulette 엔진(MIT, LICENSE 사본) 정리본 + 우리 코스 stage.ts
     nexon/api.ts                      # 넥슨 Open API 서버 전용 호출(NEXON_API_KEY, 호출 간격 220ms, 429 한 번 재시도, 오류 종류 noKey · notFound · quota · failed)
@@ -80,6 +81,7 @@ maple-dashboard/
       004_add_fragment_sales.sql # fragment_sales 테이블 추가 (조각 → 메소 전환 기록)
       005_add_log_entries.sql    # log_entries 테이블 + hunting_logs_audit 트리거 (일일 기록 변경 이력)
       006_add_sunday_weeks.sql   # sunday_weeks(썬데이 자동 갱신 결과) + sunday_cron_runs(Cron 실행 기록), 권한(GRANT) 명시
+      009_add_item_dict.sql      # item_dict(공용 아이템 사전: 이름 → 레벨 · 아이콘 코드 · 부위), 읽기 누구나 · 쓰기 서버 전용 키 — 2026-11-12 실행됨
   vercel.json                # {"regions": ["icn1"]} — Supabase와 같은 리전 고정
   .env.local                 # 실제 값 (gitignored)
   .env.local.example          # 키 이름만 문서화 (플레이스홀더)

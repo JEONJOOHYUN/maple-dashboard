@@ -1,17 +1,20 @@
 "use client";
 
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import Link from "next/link";
 import { Package, Split } from "lucide-react";
 import { eok } from "@/components/ev/ui";
-import { PeriodBar, SyncBanners, ViewTabs, usePeriod, useSync } from "@/components/enhance/board-bits";
+import { PeriodBar, SyncBanners, ViewTabs, WorldChips, useGroupsOff, usePeriod, useSync } from "@/components/enhance/board-bits";
 import { Card, Delta, Empty, Gauge, ItemIcon, Select, Tile } from "@/components/enhance/parts";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { knownItem, type FoundItem, type ItemInfo } from "@/lib/enhance/items";
+import { useItemDict, type Rolled } from "@/components/enhance/use-item-dict";
+import { useInsights, useWorldOf } from "@/components/enhance/use-worlds";
+import { itemIcon, type ItemInfo } from "@/lib/enhance/items";
 import { DAY, dayStart, kstFull, kstShort, kstStamp } from "@/lib/enhance/kst";
 import { buildPotStats, potEntries, potEntryKey, type PieceStat, type PotEntry } from "@/lib/enhance/pot-stats";
-import { trackPieces } from "@/lib/enhance/potential";
-import { PotentialSync } from "@/lib/enhance/sync";
+import { feeByInsight, trackPieces } from "@/lib/enhance/potential";
+import { PotentialSync, StarforceSync } from "@/lib/enhance/sync";
+import { groupTallies, worldGroup } from "@/lib/enhance/worlds";
 import { STAT_CONV_DEFAULT } from "@/lib/ev/defaults";
 import { GRADE_LABEL, NEXT_GRADE, convFromScouter, type Grade } from "@/lib/ev/potential";
 import { useStored } from "@/lib/use-stored";
@@ -33,8 +36,9 @@ const GRADE_CSS: Record<Grade, string> = {
 const BADGE = "rounded border px-1.5 text-[11px] leading-[18px] font-semibold whitespace-nowrap";
 const PAGE = 100;
 
-// Picture: from what the character wears now, else the calculator's list. An item that was taken off has none.
-const iconOf = (item: string, level: number, found: Record<string, FoundItem>): ItemInfo => ({ level, spare: 0, icon: found[item]?.icon || knownItem(item)?.icon, source: "api" });
+/** Item name → picture address: what the character wears now, else the calculator's list, else the shared dictionary. */
+type Icons = Record<string, string | undefined>;
+const iconOf = (item: string, level: number, icons: Icons): ItemInfo => ({ level, spare: 0, icon: icons[item], source: "api" });
 const kindLabel = (add: boolean) => (add ? "에디셔널" : "잠재능력");
 const rolls = (n: number) => `${Math.round(n).toLocaleString("ko-KR")}회`;
 
@@ -43,7 +47,7 @@ function GradeText({ grade }: { grade: Grade | null }) {
 }
 
 /** One roll: what it produced, what it cost. `showItem` = with the item's picture and name (the log). */
-function RollRow({ entry, found, showItem }: { entry: PotEntry; found: Record<string, FoundItem>; showItem: boolean }) {
+function RollRow({ entry, found, showItem }: { entry: PotEntry; found: Icons; showItem: boolean }) {
   const { row, taken, cost } = entry;
   const bar = row.up ? "var(--primary)" : taken ? "var(--gain)" : "var(--border)";
   return (
@@ -83,7 +87,7 @@ function RollRow({ entry, found, showItem }: { entry: PotEntry; found: Record<st
   );
 }
 
-function PieceCard({ piece, found, onOpen }: { piece: PieceStat; found: Record<string, FoundItem>; onOpen: () => void }) {
+function PieceCard({ piece, found, onOpen }: { piece: PieceStat; found: Icons; onOpen: () => void }) {
   const cubes = piece.rolls - piece.resets;
   // Bars: every grade-up together in one (rolls and averages add up), then the option it ended on.
   const bars: { key: string; label: ReactNode; used: number; mean: number }[] = [];
@@ -127,10 +131,16 @@ function PieceCard({ piece, found, onOpen }: { piece: PieceStat; found: Record<s
           ))}
         </div>
       )}
+      {piece.keptRolls !== null && (
+        <span className="mt-1.5 max-w-full text-xs text-muted-foreground">
+          기존 옵션 · {piece.keptBy} = 평균 {rolls(piece.keptRolls)}
+          {piece.keptMeso !== null && ` · ${eok(piece.keptMeso)}`}
+        </span>
+      )}
       {piece.spent > 0 && (
         <>
           <b className="mt-2.5 font-num text-[28px] leading-[1.1] whitespace-nowrap">{eok(piece.spent)}</b>
-          <span className="mt-[3px] text-xs text-muted-foreground">사용 메소 · {piece.expected !== null ? `기댓값 ${eok(piece.expected)}` : "기댓값 없음"}</span>
+          <span className="mt-[3px] text-xs text-muted-foreground">사용 메소{piece.expected !== null ? ` · 기댓값 ${eok(piece.expected)}` : piece.keptRolls !== null ? "" : " · 기댓값 없음"}</span>
         </>
       )}
       {/* The rolls it took against the average for the same result. Pinned to the bottom with the boxes under it:
@@ -166,7 +176,7 @@ function PieceCard({ piece, found, onOpen }: { piece: PieceStat; found: Record<s
 }
 
 /** Every roll of one piece, newest first, with how each grade went. */
-function PieceDialog({ piece, entries, found, onClose }: { piece: PieceStat | null; entries: PotEntry[]; found: Record<string, FoundItem>; onClose: () => void }) {
+function PieceDialog({ piece, entries, found, onClose }: { piece: PieceStat | null; entries: PotEntry[]; found: Icons; onClose: () => void }) {
   const [limit, setLimit] = useState(PAGE);
   // Focus goes to the list: left to the default it lands on "더 보기" at the bottom and the list opens scrolled down.
   const listRef = useRef<HTMLDivElement>(null);
@@ -210,7 +220,11 @@ function PieceDialog({ piece, entries, found, onClose }: { piece: PieceStat | nu
                     <GradeText grade={phase.grade} />
                     <span>{rolls(phase.rolls)}</span>
                     <span className="text-muted-foreground">
-                      {phase.expected !== null ? `평균 ${rolls(phase.expected)}` : "평균 없음"}
+                      {phase.expected !== null
+                        ? `평균 ${rolls(phase.expected)}`
+                        : !phase.up && i === piece.phases.length - 1 && piece.keptRolls !== null
+                          ? `기존 옵션 그대로 · ${piece.keptBy} = 평균 ${rolls(piece.keptRolls)}`
+                          : "평균 없음"}
                       {phase.up ? " → 등급 상승" : i === piece.phases.length - 1 && piece.goalBy ? ` (${piece.goalBy})` : ""}
                     </span>
                   </span>
@@ -237,7 +251,7 @@ function PieceDialog({ piece, entries, found, onClose }: { piece: PieceStat | nu
 type Rank = { title: string; empty: string; pieces: PieceStat[]; value: (p: PieceStat) => string; sub: (p: PieceStat) => string };
 
 /** Lucky and unlucky item, main vs additional potential, and the items that took the most meso, resets and cubes. */
-function PotInsight({ stats, found, onOpen }: { stats: ReturnType<typeof buildPotStats>; found: Record<string, FoundItem>; onOpen: (key: string) => void }) {
+function PotInsight({ stats, found, onOpen }: { stats: ReturnType<typeof buildPotStats>; found: Icons; onOpen: (key: string) => void }) {
   const priced = stats.pieces.filter((p) => p.delta !== null);
   const best = priced.filter((p) => p.delta! > 0).sort((a, b) => b.delta! - a.delta!)[0];
   const worst = priced.filter((p) => p.delta! < 0).sort((a, b) => a.delta! - b.delta!)[0];
@@ -341,7 +355,7 @@ function PotInsight({ stats, found, onOpen }: { stats: ReturnType<typeof buildPo
 
 type Sort = "spent" | "delta" | "recent";
 
-function PiecesView({ pieces, found, onOpen }: { pieces: PieceStat[]; found: Record<string, FoundItem>; onOpen: (key: string) => void }) {
+function PiecesView({ pieces, found, onOpen }: { pieces: PieceStat[]; found: Icons; onOpen: (key: string) => void }) {
   const [sort, setSort] = useState<Sort>("spent");
   const list = [...pieces].sort((a, b) => (sort === "spent" ? b.spent - a.spent : sort === "delta" ? (b.delta ?? -Infinity) - (a.delta ?? -Infinity) : b.last - a.last) || b.rolls - a.rolls);
   return (
@@ -365,7 +379,7 @@ function PiecesView({ pieces, found, onOpen }: { pieces: PieceStat[]; found: Rec
   );
 }
 
-function RollsView({ entries, characters, found }: { entries: PotEntry[]; characters: string[]; found: Record<string, FoundItem> }) {
+function RollsView({ entries, characters, found }: { entries: PotEntry[]; characters: string[]; found: Icons }) {
   const [who, setWho] = useState("");
   const [item, setItem] = useState("");
   const [kind, setKind] = useState("");
@@ -437,13 +451,44 @@ export function PotentialBoard({ apiKey, account, onForget, onChange }: { apiKey
   const [sync] = useState(() => new PotentialSync(apiKey, account));
   const { snap, loading, refresh } = useSync(sync, from, to, PotentialSync.serverSnapshot);
 
+  // Pictures, with the shared item dictionary for what this account no longer wears. The rolls tell the
+  // dictionary the level and part of their items in return.
+  const rolled = useMemo(() => {
+    const seen = new Map<string, Rolled>();
+    for (const r of snap.rows) if (r.level > 0 && !seen.has(r.item)) seen.set(r.item, { item: r.item, level: r.level, part: r.part });
+    return [...seen.values()];
+  }, [snap.rows]);
+  const names = useMemo(() => [...new Set(snap.rows.map((r) => r.item))], [snap.rows]);
+  const dict = useItemDict(snap.status === "done", names, snap.found, rolled);
+  const icons = useMemo(() => Object.fromEntries(names.map((name) => [name, itemIcon(name, snap.found, dict)])) as Icons, [names, snap.found, dict]);
+
   // Which item a roll belongs to is read from the rolls around it, so that needs every loaded roll, not only the period's.
   const pieces = useMemo(() => trackPieces(snap.rows), [snap.rows]);
-  const entries = useMemo(() => {
+  // A cube on an item up to Lv.120 is free for a character with enough 통찰력: asked for those characters only.
+  const feeKey = useMemo(() => [...new Set(snap.rows.filter(feeByInsight).map((r) => r.who))].sort().join("\u0000"), [snap.rows]);
+  const feeNames = useMemo(() => (feeKey ? feeKey.split("\u0000") : []), [feeKey]);
+  const insights = useInsights(apiKey, account, feeNames, snap.status === "done" || snap.status === "error");
+  const inPeriod = useMemo(() => {
     const start = dayStart(from);
     const end = dayStart(to) + DAY;
-    return potEntries(snap.rows.filter((r) => r.t >= start && r.t < end), pieces);
-  }, [snap.rows, from, to, pieces]);
+    return potEntries(snap.rows.filter((r) => r.t >= start && r.t < end), pieces, insights);
+  }, [snap.rows, from, to, pieces, insights]);
+  // The rolls carry no world: it is read from the character (its star force tries, and where it is now).
+  // The period's star force tries are fetched quietly once the rolls are in (days already saved cost no call), so
+  // the worlds are right in a browser that never opened the star force tab too. A failure here is not shown: the
+  // rolls are on screen either way, only told apart less well.
+  const [groupsOff, toggleGroup] = useGroupsOff();
+  const [tries] = useState(() => new StarforceSync(apiKey, account));
+  const triesSnap = useSyncExternalStore(tries.subscribe, tries.getSnapshot, StarforceSync.serverSnapshot);
+  const rollsIn = snap.status === "done";
+  useEffect(() => {
+    if (!rollsIn) return;
+    tries.load(from, to);
+    return () => tries.stop();
+  }, [tries, rollsIn, from, to]);
+  const worldOf = useWorldOf(apiKey, account, triesSnap.rows, triesSnap.at);
+  const tallies = useMemo(() => groupTallies(inPeriod.map((e) => ({ world: worldOf(e.row.who, e.row.t), spent: e.cost }))), [inPeriod, worldOf]);
+  const entries = useMemo(() => inPeriod.filter((e) => !groupsOff.includes(worldGroup(worldOf(e.row.who, e.row.t)))), [inPeriod, worldOf, groupsOff]);
   const stats = useMemo(() => buildPotStats(entries, conv), [entries, conv]);
 
   const latest = snap.rows.at(-1)?.t ?? 0;
@@ -470,10 +515,12 @@ export function PotentialBoard({ apiKey, account, onForget, onChange }: { apiKey
           )
         }
       />
+      <WorldChips tallies={tallies} off={groupsOff} onToggle={toggleGroup} unit="회" />
+
       <SyncBanners snap={snap} unit="회" onRetry={refresh} onForget={onForget} />
 
       {stats.rolls === 0 ? (
-        snap.status === "done" && <Empty>이 기간에 잠재능력 기록 없음</Empty>
+        snap.status === "done" && <Empty>{inPeriod.length > 0 ? "꺼 둔 월드의 기록만 있음" : "이 기간에 잠재능력 기록 없음"}</Empty>
       ) : (
         <>
           <Card>
@@ -504,10 +551,10 @@ export function PotentialBoard({ apiKey, account, onForget, onChange }: { apiKey
 
           <ViewTabs views={VIEWS} value={view} onChange={setView} />
 
-          {view === "insight" && <PotInsight stats={stats} found={snap.found} onOpen={setOpenPiece} />}
-          {view === "log" && <RollsView entries={entries} characters={stats.characters} found={snap.found} />}
-          {view === "items" && <PiecesView pieces={stats.pieces} found={snap.found} onOpen={setOpenPiece} />}
-          <PieceDialog key={openPiece} piece={stats.pieces.find((p) => p.key === openPiece) ?? null} entries={entries} found={snap.found} onClose={() => setOpenPiece("")} />
+          {view === "insight" && <PotInsight stats={stats} found={icons} onOpen={setOpenPiece} />}
+          {view === "log" && <RollsView entries={entries} characters={stats.characters} found={icons} />}
+          {view === "items" && <PiecesView pieces={stats.pieces} found={icons} onOpen={setOpenPiece} />}
+          <PieceDialog key={openPiece} piece={stats.pieces.find((p) => p.key === openPiece) ?? null} entries={entries} found={icons} onClose={() => setOpenPiece("")} />
         </>
       )}
     </div>

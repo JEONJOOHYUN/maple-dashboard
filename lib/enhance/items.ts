@@ -1,8 +1,11 @@
 // What we know about an item from its name alone. The history API has no item level, so the page looks it up in
-// this order: the user's own value → the account's equipment (Open API item-equipment) → this table → unknown.
+// this order: the user's own value → the account's equipment (Open API item-equipment) → this table →
+// the shared dictionary (what other visitors' browsers found, lib/enhance/dict.ts) → unknown.
+// The dictionary comes last on purpose: a wrong value someone sent can never beat what this account itself knows.
 // Levels and spare prices come from the calculator's list (lib/ev/defaults.ts, user-checked); the set prefixes are
 // the level every piece of that set has (에테르넬 250 · 아케인셰이드 200 · 앱솔랩스 160 · 파프니르 150).
 import { STAR_ITEMS, itemImage } from "../ev/defaults.ts";
+import { iconUrl, type Dict } from "./dict.ts";
 
 export type KnownItem = {
   level: number;
@@ -53,7 +56,7 @@ export type ItemInfo = {
   icon?: string;
   part?: string;
   /** Where the level came from. */
-  source: "user" | "api" | "table" | "none";
+  source: "user" | "api" | "table" | "dict" | "none";
 };
 
 export type ItemOverrides = {
@@ -63,18 +66,23 @@ export type ItemOverrides = {
   spares: Record<string, number>;
 };
 
-export function resolveItem(name: string, found: Record<string, FoundItem>, over: ItemOverrides): ItemInfo {
+export function resolveItem(name: string, found: Record<string, FoundItem>, over: ItemOverrides, dict: Dict = {}): ItemInfo {
   const table = knownItem(name);
   const api = found[name];
+  const shared = Object.hasOwn(dict, name) ? dict[name] : undefined;
   const userLevel = over.levels[name];
-  const level = userLevel > 0 ? userLevel : api?.level > 0 ? api.level : (table?.level ?? 0);
+  const level = userLevel > 0 ? userLevel : api?.level > 0 ? api.level : (table?.level ?? shared?.level ?? 0);
   const userSpare = over.spares[name];
   return {
     level,
     spare: userSpare >= 0 ? userSpare * 1e8 : (table?.spare ?? 0),
     maxStar: table?.maxStar,
-    icon: api?.icon || table?.icon,
-    part: api?.part,
-    source: userLevel > 0 ? "user" : api?.level > 0 ? "api" : table ? "table" : "none",
+    icon: api?.icon || table?.icon || iconUrl(shared?.icon ?? "") || undefined,
+    part: api?.part || shared?.part || undefined,
+    source: userLevel > 0 ? "user" : api?.level > 0 ? "api" : table ? "table" : shared ? "dict" : "none",
   };
 }
+
+/** Picture of an item whose level is already known (potential rolls carry it): equipment → the calculator's list → the dictionary. */
+export const itemIcon = (name: string, found: Record<string, FoundItem>, dict: Dict = {}): string | undefined =>
+  found[name]?.icon || knownItem(name)?.icon || iconUrl(Object.hasOwn(dict, name) ? dict[name].icon : "") || undefined;

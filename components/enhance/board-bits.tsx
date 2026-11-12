@@ -1,11 +1,13 @@
 "use client";
 
 // What the star force board and the potential board share: the period, the sync wiring and its banners, the tab row.
-import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { AlertCircle, Loader2, RefreshCw } from "lucide-react";
+import { eok } from "@/components/ev/ui";
 import type { ApiErrorKind } from "@/lib/enhance/client";
 import { addDays, kstDate } from "@/lib/enhance/kst";
 import type { HistorySync, SyncSnap } from "@/lib/enhance/sync";
+import { GROUP_LABEL, type GroupTally, type WorldGroup } from "@/lib/enhance/worlds";
 import { useNow } from "@/lib/use-now";
 import { useStored } from "@/lib/use-stored";
 import { cn } from "@/lib/utils";
@@ -122,6 +124,48 @@ export function PeriodBar({
         </div>
       )}
     </>
+  );
+}
+
+/** World groups left out of both boards, remembered in this browser. Event worlds start left out (user, 2026-11-12). */
+export function useGroupsOff() {
+  const [off, setOff] = useStored<WorldGroup[]>("enhance:groupsOff", ["event"]);
+  // From what is saved, not from what this render saw: two presses in a row must both count.
+  const toggle = useCallback((id: WorldGroup) => setOff((prev) => (prev.includes(id) ? prev.filter((g) => g !== id) : [...prev, id])), [setOff]);
+  return [off, toggle] as const;
+}
+
+/**
+ * 일반 · 챌린저스 · 버닝 · 이벤트: press to leave a group out of everything below. Each shows what it holds
+ * (`unit` = 회), so what was spent in a seasonal or event world reads apart from the rest.
+ * A group that is switched off stays listed, so it can be switched back on.
+ */
+export function WorldChips({ tallies, off, onToggle, unit }: { tallies: GroupTally[]; off: WorldGroup[]; onToggle: (id: WorldGroup) => void; unit: string }) {
+  // Nothing to tell apart when every record is a regular-world one. A seasonal or event group shows even alone:
+  // that is how one sees what the records are, and the only place to leave them out.
+  if (tallies.every((t) => t.id === "regular" && !off.includes(t.id))) return null;
+  return (
+    <div role="group" aria-label="월드" className="flex flex-wrap gap-1.5 text-[13px]">
+      {tallies.map(({ id, n, spent }) => {
+        const on = !off.includes(id);
+        return (
+          <button
+            key={id}
+            type="button"
+            aria-pressed={on}
+            onClick={() => onToggle(id)}
+            className={cn("rounded-full px-3 py-1.5 outline-none focus-visible:ring-3 focus-visible:ring-ring/50", on ? "bg-primary-soft text-primary-text" : "bg-muted text-muted-foreground")}
+          >
+            {GROUP_LABEL[id]}{" "}
+            <b className="font-num text-xs">
+              {n.toLocaleString("ko-KR")}
+              {unit}
+            </b>
+            {spent > 0 && <span className="font-num text-xs"> · {eok(spent)}</span>}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 

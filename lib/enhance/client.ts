@@ -178,7 +178,7 @@ export async function fetchEquipment(api: Api, character: string, signal?: Abort
   return out;
 }
 
-export type RawCharacterList = { account_list?: { character_list?: { character_name?: string; character_level?: number }[] }[] };
+export type RawCharacterList = { account_list?: { character_list?: { ocid?: string; character_name?: string; world_name?: string; character_level?: number }[] }[] };
 
 /** The highest-level character of the account (the first one on a tie), "" when there is none. */
 export function mainCharacter(body: RawCharacterList): string {
@@ -198,6 +198,32 @@ export function mainCharacter(body: RawCharacterList): string {
 /** What a remembered key is called in the list: the account's main character. One call (checked 2026-11-12: 66 characters in one answer). */
 export async function fetchMainCharacter(api: Api, signal?: AbortSignal): Promise<string> {
   return mainCharacter(await api.get<RawCharacterList>("character/list", {}, signal));
+}
+
+/** Character → the world it is in today. */
+export function characterWorldsOf(body: RawCharacterList): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const account of body.account_list ?? []) for (const c of account.character_list ?? []) if (c.character_name && c.world_name) out[c.character_name] = c.world_name;
+  return out;
+}
+
+/** Character → its id for the per-character endpoints. */
+export function characterIdsOf(body: RawCharacterList): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const account of body.account_list ?? []) for (const c of account.character_list ?? []) if (c.character_name && c.ocid) out[c.character_name] = c.ocid;
+  return out;
+}
+
+/** The account's characters: where each is today and its id. One call (the same answer as fetchMainCharacter's). */
+export async function fetchCharacters(api: Api, signal?: AbortSignal): Promise<{ worlds: Record<string, string>; ocids: Record<string, string> }> {
+  const body = await api.get<RawCharacterList>("character/list", {}, signal);
+  return { worlds: characterWorldsOf(body), ocids: characterIdsOf(body) };
+}
+
+/** 통찰력 level of one character (0 when it has none yet). One call. */
+export async function fetchInsight(api: Api, ocid: string, signal?: AbortSignal): Promise<number> {
+  const body = await api.get<{ insight_level?: number | null }>("character/propensity", { ocid }, signal);
+  return typeof body.insight_level === "number" ? body.insight_level : 0;
 }
 
 /** Short id for one key (one NEXON account) so records of different keys never mix. Not reversible. */

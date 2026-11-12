@@ -3,16 +3,22 @@
 //
 // Expected cost of a piece = for every grade it went up: average rolls to go up × the price at that grade,
 // plus, at the grade it ended on: average rolls to get the option it ended with (or better) × the price.
-// Profit = expected − spent. Cash cubes have no meso price, so they only count as rolls.
+// Profit = expected − spent. A cube's cost is the fee it takes on use (rollMeso), a reset's its price.
 import type { Grade, StatConv } from "../ev/potential.ts";
 import { kstDate } from "./kst.ts";
-import { goalChance, goalOf, gradeBefore, potKey, rollMeso, rollsToUp, upChance, type Goal, type Pieces, type PotRow } from "./potential.ts";
+import { goalChance, goalExact, goalOf, gradeBefore, potKey, rollMeso, rollsToUp, upChance, type Goal, type Pieces, type PotRow } from "./potential.ts";
 
 export type PotEntry = { row: PotRow; piece: number; taken: boolean; cost: number };
 export const potEntryKey = (e: Pick<PotEntry, "row" | "piece">) => `${potKey(e.row)}\u0000${e.piece}`;
 
-export function potEntries(rows: PotRow[], pieces: Pieces): PotEntry[] {
-  return rows.map((row) => ({ row, piece: pieces.piece.get(row.id) ?? 1, taken: pieces.taken.has(row.id), cost: rollMeso(row) }));
+/** `insights` = character → 통찰력 level (decides whether a cube on an item up to Lv.120 took a fee). */
+export function potEntries(rows: PotRow[], pieces: Pieces, insights: Record<string, number> = {}): PotEntry[] {
+  return rows.map((row) => ({
+    row,
+    piece: pieces.piece.get(row.id) ?? 1,
+    taken: pieces.taken.has(row.id),
+    cost: rollMeso(row, Object.hasOwn(insights, row.who) ? insights[row.who] : undefined),
+  }));
 }
 
 export type Phase = {
@@ -51,8 +57,15 @@ export type PieceStat = {
   goalRolls: number | null;
   /** The one line total the average is measured on (e.g. "INT 26%"). */
   goalBy: string;
-  /** Average meso for that option at the grade it ended on (null for cash cubes). */
+  /** Average meso for that option at the grade it ended on (null when the rolls cost nothing). */
   goalMeso: number | null;
+  /**
+   * The item kept the option it already had: what that option (or better) takes on average, for reading only.
+   * It was not won by these rolls, so it is in no bar and no profit. "" · null when it cannot be told.
+   */
+  keptBy: string;
+  keptRolls: number | null;
+  keptMeso: number | null;
   phases: Phase[];
   first: number;
   last: number;
@@ -79,26 +92,34 @@ export type PotStats = {
  * player then chose, so for the last batch it is assumed they took the best of what was on the table
  * (the old option or one of the batch's results; "best" = the rarest goal).
  * An option that was on the item before these rolls and that none of them produced was not won by them, so it has no
- * chance to compare with: the rolls were spent and the item is as it was (user, 2026-11-12).
+ * chance to compare with: the rolls were spent and the item is as it was (user, 2026-11-12). What such an option
+ * takes on average is still handed back (`kept`), to be shown next to it.
  */
-function finalOption(list: PotEntry[], conv: StatConv): { option: string[]; goal: Goal | null; chance: number | null; by: string } {
+function finalOption(list: PotEntry[], conv: StatConv): { option: string[]; goal: Goal | null; chance: number | null; by: string; kept: { p: number; by: string } | null } {
   const last = list[list.length - 1].row;
   const grade = last.grade;
   const candidates = [last.before, ...list.filter((e) => e.row.t === last.t).map((e) => e.row.after)];
-  let best = { option: last.before, goal: null as Goal | null, chance: null as number | null, by: "" };
+  let best = { option: last.before, goal: null as Goal | null, chance: null as number | null, exact: null as number | null, by: "" };
   let first = true;
   for (const option of candidates) {
     const goal = goalOf(option, last.add);
     const hit = goal && grade ? goalChance(last, grade, goal, conv) : null;
     const chance = hit?.p ?? null;
+    const exact = goal && grade && chance !== null ? goalExact(last, grade, goal) : null;
+    // Two options of the same class (both "three useful lines") have the same chance: the one whose own numbers are
+    // harder to roll is the better one. Without this a clearly better result lost the tie to the option the item
+    // started with and was read as "kept the old option" (user, 2026-11-12: 데스티니 데스페라도).
+    const tie = chance !== null && best.chance !== null && Math.abs(chance - best.chance) <= best.chance * 1e-9;
+    const rarer = chance !== null && (best.chance === null || (tie ? exact !== null && best.exact !== null && exact < best.exact * (1 - 1e-9) : chance < best.chance));
     // Rarer is better; an option with no goal never beats one that has a goal.
-    const better = first || (goal !== null && (best.goal === null || (chance !== null && (best.chance === null || chance < best.chance))));
-    if (better) best = { option, goal, chance, by: hit?.by ?? "" };
+    const better = first || (goal !== null && (best.goal === null || rarer));
+    if (better) best = { option, goal, chance, exact, by: hit?.by ?? "" };
     first = false;
   }
   const same = (a: string[], b: string[]) => a.length === b.length && a.every((line, i) => line === b[i]);
-  if (best.option === last.before && !list.some((e) => same(e.row.after, last.before))) return { ...best, chance: null, by: "" };
-  return best;
+  const { option, goal, chance, by } = best;
+  if (option === last.before && !list.some((e) => same(e.row.after, last.before))) return { option, goal, chance: null, by: "", kept: chance ? { p: chance, by } : null };
+  return { option, goal, chance, by, kept: null };
 }
 
 /** `entries` oldest first. `conv` = how much other lines are worth in main stat % (the calculator's setting). */
@@ -149,7 +170,7 @@ export function buildPotStats(entries: PotEntry[], conv: StatConv): PotStats {
       // only counts when every roll shared it: rolls of different cubes do not fill one counter.
       if (phase.up) phase.expected = phase.blind ? null : rollsToUp(phase.chance / phase.rolls, phase.caps.size === 1 ? [...phase.caps][0] : 0);
       else if (phase === phases[phases.length - 1]) phase.expected = final.chance ? 1 / final.chance : null;
-      // Priced only where the rolls were paid with meso.
+      // Priced only where the rolls cost meso.
       if (phase.expected !== null && phase.meso > 0) expected = (expected ?? 0) + phase.expected * (phase.meso / phase.rolls);
     }
     // A last phase with nothing to show for it yet (no goal) still cost meso: it counts as spent with no worth.
@@ -176,6 +197,9 @@ export function buildPotStats(entries: PotEntry[], conv: StatConv): PotStats {
       goalRolls: final.chance ? 1 / final.chance : null,
       goalBy: final.by,
       goalMeso: final.chance && tailPhase && !tailPhase.up && tailPhase.meso > 0 ? (tailPhase.meso / tailPhase.rolls) / final.chance : null,
+      keptBy: final.kept?.by ?? "",
+      keptRolls: final.kept ? 1 / final.kept.p : null,
+      keptMeso: final.kept && tailPhase && !tailPhase.up && tailPhase.meso > 0 ? (tailPhase.meso / tailPhase.rolls) / final.kept.p : null,
       phases: phases.map((p) => ({ grade: p.grade, rolls: p.rolls, meso: p.meso, up: p.up, expected: p.expected })),
       first: head.t,
       last: tail.t,

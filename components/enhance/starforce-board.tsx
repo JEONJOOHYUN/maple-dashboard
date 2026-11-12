@@ -2,15 +2,17 @@
 
 import { useMemo, useState } from "react";
 import { eok } from "@/components/ev/ui";
-import { PeriodBar, SyncBanners, ViewTabs, usePeriod, useSync } from "@/components/enhance/board-bits";
+import { PeriodBar, SyncBanners, ViewTabs, WorldChips, useGroupsOff, usePeriod, useSync } from "@/components/enhance/board-bits";
 import { Card, Delta, Empty, SKIP_LABEL, Select } from "@/components/enhance/parts";
 import { CalendarView, InsightView, ItemDialog, ItemsView, LogView } from "@/components/enhance/starforce-views";
+import { useItemDict, type Rolled } from "@/components/enhance/use-item-dict";
 import { resolveItem, type ItemInfo, type ItemOverrides } from "@/lib/enhance/items";
 import { NO_DISCOUNT, judge, trackCopies, type Discount, type SkipReason } from "@/lib/enhance/judge";
 import type { MvpGrade } from "@/lib/ev/starforce";
 import { DAY, dayStart, kstStamp } from "@/lib/enhance/kst";
-import { buildStats, type Entry } from "@/lib/enhance/stats";
+import { buildStats, reachedFloor, type Entry } from "@/lib/enhance/stats";
 import { StarforceSync } from "@/lib/enhance/sync";
+import { groupTallies, worldGroup } from "@/lib/enhance/worlds";
 import { useStored } from "@/lib/use-stored";
 import { cn } from "@/lib/utils";
 
@@ -23,6 +25,8 @@ const VIEWS: { id: View; label: string }[] = [
 ];
 
 const NO_OVERRIDES: ItemOverrides = { levels: {}, spares: {} };
+// Star force tries carry no level or part: the equipment lookup is all this board can tell the dictionary.
+const NO_ROLLED: Rolled[] = [];
 const MVPS: { id: MvpGrade; label: string }[] = [
   { id: "none", label: "없음" },
   { id: "silver", label: "실버" },
@@ -35,8 +39,9 @@ export function StarforceBoard({ apiKey, account, onForget, onChange }: { apiKey
   const period = usePeriod();
   const { from, to } = period;
   const [view, setView] = useState<View>("insight");
-  const [hideLow, setHideLow] = useState(true);
-  const [worldsOff, setWorldsOff] = useState<string[]>([]);
+  // One switch for the log and the item cards (tries · items under 12 stars), remembered in this browser.
+  const [hideLow, setHideLow] = useStored<boolean>("enhance:hideLow", true);
+  const [groupsOff, toggleGroup] = useGroupsOff();
   /** Key of the item whose tries are open in the window ("" = closed). */
   const [openItem, setOpenItem] = useState("");
   const [overrides, setOverrides] = useStored<ItemOverrides>("enhance:items", NO_OVERRIDES);
@@ -48,6 +53,10 @@ export function StarforceBoard({ apiKey, account, onForget, onChange }: { apiKey
   const [sync] = useState(() => new StarforceSync(apiKey, account));
   const { snap, loading, refresh } = useSync(sync, from, to, StarforceSync.serverSnapshot);
 
+  // The shared item dictionary: level and picture of items this account no longer wears.
+  const names = useMemo(() => [...new Set(snap.rows.map((r) => r.item))], [snap.rows]);
+  const dict = useItemDict(snap.status === "done", names, snap.found, NO_ROLLED);
+
   // Pieces and restored destroys are read from the item's neighbouring tries, so they need every loaded try, not only the filtered ones.
   const tracked = useMemo(() => trackCopies(snap.rows), [snap.rows]);
   const inPeriod = useMemo(() => {
@@ -55,27 +64,29 @@ export function StarforceBoard({ apiKey, account, onForget, onChange }: { apiKey
     const end = dayStart(to) + DAY;
     return snap.rows.filter((r) => r.t >= start && r.t < end);
   }, [snap.rows, from, to]);
-  const worlds = useMemo(() => {
-    const count = new Map<string, number>();
-    for (const r of inPeriod) count.set(r.world, (count.get(r.world) ?? 0) + 1);
-    return [...count.entries()].sort((a, b) => b[1] - a[1]);
-  }, [inPeriod]);
-  const entries = useMemo<Entry[]>(() => {
+  // Every try of the period is judged, the switched-off world groups too: their meso is shown on the buttons.
+  const judged = useMemo<Entry[]>(() => {
     const infos = new Map<string, ItemInfo>();
-    return inPeriod
-      .filter((r) => !worldsOff.includes(r.world))
-      .map((row) => {
-        let info = infos.get(row.item);
-        if (!info) infos.set(row.item, (info = resolveItem(row.item, snap.found, overrides)));
-        return { row, info, j: judge(row, info, tracked.restored.has(row.id), discount), copy: tracked.copy.get(row.id) ?? 1 };
-      });
-  }, [inPeriod, worldsOff, snap.found, overrides, tracked, discount]);
+    return inPeriod.map((row) => {
+      let info = infos.get(row.item);
+      if (!info) infos.set(row.item, (info = resolveItem(row.item, snap.found, overrides, dict)));
+      return { row, info, j: judge(row, info, tracked.restored.has(row.id), discount), copy: tracked.copy.get(row.id) ?? 1 };
+    });
+  }, [inPeriod, snap.found, overrides, dict, tracked, discount]);
+  const tallies = useMemo(() => groupTallies(judged.map((e) => ({ world: e.row.world, spent: e.j.ok ? e.j.cost : 0 }))), [judged]);
+  const entries = useMemo(() => judged.filter((e) => !groupsOff.includes(worldGroup(e.row.world))), [judged, groupsOff]);
   const stats = useMemo(() => buildStats(entries), [entries]);
 
   // Rows are oldest first: the last one is the newest try NEXON has given us.
   const latest = snap.rows.at(-1)?.t ?? 0;
   const skipped = (Object.entries(stats.skipped) as [SkipReason, number][]).filter(([, n]) => n > 0);
-  const noLevel = stats.items.filter((it) => it.info.level <= 0).length;
+  const unknown = stats.items.filter((it) => it.info.level <= 0);
+  const noLevel = unknown.length;
+  // The cards that wait for a level must be on screen when the link takes the user to them.
+  const toLevels = () => {
+    setView("items");
+    if (unknown.some((it) => !reachedFloor(it))) setHideLow(false);
+  };
   const tiles = [
     { label: "성공", value: stats.success.toLocaleString("ko-KR"), css: "" },
     { label: "실패", value: stats.fail.toLocaleString("ko-KR"), css: "" },
@@ -118,33 +129,12 @@ export function StarforceBoard({ apiKey, account, onForget, onChange }: { apiKey
         </label>
       </div>
 
-      {/* A world that was switched off stays listed, so it can be switched back on after the period changes. */}
-      {(worlds.length > 1 || worlds.some(([name]) => worldsOff.includes(name))) && (
-        <div role="group" aria-label="월드" className="flex flex-wrap gap-1.5 text-[13px]">
-          {worlds.map(([name, n]) => {
-            const on = !worldsOff.includes(name);
-            return (
-              <button
-                key={name}
-                type="button"
-                aria-pressed={on}
-                onClick={() => setWorldsOff(on ? [...worldsOff, name] : worldsOff.filter((w) => w !== name))}
-                className={cn(
-                  "rounded-full px-3 py-1.5 outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-                  on ? "bg-primary-soft text-primary-text" : "bg-muted text-muted-foreground"
-                )}
-              >
-                {name} <b className="font-num text-xs">{n.toLocaleString("ko-KR")}</b>
-              </button>
-            );
-          })}
-        </div>
-      )}
+      <WorldChips tallies={tallies} off={groupsOff} onToggle={toggleGroup} unit="회" />
 
       <SyncBanners snap={snap} unit="일" onRetry={refresh} onForget={onForget} />
 
       {stats.total === 0 ? (
-        snap.status === "done" && <Empty>이 기간에 스타포스 기록 없음</Empty>
+        snap.status === "done" && <Empty>{judged.length > 0 ? "꺼 둔 월드의 기록만 있음" : "이 기간에 스타포스 기록 없음"}</Empty>
       ) : (
         <>
           <Card>
@@ -171,7 +161,7 @@ export function StarforceBoard({ apiKey, account, onForget, onChange }: { apiKey
               </span>
               {skipped.length > 0 && <span>· 제외: {skipped.map(([why, n]) => `${SKIP_LABEL[why]} ${n.toLocaleString("ko-KR")}`).join(" · ")}</span>}
               {noLevel > 0 && view !== "items" && (
-                <button type="button" onClick={() => setView("items")} className="font-semibold text-primary-text underline underline-offset-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+                <button type="button" onClick={toLevels} className="font-semibold text-primary-text underline underline-offset-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
                   레벨 모르는 장비 {noLevel}개 → 입력
                 </button>
               )}
@@ -182,7 +172,7 @@ export function StarforceBoard({ apiKey, account, onForget, onChange }: { apiKey
 
           {view === "insight" && <InsightView stats={stats} onOpen={setOpenItem} />}
           {view === "log" && <LogView entries={entries} characters={stats.characters} hideLow={hideLow} onHideLow={setHideLow} />}
-          {view === "items" && <ItemsView stats={stats} overrides={overrides} onOverrides={setOverrides} onOpen={setOpenItem} />}
+          {view === "items" && <ItemsView stats={stats} overrides={overrides} onOverrides={setOverrides} onOpen={setOpenItem} hideLow={hideLow} onHideLow={setHideLow} />}
           {view === "cal" && <CalendarView stats={stats} from={from} to={to} />}
           <ItemDialog key={openItem} item={stats.items.find((it) => it.key === openItem) ?? null} entries={entries} onClose={() => setOpenItem("")} />
         </>

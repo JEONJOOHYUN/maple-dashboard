@@ -83,6 +83,9 @@ export type Stats = {
   characters: string[];
 };
 
+/** The piece was at 12 stars or tried from there in the period ("12성 미만 숨기기" hides the others). */
+export const reachedFloor = (it: Pick<ItemStat, "now" | "top">) => Math.max(it.now, it.top.star) >= FLOOR_STAR;
+
 /** Standard normal CDF (Abramowitz–Stegun 7.1.26, error under 1e-7). */
 function phi(z: number): number {
   const x = Math.abs(z) / Math.SQRT2;
