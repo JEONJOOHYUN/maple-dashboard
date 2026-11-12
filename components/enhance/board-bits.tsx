@@ -180,8 +180,7 @@ export const worldsShown = (tallies: GroupTally[], off: WorldGroup[]) => !tallie
 export function WorldStrip({ tallies, off, onToggle }: { tallies: GroupTally[]; off: WorldGroup[]; onToggle: (id: WorldGroup) => void }) {
   if (!worldsShown(tallies, off)) return null;
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border px-5 py-2.5 lg:px-7">
-      <span className="text-xs text-muted-foreground">월드</span>
+    <div className="border-b border-border px-5 py-2.5 lg:px-7">
       <WorldChips tallies={tallies} off={off} onToggle={onToggle} />
     </div>
   );

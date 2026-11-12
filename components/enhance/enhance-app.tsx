@@ -111,7 +111,6 @@ export function EnhanceApp() {
     <div className="flex flex-col gap-4 lg:gap-[22px]">
       <PageHeader
         title="강화 기록"
-        description="스타포스 · 잠재능력 기록 · 기댓값보다 얼마나 이득 · 손해"
         pinAside
         aside={
           ready &&

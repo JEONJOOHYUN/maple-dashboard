@@ -18,7 +18,7 @@ export function PageHeader({
   pinAside?: boolean;
 }) {
   return (
-    <div className={cn("flex justify-between gap-3", pinAside ? "items-start" : "flex-wrap items-end")}>
+    <div className={cn("flex justify-between gap-3", pinAside ? "items-center" : "flex-wrap items-end")}>
       <div className="flex min-w-0 flex-col gap-1.5">
         <h1 className="font-heading text-[22px] leading-tight font-bold lg:text-[26px]">{title}</h1>
         {description && <p className="text-[13px] leading-relaxed text-muted-foreground">{description}</p>}
