@@ -16,7 +16,7 @@ import { useStored } from "@/lib/use-stored";
 import { cn } from "@/lib/utils";
 
 type PeriodId = "7d" | "30d" | "1y" | "all" | "custom";
-// `short` = what the button says: the row also holds the world groups and the "계산 기준" button.
+// `short` = what the button says: the row also holds the "계산 기준" button.
 const PERIODS: { id: PeriodId; label: string; short: string; days: number }[] = [
   { id: "7d", label: "최근 7일", short: "7일", days: 7 },
   { id: "30d", label: "최근 30일", short: "30일", days: 30 },
@@ -70,9 +70,10 @@ export function useSync<T extends { t: number; who: string; item: string }>(sync
 }
 
 /**
- * Two rows (user, 2026-11-13). First: `lead` (the star force · potential switch) on the left, when the records were
- * read and the refresh button on the right. Second, under the switch: the period buttons and `filters` (the world
- * groups) on the left, `aside` (the "계산 기준" button) on the right. The date fields come under it.
+ * Rows (user, 2026-11-13). First: `lead` (the star force · potential switch) on the left, when the records were
+ * read and the refresh button on the right. Second, under the switch: the period buttons on the left, `aside` (the
+ * "계산 기준" button) on the right. Third, under the period: `filters` (the world groups — a row that is only there
+ * when the records are not all regular-world ones). The date fields come last.
  * Changing or forgetting the key is in the menu next to the page title.
  */
 export function PeriodBar({
@@ -124,10 +125,10 @@ export function PeriodBar({
               </button>
             ))}
           </div>
-          {filters}
         </div>
         {aside}
       </div>
+      {filters}
       {period === "custom" && (
         <div className="flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground">
           <input type="date" aria-label="시작일" value={custom.from || from} min={oldest} max={to} onChange={(e) => setCustom({ ...custom, from: e.target.value })} className={dateInput} />
@@ -159,7 +160,7 @@ export const worldsShown = (tallies: GroupTally[], off: WorldGroup[]) => !tallie
 export function WorldChips({ tallies, off, onToggle }: { tallies: GroupTally[]; off: WorldGroup[]; onToggle: (id: WorldGroup) => void }) {
   if (!worldsShown(tallies, off)) return null;
   return (
-    <div role="group" aria-label="월드" className="flex flex-wrap gap-[3px] rounded-lg border border-border p-[3px]">
+    <div role="group" aria-label="월드" className="flex max-w-full flex-wrap gap-[3px] self-start rounded-lg border border-border p-[3px]">
       {tallies.map(({ id, spent }) => {
         const on = !off.includes(id);
         return (
