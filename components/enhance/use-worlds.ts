@@ -4,7 +4,7 @@
 // Read from what this browser already has for the key (its saved star force tries) plus one call for where the
 // account's characters are now (kept for a day). See lib/enhance/worlds.ts for how the two are put together.
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { characterInsights, characterWorlds, savedTries } from "@/lib/enhance/sync";
+import { characterClasses, characterInsights, characterWorlds, savedTries } from "@/lib/enhance/sync";
 import { worldAt, worldRuns } from "@/lib/enhance/worlds";
 
 type Try = { t: number; who: string; world: string };
@@ -52,6 +52,28 @@ export function useWorldOf(apiKey: string, account: string, tries: Try[], fetche
   }, [apiKey, account]);
   const runs = useMemo(() => worldRuns([...saved, ...tries]), [saved, tries]);
   return useCallback((who: string, t: number) => worldAt(runs, now, who, t), [runs, now]);
+}
+
+const NO_NAMES: ReadonlySet<string> = new Set();
+
+/**
+ * The account's Xenon characters. For them an all stat % line is a goal of its own; for every other job it counts as
+ * main stat. Asked with the same one call as the worlds; until it is known (or when it fails) nobody is a Xenon.
+ */
+export function useXenons(apiKey: string, account: string): ReadonlySet<string> {
+  const [names, setNames] = useState(NO_NAMES);
+  useEffect(() => {
+    let alive = true;
+    characterClasses(apiKey, account)
+      .then((classes) => {
+        if (alive) setNames(new Set(Object.keys(classes).filter((who) => classes[who] === "제논")));
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [apiKey, account]);
+  return names;
 }
 
 const NO_INSIGHTS: Record<string, number> = {};

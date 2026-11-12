@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { NO_CONV, addWeaponChance, addWeaponSumChance, convFromScouter, customChance, fixFirstLine, lineTables, resetMeso, sumChance, weaponChance } from "../ev/potential.ts";
+import { NO_CONV, SOUL_EXTRA, addWeaponChance, addWeaponSumChance, convFromScouter, customChance, fixFirstLine, lineTables, resetMeso, sumChance, weaponChance } from "../ev/potential.ts";
 import { STAT_CONV_DEFAULT } from "../ev/defaults.ts";
 import { buildPotStats, potEntries } from "./pot-stats.ts";
-import { cappedCategory, cubeFee, cubeOf, feeByInsight, goalChance, goalOf, gradeBefore, optionToken, parsePotential, pricedCube, rollMeso, rollsToUp, slotOf, statWorth, trackPieces, upChance, upRolls, type PotRow, type RawPotential } from "./potential.ts";
+import { cappedCategory, cubeFee, cubeOf, feeByInsight, goalChance, goalOf, gradeBefore, kindOf, potKey, optionToken, parsePotential, pricedCube, rollMeso, rollsToUp, slotOf, statWorth, trackPieces, upChance, upRolls, type PotRow, type RawPotential } from "./potential.ts";
 
 const near = (actual: number, expected: number, tolerance: number, label: string) =>
   assert.ok(Math.abs(actual - expected) <= tolerance, `${label}: ${actual} is not within ${tolerance} of ${expected}`);
@@ -214,10 +214,15 @@ test("gloves with crit damage and hats with cooldown: the special option plus th
   assert.deepEqual([withAll.by, withAll.p], ["크뎀 1줄 + INT 15%", customChance(gRows, [[{ cat: "cd", min: 8 }, { cat: "int", min: 15 }]])]);
   // Only all stat lines: an all-stat item (a Xenon item). A main stat line does not count for it — so it is rarer
   // than the same total on a main stat item.
-  const onlyAll = goalChance(gloves, "legendary", goalOf(["크리티컬 데미지 +8%", "올스탯 +9%", "올스탯 +6%"], false)!, NO_CONV)!;
+  const allOnly = goalOf(["크리티컬 데미지 +8%", "올스탯 +9%", "올스탯 +6%"], false)!;
+  const onlyAll = goalChance(gloves, "legendary", allOnly, NO_CONV, { xenon: true })!;
+  // Anyone else: all stat is main stat, so a main stat line counts toward the same 15 % (user, 2026-11-13).
+  const asMain = goalChance(gloves, "legendary", allOnly, NO_CONV)!;
+  assert.deepEqual([asMain.by, asMain.p], ["크뎀 1줄 + 주스탯 15%", customChance(gRows, [[{ cat: "cd", min: 8 }, { cat: "str", min: 15 }]])]);
+  assert.ok(onlyAll.p < asMain.p);
   assert.deepEqual([onlyAll.by, onlyAll.p], ["크뎀 1줄 + 올스탯 15%", customChance(gRows, [[{ cat: "cd", min: 8 }, { cat: "all", min: 15 }]])]);
   assert.ok(onlyAll.p < withAll.p);
-  const hatAll = goalChance(row({ item_equipment_part: "모자", item_level: 200 }), "legendary", goalOf([COOL1, "올스탯 +9%", "올스탯 +6%"], false)!, NO_CONV)!;
+  const hatAll = goalChance(row({ item_equipment_part: "모자", item_level: 200 }), "legendary", goalOf([COOL1, "올스탯 +9%", "올스탯 +6%"], false)!, NO_CONV, { xenon: true })!;
   assert.deepEqual([hatAll.by, hatAll.p], ["쿨감 1초 + 올스탯 15%", customChance(lineTables("black", "legendary", "hat", 200)!, [[{ cat: "cool", min: 1 }, { cat: "all", min: 15 }]])]);
   const c = goalChance(gloves, "legendary", goalOf(["크리티컬 데미지 +8%", "방어력 +7%", "이동속도 +9"], false)!, NO_CONV)!;
   assert.equal(c.by, "크뎀 1줄");
@@ -455,9 +460,29 @@ test("additional potential with all stat % and no main stat line is converted to
   const shown = Math.floor(statWorth(goal, conv) * 10 + 1e-6) / 10;
   assert.equal(hit.p, sumChance(lineTables("white", "legendary", "gloves", 200)!, { type: "stat", min: shown - 1e-9, conv, attack: "atk" }));
   assert.ok(1 / hit.p > 29);
-  // Main potential keeps an all-stat-only option as its own goal (a Xenon item).
-  const main = goalChance(row({ item_equipment_part: "상의", item_level: 200 }), "legendary", goalOf(["올스탯 +9%", "올스탯 +9%", "올스탯 +6%"], false)!, conv)!;
-  assert.equal(main.by, "올스탯 24%");
+  // Main potential: all stat % alone is main stat too — 올스탯 10 · 10 · 7 on a mage's shoes is as good as INT 27 %,
+  // and any option with that much main stat counts (user, 2026-11-13: as its own "올스탯 27 %" goal it read as
+  // thousands of rolls, and the shoes came out as the luckiest item).
+  const shoes = row();
+  const all27 = goalChance(shoes, "legendary", goalOf(["올스탯 +10%", "올스탯 +10%", "올스탯 +7%"], false)!, conv)!;
+  const int27 = goalChance(shoes, "legendary", goalOf(["올스탯 +10%", "INT +10%", "올스탯 +7%"], false)!, conv)!;
+  assert.deepEqual([all27.by, int27.by], ["주스탯 27%", "INT 27%"]);
+  assert.equal(all27.p, int27.p);
+  near(1 / all27.p, 166.5, 0.5, "주스탯 27%");
+  // Only a Xenon keeps it as a goal of its own, where a main stat line does not count: far rarer.
+  const xenon = goalChance(shoes, "legendary", goalOf(["올스탯 +10%", "올스탯 +10%", "올스탯 +7%"], false)!, conv, { xenon: true })!;
+  assert.equal(xenon.by, "올스탯 27%");
+  assert.ok(xenon.p < all27.p / 5);
+  // The job comes with the character: the same rolls are judged one way for a Xenon and the other way for a mage.
+  const rolls = [row({ before_potential_option: opt("방어력 +7%", "이동속도 +9", "점프력 +9"), after_potential_option: opt("올스탯 +10%", "올스탯 +10%", "올스탯 +7%") })];
+  const mage = buildPotStats(potEntries(rolls, trackPieces(rolls)), conv).pieces[0];
+  const asXenon = buildPotStats(potEntries(rolls, trackPieces(rolls)), conv, new Set(["테스트"])).pieces[0];
+  // (The mage's shoes of the default row are not a Xenon's gear whoever rolls them: a thief's pair is.)
+  const thief = [row({ target_item: "에테르넬 시프슈즈", before_potential_option: opt("방어력 +7%", "이동속도 +9", "점프력 +9"), after_potential_option: opt("올스탯 +10%", "올스탯 +10%", "올스탯 +7%") })];
+  const onThief = buildPotStats(potEntries(thief, trackPieces(thief)), conv).pieces[0];
+  const onXenon = buildPotStats(potEntries(thief, trackPieces(thief)), conv, new Set(["테스트"])).pieces[0];
+  assert.deepEqual([mage.goalBy, asXenon.goalBy, onThief.goalBy, onXenon.goalBy], ["주스탯 27%", "주스탯 27%", "주스탯 27%", "올스탯 27%"]);
+  assert.ok(onThief.goalRolls! < onXenon.goalRolls! / 5);
 });
 
 test("prime cubes: the cube has a price, and line 1 is the one the item keeps", () => {
@@ -503,4 +528,66 @@ test("prime cubes: the cube has a price, and line 1 is the one the item keeps", 
   const piece = buildPotStats(potEntries(used, trackPieces(used), {}, { prime: 5e8 }), NO_CONV).pieces[0];
   assert.deepEqual([piece.spent, piece.goalBy], [5e8 + fee, "공 · 보공 3줄"]);
   near(piece.expected!, (5e8 + fee) / hit.p, 1, "expected");
+});
+
+test("soul potential: its own history, price, table and goal (history/soul-potential, 2026-11-13)", () => {
+  // The shape of a real answer (values made up): no level, no part, no potential_type.
+  const soul = (over: Partial<RawPotential> = {}): PotRow =>
+    parsePotential({
+      id: `s${seq++}`,
+      character_name: "테스트",
+      date_create: "2026-09-27T00:30:18.209+09:00",
+      item_upgrade_result: "실패",
+      miracle_time_flag: "이벤트 적용되지 않음",
+      soul_potential_amplified_grade: 4,
+      target_item: "데스티니 데스페라도",
+      soul_potential_grade: "레전드리",
+      upgrade_guarantee: false,
+      upgrade_guarantee_count: 0,
+      before_soul_potential_option: opt("공격력 +2%", "최대 MP +1.5%", "몬스터 방어율 무시 +2%"),
+      after_soul_potential_option: opt("STR +2%", "최대 MP +1.5%", "DEX +8"),
+      ...over,
+    })!;
+  const a = soul();
+  assert.deepEqual([a.soul, a.add, a.meso, a.part, a.level, a.grade, a.type, kindOf(a), cubeOf(a), slotOf(a.part)], [true, false, true, "소울", 4, "legendary", "소울 잠재능력 재설정", "soul", "soul", "soul"]);
+  assert.deepEqual([a.before[1], a.after[2]], ["최대 MP +1.5%", "DEX +8"]);
+  // Values with a decimal point are read too.
+  assert.deepEqual([optionToken("최대 MP +1.5%"), optionToken("공격력 +4.5%")], [["mp", 1.5], ["atk", 4.5]]);
+  // The soul reset's own price (the same at every stage), and the grade it had when it was paid for.
+  assert.equal(rollMeso(a), resetMeso("soul", "legendary", 4));
+  assert.equal(rollMeso(soul({ item_upgrade_result: "성공", soul_potential_grade: "유니크", soul_potential_amplified_grade: undefined })), resetMeso("soul", "epic", 1));
+  // A weapon's soul is not its main potential: the two are kept apart under the same item name.
+  const main = row({ target_item: "데스티니 데스페라도", item_equipment_part: "무기" });
+  assert.notEqual(potKey(a), potKey(main));
+  // Grade-up: the soul's own chance and ceiling, doubled in miracle time.
+  near(upChance(soul({ soul_potential_grade: "레어" }), "rare")!.p, 0.015, 1e-12, "rare → epic");
+  near(upChance(soul({ soul_potential_grade: "레어", miracle_time_flag: "이벤트 적용중" }), "rare")!.p, 0.03, 1e-12, "miracle time");
+
+  // The goal: the attack % the option adds up to, from the top two values of the stage up — the soul goal the calculator has.
+  const table = lineTables("soul", "legendary", "soul", 4)!;
+  const values = [...new Set(table.flat().filter((r) => r[0] === "atk").map((r) => r[1]))].sort((x, y) => y - x);
+  const [top, next] = values;
+  const two = goalOf([`공격력 +${top}%`, `공격력 +${next}%`, "최대 MP +1.5%"], false)!;
+  const hit = goalChance(a, "legendary", two, NO_CONV)!;
+  assert.equal(hit.by, `공격력 ${top + next}%`);
+  near(hit.p, addWeaponChance(table, "atk", "a21", false, SOUL_EXTRA), 1e-15, "the calculator's soul goal");
+  // With a good line next to it ("+ @": all stat · main stat % · damage · boss damage): rarer.
+  const plus = goalChance(a, "legendary", goalOf([`공격력 +${top}%`, `공격력 +${next}%`, "올스탯 +2%"], false)!, NO_CONV)!;
+  assert.equal(plus.by, `공격력 ${top + next}% + @`);
+  near(plus.p, addWeaponChance(table, "atk", "a21x", false, SOUL_EXTRA), 1e-15, "the calculator's + @");
+  assert.ok(plus.p < hit.p);
+  // Below the top two: the hardest single total, as for any option that has no goal of its own.
+  assert.equal(goalChance(a, "legendary", goalOf([`공격력 +${next}%`, "최대 MP +1.5%", "DEX +8"], false)!, NO_CONV)!.by, `공격력 ${next}%`);
+
+  // The soul tables write the main stat as STR: an INT · LUK line is asked the same way, not as a stat the table lacks.
+  const stat = (name: string) => goalChance(a, "legendary", goalOf([`${name} +2%`, "최대 MP +1.5%", "DEX +8"], false)!, NO_CONV)!;
+  assert.deepEqual([stat("STR").by, stat("INT").by, stat("LUK").by], ["STR 2%", "INT 2%", "LUK 2%"]);
+  assert.equal(stat("INT").p, stat("STR").p);
+  assert.equal(stat("LUK").p, stat("STR").p);
+
+  // The piece: meso spent at the soul's price, marked as a soul one.
+  const used = [soul({ before_soul_potential_option: opt("최대 MP +1.5%", "DEX +8", "STR +8"), after_soul_potential_option: opt(`공격력 +${top}%`, `공격력 +${next}%`, "최대 MP +1.5%") })];
+  const piece = buildPotStats(potEntries(used, trackPieces(used)), NO_CONV).pieces[0];
+  assert.deepEqual([piece.soul, piece.add, piece.spent, piece.goalBy], [true, false, resetMeso("soul", "legendary", 4), `공격력 ${top + next}%`]);
+  near(piece.expected!, resetMeso("soul", "legendary", 4)! / hit.p, 1, "expected");
 });

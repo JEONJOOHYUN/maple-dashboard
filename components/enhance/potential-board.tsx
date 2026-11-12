@@ -7,11 +7,11 @@ import { BasisButton, BasisRow, ItemFilter, NO_ITEM_FILTER, PeriodBar, SyncBanne
 import { Card, Delta, Empty, Gauge, ItemIcon, Select, Tile, signed } from "@/components/enhance/parts";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { useItemDict, type Rolled } from "@/components/enhance/use-item-dict";
-import { useInsights, useWorldOf } from "@/components/enhance/use-worlds";
+import { useInsights, useWorldOf, useXenons } from "@/components/enhance/use-worlds";
 import { itemIcon, type ItemInfo } from "@/lib/enhance/items";
 import { DAY, dayStart, kstFull, kstShort, kstStamp } from "@/lib/enhance/kst";
 import { buildPotStats, potEntries, potEntryKey, type PieceStat, type PotEntry } from "@/lib/enhance/pot-stats";
-import { PRICED_CUBES, cubePriceDefault, feeByInsight, trackPieces, type CubePrices, type PricedCube } from "@/lib/enhance/potential";
+import { PRICED_CUBES, cubePriceDefault, feeByInsight, kindOf, trackPieces, type CubePrices, type PotKind, type PricedCube } from "@/lib/enhance/potential";
 import { PotentialSync, StarforceSync } from "@/lib/enhance/sync";
 import { groupTallies, worldGroup } from "@/lib/enhance/worlds";
 import { STAT_CONV_DEFAULT } from "@/lib/ev/defaults";
@@ -40,7 +40,11 @@ const PAGE = 100;
 /** Item name → picture address: what the character wears now, else the calculator's list, else the shared dictionary. */
 type Icons = Record<string, string | undefined>;
 const iconOf = (item: string, level: number, icons: Icons): ItemInfo => ({ level, spare: 0, icon: icons[item], source: "api" });
-const kindLabel = (add: boolean) => (add ? "에디셔널" : "잠재능력");
+const KIND_LABEL: Record<PotKind, string> = { main: "잠재능력", add: "에디셔널", soul: "소울" };
+const KINDS: PotKind[] = ["main", "add", "soul"];
+const kindLabel = (x: { add: boolean; soul?: boolean }) => KIND_LABEL[kindOf(x)];
+/** A soul has no level of its own: its amplification stage stands where the item level is. */
+const levelLabel = (x: { soul?: boolean; level: number }) => (x.soul ? (x.level > 0 ? `증폭 ${x.level}단계` : "증폭 단계 모름") : `Lv.${x.level}`);
 const rolls = (n: number) => `${Math.round(n).toLocaleString("ko-KR")}회`;
 
 function GradeText({ grade }: { grade: Grade | null }) {
@@ -58,7 +62,7 @@ function RollRow({ entry, found, showItem }: { entry: PotEntry; found: Icons; sh
     >
       <span className="flex flex-col gap-0.5 text-xs">
         <GradeText grade={row.grade} />
-        <span className="text-muted-foreground">{kindLabel(row.add)}</span>
+        <span className="text-muted-foreground">{kindLabel(row)}</span>
       </span>
       <span className="flex min-w-0 flex-col gap-1.5">
         {showItem && (
@@ -106,14 +110,14 @@ function PieceCard({ piece, found, onOpen }: { piece: PieceStat; found: Icons; o
   if (tail && !tail.up && tail.expected !== null) bars.push({ key: "goal", label: <b className="text-primary-text">{piece.goalBy || "옵션"}</b>, used: tail.rolls, mean: tail.expected });
   return (
     <Card className="relative flex flex-col items-center p-3.5 text-center hover:border-primary/60">
-      <button type="button" aria-label={`${piece.item} ${kindLabel(piece.add)} 내역 보기`} onClick={onOpen} className="absolute inset-0 rounded-lg outline-none focus-visible:ring-3 focus-visible:ring-ring/50" />
+      <button type="button" aria-label={`${piece.item} ${kindLabel(piece)} 내역 보기`} onClick={onOpen} className="absolute inset-0 rounded-lg outline-none focus-visible:ring-3 focus-visible:ring-ring/50" />
       <span className="absolute top-3.5 left-3.5 text-xs text-muted-foreground">
         {kstShort(piece.first)} ~ {kstShort(piece.last)}
       </span>
       <ItemIcon info={iconOf(piece.item, piece.level, found)} size={48} />
       <b className="mt-2 max-w-full truncate text-[15px]">{piece.item}</b>
       <span className="mt-0.5 max-w-full truncate text-xs text-muted-foreground">
-        {kindLabel(piece.add)} · Lv.{piece.level} · {piece.who}
+        {kindLabel(piece)} · {levelLabel(piece)} · {piece.who}
         {piece.of > 1 && ` · ${piece.n}번째`}
       </span>
       <span className="mt-2.5 flex items-baseline gap-1.5 text-base whitespace-nowrap">
@@ -202,7 +206,8 @@ function PieceDialog({ piece, entries, found, onClose }: { piece: PieceStat | nu
                 <div className="flex min-w-0 flex-col gap-1">
                   <DialogTitle className="truncate text-base leading-tight font-bold">{piece.item}</DialogTitle>
                   <DialogDescription className="text-xs">
-                    {kindLabel(piece.add)} · Lv.{piece.level} · {piece.part} · {piece.who}
+                    {kindLabel(piece)} · {levelLabel(piece)}
+                    {!piece.soul && ` · ${piece.part}`} · {piece.who}
                     {piece.of > 1 && ` · ${piece.n}번째`}
                   </DialogDescription>
                 </div>
@@ -257,8 +262,9 @@ function PotInsight({ stats, found, onOpen }: { stats: ReturnType<typeof buildPo
   const priced = stats.pieces.filter((p) => p.delta !== null);
   const best = priced.filter((p) => p.delta! > 0).sort((a, b) => b.delta! - a.delta!)[0];
   const worst = priced.filter((p) => p.delta! < 0).sort((a, b) => a.delta! - b.delta!)[0];
-  const side = (add: boolean) => {
-    const list = stats.pieces.filter((p) => p.add === add);
+  const kinds = KINDS.filter((k) => k !== "soul" || stats.pieces.some((p) => p.soul));
+  const side = (which: PotKind) => {
+    const list = stats.pieces.filter((p) => kindOf(p) === which);
     return { resets: list.reduce((n, p) => n + p.resets, 0), cubes: list.reduce((n, p) => n + p.rolls - p.resets, 0), spent: list.reduce((n, p) => n + p.spent, 0) };
   };
   const top = (pick: (p: PieceStat) => number) =>
@@ -286,14 +292,15 @@ function PotInsight({ stats, found, onOpen }: { stats: ReturnType<typeof buildPo
       <span className="text-[11px] text-muted-foreground">{label}</span>
       <b className="text-sm leading-snug">{p ? p.item : "해당 없음"}</b>
       {p ? <Delta v={p.delta!} className="text-lg" /> : <b className="font-num text-lg text-muted-foreground">—</b>}
-      <span className="text-[11px] text-muted-foreground">{p ? `${kindLabel(p.add)} · ${p.goalBy || "등급 상승"} · 사용 ${eok(p.spent)}` : ""}</span>
+      <span className="text-[11px] text-muted-foreground">{p ? `${kindLabel(p)} · ${p.goalBy || "등급 상승"} · 사용 ${eok(p.spent)}` : ""}</span>
     </button>
   );
-  const kind = (label: string, add: boolean) => {
-    const t = side(add);
+  const kind = (which: PotKind) => {
+    const label = KIND_LABEL[which];
+    const t = side(which);
     // The same four lines as the lucky · unlucky boxes next to it, so the two cards are one height.
     return (
-      <div className="flex min-w-0 flex-col gap-0.5 rounded-lg bg-muted px-3 py-2.5">
+      <div key={which} className="flex min-w-0 flex-col gap-0.5 rounded-lg bg-muted px-3 py-2.5">
         <span className="text-[11px] text-muted-foreground">{label}</span>
         <b className="text-sm leading-snug">사용 메소</b>
         <b className="font-num text-lg">{t.spent > 0 ? eok(t.spent) : "—"}</b>
@@ -322,12 +329,9 @@ function PotInsight({ stats, found, onOpen }: { stats: ReturnType<typeof buildPo
         <Card className="flex flex-col">
           <h2 className="flex items-center gap-2 px-4 pt-3.5 pb-1 text-sm font-bold">
             <Split className="size-4 text-primary-text" aria-hidden="true" />
-            잠재능력 vs 에디셔널
+            {kinds.map((k) => KIND_LABEL[k]).join(kinds.length > 2 ? " · " : " vs ")}
           </h2>
-          <div className="grid flex-1 grid-cols-2 gap-2.5 px-4 pt-2 pb-3.5">
-            {kind("잠재능력", false)}
-            {kind("에디셔널", true)}
-          </div>
+          <div className={cn("grid flex-1 gap-2.5 px-4 pt-2 pb-3.5", kinds.length > 2 ? "grid-cols-3" : "grid-cols-2")}>{kinds.map(kind)}</div>
         </Card>
       </div>
       <div className="grid items-start gap-3.5 lg:grid-cols-2 xl:grid-cols-3">
@@ -348,7 +352,7 @@ function PotInsight({ stats, found, onOpen }: { stats: ReturnType<typeof buildPo
                   <span className="flex min-w-0 flex-col gap-0.5">
                     <b className="truncate text-sm">{p.item}</b>
                     <span className="truncate text-xs text-muted-foreground">
-                      {kindLabel(p.add)}
+                      {kindLabel(p)}
                       {p.of > 1 && ` ${p.n}번째`} · {rank.sub(p)}
                     </span>
                   </span>
@@ -368,9 +372,12 @@ type Sort = "spent" | "delta" | "recent";
 function PiecesView({ pieces, found, onOpen }: { pieces: PieceStat[]; found: Icons; onOpen: (key: string) => void }) {
   const [sort, setSort] = useState<Sort>("spent");
   const [picked, setFilter] = useState(NO_ITEM_FILTER);
-  const names = pieces.map((p) => p.item);
+  // 잠재능력 · 에디셔널 · 소울: "" = all of them. The item list follows the kind picked.
+  const [kind, setKind] = useState<PotKind | "">("");
+  const ofKind = pieces.filter((p) => !kind || kindOf(p) === kind);
+  const names = ofKind.map((p) => p.item);
   const filter = liveFilter(picked, names);
-  const list = pieces
+  const list = ofKind
     .filter((p) => itemMatches(p.item, filter))
     .sort((a, b) => (sort === "spent" ? b.spent - a.spent : sort === "delta" ? (b.delta ?? -Infinity) - (a.delta ?? -Infinity) : b.last - a.last) || b.rolls - a.rolls);
   return (
@@ -381,10 +388,18 @@ function PiecesView({ pieces, found, onOpen }: { pieces: PieceStat[]; found: Ico
         </b>
         <span className="flex flex-wrap items-center gap-2">
           <ItemFilter names={names} value={filter} onChange={setFilter} />
+          <Select aria-label="종류" value={kind} onChange={(e) => setKind(e.target.value as PotKind | "")} className="bg-card">
+            <option value="">모든 종류</option>
+            {KINDS.map((k) => (
+              <option key={k} value={k}>
+                {KIND_LABEL[k]}
+              </option>
+            ))}
+          </Select>
           <Select aria-label="정렬" value={sort} onChange={(e) => setSort(e.target.value as Sort)} className="bg-card">
-            <option value="spent">사용한 메소 순</option>
-            <option value="delta">손익 순</option>
-            <option value="recent">최근 재설정 순</option>
+            <option value="spent">많이 쓴 순</option>
+            <option value="delta">이득 큰 순</option>
+            <option value="recent">최근 순</option>
           </Select>
         </span>
       </div>
@@ -407,7 +422,7 @@ function RollsView({ entries, characters, found }: { entries: PotEntry[]; charac
   // Items of the chosen character (every item when no character is chosen).
   const items = [...new Set(entries.filter((e) => !who || e.row.who === who).map((e) => e.row.item))].sort((a, b) => a.localeCompare(b, "ko"));
   const list = entries.filter(
-    (e) => (!who || e.row.who === who) && (!item || e.row.item === item) && (!kind || (kind === "add") === e.row.add) && (!only || e.taken || e.row.up)
+    (e) => (!who || e.row.who === who) && (!item || e.row.item === item) && (!kind || kindOf(e.row) === kind) && (!only || e.taken || e.row.up)
   );
   const shown = list.slice(-limit).reverse();
   return (
@@ -429,9 +444,12 @@ function RollsView({ entries, characters, found }: { entries: PotEntry[]; charac
           ))}
         </Select>
         <Select aria-label="종류" value={kind} onChange={(e) => (setKind(e.target.value), setLimit(PAGE))}>
-          <option value="">잠재 · 에디셔널</option>
-          <option value="main">잠재능력</option>
-          <option value="add">에디셔널</option>
+          <option value="">모든 종류</option>
+          {KINDS.map((k) => (
+            <option key={k} value={k}>
+              {KIND_LABEL[k]}
+            </option>
+          ))}
         </Select>
         <label className="inline-flex items-center gap-1.5 text-[13px]">
           <input type="checkbox" checked={only} onChange={(e) => (setOnly(e.target.checked), setLimit(PAGE))} className="size-4 accent-primary" />
@@ -474,7 +492,7 @@ export function PotentialBoard({ apiKey, account, onForget, switcher }: { apiKey
   // dictionary the level and part of their items in return.
   const rolled = useMemo(() => {
     const seen = new Map<string, Rolled>();
-    for (const r of snap.rows) if (r.level > 0 && !seen.has(r.item)) seen.set(r.item, { item: r.item, level: r.level, part: r.part });
+    for (const r of snap.rows) if (!r.soul && r.level > 0 && !seen.has(r.item)) seen.set(r.item, { item: r.item, level: r.level, part: r.part });
     return [...seen.values()];
   }, [snap.rows]);
   const names = useMemo(() => [...new Set(snap.rows.map((r) => r.item))], [snap.rows]);
@@ -519,7 +537,9 @@ export function PotentialBoard({ apiKey, account, onForget, switcher }: { apiKey
   const tallies = useMemo(() => groupTallies(inPeriod.map((e) => ({ world: worldOf(e.row.who, e.row.t), spent: e.cost }))), [inPeriod, worldOf]);
   const groups = useKnownGroups(account, tallies);
   const entries = useMemo(() => inPeriod.filter((e) => !groupsOff.includes(worldGroup(worldOf(e.row.who, e.row.t)))), [inPeriod, worldOf, groupsOff]);
-  const stats = useMemo(() => buildPotStats(entries, conv), [entries, conv]);
+  // All stat % is main stat for every job but Xenon: which characters are one comes with the account's list.
+  const xenons = useXenons(apiKey, account);
+  const stats = useMemo(() => buildPotStats(entries, conv, xenons), [entries, conv, xenons]);
 
   const tiles = [
     { label: "재설정", value: rolls(stats.resets) },

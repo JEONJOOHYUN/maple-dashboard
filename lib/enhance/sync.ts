@@ -231,7 +231,7 @@ export class StarforceSync extends HistorySync<SfRow> {
   }
 }
 
-/** Potential rolls: meso resets (history/potential) and cash cubes (history/cube). The equipment lookup only adds pictures. */
+/** Potential rolls: meso resets (history/potential), cash cubes (history/cube) and soul resets (history/soul-potential) — three calls a day. The equipment lookup only adds pictures. */
 export class PotentialSync extends HistorySync<PotRow> {
   static readonly serverSnapshot = (): SyncSnap<PotRow> => EMPTY;
   constructor(key: string, account: string) {
@@ -239,7 +239,12 @@ export class PotentialSync extends HistorySync<PotRow> {
       tag,
       fetchDay: async (api, date, signal) => (await fetchHistoryDay<RawPotential>(api, path, list, date, signal)).map(parsePotential).filter((r): r is PotRow => r !== null),
     });
-    super(key, account, [source("pot", "history/potential", "potential_history"), source("cube", "history/cube", "cube_history")], (row, found) => !found[row.item]);
+    super(
+      key,
+      account,
+      [source("pot", "history/potential", "potential_history"), source("cube", "history/cube", "cube_history"), source("soul", "history/soul-potential", "soul_potential_history")],
+      (row, found) => !found[row.item]
+    );
   }
 }
 
@@ -249,30 +254,31 @@ export async function savedTries(account: string): Promise<SfRow[]> {
   return saved.flatMap(([, day]) => day.rows);
 }
 
-type SavedCharacters = { at: number; worlds: Record<string, string>; ocids: Record<string, string> };
+type SavedCharacters = { at: number; worlds: Record<string, string>; ocids: Record<string, string>; classes: Record<string, string> };
+type Characters = Pick<SavedCharacters, "worlds" | "ocids" | "classes">;
 const charactersKey = (account: string) => `${VERSION}|${account}|cw`;
 
 /** character/list calls under way, by key: the world lookup and the 통찰력 lookup start together and share one. */
-const listing = new Map<string, Promise<Pick<SavedCharacters, "worlds" | "ocids">>>();
+const listing = new Map<string, Promise<Characters>>();
 
 /**
  * The account's characters (where each is now, and its id), asked at most once a day (one call). A failure answers
  * with what was saved before, or nothing: this only refines the page, it must never fail it.
  * The call is not tied to one caller's abort signal: it is shared, and it is a single small request.
  */
-function accountCharacters(api: Api, account: string): Promise<Pick<SavedCharacters, "worlds" | "ocids">> {
+function accountCharacters(api: Api, account: string): Promise<Characters> {
   const running = listing.get(account);
   if (running) return running;
   const work = (async () => {
     const saved = await idbGet<Partial<SavedCharacters>>(charactersKey(account));
-    // A copy saved before the ids were kept counts as stale.
-    if (saved?.worlds && saved.ocids && saved.at && Date.now() - saved.at < DAY) return { worlds: saved.worlds, ocids: saved.ocids };
+    // A copy saved before the ids · jobs were kept counts as stale.
+    if (saved?.worlds && saved.ocids && saved.classes && saved.at && Date.now() - saved.at < DAY) return { worlds: saved.worlds, ocids: saved.ocids, classes: saved.classes };
     try {
       const fresh = await fetchCharacters(api);
       void idbPut(charactersKey(account), { at: Date.now(), ...fresh } satisfies SavedCharacters);
       return fresh;
     } catch {
-      return { worlds: saved?.worlds ?? {}, ocids: saved?.ocids ?? {} };
+      return { worlds: saved?.worlds ?? {}, ocids: saved?.ocids ?? {}, classes: saved?.classes ?? {} };
     }
   })().finally(() => listing.delete(account));
   listing.set(account, work);
@@ -282,6 +288,11 @@ function accountCharacters(api: Api, account: string): Promise<Pick<SavedCharact
 /** Character → the world it is in today. */
 export async function characterWorlds(key: string, account: string): Promise<Record<string, string>> {
   return (await accountCharacters(createApi(key, account), account)).worlds;
+}
+
+/** Character → its job today (the same one call as the worlds). */
+export async function characterClasses(key: string, account: string): Promise<Record<string, string>> {
+  return (await accountCharacters(createApi(key, account), account)).classes;
 }
 
 type SavedInsights = Record<string, { at: number; level: number }>;

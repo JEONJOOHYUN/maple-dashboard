@@ -318,9 +318,9 @@ export function ItemsView({
           </label>
           <ItemFilter names={names} value={filter} onChange={setFilter} />
           <Select aria-label="정렬" value={sort} onChange={(e) => setSort(e.target.value as Sort)} className="bg-card">
-            <option value="spent">사용한 메소 순</option>
-            <option value="delta">손익 순</option>
-            <option value="recent">최근 강화 순</option>
+            <option value="spent">많이 쓴 순</option>
+            <option value="delta">이득 큰 순</option>
+            <option value="recent">최근 순</option>
           </Select>
         </span>
       </div>

@@ -522,8 +522,8 @@ export function addWeaponChance(rows: Row[][], attack: "atk" | "matk", goal: Add
  * the 21 % of 12 + 9 (user, 2026-11-13). `withExtra` = and every other line is "@", as in "a21x".
  * With `min` = addWeaponNeed() this is addWeaponChance()'s "a21" · "a21x".
  */
-export function addWeaponSumChance(rows: Row[][], attack: "atk" | "matk", min: number, withExtra = false): number {
-  const extra = new Set(["str", "all", "lvstr", "strf", attack === "atk" ? "atkf" : "matkf"]);
+export function addWeaponSumChance(rows: Row[][], attack: "atk" | "matk", min: number, withExtra = false, extraCats?: string[]): number {
+  const extra = new Set(extraCats ?? ["str", "all", "lvstr", "strf", attack === "atk" ? "atkf" : "matkf"]);
   const lines = rows.map((line) =>
     tokens(line, (r) => (r[0] === attack ? { cat: "a", value: r[1], own: false } : extra.has(r[0]) ? { cat: "e", value: 0, own: false } : null))
   );

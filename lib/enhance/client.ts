@@ -178,7 +178,7 @@ export async function fetchEquipment(api: Api, character: string, signal?: Abort
   return out;
 }
 
-export type RawCharacterList = { account_list?: { character_list?: { ocid?: string; character_name?: string; world_name?: string; character_level?: number }[] }[] };
+export type RawCharacterList = { account_list?: { character_list?: { ocid?: string; character_name?: string; world_name?: string; character_class?: string; character_level?: number }[] }[] };
 
 /** The highest-level character of the account (the first one on a tie), "" when there is none. */
 export function mainCharacter(body: RawCharacterList): string {
@@ -207,6 +207,13 @@ export function characterWorldsOf(body: RawCharacterList): Record<string, string
   return out;
 }
 
+/** Character → its job (e.g. "제논"). */
+export function characterClassesOf(body: RawCharacterList): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const account of body.account_list ?? []) for (const c of account.character_list ?? []) if (c.character_name && c.character_class) out[c.character_name] = c.character_class;
+  return out;
+}
+
 /** Character → its id for the per-character endpoints. */
 export function characterIdsOf(body: RawCharacterList): Record<string, string> {
   const out: Record<string, string> = {};
@@ -215,9 +222,9 @@ export function characterIdsOf(body: RawCharacterList): Record<string, string> {
 }
 
 /** The account's characters: where each is today and its id. One call (the same answer as fetchMainCharacter's). */
-export async function fetchCharacters(api: Api, signal?: AbortSignal): Promise<{ worlds: Record<string, string>; ocids: Record<string, string> }> {
+export async function fetchCharacters(api: Api, signal?: AbortSignal): Promise<{ worlds: Record<string, string>; ocids: Record<string, string>; classes: Record<string, string> }> {
   const body = await api.get<RawCharacterList>("character/list", {}, signal);
-  return { worlds: characterWorldsOf(body), ocids: characterIdsOf(body) };
+  return { worlds: characterWorldsOf(body), ocids: characterIdsOf(body), classes: characterClassesOf(body) };
 }
 
 /** 통찰력 level of one character (0 when it has none yet). One call. */
