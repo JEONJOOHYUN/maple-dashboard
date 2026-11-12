@@ -21,9 +21,8 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files
+# env files (the example with the variable names stays on the developer machine too)
 .env*
-!.env.local.example
 
 # vercel
 .vercel
@@ -34,3 +33,7 @@ next-env.d.ts
 
 # untouched third-party originals kept locally for reference (license review in .agents/project-spec.md 4-7)
 /vendor/
+
+# AI tool files: rewritten by next dev / local tool settings
+AGENTS.md
+.claude/
