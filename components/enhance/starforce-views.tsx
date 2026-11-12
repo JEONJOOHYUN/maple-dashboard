@@ -3,6 +3,7 @@
 import { useRef, useState, type ReactNode } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, Package, Pencil } from "lucide-react";
 import { NumberField, Segment, eok, parseNum } from "@/components/ev/ui";
+import { ItemFilter, NO_ITEM_FILTER, itemMatches, liveFilter } from "@/components/enhance/board-bits";
 import { CHIP, Card, Delta, Empty, Gauge, ItemIcon, SKIP_LABEL, Select, Tile, TryBadges, signed, signedShort, tone } from "@/components/enhance/parts";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import type { ItemOverrides } from "@/lib/enhance/items";
@@ -24,15 +25,23 @@ function Duo({ good, bad }: { good: Box; bad: Box }) {
     </div>
   );
 }
-type Box = { label: string; title: string; value: number | null; sub: string };
-function DuoBox({ label, title, value, sub, className }: Box & { className: string }) {
-  return (
-    <div className={cn("flex min-w-0 flex-col gap-0.5 rounded-lg px-3 py-2.5", className)}>
+/** `onOpen` = the box is an item: pressing it opens that item's tries. */
+type Box = { label: string; title: string; value: number | null; sub: string; onOpen?: () => void };
+function DuoBox({ label, title, value, sub, onOpen, className }: Box & { className: string }) {
+  const body = (
+    <>
       <span className="text-[11px] text-muted-foreground">{label}</span>
       <b className="text-sm leading-snug">{title}</b>
       {value === null ? <b className="font-num text-lg text-muted-foreground">—</b> : <Delta v={value} className="text-lg" />}
       <span className="text-[11px] text-muted-foreground">{sub}</span>
-    </div>
+    </>
+  );
+  const css = cn("flex min-w-0 flex-col gap-0.5 rounded-lg px-3 py-2.5", className);
+  if (!onOpen) return <div className={css}>{body}</div>;
+  return (
+    <button type="button" onClick={onOpen} className={cn(css, "text-left outline-none hover:brightness-95 focus-visible:ring-3 focus-visible:ring-ring/50 dark:hover:brightness-125")}>
+      {body}
+    </button>
   );
 }
 
@@ -42,9 +51,9 @@ const tallyBox = (label: string, title: string, t: Tally): Box => ({
   value: t.tries ? t.delta : null,
   sub: t.tries ? `${t.tries.toLocaleString("ko-KR")}회 · 사용 ${eok(t.spent)}` : "기록 없음",
 });
-const itemBox = (label: string, it: ItemStat | undefined): Box =>
+const itemBox = (label: string, it: ItemStat | undefined, onOpen: (key: string) => void): Box =>
   it
-    ? { label, title: it.item, value: it.delta, sub: `${it.judged.toLocaleString("ko-KR")}회 · 파괴 ${it.destroy} · 사용 ${eok(it.spent)}` }
+    ? { label, title: it.item, value: it.delta, sub: `${it.judged.toLocaleString("ko-KR")}회 · 파괴 ${it.destroy} · 사용 ${eok(it.spent)}`, onOpen: () => onOpen(it.key) }
     : { label, title: "해당 없음", value: null, sub: "" };
 
 /** Top three items of one kind: `sub` goes under the name after the character, `value` on the right in `color`. */
@@ -120,7 +129,7 @@ export function InsightView({ stats, onOpen }: { stats: Stats; onOpen: (key: str
             <Package className="size-4 text-primary-text" aria-hidden="true" />
             행운의 아이템
           </h2>
-          <Duo good={itemBox("행운", best)} bad={itemBox("저주", worst)} />
+          <Duo good={itemBox("행운", best, onOpen)} bad={itemBox("저주", worst, onOpen)} />
         </Card>
         <Card>
           <h2 className="flex items-center gap-2 px-4 pt-3.5 pb-1 text-sm font-bold">
@@ -284,10 +293,14 @@ export function ItemsView({
 }) {
   const [sort, setSort] = useState<Sort>("spent");
   const [editing, setEditing] = useState("");
+  const [picked, setFilter] = useState(NO_ITEM_FILTER);
   // Items whose level is unknown come first: they are the ones waiting for an answer.
   const unknown = (it: ItemStat) => (it.info.level > 0 ? 0 : 1);
-  const items = stats.items
-    .filter((it) => !hideLow || reachedFloor(it))
+  const visible = stats.items.filter((it) => !hideLow || reachedFloor(it));
+  const names = visible.map((it) => it.item);
+  const filter = liveFilter(picked, names);
+  const items = visible
+    .filter((it) => itemMatches(it.item, filter))
     .sort(
     (a, b) => unknown(b) - unknown(a) || (sort === "spent" ? b.spent - a.spent : sort === "delta" ? b.delta - a.delta : b.last - a.last) || b.tries - a.tries
   );
@@ -303,6 +316,7 @@ export function ItemsView({
             <input type="checkbox" checked={hideLow} onChange={(e) => onHideLow(e.target.checked)} className="size-4 accent-primary" />
             12성 미만 숨기기
           </label>
+          <ItemFilter names={names} value={filter} onChange={setFilter} />
           <Select aria-label="정렬" value={sort} onChange={(e) => setSort(e.target.value as Sort)} className="bg-card">
             <option value="spent">사용한 메소 순</option>
             <option value="delta">손익 순</option>
@@ -310,7 +324,7 @@ export function ItemsView({
           </Select>
         </span>
       </div>
-      {items.length === 0 && <Empty>12성 이상 아이템 없음</Empty>}
+      {items.length === 0 && <Empty>{visible.length === 0 ? "12성 이상 아이템 없음" : "해당 아이템 없음"}</Empty>}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {items.map((it) => {
           const noLevel = it.info.level <= 0;
@@ -352,8 +366,17 @@ export function ItemsView({
                   <b className="mt-1.5 font-num text-[28px] leading-[1.1] whitespace-nowrap">{eok(it.spent)}</b>
                   {it.worth > 0 ? (
                     <div className="mt-2 self-stretch text-left">
-                      <Gauge label="사용 메소" used={it.spent} mean={it.worth}>
-                        <span className="text-muted-foreground">기댓값</span> <b>{eok(it.worth)}</b>
+                      {/* Left = the average (the tick), right = what the bar is. Swapped on the user's request (2026-11-12). */}
+                      <Gauge
+                        label={
+                          <>
+                            기댓값 <b className="text-foreground">{eok(it.worth)}</b>
+                          </>
+                        }
+                        used={it.spent}
+                        mean={it.worth}
+                      >
+                        <span className="text-muted-foreground">사용 메소</span>
                       </Gauge>
                     </div>
                   ) : (

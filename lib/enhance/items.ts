@@ -39,6 +39,8 @@ export function knownItem(name: string): KnownItem | null {
   if (n.startsWith("아케인셰이드")) return pick("arcane");
   if (n.startsWith("아스트라")) return pick("astra");
   if (n.startsWith("데스티니")) return pick("destiny");
+  // A spare costs about 4만 메소: counted as nothing (user, 2026-11-12).
+  if (n === "로얄블랙메탈숄더") return { level: 120, spare: 0 };
   if (n.startsWith("앱솔랩스")) return { level: 160, spare: 0 };
   if (n.startsWith("파프니르")) return { level: 150, spare: 0 };
   return null;

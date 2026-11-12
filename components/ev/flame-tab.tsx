@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { Chip, Label, NumberField, Panel, Segment, count, eok, parseNum, pct } from "@/components/ev/ui";
-import { FLAMES, armorChance, bestWeaponGrade, weaponChance, DEFAULT_HP_WEIGHTS, DEFAULT_WEIGHTS } from "@/lib/ev/flame";
+import { FLAMES, armorChance, bestWeaponGrade, weaponChance, DEFAULT_HP_WEIGHTS, DEFAULT_WEIGHTS, DEFAULT_XENON_WEIGHTS, type FlameJob } from "@/lib/ev/flame";
 import { averageTries, triesAt } from "@/lib/ev/luck";
 import { cn } from "@/lib/utils";
 import { koreanUnits } from "@/lib/format";
@@ -12,31 +12,34 @@ export function FlameTab() {
   const [levelText, setLevelText] = useState("200");
   const [grade, setGrade] = useState(1);
   const [extraText, setExtraText] = useState("0");
-  const [job, setJob] = useState<"stat" | "hp">("stat");
+  const [job, setJob] = useState<FlameJob>("stat");
   const [targetText, setTargetText] = useState("120");
   // Price per try (억 메소): reset is fixed at 300만, abyss flame defaults to 5,000만 and can be changed.
   const [abyssText, setAbyssText] = useState("0.5");
   // 강력한 환생의 불꽃 has no meso price in game (event / cash); counted only when a price is typed.
   const [strongText, setStrongText] = useState("");
   // Conversion: what is on the item now, and the weights.
-  const [now, setNow] = useState({ main: "64", sub: "40", atk: "5", all: "3", hp: "4500", hAtk: "7", hStr: "60" });
+  // Xenon example = 커맨더 포스 이어링 of the character 제논 (STR · DEX · LUK 66 each, all stat 7 %; NEXON Open API 2026-11-12).
+  const [now, setNow] = useState({ main: "64", sub: "40", atk: "5", all: "3", hp: "4500", hAtk: "7", hStr: "60", xStr: "66", xDex: "66", xLuk: "66", xAtk: "0", xAll: "7" });
   const [w, setW] = useState({ sub: String(DEFAULT_WEIGHTS.sub), attack: String(DEFAULT_WEIGHTS.attack), allStat: String(DEFAULT_WEIGHTS.allStat) });
   const [hw, setHw] = useState({ attack: String(DEFAULT_HP_WEIGHTS.attack), str: String(DEFAULT_HP_WEIGHTS.str) });
+  const [xw, setXw] = useState({ attack: String(DEFAULT_XENON_WEIGHTS.attack), allStat: String(DEFAULT_XENON_WEIGHTS.allStat) });
 
   const level = Math.max(1, Math.round(parseNum(levelText, 200)));
   const extra = parseNum(extraText, 0);
   const target = parseNum(targetText, 0);
   const weights = { sub: parseNum(w.sub, 10) || 10, attack: parseNum(w.attack, 4), allStat: parseNum(w.allStat, 10) };
   const hpWeights = { attack: parseNum(hw.attack, 90), str: parseNum(hw.str, 1) };
+  const xenonWeights = { attack: parseNum(xw.attack, DEFAULT_XENON_WEIGHTS.attack), allStat: parseNum(xw.allStat, DEFAULT_XENON_WEIGHTS.allStat) };
 
   const rows = useMemo(
     () =>
       FLAMES.map((f) => ({
         ...f,
-        p: equip === "weapon" ? weaponChance(f.id, grade, extra, level) : armorChance(f.id, level, target, job, weights, hpWeights),
+        p: equip === "weapon" ? weaponChance(f.id, grade, extra, level) : armorChance(f.id, level, target, job, weights, hpWeights, xenonWeights),
       })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [equip, grade, extra, level, target, job, weights.sub, weights.attack, weights.allStat, hpWeights.attack, hpWeights.str]
+    [equip, grade, extra, level, target, job, weights.sub, weights.attack, weights.allStat, hpWeights.attack, hpWeights.str, xenonWeights.attack, xenonWeights.allStat]
   );
   const priceOf = (id: string) =>
     id === "eternal" ? 3_000_000 : id === "abyss" ? parseNum(abyssText, 0) * 1e8 : id === "strong" ? parseNum(strongText, 0) * 1e8 : 0;
@@ -53,7 +56,9 @@ export function FlameTab() {
   const nowScore =
     job === "hp"
       ? parseNum(now.hp) + parseNum(now.hAtk) * hpWeights.attack + parseNum(now.hStr) * hpWeights.str
-      : parseNum(now.main) + parseNum(now.sub) / weights.sub + parseNum(now.atk) * weights.attack + parseNum(now.all) * weights.allStat;
+      : job === "xenon"
+        ? parseNum(now.xStr) + parseNum(now.xDex) + parseNum(now.xLuk) + parseNum(now.xAtk) * xenonWeights.attack + parseNum(now.xAll) * xenonWeights.allStat
+        : parseNum(now.main) + parseNum(now.sub) / weights.sub + parseNum(now.atk) * weights.attack + parseNum(now.all) * weights.allStat;
   const unit = job === "hp" ? " HP" : "급";
   const goalText = equip === "weapon" ? `${grade}추 + ${extra}%급 이상` : job === "hp" ? `HP 환산 ${target.toLocaleString("ko-KR")} 이상` : `${target}급 이상`;
 
@@ -108,13 +113,14 @@ export function FlameTab() {
                   value={job}
                   onChange={(j) => {
                     setJob(j);
-                    setTargetText(j === "hp" ? "5000" : "120");
+                    setTargetText(j === "hp" ? "5000" : j === "xenon" ? "300" : "120");
                   }}
                   options={[
                     { id: "stat", label: "주스탯 직업" },
+                    { id: "xenon", label: "제논" },
                     { id: "hp", label: "데몬어벤져" },
                   ]}
-                  className="w-48"
+                  className="w-64"
                 />
               }
             >
@@ -125,7 +131,7 @@ export function FlameTab() {
               {job === "hp" ? "이상" : "급 이상"}
             </span>
             <div className="grid grid-cols-4 gap-1.5">
-              {(job === "hp" ? [4000, 4500, 5000, 5500] : [100, 120, 140, 160]).map((n) => (
+              {(job === "hp" ? [4000, 4500, 5000, 5500] : job === "xenon" ? [200, 250, 300, 350] : [100, 120, 140, 160]).map((n) => (
                 <Chip key={n} on={target === n} onClick={() => setTargetText(String(n))} className="px-0">
                   {job === "hp" ? n.toLocaleString("ko-KR") : `${n}급`}
                 </Chip>
@@ -149,6 +155,28 @@ export function FlameTab() {
                     <b>STR</b>
                     <NumberField label="STR 값" value={now.hStr} onChange={(t) => setNow({ ...now, hStr: t })} inputClassName="w-full" />
                     <NumberField label="STR 1 = HP" value={hw.str} onChange={(t) => setHw({ ...hw, str: t })} decimal className="justify-end" inputClassName="w-full border-primary/60" />
+                  </>
+                ) : job === "xenon" ? (
+                  <>
+                    {(
+                      [
+                        ["xStr", "STR"],
+                        ["xDex", "DEX"],
+                        ["xLuk", "LUK"],
+                      ] as const
+                    ).map(([k, name]) => (
+                      <Fragment key={k}>
+                        <b>{name}</b>
+                        <NumberField label={`${name} 값`} value={now[k]} onChange={(t) => setNow({ ...now, [k]: t })} inputClassName="w-full" />
+                        <span className="text-right text-xs text-muted-foreground">× 1</span>
+                      </Fragment>
+                    ))}
+                    <b>공격력</b>
+                    <NumberField label="공격력 값" value={now.xAtk} onChange={(t) => setNow({ ...now, xAtk: t })} inputClassName="w-full" />
+                    <NumberField label="공격력 1 = 스탯" value={xw.attack} onChange={(t) => setXw({ ...xw, attack: t })} decimal className="justify-end" inputClassName="w-full border-primary/60" />
+                    <b>올스탯 %</b>
+                    <NumberField label="올스탯 % 값" value={now.xAll} onChange={(t) => setNow({ ...now, xAll: t })} inputClassName="w-full" />
+                    <NumberField label="올스탯 1% = 스탯" value={xw.allStat} onChange={(t) => setXw({ ...xw, allStat: t })} decimal className="justify-end" inputClassName="w-full border-primary/60" />
                   </>
                 ) : (
                   <>

@@ -189,15 +189,17 @@ test("gloves / hats: special-option lines + main stat lines, the rest any option
   const g = (lines: number, stat: number) => comboChance(gloves, { type: "combo", special: "cd", lines, stat });
   // Lv.200 legendary black cube. A main stat line = a main stat % line or an all stat % line (user, 2026-11-12;
   // before that only the main stat's own line counted: 2.16 · 0.105 · 0.0235 %).
-  assert.equal(+(g(1, 0) * 100).toFixed(2), 12.24);
-  assert.equal(+(g(1, 1) * 100).toFixed(3), 3.715);
+  // 12.24 · 3.715 until 2026-11-12: the options that cannot repeat (쓸만한 skills, 피격 시 데미지 % 무시) were not left
+  // out of the later lines here, as they are for every other goal (Codex review).
+  assert.equal(+(g(1, 0) * 100).toFixed(2), 12.26);
+  assert.equal(+(g(1, 1) * 100).toFixed(3), 3.729);
   assert.equal(+(g(2, 0) * 100).toFixed(3), 0.258);
   assert.equal(+(g(1, 2) * 100).toFixed(3), 0.335);
   assert.equal(+(g(2, 1) * 100).toFixed(4), 0.0422);
   assert.equal(+(g(3, 0) * 100).toFixed(4), 0.001);
   // Xenon (all stat only) and demon avenger (HP only) count their own line, as before.
   const own = (main: "all" | "hp") => +(comboChance(gloves, { type: "combo", special: "cd", lines: 1, stat: 1, main }) * 100).toFixed(3);
-  assert.deepEqual([own("all"), own("hp")], [1.721, 2.474]);
+  assert.deepEqual([own("all"), own("hp")], [1.727, 2.484]);
   // More lines asked → never easier.
   assert.ok(g(1, 0) > g(1, 1) && g(1, 1) > g(1, 2) && g(2, 0) > g(2, 1) && g(2, 1) > g(3, 0));
   // sumChance routes combo goals to comboChance.
@@ -210,6 +212,15 @@ test("gloves / hats: special-option lines + main stat lines, the rest any option
   // Prime cube keeps line 1 = crit damage → one crit line is certain.
   const primeRows = lineTables("prime", "legendary", "gloves", 200);
   if (primeRows) assert.equal(+comboChance(fixFirstLine(primeRows, "cd", bestValues([primeRows[0]]).cd ?? 0), { type: "combo", special: "cd", lines: 1, stat: 0 }).toFixed(6), 1);
+  // A skill kept on line 1 cannot come again: lines 2 · 3 are rolled without the skills, so crit damage + main stat on
+  // them is likelier than after a line that takes nothing away (Codex review: 0.4697 % against 0.4046 %).
+  const one = { type: "combo" as const, special: "cd" as const, lines: 1, stat: 1 };
+  const afterSkill = comboChance(fixFirstLine(gloves, "sksharp", 0), one);
+  const afterPlain = comboChance(fixFirstLine(gloves, "", 0), one);
+  assert.deepEqual([+(afterSkill * 100).toFixed(4), +(afterPlain * 100).toFixed(4)], [0.4697, 0.4046]);
+  // The same for a hat: cooldown seconds in total + a main stat line after a kept skill.
+  const sum = { type: "combo" as const, special: "cool" as const, lines: 1, stat: 1, minSum: 2 };
+  assert.ok(comboChance(fixFirstLine(hat, "skbless", 0), sum) > comboChance(fixFirstLine(hat, "", 0), sum) * 1.05);
 });
 
 test("additional gloves: crit damage 1 % lines do not count (3 % only, user 2026-11-10)", () => {

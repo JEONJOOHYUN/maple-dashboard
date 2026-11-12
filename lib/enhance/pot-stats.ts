@@ -6,18 +6,21 @@
 // Profit = expected − spent. A cube's cost is the fee it takes on use (rollMeso), a reset's its price.
 import type { Grade, StatConv } from "../ev/potential.ts";
 import { kstDate } from "./kst.ts";
-import { goalChance, goalExact, goalOf, gradeBefore, potKey, rollMeso, rollsToUp, upChance, type Goal, type Pieces, type PotRow } from "./potential.ts";
+import { goalChance, goalExact, goalOf, gradeBefore, potKey, rollMeso, rollsToUp, upChance, type CubePrices, type Goal, type Pieces, type PotRow } from "./potential.ts";
 
 export type PotEntry = { row: PotRow; piece: number; taken: boolean; cost: number };
 export const potEntryKey = (e: Pick<PotEntry, "row" | "piece">) => `${potKey(e.row)}\u0000${e.piece}`;
 
-/** `insights` = character → 통찰력 level (decides whether a cube on an item up to Lv.120 took a fee). */
-export function potEntries(rows: PotRow[], pieces: Pieces, insights: Record<string, number> = {}): PotEntry[] {
+/**
+ * `insights` = character → 통찰력 level (decides whether a cube on an item up to Lv.120 took a fee),
+ * `prices` = meso for one prime cube when the user set it (else our default).
+ */
+export function potEntries(rows: PotRow[], pieces: Pieces, insights: Record<string, number> = {}, prices: CubePrices = {}): PotEntry[] {
   return rows.map((row) => ({
     row,
     piece: pieces.piece.get(row.id) ?? 1,
     taken: pieces.taken.has(row.id),
-    cost: rollMeso(row, Object.hasOwn(insights, row.who) ? insights[row.who] : undefined),
+    cost: rollMeso(row, Object.hasOwn(insights, row.who) ? insights[row.who] : undefined, prices),
   }));
 }
 

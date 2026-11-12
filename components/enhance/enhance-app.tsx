@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Ellipsis } from "lucide-react";
 import { Segment } from "@/components/ev/ui";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { KeyGate, type Connected } from "@/components/enhance/key-gate";
 import { PotentialBoard } from "@/components/enhance/potential-board";
 import { StarforceBoard } from "@/components/enhance/starforce-board";
@@ -89,33 +91,53 @@ export function EnhanceApp() {
     return () => stop.abort();
   }, [unnamedKey, unnamedAccount, setKeys]);
 
+  // Layout C (user, 2026-11-13): the switch sits in the board's tool row with the period and refresh; what is done
+  // to the key (rarely) is in a menu next to the title.
+  const switcher = (
+    <Segment
+      label="기록 종류"
+      value={kind}
+      onChange={setKind}
+      options={[
+        { id: "starforce", label: "스타포스" },
+        { id: "potential", label: "잠재능력" },
+      ]}
+      className="w-[180px]"
+    />
+  );
+
   return (
     <div className="flex flex-col gap-4 lg:gap-[22px]">
       <PageHeader
         title="강화 기록"
         description="스타포스 · 잠재능력 기록 · 기댓값보다 얼마나 이득 · 손해"
+        pinAside
         aside={
           ready &&
           active && (
-            <Segment
-              label="기록 종류"
-              value={kind}
-              onChange={setKind}
-              options={[
-                { id: "starforce", label: "스타포스" },
-                { id: "potential", label: "잠재능력" },
-              ]}
-              className="w-[200px]"
-            />
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                aria-label="키 관리"
+                className="flex h-8 w-9 shrink-0 items-center justify-center rounded-md border border-border bg-card text-foreground outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                <Ellipsis className="size-4" aria-hidden="true" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-auto min-w-40">
+                <DropdownMenuItem onClick={change}>키 바꾸기</DropdownMenuItem>
+                <DropdownMenuItem variant="destructive" onClick={forget}>
+                  키 · 기록 지우기
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )
         }
       />
       {!ready ? null : !active ? (
         <KeyGate saved={list} onConnect={connect} onForgetAll={forgetAll} />
       ) : kind === "potential" ? (
-        <PotentialBoard key={active.account} apiKey={active.key} account={active.account} onForget={forget} onChange={change} />
+        <PotentialBoard key={active.account} apiKey={active.key} account={active.account} onForget={forget} switcher={switcher} />
       ) : (
-        <StarforceBoard key={active.account} apiKey={active.key} account={active.account} onForget={forget} onChange={change} />
+        <StarforceBoard key={active.account} apiKey={active.key} account={active.account} onForget={forget} switcher={switcher} />
       )}
     </div>
   );

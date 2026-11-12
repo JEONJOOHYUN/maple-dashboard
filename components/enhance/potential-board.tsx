@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import Link from "next/link";
 import { Package, Split } from "lucide-react";
-import { eok } from "@/components/ev/ui";
-import { PeriodBar, SyncBanners, ViewTabs, WorldChips, useGroupsOff, usePeriod, useSync } from "@/components/enhance/board-bits";
+import { NumberField, eok, parseNum } from "@/components/ev/ui";
+import { ItemFilter, NO_ITEM_FILTER, PeriodBar, SyncBanners, ViewTabs, WorldChips, itemMatches, liveFilter, useGroupsOff, usePeriod, useSync } from "@/components/enhance/board-bits";
 import { Card, Delta, Empty, Gauge, ItemIcon, Select, Tile } from "@/components/enhance/parts";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { useItemDict, type Rolled } from "@/components/enhance/use-item-dict";
@@ -12,7 +12,7 @@ import { useInsights, useWorldOf } from "@/components/enhance/use-worlds";
 import { itemIcon, type ItemInfo } from "@/lib/enhance/items";
 import { DAY, dayStart, kstFull, kstShort, kstStamp } from "@/lib/enhance/kst";
 import { buildPotStats, potEntries, potEntryKey, type PieceStat, type PotEntry } from "@/lib/enhance/pot-stats";
-import { feeByInsight, trackPieces } from "@/lib/enhance/potential";
+import { PRICED_CUBES, cubePriceDefault, feeByInsight, pricedCube, trackPieces, type CubePrices, type PricedCube } from "@/lib/enhance/potential";
 import { PotentialSync, StarforceSync } from "@/lib/enhance/sync";
 import { groupTallies, worldGroup } from "@/lib/enhance/worlds";
 import { STAT_CONV_DEFAULT } from "@/lib/ev/defaults";
@@ -34,6 +34,7 @@ const GRADE_CSS: Record<Grade, string> = {
   legendary: "text-[#11663a] dark:text-[#7be0a0]",
 };
 const BADGE = "rounded border px-1.5 text-[11px] leading-[18px] font-semibold whitespace-nowrap";
+const CUBE_NAME: Record<PricedCube, string> = { prime: "프라임 큐브", primeAddi: "프라임 에디셔널 큐브" };
 const PAGE = 100;
 
 /** Item name → picture address: what the character wears now, else the calculator's list, else the shared dictionary. */
@@ -257,7 +258,7 @@ function PotInsight({ stats, found, onOpen }: { stats: ReturnType<typeof buildPo
   const worst = priced.filter((p) => p.delta! < 0).sort((a, b) => a.delta! - b.delta!)[0];
   const side = (add: boolean) => {
     const list = stats.pieces.filter((p) => p.add === add);
-    return { resets: list.reduce((n, p) => n + p.resets, 0), cubes: list.reduce((n, p) => n + p.rolls - p.resets, 0), spent: list.reduce((n, p) => n + p.spent, 0) };
+    return { items: list.length, resets: list.reduce((n, p) => n + p.resets, 0), cubes: list.reduce((n, p) => n + p.rolls - p.resets, 0), spent: list.reduce((n, p) => n + p.spent, 0) };
   };
   const top = (pick: (p: PieceStat) => number) =>
     stats.pieces
@@ -284,9 +285,11 @@ function PotInsight({ stats, found, onOpen }: { stats: ReturnType<typeof buildPo
   );
   const kind = (label: string, add: boolean) => {
     const t = side(add);
+    // The same four lines as the lucky · unlucky boxes next to it, so the two cards are one height.
     return (
       <div className="flex min-w-0 flex-col gap-0.5 rounded-lg bg-muted px-3 py-2.5">
         <span className="text-[11px] text-muted-foreground">{label}</span>
+        <b className="text-sm leading-snug">아이템 {t.items.toLocaleString("ko-KR")}개</b>
         <b className="font-num text-lg">{t.spent > 0 ? eok(t.spent) : "—"}</b>
         <span className="text-[11px] text-muted-foreground">
           재설정 {rolls(t.resets)}
@@ -299,22 +302,23 @@ function PotInsight({ stats, found, onOpen }: { stats: ReturnType<typeof buildPo
   return (
     <>
       <div className="grid gap-3.5 lg:grid-cols-2">
-        <Card>
+        {/* The boxes fill their card: a long item name on one side must not leave the other card's boxes shorter. */}
+        <Card className="flex flex-col">
           <h2 className="flex items-center gap-2 px-4 pt-3.5 pb-1 text-sm font-bold">
             <Package className="size-4 text-primary-text" aria-hidden="true" />
             행운의 아이템
           </h2>
-          <div className="grid grid-cols-2 gap-2.5 px-4 pt-2 pb-3.5">
+          <div className="grid flex-1 grid-cols-2 gap-2.5 px-4 pt-2 pb-3.5">
             {luck("행운", best, "bg-gain/10")}
             {luck("저주", worst, "bg-loss/10")}
           </div>
         </Card>
-        <Card>
+        <Card className="flex flex-col">
           <h2 className="flex items-center gap-2 px-4 pt-3.5 pb-1 text-sm font-bold">
             <Split className="size-4 text-primary-text" aria-hidden="true" />
             잠재능력 vs 에디셔널
           </h2>
-          <div className="grid grid-cols-2 gap-2.5 px-4 pt-2 pb-3.5">
+          <div className="grid flex-1 grid-cols-2 gap-2.5 px-4 pt-2 pb-3.5">
             {kind("잠재능력", false)}
             {kind("에디셔널", true)}
           </div>
@@ -357,19 +361,28 @@ type Sort = "spent" | "delta" | "recent";
 
 function PiecesView({ pieces, found, onOpen }: { pieces: PieceStat[]; found: Icons; onOpen: (key: string) => void }) {
   const [sort, setSort] = useState<Sort>("spent");
-  const list = [...pieces].sort((a, b) => (sort === "spent" ? b.spent - a.spent : sort === "delta" ? (b.delta ?? -Infinity) - (a.delta ?? -Infinity) : b.last - a.last) || b.rolls - a.rolls);
+  const [picked, setFilter] = useState(NO_ITEM_FILTER);
+  const names = pieces.map((p) => p.item);
+  const filter = liveFilter(picked, names);
+  const list = pieces
+    .filter((p) => itemMatches(p.item, filter))
+    .sort((a, b) => (sort === "spent" ? b.spent - a.spent : sort === "delta" ? (b.delta ?? -Infinity) - (a.delta ?? -Infinity) : b.last - a.last) || b.rolls - a.rolls);
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <b className="text-sm">
           아이템별 모아보기 <span className="font-medium text-muted-foreground">{list.length}개</span>
         </b>
-        <Select aria-label="정렬" value={sort} onChange={(e) => setSort(e.target.value as Sort)} className="bg-card">
-          <option value="spent">사용한 메소 순</option>
-          <option value="delta">손익 순</option>
-          <option value="recent">최근 재설정 순</option>
-        </Select>
+        <span className="flex flex-wrap items-center gap-2">
+          <ItemFilter names={names} value={filter} onChange={setFilter} />
+          <Select aria-label="정렬" value={sort} onChange={(e) => setSort(e.target.value as Sort)} className="bg-card">
+            <option value="spent">사용한 메소 순</option>
+            <option value="delta">손익 순</option>
+            <option value="recent">최근 재설정 순</option>
+          </Select>
+        </span>
       </div>
+      {list.length === 0 && <Empty>해당 아이템 없음</Empty>}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {list.map((piece) => (
           <PieceCard key={piece.key} piece={piece} found={found} onOpen={() => onOpen(piece.key)} />
@@ -432,8 +445,8 @@ function RollsView({ entries, characters, found }: { entries: PotEntry[]; charac
   );
 }
 
-/** `onChange` = to the key screen with this key and its records kept. */
-export function PotentialBoard({ apiKey, account, onForget, onChange }: { apiKey: string; account: string; onForget: () => void; onChange: () => void }) {
+/** `switcher` = the star force · potential switch, shown at the start of the period row. */
+export function PotentialBoard({ apiKey, account, onForget, switcher }: { apiKey: string; account: string; onForget: () => void; switcher: ReactNode }) {
   const period = usePeriod();
   const { from, to } = period;
   const [view, setView] = useState<View>("insight");
@@ -468,11 +481,22 @@ export function PotentialBoard({ apiKey, account, onForget, onChange }: { apiKey
   const feeKey = useMemo(() => [...new Set(snap.rows.filter(feeByInsight).map((r) => r.who))].sort().join("\u0000"), [snap.rows]);
   const feeNames = useMemo(() => (feeKey ? feeKey.split("\u0000") : []), [feeKey]);
   const insights = useInsights(apiKey, account, feeNames, snap.status === "done" || snap.status === "error");
+  // Prime cubes are bought with meso, so each one used costs its price: ours unless the user typed another (억).
+  const [priceText, setPriceText] = useStored<Partial<Record<PricedCube, string>>>("enhance:cubePrice", {});
+  const prices = useMemo(() => {
+    const out: CubePrices = {};
+    for (const cube of PRICED_CUBES) {
+      const typed = priceText[cube] ?? "";
+      if (typed !== "") out[cube] = parseNum(typed, 0) * 1e8;
+    }
+    return out;
+  }, [priceText]);
+  const pricedUsed = useMemo(() => PRICED_CUBES.filter((cube) => snap.rows.some((r) => pricedCube(r) === cube)), [snap.rows]);
   const inPeriod = useMemo(() => {
     const start = dayStart(from);
     const end = dayStart(to) + DAY;
-    return potEntries(snap.rows.filter((r) => r.t >= start && r.t < end), pieces, insights);
-  }, [snap.rows, from, to, pieces, insights]);
+    return potEntries(snap.rows.filter((r) => r.t >= start && r.t < end), pieces, insights, prices);
+  }, [snap.rows, from, to, pieces, insights, prices]);
   // The rolls carry no world: it is read from the character (its star force tries, and where it is now).
   // The period's star force tries are fetched quietly once the rolls are in (days already saved cost no call), so
   // the worlds are right in a browser that never opened the star force tab too. A failure here is not shown: the
@@ -504,8 +528,7 @@ export function PotentialBoard({ apiKey, account, onForget, onChange }: { apiKey
         state={period}
         loading={loading}
         onRefresh={refresh}
-        onChange={onChange}
-        onForget={onForget}
+        lead={switcher}
         status={
           snap.at > 0 && (
             <span>
@@ -515,6 +538,25 @@ export function PotentialBoard({ apiKey, account, onForget, onChange }: { apiKey
           )
         }
       />
+      {pricedUsed.length > 0 && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px] text-muted-foreground">
+          {pricedUsed.map((cube) => (
+            <label key={cube} className="inline-flex items-center gap-1.5">
+              {CUBE_NAME[cube]} 1개
+              <NumberField
+                label={`${CUBE_NAME[cube]} 1개 가격 (억 메소)`}
+                value={priceText[cube] ?? ""}
+                onChange={(t) => setPriceText({ ...priceText, [cube]: t })}
+                placeholder={String(cubePriceDefault(cube) / 1e8)}
+                decimal
+                suffix="억"
+                inputClassName="h-8 w-16"
+              />
+            </label>
+          ))}
+        </div>
+      )}
+
       <WorldChips tallies={tallies} off={groupsOff} onToggle={toggleGroup} unit="회" />
 
       <SyncBanners snap={snap} unit="회" onRetry={refresh} onForget={onForget} />

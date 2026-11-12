@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { NO_CONV, addWeaponChance, convFromScouter, lineTables, resetMeso, sumChance, weaponChance } from "../ev/potential.ts";
+import { NO_CONV, addWeaponChance, addWeaponSumChance, convFromScouter, customChance, fixFirstLine, lineTables, resetMeso, sumChance, weaponChance } from "../ev/potential.ts";
 import { STAT_CONV_DEFAULT } from "../ev/defaults.ts";
 import { buildPotStats, potEntries } from "./pot-stats.ts";
-import { cubeFee, cubeOf, feeByInsight, goalChance, goalOf, gradeBefore, optionToken, parsePotential, rollMeso, rollsToUp, slotOf, statWorth, trackPieces, upChance, upRolls, type PotRow, type RawPotential } from "./potential.ts";
+import { cappedCategory, cubeFee, cubeOf, feeByInsight, goalChance, goalOf, gradeBefore, optionToken, parsePotential, pricedCube, rollMeso, rollsToUp, slotOf, statWorth, trackPieces, upChance, upRolls, type PotRow, type RawPotential } from "./potential.ts";
 
 const near = (actual: number, expected: number, tolerance: number, label: string) =>
   assert.ok(Math.abs(actual - expected) <= tolerance, `${label}: ${actual} is not within ${tolerance} of ${expected}`);
@@ -172,7 +172,7 @@ test("weapons, secondaries and emblems: useful lines, as on the calculator", () 
   assert.equal(goalChance(row({ item_equipment_part: "방패", item_level: 200 }), "legendary", goalOf(["데미지 +12%", "DEX +9%", "올스탯 +6%"], false)!, NO_CONV)!.by, "데미지 12%");
 });
 
-test("weapons, additional potential: attack % 21, with @, or three lines", () => {
+test("weapons, additional potential: the attack % it adds up to, with @ (user, 2026-11-13)", () => {
   const sub = row({ ...ADD, item_equipment_part: "포스실드소울링", item_level: 200 });
   const rows = lineTables("white", "legendary", "sub", 200)!;
   const a21 = goalChance(sub, "legendary", goalOf(["공격력 +12%", "공격력 +9%", "최대 HP +8%"], true)!, NO_CONV)!;
@@ -180,59 +180,78 @@ test("weapons, additional potential: attack % 21, with @, or three lines", () =>
   const a21x = goalChance(sub, "legendary", goalOf(["마력 +12%", "마력 +9%", "INT +9%"], true)!, NO_CONV)!;
   assert.deepEqual([a21x.by, a21x.p], ["마력 21% + @", addWeaponChance(rows, "matk", "a21x")]);
   const a3 = goalChance(sub, "legendary", goalOf(["마력 +12%", "마력 +9%", "마력 +9%"], true)!, NO_CONV)!;
-  assert.deepEqual([a3.by, a3.p], ["마력 3줄", addWeaponChance(rows, "matk", "a3")]);
+  // Three lines are read by their total too: 12 + 9 + 9 is the least three lines can be, so it is the same as "3줄".
+  assert.deepEqual([a3.by, a3.p], ["마력 30%", addWeaponSumChance(rows, "matk", 30)]);
+  near(a3.p, addWeaponChance(rows, "matk", "a3"), 1e-15, "30 % = three lines");
   assert.ok(a3.p < a21x.p && a21x.p < a21.p);
+  // 12 + 12 is not 12 + 9: 24 % is far rarer than 21 %, and 12 + 12 + 9 rarer than any three lines.
+  const a24 = goalChance(sub, "legendary", goalOf(["공격력 +12%", "공격력 +12%", "최대 HP +8%"], true)!, NO_CONV)!;
+  assert.deepEqual([a24.by, a24.p], ["공격력 24%", addWeaponSumChance(rows, "atk", 24)]);
+  assert.ok(a24.p < a21.p / 10);
+  const a33 = goalChance(sub, "legendary", goalOf(["마력 +12%", "마력 +12%", "마력 +9%"], true)!, NO_CONV)!;
+  assert.equal(a33.by, "마력 33%");
+  assert.ok(a33.p < a3.p / 10);
   // 공격력 12 % + 9 % with an INT line is still 공격력 21 % (it was read as "INT 9 %", about 4 rolls).
   const warrior = goalChance(row({ ...ADD, item_equipment_part: "무기", item_level: 200 }), "legendary", goalOf(["공격력 +12%", "공격력 +9%", "INT +9%"], true)!, NO_CONV)!;
   assert.deepEqual([warrior.by, warrior.p], ["공격력 21% + @", addWeaponChance(lineTables("white", "legendary", "weapon", 200)!, "atk", "a21x")]);
   assert.ok(1 / warrior.p > 213);
 });
 
-test("gloves with crit damage and hats with cooldown: special lines plus main stat lines", () => {
+test("gloves with crit damage and hats with cooldown: the special option plus the main stat % in total (user, 2026-11-13)", () => {
   const gloves = row({ item_equipment_part: "장갑", item_level: 200 });
   const gRows = lineTables("black", "legendary", "gloves", 200)!;
   const cc = goalChance(gloves, "legendary", goalOf(["크리티컬 데미지 +8%", "크리티컬 데미지 +8%", "INT +12%"], false)!, NO_CONV)!;
-  assert.deepEqual([cc.by, cc.p], ["크뎀 2줄 + INT 1줄", sumChance(gRows, { type: "combo", special: "cd", lines: 2, stat: 1, minSpecial: 3 })]);
-  // An all stat % line is a main stat line too, as on the calculator.
+  assert.deepEqual([cc.by, cc.p], ["크뎀 2줄 + INT 12%", customChance(gRows, [[{ cat: "cd", min: 16 }, { cat: "int", min: 12 }]])]);
+  // The value of the stat line counts: INT 9 % next to the same two crit lines is a lesser option, and likelier.
+  const cc9 = goalChance(gloves, "legendary", goalOf(["크리티컬 데미지 +8%", "크리티컬 데미지 +8%", "INT +9%"], false)!, NO_CONV)!;
+  assert.equal(cc9.by, "크뎀 2줄 + INT 9%");
+  assert.ok(cc.p < cc9.p / 5);
+  // Counting lines put both at "크뎀 2줄 + 주스탯 1줄" (what the chips of the calculator still ask for).
+  const byLines = sumChance(gRows, { type: "combo", special: "cd", lines: 2, stat: 1, minSpecial: 3 });
+  assert.ok(cc.p < byLines && cc9.p < byLines);
+  // All stat % raises the main stat too: it is part of the total.
   const withAll = goalChance(gloves, "legendary", goalOf(["크리티컬 데미지 +8%", "INT +9%", "올스탯 +6%"], false)!, NO_CONV)!;
-  assert.deepEqual([withAll.by, withAll.p], ["크뎀 1줄 + INT 2줄", sumChance(gRows, { type: "combo", special: "cd", lines: 1, stat: 2, minSpecial: 3 })]);
-  // Only all stat lines: an all-stat item (Xenon's). The calculator's "제논 · 올스탯" goal, where a main stat
-  // line does not count — so it is rarer than the same line count on a main stat item.
+  assert.deepEqual([withAll.by, withAll.p], ["크뎀 1줄 + INT 15%", customChance(gRows, [[{ cat: "cd", min: 8 }, { cat: "int", min: 15 }]])]);
+  // Only all stat lines: an all-stat item (a Xenon item). A main stat line does not count for it — so it is rarer
+  // than the same total on a main stat item.
   const onlyAll = goalChance(gloves, "legendary", goalOf(["크리티컬 데미지 +8%", "올스탯 +9%", "올스탯 +6%"], false)!, NO_CONV)!;
-  assert.deepEqual([onlyAll.by, onlyAll.p], ["크뎀 1줄 + 올스탯 2줄", sumChance(gRows, { type: "combo", special: "cd", lines: 1, stat: 2, main: "all", minSpecial: 3 })]);
+  assert.deepEqual([onlyAll.by, onlyAll.p], ["크뎀 1줄 + 올스탯 15%", customChance(gRows, [[{ cat: "cd", min: 8 }, { cat: "all", min: 15 }]])]);
   assert.ok(onlyAll.p < withAll.p);
   const hatAll = goalChance(row({ item_equipment_part: "모자", item_level: 200 }), "legendary", goalOf([COOL1, "올스탯 +9%", "올스탯 +6%"], false)!, NO_CONV)!;
-  assert.deepEqual([hatAll.by, hatAll.p], ["쿨감 1초 + 올스탯 2줄", sumChance(lineTables("black", "legendary", "hat", 200)!, { type: "combo", special: "cool", lines: 1, stat: 2, main: "all", minSum: 1 })]);
+  assert.deepEqual([hatAll.by, hatAll.p], ["쿨감 1초 + 올스탯 15%", customChance(lineTables("black", "legendary", "hat", 200)!, [[{ cat: "cool", min: 1 }, { cat: "all", min: 15 }]])]);
   const c = goalChance(gloves, "legendary", goalOf(["크리티컬 데미지 +8%", "방어력 +7%", "이동속도 +9"], false)!, NO_CONV)!;
-  assert.deepEqual([c.by, c.p], ["크뎀 1줄", sumChance(gRows, { type: "combo", special: "cd", lines: 1, stat: 0, minSpecial: 3 })]);
+  assert.equal(c.by, "크뎀 1줄");
+  near(c.p, sumChance(gRows, { type: "combo", special: "cd", lines: 1, stat: 0, minSpecial: 3 }), 1e-12, "크뎀 1줄, as on the calculator");
   // Gloves without a crit damage line are plain armour.
   assert.equal(goalChance(gloves, "legendary", goalOf(["INT +12%", "INT +9%", "INT +9%"], false)!, NO_CONV)!.by, "INT 30%");
 
   const hat = row({ item_equipment_part: "모자", item_level: 200 });
   const hRows = lineTables("black", "legendary", "hat", 200)!;
   const four = goalChance(hat, "legendary", goalOf([COOL2, COOL2, "방어력 +7%"], false)!, NO_CONV)!;
-  assert.deepEqual([four.by, four.p], ["쿨감 4초", sumChance(hRows, { type: "cool", min: 4 })]);
+  assert.equal(four.by, "쿨감 4초");
+  near(four.p, sumChance(hRows, { type: "cool", min: 4 }), 1e-12, "쿨감 4초, as on the calculator");
   const mixed = goalChance(hat, "legendary", goalOf([COOL2, "INT +12%", "INT +9%"], false)!, NO_CONV)!;
-  assert.deepEqual([mixed.by, mixed.p], ["쿨감 2초 + INT 2줄", sumChance(hRows, { type: "combo", special: "cool", lines: 1, stat: 2, minSum: 2 })]);
-  // One −2초 line and two stat lines: asking for 2 seconds in total is the same thing as asking for a −2초 line.
-  near(mixed.p, sumChance(hRows, { type: "combo", special: "cool", lines: 1, stat: 2, minSpecial: 2 }), 1e-15, "2초 on one line");
+  assert.deepEqual([mixed.by, mixed.p], ["쿨감 2초 + INT 21%", customChance(hRows, [[{ cat: "cool", min: 2 }, { cat: "int", min: 21 }]])]);
+  // Two stat lines of any value ("쿨감 2초 + 주스탯 2줄") include 9 + 9: 21 % is rarer.
+  assert.ok(mixed.p < sumChance(hRows, { type: "combo", special: "cool", lines: 1, stat: 2, minSum: 2 }));
   // Cooldown on two lines is read by its total: −2초 · −1초 = 3 seconds, −2초 · −2초 = 4 seconds.
   const three = goalChance(hat, "legendary", goalOf([COOL2, COOL1, "INT +12%"], false)!, NO_CONV)!;
-  assert.deepEqual([three.by, three.p], ["쿨감 3초 + INT 1줄", sumChance(hRows, { type: "combo", special: "cool", lines: 1, stat: 1, minSum: 3 })]);
+  assert.deepEqual([three.by, three.p], ["쿨감 3초 + INT 12%", customChance(hRows, [[{ cat: "cool", min: 3 }, { cat: "int", min: 12 }]])]);
   const fourStat = goalChance(hat, "legendary", goalOf([COOL2, COOL2, "INT +12%"], false)!, NO_CONV)!;
-  assert.deepEqual([fourStat.by, fourStat.p], ["쿨감 4초 + INT 1줄", sumChance(hRows, { type: "combo", special: "cool", lines: 1, stat: 1, minSum: 4 })]);
+  assert.deepEqual([fourStat.by, fourStat.p], ["쿨감 4초 + INT 12%", customChance(hRows, [[{ cat: "cool", min: 4 }, { cat: "int", min: 12 }]])]);
   // 3 seconds or more leaves out −1초 · −1초, which "two cooldown lines" let through; 4 seconds is harder still.
   const twoLines = sumChance(hRows, { type: "combo", special: "cool", lines: 2, stat: 1, minSpecial: 1 });
   assert.ok(fourStat.p < three.p && three.p < twoLines);
-  // 3 seconds with a stat line = −2초 · −1초 either way round, or −2초 · −2초, with the stat on the third line.
-  const p = (cat: string, value: number, i: number) => hRows[i].filter((r) => r[0] === cat && (cat !== "cool" || r[1] === value)).reduce((s, r) => s + r[2], 0);
-  const stat = (i: number) => p("int", 0, i) + p("all", 0, i);
+  // 3 seconds with INT 12 % = −2초 · −1초 either way round, or −2초 · −2초, with an INT 12 % line as the third
+  // (one line cannot be 12 % any other way: all stat stops at 9 %).
+  const p = (cat: string, value: number, i: number) => hRows[i].filter((r) => r[0] === cat && r[1] === value).reduce((s, r) => s + r[2], 0);
+  const stat = (i: number) => p("int", 12, i);
   let byHand = 0;
   for (const s of [0, 1, 2]) {
     const [a, b] = [0, 1, 2].filter((i) => i !== s);
     byHand += stat(s) * (p("cool", 2, a) * p("cool", 1, b) + p("cool", 1, a) * p("cool", 2, b) + p("cool", 2, a) * p("cool", 2, b));
   }
-  near(three.p, byHand, 1e-12, "쿨감 3초 + 주스탯 1줄, by hand");
+  near(three.p, byHand, 1e-12, "쿨감 3초 + INT 12 %, by hand");
 });
 
 test("accessories: drop rate and meso lines count together, next to the stat", () => {
@@ -269,11 +288,14 @@ test("average rolls to go up a grade include the guarantee", () => {
   near(upRolls(miracle, "epic")!, 13.7, 0.1, "epic → unique, miracle time");
 });
 
-test("cubes: prime cubes are their own kind and get no average", () => {
+test("cubes: prime cubes are their own kind, judged with line 1 kept (the calculator's prime cube)", () => {
   const prime = row({ potential_type: undefined, cube_type: "프라임 에디셔널 큐브", additional_potential_option_grade: "레전드리", before_potential_option: [], after_potential_option: [], before_additional_potential_option: opt("마력 +12%"), after_additional_potential_option: opt("마력 +12%"), item_equipment_part: "무기", item_level: 200 });
   assert.deepEqual([prime.add, cubeOf(prime)], [true, "primeAddi"]);
   assert.equal(cubeOf(row({ potential_type: undefined, cube_type: "프라임 큐브" })), "prime");
-  assert.equal(goalChance(prime, "legendary", goalOf(["마력 +12%", "마력 +9%", "마력 +9%"], true)!, NO_CONV), null);
+  // 마력 12 % stays on line 1: three attack lines = the other two both attack %, as the calculator works it out.
+  const kept = goalChance(prime, "legendary", goalOf(["마력 +12%", "마력 +9%", "마력 +9%"], true)!, NO_CONV)!;
+  assert.equal(kept.by, "마력 30%");
+  near(kept.p, addWeaponChance(lineTables("primeAddi", "legendary", "weapon", 200)!, "matk", "a3", true), 1e-15, "prime, three attack lines");
   assert.equal(upChance(prime, "unique"), null);
 });
 
@@ -420,4 +442,65 @@ test("stats: a better option of the same class as the old one counts as won (rea
   assert.deepEqual([c.option, c.goalBy], [tieNew.map((o) => o.value), "공 · 보공 3줄"]);
   const back2 = [row({ ...weapon, before_potential_option: tieNew, after_potential_option: tieOld, date_create: at(50) })];
   assert.deepEqual(buildPotStats(potEntries(back2, trackPieces(back2)), NO_CONV).pieces[0].goalRolls, null);
+});
+
+test("additional potential with all stat % and no main stat line is converted too (user, 2026-11-12)", () => {
+  const conv = convFromScouter(STAT_CONV_DEFAULT);
+  const gloves = row({ ...ADD, item_equipment_part: "장갑", item_level: 200 });
+  const goal = goalOf(["크리티컬 데미지 +3%", "올스탯 +6%", "최대 HP +5%"], true)!;
+  near(statWorth(goal, conv), 6 * conv.all + 3 * conv.cd, 1e-9, "worth");
+  // One number for the whole option, not "크뎀 3 %" alone (that read as a 1-in-29 result).
+  const hit = goalChance(gloves, "legendary", goal, conv)!;
+  assert.match(hit.by, /^주스탯 \d+(\.\d)?%급$/);
+  const shown = Math.floor(statWorth(goal, conv) * 10 + 1e-6) / 10;
+  assert.equal(hit.p, sumChance(lineTables("white", "legendary", "gloves", 200)!, { type: "stat", min: shown - 1e-9, conv, attack: "atk" }));
+  assert.ok(1 / hit.p > 29);
+  // Main potential keeps an all-stat-only option as its own goal (a Xenon item).
+  const main = goalChance(row({ item_equipment_part: "상의", item_level: 200 }), "legendary", goalOf(["올스탯 +9%", "올스탯 +9%", "올스탯 +6%"], false)!, conv)!;
+  assert.equal(main.by, "올스탯 24%");
+});
+
+test("prime cubes: the cube has a price, and line 1 is the one the item keeps", () => {
+  const prime = (over: Partial<RawPotential> = {}) => row({ potential_type: undefined, cube_type: "프라임 큐브", item_equipment_part: "무기", item_level: 200, ...over });
+  assert.deepEqual([cubeOf(prime()), pricedCube(prime()), pricedCube(row())], ["prime", "prime", null]);
+  // Our price (프라임 큐브 7.4억 · 프라임 에디셔널 14.5억) plus the fee; the price the user set instead; 0 = the fee alone.
+  const fee = cubeFee(200);
+  assert.equal(rollMeso(prime()), 7.4e8 + fee);
+  assert.equal(rollMeso(prime(), undefined, { prime: 5e8 }), 5e8 + fee);
+  assert.equal(rollMeso(prime(), undefined, { prime: 0 }), fee);
+  assert.equal(rollMeso(prime({ cube_type: "프라임 에디셔널 큐브" })), 14.5e8 + fee);
+  // Other cubes and resets have no price of their own.
+  assert.equal(rollMeso(prime({ cube_type: "카르마 블랙 큐브" }), undefined, { prime: 5e8 }), fee);
+
+  // Line 1 (보공 40 %) stays and the other two are rolled: the calculator's prime cube with boss damage kept.
+  const three = { attack: "atk" as const, ied: false, min: { a: 0, b: 0, i: 0, v: 3 }, tier: "v3" as const };
+  const goal = goalOf(["보스 몬스터 데미지 +40%", "공격력 +9%", "보스 몬스터 데미지 +30%"], false)!;
+  const hit = goalChance(prime(), "legendary", goal, NO_CONV)!;
+  assert.equal(hit.by, "공 · 보공 3줄");
+  assert.equal(hit.p, weaponChance(lineTables("prime", "legendary", "weapon", 200)!, three, "b"));
+  // Two lines to roll instead of three: far likelier than the same option from a black cube.
+  assert.ok(hit.p > 5 * goalChance(prime({ cube_type: "카르마 블랙 큐브" }), "legendary", goal, NO_CONV)!.p);
+  // Armour: the kept INT 12 % line counts toward the total, the other two lines are rolled.
+  const shoes = goalChance(prime({ item_equipment_part: "신발" }), "legendary", goalOf(["INT +12%", "INT +9%", "INT +9%"], false)!, NO_CONV)!;
+  assert.equal(shoes.by, "INT 30%");
+  assert.equal(shoes.p, sumChance(fixFirstLine(lineTables("prime", "legendary", "shoes", 200)!, "str", 12), { type: "stat", min: 30 - 1e-9, conv: NO_CONV, attack: "matk" }));
+  // A kept line of another stat is worth nothing to an INT item: both rolled lines must be INT 9 % or more.
+  const off = goalChance(prime({ item_equipment_part: "신발" }), "legendary", goalOf(["STR +12%", "INT +9%", "INT +9%"], false)!, NO_CONV)!;
+  assert.equal(off.by, "INT 18%");
+  assert.ok(off.p < shoes.p * 1.0001 && off.p > 0);
+
+  // A kept line that cannot repeat (a "쓸만한" skill) is out of the other two lines, which makes the rest of them a
+  // little likelier than after a line that is simply not counted (Codex review).
+  const skill = goalOf(["<쓸만한 컴뱃 오더스> 스킬 사용 가능", "INT +9%", "INT +9%"], false)!;
+  assert.deepEqual(skill.lines[0], ["skcombat", 0]);
+  const afterSkill = goalChance(prime({ item_equipment_part: "신발" }), "legendary", skill, NO_CONV)!;
+  assert.equal(afterSkill.p, sumChance(fixFirstLine(lineTables("prime", "legendary", "shoes", 200)!, "skcombat", 0), { type: "stat", min: 18 - 1e-9, conv: NO_CONV, attack: "matk" }));
+  assert.ok(afterSkill.p > off.p * 1.05);
+  assert.deepEqual(["피격 후 무적시간 +3초", "피격 시 5% 확률로 데미지의 20% 무시", "피격 시 2% 확률로 7초간 무적", "방어력 +7%"].map(cappedCategory), ["invtime", "ignp", "inv", ""]);
+
+  // The piece: what was spent and what the same result costs on average are both in cube price + fee.
+  const used = [prime({ before_potential_option: opt("보스 몬스터 데미지 +40%", "공격력 +9%", "최대 HP +9%"), after_potential_option: opt("보스 몬스터 데미지 +40%", "공격력 +9%", "보스 몬스터 데미지 +30%") })];
+  const piece = buildPotStats(potEntries(used, trackPieces(used), {}, { prime: 5e8 }), NO_CONV).pieces[0];
+  assert.deepEqual([piece.spent, piece.goalBy], [5e8 + fee, "공 · 보공 3줄"]);
+  near(piece.expected!, (5e8 + fee) / hit.p, 1, "expected");
 });

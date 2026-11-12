@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { eok } from "@/components/ev/ui";
 import { PeriodBar, SyncBanners, ViewTabs, WorldChips, useGroupsOff, usePeriod, useSync } from "@/components/enhance/board-bits";
 import { Card, Delta, Empty, SKIP_LABEL, Select } from "@/components/enhance/parts";
@@ -34,8 +34,8 @@ const MVPS: { id: MvpGrade; label: string }[] = [
   { id: "diamond", label: "다이아+" },
 ];
 
-/** `onChange` = to the key screen with this key and its records kept. */
-export function StarforceBoard({ apiKey, account, onForget, onChange }: { apiKey: string; account: string; onForget: () => void; onChange: () => void }) {
+/** `switcher` = the star force · potential switch, shown at the start of the period row. */
+export function StarforceBoard({ apiKey, account, onForget, switcher }: { apiKey: string; account: string; onForget: () => void; switcher: ReactNode }) {
   const period = usePeriod();
   const { from, to } = period;
   const [view, setView] = useState<View>("insight");
@@ -100,8 +100,7 @@ export function StarforceBoard({ apiKey, account, onForget, onChange }: { apiKey
         state={period}
         loading={loading}
         onRefresh={refresh}
-        onChange={onChange}
-        onForget={onForget}
+        lead={switcher}
         status={
           snap.at > 0 && (
             <span>

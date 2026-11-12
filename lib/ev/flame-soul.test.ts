@@ -60,6 +60,16 @@ test("armor flames: harder targets are rarer, abyss beats eternal", () => {
   assert.ok(armorChance("eternal", 250, 4500, "hp") > 0);
 });
 
+test("Xenon flames: STR · DEX · LUK all count, attack and all stat by their weights", () => {
+  assert.ok(armorChance("eternal", 200, 250, "xenon") > armorChance("eternal", 200, 300, "xenon"));
+  near(armorChance("eternal", 200, 0, "xenon"), 1, 1e-9, "target 0");
+  // Best at Lv.200 with the default weights: three stat pairs at tier 7 (2 × 6 × 7 each) + all stat 7 % × 20 = 392.
+  assert.ok(armorChance("abyss", 200, 392, "xenon") > 0);
+  assert.equal(armorChance("abyss", 200, 393, "xenon"), 0);
+  // A pair with INT in it counts once, so the same target is rarer than for a job whose sub stat is worth nothing.
+  assert.ok(armorChance("eternal", 200, 250, "xenon", undefined, undefined, { attack: 7, allStat: 30 }) > armorChance("eternal", 200, 250, "xenon"));
+});
+
 test("soul ether averages match mapletiptip", () => {
   const ether = [2.1, 3.4, 4.3, 30.4];
   const r = soulPlan(0, 4, 0, ether);

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { STAR_ITEMS } from "../ev/defaults.ts";
 import { baseCost, starSteps } from "../ev/starforce.ts";
 import { knownItem, resolveItem } from "./items.ts";
 import { caught, judge, restoredIds, starAfter, trackCopies } from "./judge.ts";
@@ -209,6 +210,12 @@ test("item table: sets, exact names and the user's own values", () => {
   assert.equal(knownItem("여명의 가디언 엔젤 링")!.level, 160);
   assert.equal(knownItem("컴플리트 언더컨트롤")!.level, 200);
   assert.equal(knownItem("처음 보는 장비"), null);
+  // A spare that costs next to nothing is 0 (user, 2026-11-12), and the items added to the calculator are known here too.
+  assert.deepEqual(knownItem("로얄 블랙메탈 숄더"), { level: 120, spare: 0 });
+  assert.deepEqual([resolveItem("로얄 블랙메탈 숄더", {}, { levels: {}, spares: {} }).spare, resolveItem("로얄 블랙메탈 숄더", {}, { levels: {}, spares: {} }).source], [0, "table"]);
+  assert.deepEqual(["골든 클로버 벨트", "파풀라투스 마크", "분노한 자쿰의 벨트"].map((name) => knownItem(name)?.level), [140, 145, 150]);
+  // The calculator lists each level cheapest first.
+  for (const group of STAR_ITEMS) assert.deepEqual(group.items.map((it) => it.spareEok), [...group.items.map((it) => it.spareEok)].sort((a, b) => a - b), `Lv.${group.level}`);
   const found = { "처음 보는 장비": { level: 140, icon: "x", part: "반지" } };
   assert.equal(resolveItem("처음 보는 장비", found, { levels: {}, spares: {} }).level, 140);
   const mine = resolveItem("처음 보는 장비", found, { levels: { "처음 보는 장비": 160 }, spares: { "처음 보는 장비": 3 } });

@@ -156,11 +156,23 @@ export function PotentialTab() {
   }, [refRows, target, best.cd, conv, attack, customMin, mainStat, kind]);
   const tIdx = Math.min(targetIdx, Math.max(0, sumTargets.length - 1));
   const comboSpecial = target === "crit" ? "cd" : target === "cool" ? "cool" : null;
-  const comboGoal: SumGoal | null = comboSpecial ? { type: "combo", special: comboSpecial, lines: combo.lines, stat: combo.stat, main: mainStat, minSpecial: comboSpecial === "cd" ? 3 : undefined } : null;
-  const comboRest = 3 - combo.lines - combo.stat;
+  // Hats: cooldown is asked by its total seconds (−2초 and −1초 = 3초), the way the 강화 기록 page reads an option
+  // (user, 2026-11-12) — `combo.lines` is then seconds. Gloves still count crit damage lines.
+  const bySeconds = comboSpecial === "cool";
+  const coolTop = Math.max(1, best.cool ?? 1);
+  /** Lines the special option needs at the least: every cooldown line at its top value. */
+  const specialLines = (n: number) => (bySeconds ? Math.ceil(n / coolTop) : n);
+  // A total picked on another grade may be out of reach here (unique hats only have −1초 lines).
+  const special = bySeconds ? Math.max(1, Math.min(combo.lines, coolTop * (3 - combo.stat))) : combo.lines;
+  const comboGoal: SumGoal | null = !comboSpecial
+    ? null
+    : bySeconds
+      ? { type: "combo", special: "cool", lines: 1, stat: combo.stat, main: mainStat, minSum: special }
+      : { type: "combo", special: comboSpecial, lines: combo.lines, stat: combo.stat, main: mainStat, minSpecial: 3 };
+  const comboRest = 3 - specialLines(special) - combo.stat;
   const specialName = comboSpecial === "cd" ? "크뎀" : "쿨감";
   const mainName = mainStat === "all" ? "올스탯" : mainStat === "hp" ? "HP" : "주스탯";
-  const comboText = [`${specialName} ${combo.lines}줄`, combo.stat ? `${mainName} ${combo.stat}줄` : "", comboRest ? `아무 옵션 ${comboRest}줄` : ""]
+  const comboText = [`${specialName} ${special}${bySeconds ? "초" : "줄"}`, combo.stat ? `${mainName} ${combo.stat}줄` : "", comboRest ? `아무 옵션 ${comboRest}줄` : ""]
     .filter(Boolean)
     .join(" + ");
   // Lowest value of an option in this table: what "any value" means on screen (user, 2026-11-10: "올스탯 6% 이상").
@@ -169,8 +181,9 @@ export function PotentialTab() {
     return vals.length ? Math.min(...vals) : 0;
   };
   const setComboPart = (k: "lines" | "stat", v: number) => {
-    const next = { ...combo, [k]: v };
-    if (next.lines < 1 || next.stat < 0 || next.lines + next.stat > 3) return;
+    // Steps start from what is on screen (a total clamped to this grade), not from the number kept underneath.
+    const next = { lines: special, stat: combo.stat, [k]: v };
+    if (next.lines < 1 || next.stat < 0 || specialLines(next.lines) + next.stat > 3) return;
     setCombo(next);
   };
 
@@ -358,10 +371,14 @@ export function PotentialTab() {
         {soul ? (
           null
         ) : (
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold">
-              장비 레벨
-              <NumberField label="장비 레벨" value={levelText} onChange={setLevelText} inputClassName="w-16" />
+          // Level on the left, the potential kind at the right edge: in line with the switches under it (user, 2026-11-13).
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold">
+                장비 레벨
+                <NumberField label="장비 레벨" value={levelText} onChange={setLevelText} inputClassName="w-16" />
+              </span>
+              {level < 120 && <span className="text-xs text-destructive">120레벨 이상 장비만</span>}
             </span>
             <Segment
               label="잠재 종류"
@@ -376,7 +393,6 @@ export function PotentialTab() {
               ]}
               className="w-44"
             />
-            {level < 120 && <span className="text-xs text-destructive">120레벨 이상 장비만</span>}
           </div>
         )}
 
@@ -589,7 +605,7 @@ export function PotentialTab() {
                 {(
                   [
                     // Main potential has crit damage 8 % only; additional has 1 % and 3 %, and only 3 % counts.
-                    ["lines", `${specialName} 줄`, comboSpecial === "cd" ? (kind === "main" ? `크리티컬 데미지 ${lowest("cd")}%` : "크리티컬 데미지 3% 이상") : `재사용 대기시간 −${lowest("cool")}초 이상`],
+                    ["lines", bySeconds ? "쿨감 합" : `${specialName} 줄`, comboSpecial === "cd" ? (kind === "main" ? `크리티컬 데미지 ${lowest("cd")}%` : "크리티컬 데미지 3% 이상") : lowest("cool") === coolTop ? `한 줄 −${coolTop}초` : `한 줄 −${lowest("cool")} ~ −${coolTop}초`],
                     // An all stat % line raises the main stat too, so it counts as a main stat line (user, 2026-11-12).
                     ["stat", `${mainName} 줄`, mainStat === "str" ? `주스탯 ${lowest("str")}% 이상 · 올스탯 포함` : `${mainName} ${lowest(mainStat)}% 이상`],
                   ] as const
@@ -603,16 +619,16 @@ export function PotentialTab() {
                       <button
                         type="button"
                         aria-label={`${label} 줄이기`}
-                        onClick={() => setComboPart(k, combo[k] - 1)}
+                        onClick={() => setComboPart(k, (k === "lines" ? special : combo.stat) - 1)}
                         className="flex size-8 items-center justify-center rounded-md border border-border"
                       >
                         <Minus className="size-3.5" aria-hidden="true" />
                       </button>
-                      <b className="w-6 text-center font-num">{combo[k]}</b>
+                      <b className={cn("text-center font-num", k === "lines" && bySeconds ? "w-10" : "w-6")}>{k === "lines" ? (bySeconds ? `${special}초` : special) : combo.stat}</b>
                       <button
                         type="button"
                         aria-label={`${label} 늘리기`}
-                        onClick={() => setComboPart(k, combo[k] + 1)}
+                        onClick={() => setComboPart(k, (k === "lines" ? special : combo.stat) + 1)}
                         className="flex size-8 items-center justify-center rounded-md border border-border"
                       >
                         <Plus className="size-3.5" aria-hidden="true" />

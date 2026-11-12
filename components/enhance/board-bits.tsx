@@ -2,8 +2,10 @@
 
 // What the star force board and the potential board share: the period, the sync wiring and its banners, the tab row.
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { AlertCircle, Loader2, RefreshCw } from "lucide-react";
+import { AlertCircle, Loader2, RefreshCw, Search } from "lucide-react";
+import { Select } from "@/components/enhance/parts";
 import { eok } from "@/components/ev/ui";
+import { Input } from "@/components/ui/input";
 import type { ApiErrorKind } from "@/lib/enhance/client";
 import { addDays, kstDate } from "@/lib/enhance/kst";
 import type { HistorySync, SyncSnap } from "@/lib/enhance/sync";
@@ -13,13 +15,14 @@ import { useStored } from "@/lib/use-stored";
 import { cn } from "@/lib/utils";
 
 type PeriodId = "7d" | "30d" | "1y" | "all" | "custom";
-const PERIODS: { id: PeriodId; label: string; days: number }[] = [
-  { id: "7d", label: "최근 7일", days: 7 },
-  { id: "30d", label: "최근 30일", days: 30 },
-  { id: "1y", label: "최근 1년", days: 365 },
+// `short` = what the button says: the row also holds the star force · potential switch and the refresh button.
+const PERIODS: { id: PeriodId; label: string; short: string; days: number }[] = [
+  { id: "7d", label: "최근 7일", short: "7일", days: 7 },
+  { id: "30d", label: "최근 30일", short: "30일", days: 30 },
+  { id: "1y", label: "최근 1년", short: "1년", days: 365 },
   // The API keeps two years.
-  { id: "all", label: "전체 2년", days: 730 },
-  { id: "custom", label: "기간 설정", days: 0 },
+  { id: "all", label: "전체 2년", short: "2년", days: 730 },
+  { id: "custom", label: "기간 설정", short: "기간 설정", days: 0 },
 ];
 
 const ERRORS: Record<ApiErrorKind, string> = {
@@ -65,54 +68,41 @@ export function useSync<T extends { t: number; who: string; item: string }>(sync
   return { snap, loading: snap.status === "loading" || snap.status === "idle", refresh: () => setTick((n) => n + 1) };
 }
 
-/** Period buttons on the left; when the records were read, refresh, change key and forget on the right; the date fields under it. */
-export function PeriodBar({
-  state,
-  status,
-  loading,
-  onRefresh,
-  onChange,
-  onForget,
-}: {
-  state: PeriodState;
-  status: ReactNode;
-  loading: boolean;
-  onRefresh: () => void;
-  /** To the key screen, this key and its records kept. */
-  onChange: () => void;
-  onForget: () => void;
-}) {
+/**
+ * One tool row (user, 2026-11-13): `lead` (the star force · potential switch) and the period buttons on the left,
+ * when the records were read and the refresh button on the right; the date fields under it. Changing or forgetting
+ * the key is in the menu next to the page title.
+ */
+export function PeriodBar({ state, status, loading, onRefresh, lead }: { state: PeriodState; status: ReactNode; loading: boolean; onRefresh: () => void; lead?: ReactNode }) {
   const { period, setPeriod, custom, setCustom, today, oldest, from, to } = state;
   return (
     <>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div role="group" aria-label="기간" className="flex flex-wrap gap-[3px] rounded-lg border border-border p-[3px]">
-          {PERIODS.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              aria-pressed={period === p.id}
-              onClick={() => setPeriod(p.id)}
-              className={cn(
-                "h-[30px] rounded-md px-3 text-[13px] outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-                period === p.id ? "bg-primary-soft font-bold text-primary-text" : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {p.label}
-            </button>
-          ))}
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {lead}
+          <div role="group" aria-label="기간" className="flex flex-wrap gap-[3px] rounded-lg border border-border p-[3px]">
+            {PERIODS.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                aria-label={p.label}
+                aria-pressed={period === p.id}
+                onClick={() => setPeriod(p.id)}
+                className={cn(
+                  "h-8 rounded-md px-2.5 text-[13px] outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                  period === p.id ? "bg-primary-soft font-bold text-primary-text" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {p.short}
+              </button>
+            ))}
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           {!loading && status}
           <button type="button" onClick={onRefresh} disabled={loading} className={cn(plainButton, "inline-flex items-center gap-1.5 disabled:opacity-50")}>
             <RefreshCw className={cn("size-3.5", loading && "animate-spin")} aria-hidden="true" />
             새로 고침
-          </button>
-          <button type="button" onClick={onChange} className={plainButton}>
-            키 바꾸기
-          </button>
-          <button type="button" onClick={onForget} className={plainButton}>
-            키 · 기록 지우기
           </button>
         </div>
       </div>
@@ -200,6 +190,51 @@ export function SyncBanners({ snap, unit, onRetry, onForget }: { snap: Pick<Sync
           </button>
         </div>
       )}
+    </>
+  );
+}
+
+const plain = (s: string) => s.replace(/\s+/g, "").toLowerCase();
+
+/** Whether an item passes the 모아보기 filter: the one picked in the list, else any name that has the typed text in it. */
+export const itemMatches = (name: string, filter: ItemFilterState) => (filter.picked ? name === filter.picked : plain(name).includes(plain(filter.query)));
+
+export type ItemFilterState = { query: string; picked: string };
+export const NO_ITEM_FILTER: ItemFilterState = { query: "", picked: "" };
+
+/**
+ * The filter as it applies to the items on screen now: an item picked earlier that is no longer among them (another
+ * period, a world group switched off, the low-star switch) is dropped. Left in, the list would read "모든 아이템"
+ * while every card stayed hidden behind a name that is not there (Codex review, 2026-11-12).
+ */
+export const liveFilter = (filter: ItemFilterState, names: string[]): ItemFilterState => (filter.picked && !names.includes(filter.picked) ? { ...filter, picked: "" } : filter);
+
+/**
+ * Finds one item among the 모아보기 cards: typing narrows the cards (and the list) to the names that have the text
+ * in them ("언" → 컴플리트 언더컨트롤), the list picks one item by name.
+ */
+export function ItemFilter({ names, value, onChange }: { names: string[]; value: ItemFilterState; onChange: (next: ItemFilterState) => void }) {
+  const listed = [...new Set(names)].filter((name) => plain(name).includes(plain(value.query))).sort((a, b) => a.localeCompare(b, "ko"));
+  return (
+    <>
+      <span className="relative inline-flex">
+        <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+        <Input
+          type="search"
+          aria-label="아이템 검색"
+          placeholder="아이템 검색"
+          value={value.query}
+          // A new search starts from every item again: the one picked before may not be in it.
+          onChange={(e) => onChange({ query: e.target.value, picked: "" })}
+          className="h-8 w-36 rounded-md bg-card pl-8 text-[13px] md:text-[13px]"
+        />
+      </span>
+      <Select aria-label="아이템" value={value.picked} onChange={(e) => onChange({ ...value, picked: e.target.value })} className="max-w-[180px] bg-card">
+        <option value="">모든 아이템</option>
+        {listed.map((name) => (
+          <option key={name}>{name}</option>
+        ))}
+      </Select>
     </>
   );
 }

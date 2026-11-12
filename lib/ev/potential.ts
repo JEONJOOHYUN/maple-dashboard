@@ -284,12 +284,16 @@ export function weaponTierOf(rows: Row[][], attack: "atk" | "matk", ied: boolean
   return TIERS_HARD_FIRST.find((tier) => tierMet(tier, seen)) ?? "v3";
 }
 
-export function weaponChance(rows: Row[][], goal: WeaponGoal, fixFirst?: "a" | "b" | "i"): number {
+/**
+ * `fixFirst` = a prime cube's kept line 1: "a" · "b" · "i" = attack · boss · ignore defence at its top value (what the
+ * calculator offers), or the line an item actually has ({ cat, value } — a line that is not useful counts as none).
+ */
+export function weaponChance(rows: Row[][], goal: WeaponGoal, fixFirst?: "a" | "b" | "i" | { cat: string; value: number }): number {
   const best = topValues(rows);
-  if (fixFirst) {
+  if (typeof fixFirst === "string") {
     const cat = fixFirst === "a" ? goal.attack : fixFirst === "b" ? "boss" : "ied";
     rows = fixFirstLine(rows, cat, best[cat] ?? 0);
-  }
+  } else if (fixFirst) rows = fixFirstLine(rows, fixFirst.cat, fixFirst.value);
   const cats = new Set([goal.attack, "boss", "ied"]);
   const lines = rows.map((line) =>
     tokens(line, (r) => (cats.has(r[0]) ? { cat: r[0] === goal.attack ? "a" : r[0] === "boss" ? "b" : "i", value: r[1], own: r[3] === 1 } : null))
@@ -358,33 +362,25 @@ export type SumGoal =
  */
 export type ComboGoal = { type: "combo"; special: "cd" | "cool"; lines: number; stat: number; main?: MainStat; minSpecial?: number; minSum?: number };
 
+/**
+ * Worked out on the same three-line enumeration as the other goals, so the options that cannot repeat ("쓸만한"
+ * skills …) are left out of the later lines here too (Codex review, 2026-11-12: with its own walk over the lines
+ * this ignored the cap, and a prime cube that keeps a skill on line 1 read about 16 % rarer than it is).
+ */
 export function comboChance(rows: Row[][], goal: ComboGoal): number {
   const main = goal.main ?? "str";
   const isStat = (cat: string) => cat === main || (main === "str" && cat === "all");
-  if (goal.minSum !== undefined) return comboSumChance(rows, goal, isStat, goal.minSum);
-  const per = rows.map((line) => {
-    let sp = 0;
-    let st = 0;
-    for (const r of line) {
-      if (r[0] === goal.special && r[1] >= (goal.minSpecial ?? 0)) sp += r[2];
-      else if (isStat(r[0])) st += r[2];
-    }
-    return { sp, st, other: Math.max(0, 1 - sp - st) };
+  const minSpecial = goal.minSpecial ?? 0;
+  // Special lines keep their value (a total may be asked of them); main stat lines only count.
+  const lines = rows.map((line) =>
+    tokens(line, (r) => (r[0] === goal.special && r[1] >= minSpecial ? { cat: "sp", value: r[1], own: false } : isStat(r[0]) ? { cat: "st", value: 0, own: false } : null))
+  );
+  return enumerate(lines, (a, b, c) => {
+    const special = [a, b, c].filter((t) => t.cat === "sp");
+    if (special.length < goal.lines) return false;
+    if ([a, b, c].filter((t) => t.cat === "st").length < goal.stat) return false;
+    return goal.minSum === undefined || special.reduce((sum, t) => sum + t.value, 0) >= goal.minSum;
   });
-  let total = 0;
-  const walk = (i: number, sp: number, st: number, p: number) => {
-    if (p === 0) return;
-    if (i === per.length) {
-      if (sp >= goal.lines && st >= goal.stat) total += p;
-      return;
-    }
-    const l = per[i];
-    walk(i + 1, sp + 1, st, p * l.sp);
-    walk(i + 1, sp, st + 1, p * l.st);
-    walk(i + 1, sp, st, p * l.other);
-  };
-  walk(0, 0, 0, 1);
-  return total;
 }
 
 /** Armor · accessories. Main stat = STR % plus other lines turned into main stat % by goal.conv (STR stands in for any main stat). */
@@ -410,34 +406,6 @@ export function sumChance(rows: Row[][], goal: SumGoal): number {
 }
 
 /** One line's worth in main stat % (0 = not a main stat line). */
-/** comboChance() when the special lines are also asked for a total: each value of the special option is followed on its own. */
-function comboSumChance(rows: Row[][], goal: ComboGoal, isStat: (cat: string) => boolean, minSum: number): number {
-  const per = rows.map((line) => {
-    const special = new Map<number, number>();
-    let st = 0;
-    for (const r of line) {
-      if (r[0] === goal.special && r[1] >= (goal.minSpecial ?? 0)) special.set(r[1], (special.get(r[1]) ?? 0) + r[2]);
-      else if (isStat(r[0])) st += r[2];
-    }
-    const sp = [...special.values()].reduce((s, p) => s + p, 0);
-    return { special: [...special.entries()], st, other: Math.max(0, 1 - sp - st) };
-  });
-  let total = 0;
-  const walk = (i: number, sp: number, sum: number, st: number, p: number) => {
-    if (p === 0) return;
-    if (i === per.length) {
-      if (sp >= goal.lines && st >= goal.stat && sum >= minSum) total += p;
-      return;
-    }
-    const l = per[i];
-    for (const [value, chance] of l.special) walk(i + 1, sp + 1, sum + value, st, p * chance);
-    walk(i + 1, sp, sum, st + 1, p * l.st);
-    walk(i + 1, sp, sum, st, p * l.other);
-  };
-  walk(0, 0, 0, 0, 1);
-  return total;
-}
-
 function statValue(r: Row, conv: StatConv, attack: "atk" | "matk"): number {
   switch (r[0]) {
     case "str":
@@ -546,6 +514,23 @@ export function addWeaponChance(rows: Row[][], attack: "atk" | "matk", goal: Add
     const sum = atk.reduce((s, t) => s + t.value, 0);
     if (sum < need) return false;
     return goal === "a21" || xs.every((t) => t.cat === "a" || t.cat === "e");
+  });
+}
+
+/**
+ * Attack % adding up to `min` or more — what an option a weapon actually has is worth: 12 + 12 is 24 %, rarer than
+ * the 21 % of 12 + 9 (user, 2026-11-13). `withExtra` = and every other line is "@", as in "a21x".
+ * With `min` = addWeaponNeed() this is addWeaponChance()'s "a21" · "a21x".
+ */
+export function addWeaponSumChance(rows: Row[][], attack: "atk" | "matk", min: number, withExtra = false): number {
+  const extra = new Set(["str", "all", "lvstr", "strf", attack === "atk" ? "atkf" : "matkf"]);
+  const lines = rows.map((line) =>
+    tokens(line, (r) => (r[0] === attack ? { cat: "a", value: r[1], own: false } : extra.has(r[0]) ? { cat: "e", value: 0, own: false } : null))
+  );
+  return enumerate(lines, (x, y, z) => {
+    const xs = [x, y, z];
+    if (xs.reduce((sum, t) => sum + (t.cat === "a" ? t.value : 0), 0) < min) return false;
+    return !withExtra || xs.every((t) => t.cat === "a" || t.cat === "e");
   });
 }
 

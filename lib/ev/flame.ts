@@ -90,6 +90,15 @@ export type HpWeights = { attack: number; str: number };
 export const DEFAULT_WEIGHTS: ArmorWeights = { sub: 10, attack: 4, allStat: 10 };
 /** Demon Avenger (HP): guesses fitted to maplescouter totals of Lv.250 gear (spec §4-8, 확인 필요). */
 export const DEFAULT_HP_WEIGHTS: HpWeights = { attack: 90, str: 1 };
+/**
+ * Xenon: STR · DEX · LUK all count one for one (its damage goes with their sum); attack 1 and all stat 1 % in those
+ * points. Estimated from the character 제논 (스카니아 Lv.290, NEXON Open API 2026-11-12: STR 60,760 · DEX 63,335 ·
+ * LUK 67,745 · 공격력 11,121, gear all stat about 480 %): attack 1 ≈ 6~8, all stat 1 % ≈ 16~22 depending on how much
+ * of the stat is not raised by % (symbols, union …) — rounded to 7 and 20, and the page lets people change them (확인 필요).
+ */
+export type XenonWeights = { attack: number; allStat: number };
+export const DEFAULT_XENON_WEIGHTS: XenonWeights = { attack: 7, allStat: 20 };
+export type FlameJob = "stat" | "hp" | "xenon";
 
 export function tierValues(level: number) {
   return {
@@ -101,8 +110,23 @@ export function tierValues(level: number) {
 }
 
 /** Score of one option per boss tier (3~7), for the options that count. */
-function relevantOptions(level: number, job: "stat" | "hp", w: ArmorWeights, hw: HpWeights): ((tier: number) => number)[] {
+function relevantOptions(level: number, job: FlameJob, w: ArmorWeights, hw: HpWeights, xw: XenonWeights): ((tier: number) => number)[] {
   const v = tierValues(level);
+  if (job === "xenon") {
+    return [
+      (t) => t * v.single, // STR
+      (t) => t * v.single, // DEX
+      (t) => t * v.single, // LUK
+      (t) => t * v.double * 2, // STR+DEX
+      (t) => t * v.double * 2, // STR+LUK
+      (t) => t * v.double * 2, // DEX+LUK
+      (t) => t * v.double, // STR+INT
+      (t) => t * v.double, // DEX+INT
+      (t) => t * v.double, // INT+LUK
+      (t) => t * xw.attack, // attack
+      (t) => t * xw.allStat, // all stat %
+    ];
+  }
   if (job === "hp") {
     return [
       (t) => t * v.hp, // max HP
@@ -132,12 +156,13 @@ export function armorChance(
   flame: FlameId,
   level: number,
   target: number,
-  job: "stat" | "hp" = "stat",
+  job: FlameJob = "stat",
   w: ArmorWeights = DEFAULT_WEIGHTS,
-  hw: HpWeights = DEFAULT_HP_WEIGHTS
+  hw: HpWeights = DEFAULT_HP_WEIGHTS,
+  xw: XenonWeights = DEFAULT_XENON_WEIGHTS
 ): number {
   const dist = bossTiers(flame);
-  const options = relevantOptions(level, job, w, hw);
+  const options = relevantOptions(level, job, w, hw, xw);
   const R = options.length;
   const total = comb(POOL, LINES);
   const SCALE = 100; // scores to 0.01 steps

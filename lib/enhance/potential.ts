@@ -5,7 +5,8 @@
 // - potential_option_grade / additional_potential_option_grade = the item's grade AFTER the roll;
 //   item_upgrade_result "성공" = the roll raised the grade.
 // - unlike star force, the rows carry item level and equipment part.
-import { CUBES, NEXT_GRADE, NO_CONV, SLOTS, WEAPON_TIERS, addWeaponChance, addWeaponNeed, customChance, gradeUp, lineTables, resetMeso, sumChance, weaponChance, weaponTierOf, type CubeId, type CustomCond, type Grade, type StatConv } from "../ev/potential.ts";
+import { CREDIT_SHOP } from "../ev/defaults.ts";
+import { CUBES, NEXT_GRADE, NO_CONV, SLOTS, WEAPON_TIERS, addWeaponNeed, addWeaponSumChance, customChance, fixFirstLine, gradeUp, lineTables, resetMeso, sumChance, weaponChance, weaponTierOf, type CubeId, type CustomCond, type Grade, type StatConv } from "../ev/potential.ts";
 
 export type RawOption = { value?: string; grade?: string };
 export type RawPotential = {
@@ -123,13 +124,31 @@ export function cubeFee(level: number, insight?: number): number {
 /** Whether what a cube roll costs depends on the character's 통찰력 (so the level is worth asking for). */
 export const feeByInsight = (row: PotRow) => !row.meso && row.level >= 31 && row.level <= 120 && row.type.includes("큐브");
 
+/** Cubes that are bought with meso on the auction house, so one of them is worth a price: the prime cubes. */
+export type PricedCube = "prime" | "primeAddi";
+export const PRICED_CUBES: PricedCube[] = ["prime", "primeAddi"];
+/** Meso for one cube, by the user ("" = our default). */
+export type CubePrices = Partial<Record<PricedCube, number>>;
+/** Our price for one cube in meso: the auction price the MVP page uses (lib/ev/defaults.ts CREDIT_SHOP). */
+export const cubePriceDefault = (cube: PricedCube): number => (CREDIT_SHOP.find((x) => x.id === cube)?.auctionEok ?? 0) * 1e8;
+
+/** The priced cube a roll used, or null (a reset, or a cube that is not traded for meso). */
+export function pricedCube(row: PotRow): PricedCube | null {
+  if (row.meso) return null;
+  const cube = cubeOf(row);
+  return cube === "prime" || cube === "primeAddi" ? cube : null;
+}
+
 /**
  * Meso paid for the roll: the reset's price, or the fee a cube takes (nothing for what is not a cube, e.g. 펄스 인핸서).
+ * A prime cube also costs the cube itself: `prices` = what the user set for one, else our default.
  * `insight` = the 통찰력 level of the character that rolled, when known.
  */
-export function rollMeso(row: PotRow, insight?: number): number {
-  if (row.level <= 0) return 0;
-  if (!row.meso) return row.type.includes("큐브") ? cubeFee(row.level, insight) : 0;
+export function rollMeso(row: PotRow, insight?: number, prices: CubePrices = {}): number {
+  const priced = pricedCube(row);
+  const cube = priced ? (prices[priced] ?? cubePriceDefault(priced)) : 0;
+  if (row.level <= 0) return cube;
+  if (!row.meso) return row.type.includes("큐브") ? cubeFee(row.level, insight) + cube : 0;
   const grade = gradeBefore(row);
   return grade ? (resetMeso(row.add ? "white" : "black", grade, row.level) ?? 0) : 0;
 }
@@ -169,6 +188,27 @@ export function optionToken(text: string): [string, number] | null {
   return null;
 }
 
+/**
+ * Options that cannot fill all three lines ("쓸만한" skills and 피격 후 무적시간 once, 피격 시 데미지 % 무시 and 피격 시 무적
+ * twice): the calculator's category for one, "" for any other line. They are not ranked, but a prime cube that keeps
+ * one on line 1 rolls the other two lines without it, so the line has to stay known for what it is (Codex review,
+ * 2026-11-12: read as nothing, 쓸만한 컴뱃 오더스 kept on shoes made STR 9 % + 9 % a 1.37 % roll instead of 1.61 %).
+ * Wording as in NEXON's cube guide (the table's source); matched loosely in case the API spaces it differently.
+ */
+const CAPPED: [RegExp, string][] = [
+  [/쓸만한\s*샤프\s*아이즈/, "sksharp"],
+  [/쓸만한\s*윈드\s*부스터/, "skwind"],
+  [/쓸만한\s*컴뱃\s*오더스/, "skcombat"],
+  [/쓸만한\s*어드밴스드\s*블레스/, "skbless"],
+  [/쓸만한\s*하이퍼\s*바디/, "skhyper"],
+  [/쓸만한\s*헤이스트/, "skhaste"],
+  [/쓸만한\s*미스틱\s*도어/, "skdoor"],
+  [/피격 후 무적시간/, "invtime"],
+  [/피격 시 \d+% 확률로 데미지의 \d+% 무시/, "ignp"],
+  [/피격 시 \d+% 확률로 \d+초간 무적/, "inv"],
+];
+export const cappedCategory = (text: string): string => CAPPED.find(([re]) => re.test(text))?.[1] ?? "";
+
 // ── What the item ended with, as a goal ──
 
 const MAIN_STATS = ["str", "dex", "int", "luk"];
@@ -178,7 +218,8 @@ const WANTED_ADD = ["boss", "ied", "atk", "matk", "atkf", "matkf", "dmg", "cd", 
 
 /**
  * `stat` = the item's main stat ("" when the option has none), `magic` = magic attack rather than attack,
- * `sums` = every ranked line total by category, `lines` = the option line by line (["", 0] for a line that is not ranked).
+ * `sums` = every ranked line total by category, `lines` = the option line by line: ["", 0] for a line that is not
+ * ranked, [its category, 0] for an unranked one that cannot repeat (cappedCategory).
  */
 export type Goal = { conds: CustomCond[]; label: string; stat: string; magic: boolean; sums: Record<string, number>; lines: [string, number][] };
 
@@ -203,7 +244,7 @@ export function goalOf(option: string[], add: boolean): Goal | null {
   const lines: [string, number][] = [];
   for (const text of option) {
     const token = optionToken(text);
-    lines.push(token ?? ["", 0]);
+    lines.push(token ?? [cappedCategory(text), 0]);
     if (token) total.set(token[0], (total.get(token[0]) ?? 0) + token[1]);
   }
   const sum = (cat: string) => total.get(cat) ?? 0;
@@ -233,7 +274,6 @@ export function goalOf(option: string[], add: boolean): Goal | null {
 const SLOT: Record<string, string> = {
   모자: "hat", 상의: "top", 한벌옷: "overall", 하의: "bottom", 신발: "shoes", 장갑: "gloves", 망토: "cape", 벨트: "belt", 어깨장식: "shoulder",
   얼굴장식: "face", 눈장식: "eye", 귀고리: "earring", 반지: "ring", 펜던트: "pendant", 기계심장: "heart", 엠블렘: "emblem",
-  // "무기" has not been seen in a real response yet (the 2026-11-12 sample had no weapon roll).
   무기: "weapon",
   // Secondary weapons that are not named "보조무기" by the API.
   보조무기: "sub", 방패: "sub", 포스실드소울링: "sub", 포스실드: "sub", 소울링: "sub", 블레이드: "sub",
@@ -253,9 +293,31 @@ const inStat = (cat: string, stat: string, conv: StatConv) =>
  * and flat attack turned into stat % with the calculator's conversion (the user's maplescouter numbers).
  */
 export function statWorth(goal: Goal, conv: StatConv): number {
-  if (!goal.stat) return 0;
   const sum = (cat: string) => goal.sums[cat] ?? 0;
-  return sum(goal.stat) + sum("all") * conv.all + sum(`lv${goal.stat}`) * conv.lvstr + sum("cd") * conv.cd + sum(goal.magic ? "matkf" : "atkf") * conv.atkf;
+  // An option with no main stat line of its own (all stat % only) is still worth main stat through the conversion.
+  const own = goal.stat ? sum(goal.stat) + sum(`lv${goal.stat}`) * conv.lvstr : 0;
+  return own + sum("all") * conv.all + sum("cd") * conv.cd + sum(goal.magic ? "matkf" : "atkf") * conv.atkf;
+}
+
+type Row = NonNullable<ReturnType<typeof lineTables>>[number][number];
+
+/**
+ * The line tables a roll is judged on. A prime cube keeps line 1 and rerolls the other two, so its line 1 is the one
+ * the option has: `rows` with the option's own category names, `std` with the item's main stat renamed to STR — the
+ * stand-in the calculator's main stat goals count (another stat's line is then worth nothing).
+ * `table` = the cube's tables as they are (top values and line grades are read from these).
+ */
+function tablesOf(row: Pick<PotRow, "part" | "level" | "meso" | "add" | "type">, grade: Grade, goal: Goal) {
+  const cube = cubeOf(row as PotRow);
+  const slot = slotOf(row.part);
+  if (!cube || !slot) return null;
+  const table = lineTables(cube, grade, slot, row.level);
+  if (!table) return null;
+  const [cat, value] = goal.lines[0] ?? ["", 0];
+  const prime = (CUBES.find((c) => c.id === cube)?.fixFirst ?? false) && goal.lines.length > 0;
+  const standIn = !goal.stat ? cat : cat === goal.stat ? "str" : cat === `lv${goal.stat}` ? "lvstr" : cat === "str" || cat === "lvstr" ? "" : cat;
+  const fix = (name: string): Row[][] => (prime ? fixFirstLine(table, name, value) : table);
+  return { slot, table, rows: fix(cat), std: fix(standIn), first: prime ? { cat, value } : undefined };
 }
 
 /**
@@ -264,10 +326,12 @@ export function statWorth(goal: Goal, conv: StatConv): number {
  * - weapons · secondaries · emblems, main potential: useful lines (attack % · boss damage, and ignore defence when the
  *   option has one) — "유효 3줄". Which of them a line is does not matter: 보공 + 마력 + 방무 is as rare as any other
  *   three useful lines. Judging it by its hardest single line called it a 1-in-18 result (user, 2026-11-12);
- * - weapons, additional potential: attack % adding up to the top two values (21 %), with "+ @" when the third line
- *   is a main stat one, or three attack % lines;
- * - gloves with crit damage, main potential: that many crit damage lines plus that many main stat lines;
- *   hats with cooldown: that many seconds of cooldown in total plus that many main stat lines;
+ * - weapons, additional potential: the attack % the option adds up to, from the top two values (21 %) up — 12 + 12 is
+ *   "공격력 24 %", three lines "30 %" — with "+ @" when the line that is not attack % is a main stat one;
+ * - gloves with crit damage, main potential: that many crit damage lines plus the option's main stat % in total;
+ *   hats with cooldown: that many seconds of cooldown in total plus the main stat % in total.
+ *   The values count, not the number of lines (user, 2026-11-13): STR 12 % is not the 9 % line, and 공 12 + 12 is
+ *   not 12 + 9. The calculator's chips still count lines; its "직접" mode gives these numbers;
  * - armour and accessories with a main stat: the option's main stat % — the chance of any option with that much or more.
  *   Main potential is read the way players say it ("INT 30 %": stat % plus all stat %, one for one; user 2026-11-12).
  *   Additional potential mixes flat attack and "per 9 levels" lines, so those are converted: "INT 15.8 %급";
@@ -275,13 +339,10 @@ export function statWorth(goal: Goal, conv: StatConv): number {
  * null when the calculator has no table for this cube · grade · part.
  */
 export function goalChance(row: Pick<PotRow, "part" | "level" | "meso" | "add" | "type">, grade: Grade, goal: Goal, conv: StatConv): { p: number; by: string } | null {
-  const cube = cubeOf(row as PotRow);
-  const slot = slotOf(row.part);
-  if (!cube || !slot) return null;
-  // Cubes that keep line 1: the chance of the other two lines alone is not worked out here, so no average is given.
-  if (CUBES.find((c) => c.id === cube)?.fixFirst) return null;
-  const rows = lineTables(cube, grade, slot, row.level);
-  if (!rows) return null;
+  const tables = tablesOf(row, grade, goal);
+  if (!tables) return null;
+  // `rows` · `std` have a prime cube's line 1 fixed to the option's own (see tablesOf); `table` never does.
+  const { slot, table, rows, std, first } = tables;
   const info = SLOTS.find((x) => x.id === slot);
   const kind = info?.kind;
   // Attack or magic attack. On a weapon the option's own attack % lines say which: a stray INT line on a warrior's
@@ -291,25 +352,27 @@ export function goalChance(row: Pick<PotRow, "part" | "level" | "meso" | "add" |
   const magic = weaponLike && pct("atk") !== pct("matk") ? pct("matk") > pct("atk") : goal.magic;
   const attack = magic ? "matk" : "atk";
   const count = (cat: string, min = 0) => goal.lines.filter(([c, v]) => c === cat && v >= min).length;
-  // Main stat lines the way the calculator counts them: an all stat % line is one too (user, 2026-11-12).
-  // With no main stat line at all the option is an all-stat one (Xenon's): then only all stat lines count, which
-  // is the calculator's "제논 · 올스탯" goal — a main stat line is not "this or better" for that item.
-  const statLines = (goal.stat ? count(goal.stat) : 0) + count("all");
-  const statMain = goal.stat || statLines === 0 ? ("str" as const) : ("all" as const);
-  const plusStat = statLines > 0 ? ` + ${goal.stat ? LABEL[goal.stat] : "올스탯"} ${statLines}줄` : "";
+  // The main stat an option of gloves · hats has next to its crit damage · cooldown, as one total: the stat's own %
+  // lines plus all stat % (all stat raises the main stat; user, 2026-11-12). With no main stat line at all the option
+  // is an all-stat one (Xenon's): then only all stat counts — a main stat line is not "this or better" for that item.
+  const statCat = goal.stat || "all";
+  const statTotal = (goal.stat ? pct(goal.stat) : 0) + pct("all");
+  const plusStat = statTotal > 0 ? ` + ${LABEL[statCat]} ${statTotal}%` : "";
+  /** Chance of `special` adding up to `min` or more, together with the main stat total when the option has one. */
+  const withStat = (special: string, min: number) => customChance(rows, [[{ cat: special, min }, ...(statTotal > 0 ? [{ cat: statCat, min: statTotal }] : [])]]);
   const hit = (p: number, by: string) => (p > 0 ? { p, by } : null);
 
   if (weaponLike) {
     if (row.add) {
-      const lines = count(attack);
-      const need = addWeaponNeed(rows, attack);
-      if (lines === 3) return hit(addWeaponChance(rows, attack, "a3"), `${LABEL[attack]} 3줄`);
-      if (need > 0 && (goal.sums[attack] ?? 0) >= need) {
+      // From the calculator's 21 % (the top two values) up, the option is read by the attack % it adds up to.
+      const need = addWeaponNeed(table, attack);
+      const total = pct(attack);
+      if (need > 0 && total >= need) {
         // "+ @": the line that is not attack % is still a main stat one (the calculator's a21x).
         const extra = new Set(["all", magic ? "matkf" : "atkf", ...(goal.stat ? [goal.stat, `lv${goal.stat}`, `f${goal.stat}`] : [])]);
         const rest = goal.lines.filter(([c]) => c !== attack);
-        const withStat = rest.length > 0 && rest.every(([c]) => extra.has(c));
-        return hit(addWeaponChance(rows, attack, withStat ? "a21x" : "a21"), `${LABEL[attack]} ${need}%${withStat ? " + @" : ""}`);
+        const plus = rest.length > 0 && rest.every(([c]) => extra.has(c));
+        return hit(addWeaponSumChance(std, attack, total, plus), `${LABEL[attack]} ${total}%${plus ? " + @" : ""}`);
       }
     } else {
       const ied = count("ied");
@@ -318,8 +381,8 @@ export function goalChance(row: Pick<PotRow, "part" | "level" | "meso" | "add" |
         // How good the lines are counts too: 보공 45 · 45 + 공 10 (two lines at the top value) is far rarer than
         // "any three useful lines" (user, 2026-11-12). The option's tier is read with the calculator's own rules,
         // so picking the same chip there gives the same average.
-        const tier = weaponTierOf(rows, attack, ied > 0, goal.lines);
-        const p = weaponChance(rows, { attack, ied: ied > 0, min: { a: 0, b: 0, i: 0, v: useful }, tier });
+        const tier = weaponTierOf(table, attack, ied > 0, goal.lines);
+        const p = weaponChance(table, { attack, ied: ied > 0, min: { a: 0, b: 0, i: 0, v: useful }, tier }, first);
         // Without an ignore defence line the count is of attack % and boss damage only (emblems have no boss line).
         const name = ied > 0 ? "유효" : kind === "emblem" ? LABEL[attack] : `${magic ? "마" : "공"} · 보공`;
         const grade = tier === "v3" ? "" : ` · ${WEAPON_TIERS.find((t) => t.id === tier)!.label}`;
@@ -330,8 +393,8 @@ export function goalChance(row: Pick<PotRow, "part" | "level" | "meso" | "add" |
 
   if (!row.add && slot === "gloves") {
     // Crit damage lines of 3 % or more, as on the calculator (the 1 % lines do not count).
-    const crit = count("cd", 3);
-    if (crit > 0) return hit(sumChance(rows, { type: "combo", special: "cd", lines: crit, stat: statLines, main: statMain, minSpecial: 3 }), `크뎀 ${crit}줄${plusStat}`);
+    const crit = goal.lines.filter(([c, v]) => c === "cd" && v >= 3);
+    if (crit.length > 0) return hit(withStat("cd", crit.reduce((sum, [, v]) => sum + v, 0)), `크뎀 ${crit.length}줄${plusStat}`);
   }
   if (!row.add && slot === "hat") {
     const cool = goal.lines.filter(([c]) => c === "cool").map(([, v]) => v);
@@ -340,8 +403,7 @@ export function goalChance(row: Pick<PotRow, "part" | "level" | "meso" | "add" |
       // only options with 3 seconds or more count as this good. Counting lines called −2초 · −1초 and −2초 · −2초
       // the same thing, and let −1초 · −1초 pass for the first (user, 2026-11-12).
       const seconds = cool.reduce((s, v) => s + v, 0);
-      if (statLines === 0) return hit(sumChance(rows, { type: "cool", min: seconds }), `쿨감 ${seconds}초`);
-      return hit(sumChance(rows, { type: "combo", special: "cool", lines: 1, stat: statLines, main: statMain, minSum: seconds }), `쿨감 ${seconds}초${plusStat}`);
+      return hit(withStat("cool", seconds), `쿨감 ${seconds}초${plusStat}`);
     }
   }
 
@@ -351,7 +413,10 @@ export function goalChance(row: Pick<PotRow, "part" | "level" | "meso" | "add" |
   };
   // The conversion the number is made with: none for main potential (all stat one for one).
   const used = row.add ? conv : NO_CONV;
-  const byStat = goal.stat !== "" && (kind === "armor" || kind === "acc");
+  // Additional potential with all stat % and no main stat line is worth main stat too (user, 2026-11-12): 크뎀 3 % +
+  // 올스탯 6 % on gloves is one number, not "크뎀 3 %" alone. Main potential keeps such an option as its own goal
+  // ("올스탯 27 %" — a Xenon's item).
+  const byStat = (kind === "armor" || kind === "acc") && (goal.stat !== "" || (row.add && (goal.sums.all ?? 0) > 0));
   if (byStat) {
     // Main potential: the number is the plain one. The chance is still the calculator's — "27 % or more" with its
     // conversion — so the same number gives the same average on both pages.
@@ -360,12 +425,12 @@ export function goalChance(row: Pick<PotRow, "part" | "level" | "meso" | "add" |
     // calculator then gives the same average (10.77 shown as "10.8" was 789 rolls here and 876 there; user 2026-11-12).
     const shown = Math.floor(worth * 10 + 1e-6) / 10;
     // "급" only when something other than the stat's own % lines went into the number.
-    const pure = Math.abs(worth - (goal.sums[goal.stat] ?? 0)) < 1e-9;
-    offer(sumChance(rows, { type: "stat", min: shown - 1e-9, conv, attack }), `${LABEL[goal.stat]} ${shown}%${pure || !row.add ? "" : "급"}`);
+    const pure = goal.stat !== "" && Math.abs(worth - (goal.sums[goal.stat] ?? 0)) < 1e-9;
+    offer(sumChance(std, { type: "stat", min: shown - 1e-9, conv, attack }), `${goal.stat ? LABEL[goal.stat] : "주스탯"} ${shown}%${pure || !row.add ? "" : "급"}`);
   }
   // Accessories, main potential: drop rate and meso lines are counted together ("드메 2줄"), as on the calculator.
   const dropLines = !row.add && info?.extra === "drop" ? count("drop") + count("meso") : 0;
-  if (dropLines > 0) offer(sumChance(rows, { type: "drop", lines: dropLines }), `드메 ${dropLines}줄`);
+  if (dropLines > 0) offer(sumChance(std, { type: "drop", lines: dropLines }), `드메 ${dropLines}줄`);
   for (const cond of goal.conds) {
     if (byStat && inStat(cond.cat, goal.stat, used)) continue;
     if (dropLines > 0 && (cond.cat === "drop" || cond.cat === "meso")) continue;
@@ -380,10 +445,8 @@ export function goalChance(row: Pick<PotRow, "part" | "level" | "meso" | "add" |
  * goalChance() puts in the same class: 보공 45 · 45 + 공 10 and 공 13 + 보공 35 · 35 are both "three useful lines".
  */
 export function goalExact(row: Pick<PotRow, "part" | "level" | "meso" | "add" | "type">, grade: Grade, goal: Goal): number | null {
-  const cube = cubeOf(row as PotRow);
-  const slot = slotOf(row.part);
-  const rows = cube && slot ? lineTables(cube, grade, slot, row.level) : null;
-  const p = rows ? customChance(rows, [goal.conds]) : 0;
+  const tables = tablesOf(row, grade, goal);
+  const p = tables ? customChance(tables.rows, [goal.conds]) : 0;
   return p > 0 ? p : null;
 }
 

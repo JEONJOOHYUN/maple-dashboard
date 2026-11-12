@@ -7,17 +7,26 @@ export const DEFAULTS_UPDATED = "2026-11-11";
  * Job-specific gear uses one job as the picture (메이지 에테르넬 · 아스트라 아케인 실드 · 데스티니 스태프); 가디언 엔젤 링 uses
  * 여명의 가디언 엔젤 링 (same picture, user 2026-11-09). No icon = text.
  * spare price = 노작값 in 억 메소 (from the user, 2026-11-08; 블랙빈 · 트와일라이트 · 에스텔라 · 도미네이터 added 2026-11-11,
- * icons from 푸소). 아케인셰이드 shows gloves · shoes · cape (user, 2026-11-11). */
+ * icons from 푸소). 아케인셰이드 shows gloves · shoes · cape (user, 2026-11-11).
+ * 골든 클로버 벨트 · 파풀라투스 마크 · 분노한 자쿰의 벨트 added 2026-11-12 (levels and icons from the shared item
+ * dictionary; spare prices 0 · 3억 · 1,000만 from the user, 2026-11-13). */
 export type StarItem = { id: string; name: string; icons: string[]; spareEok: number; /** Item-specific cap below the level rule. */ maxStar?: number };
 export const STAR_ITEMS: { level: number; items: StarItem[] }[] = [
   { level: 135, items: [
     { id: "blackbean", name: "블랙빈 마크", icons: ["KEPAJFND"], spareEok: 1.5 },
   ] },
   { level: 140, items: [
+    { id: "clover", name: "골든 클로버 벨트", icons: ["KEOBJFJD"], spareEok: 0 },
     { id: "mring", name: "마이스터 링", icons: ["KEODIHLE"], spareEok: 0.3 },
     { id: "dpendant", name: "데이브레이크 펜던트", icons: ["KEOAJDKC"], spareEok: 0.1 },
     { id: "twilight", name: "트와일라이트 마크", icons: ["KEPDJALG"], spareEok: 0.005 },
     { id: "dominator", name: "도미네이터 펜던트", icons: ["KEOAJGLB"], spareEok: 10.5 },
+  ] },
+  { level: 145, items: [
+    { id: "papulatus", name: "파풀라투스 마크", icons: ["KEPAJFJG"], spareEok: 3 },
+  ] },
+  { level: 150, items: [
+    { id: "zakum", name: "분노한 자쿰의 벨트", icons: ["KEOBJFHH"], spareEok: 0.1 },
   ] },
   { level: 160, items: [
     { id: "gaen", name: "가디언 엔젤 링", icons: ["KEODIEPH"], spareEok: 0.15 },
@@ -46,6 +55,8 @@ export const STAR_ITEMS: { level: number; items: StarItem[] }[] = [
     { id: "soulblood", name: "굶주리는 핏빛 원혼", icons: ["KEPAJEHG"], spareEok: 450 },
   ] },
 ];
+// Shown cheapest first inside each level (user, 2026-11-12): sorted here, so a changed price moves its item by itself.
+for (const group of STAR_ITEMS) group.items.sort((a, b) => a.spareEok - b.spareEok);
 export const itemImage = (code: string) => `https://open.api.nexon.com/static/maplestory/item/icon/${code}`;
 /** Level for "목록에 없는 장비" when the page opens. */
 export const CUSTOM_LEVEL = 130;
