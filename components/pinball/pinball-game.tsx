@@ -5,7 +5,7 @@ import { useTheme } from "next-themes";
 import { Minus, Plus, X } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { Chip } from "@/components/ev/ui";
-import type { Roulette } from "@/lib/pinball/roulette";
+import type { Roulette } from "@/lib/third-party/roulette/roulette";
 import { useStored } from "@/lib/use-stored";
 import { cn } from "@/lib/utils";
 
@@ -64,7 +64,7 @@ export function PinballGame() {
   useEffect(() => {
     let game: Roulette | null = null;
     let alive = true;
-    import("@/lib/pinball/roulette")
+    import("@/lib/third-party/roulette/roulette")
       .then(({ Roulette }) => {
         if (!alive || !boardRef.current) return;
         game = new Roulette(boardRef.current);

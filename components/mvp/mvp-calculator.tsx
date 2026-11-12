@@ -20,7 +20,7 @@ import {
   type Market,
   type MvpTier,
   type Route,
-} from "@/lib/mvp";
+} from "@/lib/mvp/mvp";
 import { useNow } from "@/lib/use-now";
 import { useStored } from "@/lib/use-stored";
 import { cn } from "@/lib/utils";
