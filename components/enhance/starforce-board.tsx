@@ -30,7 +30,8 @@ const MVPS: { id: MvpGrade; label: string }[] = [
   { id: "diamond", label: "다이아+" },
 ];
 
-export function StarforceBoard({ apiKey, account, onForget }: { apiKey: string; account: string; onForget: () => void }) {
+/** `onChange` = to the key screen with this key and its records kept. */
+export function StarforceBoard({ apiKey, account, onForget, onChange }: { apiKey: string; account: string; onForget: () => void; onChange: () => void }) {
   const period = usePeriod();
   const { from, to } = period;
   const [view, setView] = useState<View>("insight");
@@ -39,8 +40,10 @@ export function StarforceBoard({ apiKey, account, onForget }: { apiKey: string; 
   /** Key of the item whose tries are open in the window ("" = closed). */
   const [openItem, setOpenItem] = useState("");
   const [overrides, setOverrides] = useStored<ItemOverrides>("enhance:items", NO_OVERRIDES);
-  // The API does not say which discounts a try had, so the user sets them once for every try.
-  const [discount, setDiscount] = useStored<Discount>("enhance:discount", NO_DISCOUNT);
+  // The API does not say which discounts a try had, so the user sets them once for every try. They belong to the
+  // account (a friend's MVP grade is not mine); the setting made before keys could be changed is where each starts.
+  const [shared] = useStored<Discount>("enhance:discount", NO_DISCOUNT);
+  const [discount, setDiscount] = useStored<Discount>(`enhance:discount:${account}`, shared);
 
   const [sync] = useState(() => new StarforceSync(apiKey, account));
   const { snap, loading, refresh } = useSync(sync, from, to, StarforceSync.serverSnapshot);
@@ -86,6 +89,7 @@ export function StarforceBoard({ apiKey, account, onForget }: { apiKey: string; 
         state={period}
         loading={loading}
         onRefresh={refresh}
+        onChange={onChange}
         onForget={onForget}
         status={
           snap.at > 0 && (

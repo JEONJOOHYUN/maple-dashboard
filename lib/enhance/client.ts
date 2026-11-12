@@ -126,6 +126,28 @@ export async function fetchEquipment(api: Api, character: string, signal?: Abort
   return out;
 }
 
+export type RawCharacterList = { account_list?: { character_list?: { character_name?: string; character_level?: number }[] }[] };
+
+/** The highest-level character of the account (the first one on a tie), "" when there is none. */
+export function mainCharacter(body: RawCharacterList): string {
+  let name = "";
+  let level = -1;
+  for (const account of body.account_list ?? [])
+    for (const c of account.character_list ?? []) {
+      const lv = typeof c.character_level === "number" ? c.character_level : 0;
+      if (c.character_name && lv > level) {
+        name = c.character_name;
+        level = lv;
+      }
+    }
+  return name;
+}
+
+/** What a remembered key is called in the list: the account's main character. One call (checked 2026-11-12: 66 characters in one answer). */
+export async function fetchMainCharacter(api: Api, signal?: AbortSignal): Promise<string> {
+  return mainCharacter(await api.get<RawCharacterList>("character/list", {}, signal));
+}
+
 /** Short id for one key (one NEXON account) so records of different keys never mix. Not reversible. */
 export async function accountId(key: string): Promise<string> {
   const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`maple-enhance:${key}`));

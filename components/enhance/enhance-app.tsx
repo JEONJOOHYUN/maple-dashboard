@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Segment } from "@/components/ev/ui";
 import { KeyGate, type Connected } from "@/components/enhance/key-gate";
 import { PotentialBoard } from "@/components/enhance/potential-board";
 import { StarforceBoard } from "@/components/enhance/starforce-board";
 import { PageHeader } from "@/components/page-header";
-import { clearAccount } from "@/lib/enhance/sync";
+import { createApi, fetchMainCharacter } from "@/lib/enhance/client";
+import { withKey, withName, withoutKey, type SavedKey } from "@/lib/enhance/keys";
+import { clearAccount, clearEverything } from "@/lib/enhance/sync";
 import { useNow } from "@/lib/use-now";
 import { useStored } from "@/lib/use-stored";
 
@@ -15,20 +17,61 @@ type Kind = "starforce" | "potential";
 /**
  * 강화 기록: the visitor's own NEXON Open API key, kept in this browser only (localStorage when "기억" is on,
  * otherwise just this tab's memory). The key and the records never reach our server.
+ * More than one key can be remembered (a second account, a friend's key): the records are stored apart by account,
+ * so going back to a key does not fetch its days again.
  */
 export function EnhanceApp() {
   // 0 until the browser has taken over: the saved key is not readable before that.
   const ready = useNow() > 0;
+  // The key in use (remembered), every remembered key, and a key that is only held for this visit.
   const [saved, setSaved] = useStored<Connected | null>("enhance:key", null);
+  const [keys, setKeys] = useStored<SavedKey[]>("enhance:keys", []);
   const [session, setSession] = useState<Connected | null>(null);
   const [kind, setKind] = useStored<Kind>("enhance:kind", "starforce");
   const active = saved ?? session;
+  // A key remembered before there was a list belongs in it.
+  const list = saved ? withKey(keys, saved) : keys;
 
-  const forget = () => {
-    if (active) void clearAccount(active.account);
+  const connect = (value: Connected, remember: boolean) => {
+    if (!remember) return setSession(value);
+    setKeys((prev) => withKey(prev, value));
+    setSaved(value);
+  };
+  /** Back to the key screen with everything kept: the key stays in the list and its records stay saved. */
+  const change = () => {
+    if (saved) setKeys((prev) => withKey(prev, saved));
     setSaved(null);
     setSession(null);
   };
+  const forget = () => {
+    if (active) {
+      void clearAccount(active.account);
+      setKeys((prev) => withoutKey(prev, active.account));
+    }
+    setSaved(null);
+    setSession(null);
+  };
+  const forgetAll = () => {
+    void clearEverything();
+    setKeys([]);
+    setSaved(null);
+    setSession(null);
+  };
+  // The list shows the account's main character (its highest level) instead of the key: asked once, for a
+  // remembered key that has no name yet. A failure only leaves it as "저장된 키 n" until the next visit.
+  const unnamed = saved && !list.find((k) => k.account === saved.account)?.name ? saved : null;
+  const unnamedKey = unnamed?.key;
+  const unnamedAccount = unnamed?.account;
+  useEffect(() => {
+    if (!unnamedKey || !unnamedAccount) return;
+    const stop = new AbortController();
+    fetchMainCharacter(createApi(unnamedKey), stop.signal)
+      .then((who) => {
+        if (who && !stop.signal.aborted) setKeys((prev) => withName(withKey(prev, { key: unnamedKey, account: unnamedAccount }), unnamedAccount, who));
+      })
+      .catch(() => {});
+    return () => stop.abort();
+  }, [unnamedKey, unnamedAccount, setKeys]);
 
   return (
     <div className="flex flex-col gap-4 lg:gap-[22px]">
@@ -52,11 +95,11 @@ export function EnhanceApp() {
         }
       />
       {!ready ? null : !active ? (
-        <KeyGate onConnect={(value, remember) => (remember ? setSaved(value) : setSession(value))} />
+        <KeyGate saved={list} onConnect={connect} onForgetAll={forgetAll} />
       ) : kind === "potential" ? (
-        <PotentialBoard key={active.account} apiKey={active.key} account={active.account} onForget={forget} />
+        <PotentialBoard key={active.account} apiKey={active.key} account={active.account} onForget={forget} onChange={change} />
       ) : (
-        <StarforceBoard key={active.account} apiKey={active.key} account={active.account} onForget={forget} />
+        <StarforceBoard key={active.account} apiKey={active.key} account={active.account} onForget={forget} onChange={change} />
       )}
     </div>
   );

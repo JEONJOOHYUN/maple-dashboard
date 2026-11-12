@@ -74,6 +74,22 @@ export async function idbRange<T>(lower: string, upper: string): Promise<[string
   });
 }
 
+/** Whether anything at all is saved here (in the store or, when it is blocked, in memory). */
+export async function idbAny(): Promise<boolean> {
+  if (memory.size > 0) return true;
+  const db = await open();
+  if (!db) return false;
+  return new Promise((resolve) => {
+    try {
+      const req = db.transaction(STORE, "readonly").objectStore(STORE).openKeyCursor();
+      req.onsuccess = () => resolve(req.result !== null);
+      req.onerror = () => resolve(false);
+    } catch {
+      resolve(false);
+    }
+  });
+}
+
 /** Delete every key that starts with `prefix`. */
 export async function idbDeletePrefix(prefix: string): Promise<void> {
   for (const k of [...memory.keys()]) if (k.startsWith(prefix)) memory.delete(k);

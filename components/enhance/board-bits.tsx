@@ -63,8 +63,23 @@ export function useSync<T extends { t: number; who: string; item: string }>(sync
   return { snap, loading: snap.status === "loading" || snap.status === "idle", refresh: () => setTick((n) => n + 1) };
 }
 
-/** Period buttons on the left; when the records were read, refresh and forget on the right; the date fields under it. */
-export function PeriodBar({ state, status, loading, onRefresh, onForget }: { state: PeriodState; status: ReactNode; loading: boolean; onRefresh: () => void; onForget: () => void }) {
+/** Period buttons on the left; when the records were read, refresh, change key and forget on the right; the date fields under it. */
+export function PeriodBar({
+  state,
+  status,
+  loading,
+  onRefresh,
+  onChange,
+  onForget,
+}: {
+  state: PeriodState;
+  status: ReactNode;
+  loading: boolean;
+  onRefresh: () => void;
+  /** To the key screen, this key and its records kept. */
+  onChange: () => void;
+  onForget: () => void;
+}) {
   const { period, setPeriod, custom, setCustom, today, oldest, from, to } = state;
   return (
     <>
@@ -90,6 +105,9 @@ export function PeriodBar({ state, status, loading, onRefresh, onForget }: { sta
           <button type="button" onClick={onRefresh} disabled={loading} className={cn(plainButton, "inline-flex items-center gap-1.5 disabled:opacity-50")}>
             <RefreshCw className={cn("size-3.5", loading && "animate-spin")} aria-hidden="true" />
             새로 고침
+          </button>
+          <button type="button" onClick={onChange} className={plainButton}>
+            키 바꾸기
           </button>
           <button type="button" onClick={onForget} className={plainButton}>
             키 · 기록 지우기

@@ -2,7 +2,7 @@
 // range: days already fetched come from IndexedDB, the rest is fetched newest first and saved as it arrives.
 // A day that is over never changes, so it is fetched once; today (and a day fetched before it was over) is refreshed.
 import { ApiError, createApi, fetchEquipment, fetchHistoryDay, type Api, type ApiErrorKind } from "./client.ts";
-import { idbDeletePrefix, idbGet, idbPut, idbRange } from "./idb.ts";
+import { idbAny, idbDeletePrefix, idbGet, idbPut, idbRange } from "./idb.ts";
 import { knownItem, type FoundItem } from "./items.ts";
 import { DAY, datesBetween, dayStart } from "./kst.ts";
 import { parseStarforce, type RawStarforce, type SfRow } from "./parse.ts";
@@ -244,3 +244,6 @@ export class PotentialSync extends HistorySync<PotRow> {
 
 /** Remove the saved records of a key without building a sync for it. */
 export const clearAccount = (account: string) => idbDeletePrefix(`${VERSION}|${account}|`);
+/** The records of every key this browser has seen (also ones whose key was not remembered, or saved in an older shape). */
+export const clearEverything = () => idbDeletePrefix("");
+export const hasRecords = () => idbAny();

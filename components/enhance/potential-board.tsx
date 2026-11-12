@@ -418,7 +418,8 @@ function RollsView({ entries, characters, found }: { entries: PotEntry[]; charac
   );
 }
 
-export function PotentialBoard({ apiKey, account, onForget }: { apiKey: string; account: string; onForget: () => void }) {
+/** `onChange` = to the key screen with this key and its records kept. */
+export function PotentialBoard({ apiKey, account, onForget, onChange }: { apiKey: string; account: string; onForget: () => void; onChange: () => void }) {
   const period = usePeriod();
   const { from, to } = period;
   const [view, setView] = useState<View>("insight");
@@ -458,6 +459,7 @@ export function PotentialBoard({ apiKey, account, onForget }: { apiKey: string; 
         state={period}
         loading={loading}
         onRefresh={refresh}
+        onChange={onChange}
         onForget={onForget}
         status={
           snap.at > 0 && (
