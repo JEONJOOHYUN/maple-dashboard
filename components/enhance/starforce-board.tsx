@@ -3,11 +3,11 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { Segment, eok } from "@/components/ev/ui";
 import { BasisButton, BasisRow, PeriodBar, SyncBanners, Toggle, ViewTabs, WorldStrip, useGroupsOff, useKnownGroups, usePeriod, useSync } from "@/components/enhance/board-bits";
-import { Card, Empty, signed, tone } from "@/components/enhance/parts";
+import { Card, Empty, SKIP_LABEL, signed, tone } from "@/components/enhance/parts";
 import { CalendarView, InsightView, ItemDialog, ItemsView, LogView } from "@/components/enhance/starforce-views";
 import { useItemDict, type Rolled } from "@/components/enhance/use-item-dict";
 import { resolveItem, type ItemInfo, type ItemOverrides } from "@/lib/enhance/items";
-import { NO_DISCOUNT, judge, trackCopies, type Discount } from "@/lib/enhance/judge";
+import { NO_DISCOUNT, judge, trackCopies, type Discount, type SkipReason } from "@/lib/enhance/judge";
 import type { MvpGrade } from "@/lib/ev/starforce";
 import { DAY, dayStart, kstStamp } from "@/lib/enhance/kst";
 import { buildStats, reachedFloor, type Entry } from "@/lib/enhance/stats";
@@ -78,6 +78,7 @@ export function StarforceBoard({ apiKey, account, onForget, switcher }: { apiKey
   const entries = useMemo(() => judged.filter((e) => !groupsOff.includes(worldGroup(e.row.world))), [judged, groupsOff]);
   const stats = useMemo(() => buildStats(entries), [entries]);
 
+  const skipped = (Object.entries(stats.skipped) as [SkipReason, number][]).filter(([, n]) => n > 0);
   const unknown = stats.items.filter((it) => it.info.level <= 0);
   const noLevel = unknown.length;
   // The cards that wait for a level must be on screen when the link takes the user to them.
@@ -153,10 +154,15 @@ export function StarforceBoard({ apiKey, account, onForget, switcher }: { apiKey
               </div>
             </div>
             <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 px-5 pb-3.5 text-xs text-muted-foreground lg:px-7">
-              {/* How many tries the profit counts, how many it leaves out, and the way to the items that wait for a
-                  level (user, 2026-11-13: no list of reasons here — each try says its own in the log). */}
+              {/* How many tries the profit counts, how many it leaves out and why (in brackets), and the way to the
+                  items that wait for a level (user, 2026-11-13). */}
               <span>{stats.judged.toLocaleString("ko-KR")}건 반영</span>
-              {stats.total > stats.judged && <span>· {(stats.total - stats.judged).toLocaleString("ko-KR")}건 제외</span>}
+              {stats.total > stats.judged && (
+                <span>
+                  · {(stats.total - stats.judged).toLocaleString("ko-KR")}건 제외
+                  {skipped.length > 0 && ` (${skipped.map(([why, n]) => `${SKIP_LABEL[why]} ${n.toLocaleString("ko-KR")}`).join(" · ")})`}
+                </span>
+              )}
               {noLevel > 0 && view !== "items" && (
                 <>
                   <span>·</span>
