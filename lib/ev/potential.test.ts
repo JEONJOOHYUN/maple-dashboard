@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { averageTries } from "./luck.ts";
-import { NO_CONV, OPTIONS, SOUL_EXTRA, addWeaponChance, customChance, slotOptions, comboChance, practicalTargets, bestValues, convFromScouter, fixFirstLine, gradeUp, lineTables, resetMeso, soulChance, statTargets, sumChance, weaponChance, type WeaponGoal } from "./potential.ts";
+import { NO_CONV, OPTIONS, SOUL_EXTRA, addWeaponChance, customChance, slotOptions, comboChance, practicalTargets, bestValues, convFromScouter, fixFirstLine, gradeUp, lineTables, resetMeso, soulChance, statTargets, sumChance, weaponChance, type WeaponGoal, WEAPON_TIERS, weaponTierOf } from "./potential.ts";
 
 const near = (actual: number, expected: number, tolerance: number, label: string) =>
   assert.ok(Math.abs(actual - expected) <= tolerance, `${label}: ${actual} is not within ${tolerance} of ${expected}`);
@@ -24,14 +24,34 @@ test("weapon goals match the numbers checked against mesu.live (spec §4-8)", ()
   near(weaponChance(rows, { ...v3, min: { a: 3, b: 0, i: 0, v: 3 } }), 0.000219792, 0.000001, "attack 3 lines");
 });
 
-test("이탈 chips get harder in order (spec §4-8)", () => {
+test("이탈 chips get harder in order: 반이탈 · 꽉이탈 1 · 2 · 3줄 (user's meanings, 2026-11-12)", () => {
   const rows = lineTables("black", "legendary", "weapon", 200)!;
-  const tiers = (["v3", "half", "one", "two", "all"] as const).map((tier) => weaponChance(rows, { ...v3, tier }));
-  near(tiers[1], 0.00437, 0.00005, "반이탈");
-  near(tiers[2], 0.00225, 0.00005, "이탈 1줄");
-  near(tiers[3], 0.0000627, 0.000001, "이탈 2줄");
-  near(tiers[4], 0.0000313, 0.000001, "올이탈");
+  const tiers = WEAPON_TIERS.map((t) => weaponChance(rows, { ...v3, tier: t.id }));
+  assert.deepEqual(WEAPON_TIERS.map((t) => t.label), ["유효 3줄", "반이탈", "꽉이탈 1줄", "꽉이탈 2줄", "꽉이탈 3줄"]);
+  near(tiers[1], 0.00437, 0.00005, "반이탈: a line 2 · 3 of the item's grade");
+  near(tiers[2], 0.00225, 0.00005, "꽉이탈 1줄: a line 2 · 3 at the top value");
+  near(tiers[3], 0.001125, 0.000005, "꽉이탈 2줄: that, and line 1 at the top value");
+  near(tiers[4], 0.0000313, 0.000001, "꽉이탈 3줄: all three at the top value");
   for (let i = 1; i < tiers.length; i++) assert.ok(tiers[i] < tiers[i - 1]);
+});
+
+test("the tier of an option a weapon actually has", () => {
+  const rows = lineTables("black", "legendary", "weapon", 250)!;
+  const tier = (...lines: [string, number][]) => weaponTierOf(rows, "atk", lines.some(([c]) => c === "ied"), lines);
+  // Lv.250 legendary: line 1 tops are 공 13 % · 보공 45 % · 방무 45 %; 40 % is the item's grade but not the top.
+  assert.equal(tier(["atk", 13], ["boss", 35], ["boss", 35]), "v3");
+  assert.equal(tier(["boss", 40], ["boss", 40], ["atk", 10]), "half");
+  assert.equal(tier(["boss", 40], ["boss", 45], ["atk", 10]), "one");
+  assert.equal(tier(["boss", 45], ["boss", 45], ["atk", 10]), "two");
+  assert.equal(tier(["atk", 13], ["boss", 35], ["atk", 13]), "two");
+  assert.equal(tier(["boss", 45], ["boss", 45], ["atk", 13]), "all");
+  // A top value on a line that is not useful does not count; ignore defence counts only when it is asked for.
+  assert.equal(weaponTierOf(rows, "atk", false, [["boss", 45], ["ied", 45], ["atk", 10]]), "v3");
+  assert.equal(weaponTierOf(rows, "atk", true, [["boss", 45], ["ied", 45], ["atk", 10]]), "two");
+  assert.equal(tier(["str", 13], ["boss", 45], ["atk", 10]), "one");
+  assert.equal(weaponTierOf(rows, "atk", false, [["boss", 45], ["boss", 45]]), "v3");
+  // The option meets its own tier's rule, so its chance is never above a plain "three useful lines".
+  for (const t of ["half", "one", "two", "all"] as const) assert.ok(weaponChance(rows, { ...v3, ied: false, tier: t }) < weaponChance(rows, { ...v3, ied: false }));
 });
 
 test("armor main stat targets follow the item level", () => {

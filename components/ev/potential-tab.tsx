@@ -19,6 +19,7 @@ import { type MainStat,
   fixFirstLine,
   gradeUp,
   SOUL_EXTRA,
+  WEAPON_TIERS,
   addWeaponChance,
   addWeaponNeed,
   lineTables,
@@ -50,13 +51,7 @@ const GRADE_COLOR: Record<Grade, string> = {
   unique: "border-amber-400 text-amber-600 dark:text-amber-300",
   legendary: "border-emerald-400 text-emerald-600 dark:text-emerald-300",
 };
-const TIERS: { id: WeaponGoal["tier"]; label: string; desc: string }[] = [
-  { id: "v3", label: "유효 3줄", desc: "등급 상관없이 세 줄 모두 유효" },
-  { id: "half", label: "반이탈", desc: "유효 3줄 + 2 · 3번째 줄 중 1줄 이상 레전드리 수치" },
-  { id: "one", label: "이탈 1줄", desc: "유효 3줄 + 2 · 3번째 줄 중 1줄 이상 최고 수치" },
-  { id: "two", label: "이탈 2줄", desc: "유효 3줄 + 2 · 3번째 줄 모두 최고 수치" },
-  { id: "all", label: "올이탈", desc: "세 줄 모두 최고 수치" },
-];
+const TIERS = WEAPON_TIERS;
 type Extra = "stat" | "cool" | "crit" | "drop";
 // cd8 = what was typed in the main-potential "크뎀 8%" box; cd3 (maplescouter's unit) stays the source of truth.
 type ConvText = Record<keyof typeof STAT_CONV_DEFAULT, string> & { cd8?: string };

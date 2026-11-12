@@ -150,8 +150,12 @@ test("weapons, secondaries and emblems: useful lines, as on the calculator", () 
   const v = (n: number, ied: boolean) => ({ attack: "atk" as const, ied, min: { a: 0, b: 0, i: 0, v: n }, tier: "v3" as const });
   // 보공 + 공 + 방무 is three useful lines, not "the hardest single line" (that called it a 1-in-18 result).
   const shield = goalChance(row({ item_equipment_part: "방패", item_level: 200 }), "legendary", goalOf(["보스 몬스터 데미지 +35%", "공격력 +12%", "몬스터 방어율 무시 +30%"], false)!, NO_CONV)!;
-  assert.equal(shield.by, "유효 3줄");
-  assert.equal(shield.p, weaponChance(lineTables("black", "legendary", "sub", 200)!, v(3, true)));
+  // 공 12 % on line 2 is a line at the top value: 꽉이탈 1줄, rarer than plain three useful lines.
+  assert.equal(shield.by, "유효 3줄 · 꽉이탈 1줄");
+  assert.equal(shield.p, weaponChance(lineTables("black", "legendary", "sub", 200)!, { ...v(3, true), tier: "one" }));
+  const plain = goalChance(row({ item_equipment_part: "방패", item_level: 200 }), "legendary", goalOf(["보스 몬스터 데미지 +40%", "공격력 +9%", "몬스터 방어율 무시 +30%"], false)!, NO_CONV)!;
+  assert.deepEqual([plain.by, plain.p], ["유효 3줄", weaponChance(lineTables("black", "legendary", "sub", 200)!, v(3, true))]);
+  assert.ok(shield.p < plain.p);
   // No ignore defence line in the option: only attack % and boss damage count.
   const weapon = goalChance(row({ item_equipment_part: "무기", item_level: 200 }), "legendary", goalOf(["보스 몬스터 데미지 +40%", "보스 몬스터 데미지 +30%", "공격력 +9%"], false)!, NO_CONV)!;
   assert.equal(weapon.by, "공 · 보공 3줄");
@@ -347,7 +351,7 @@ test("stats: an option the item already had is not counted as won", () => {
 
 test("stats: a better option of the same class as the old one counts as won (real rolls, 2026-09-30)", () => {
   // 데스티니 데스페라도, 카르마 블랙 큐브: every roll started from 공 13 + 보공 35 · 35, the last batch offered
-  // 보공 45 · 45 + 공 10. Both are "three useful lines", so the chance is the same; the new one is the harder roll.
+  // 보공 45 · 45 + 공 10: lines 1 and 2 at the top value = 꽉이탈 2줄, far rarer than the old three useful lines.
   const weapon = { potential_type: undefined, cube_type: "카르마 블랙 큐브", item_equipment_part: "무기", target_item: "데스티니 데스페라도" };
   const old = opt("공격력 +13%", "보스 몬스터 데미지 +35%", "보스 몬스터 데미지 +35%");
   const better = opt("보스 몬스터 데미지 +45%", "보스 몬스터 데미지 +45%", "공격력 +10%");
@@ -359,9 +363,12 @@ test("stats: a better option of the same class as the old one counts as won (rea
     row({ ...weapon, before_potential_option: old, after_potential_option: opt("LUK +13%", "DEX +10%", "크리티컬 확률 +10%"), date_create: at(25) }),
   ];
   const a = buildPotStats(potEntries(rolls, trackPieces(rolls)), NO_CONV).pieces[0];
-  assert.deepEqual([a.option, a.goalBy], [better.map((o) => o.value), "공 · 보공 3줄"]);
+  assert.deepEqual([a.option, a.goalBy], [better.map((o) => o.value), "공 · 보공 3줄 · 꽉이탈 2줄"]);
   const table = lineTables("black", "legendary", "weapon", 250)!;
-  near(a.goalRolls!, 1 / weaponChance(table, { attack: "atk", ied: false, min: { a: 0, b: 0, i: 0, v: 3 }, tier: "v3" }), 1e-6, "average");
+  const three = { attack: "atk" as const, ied: false, min: { a: 0, b: 0, i: 0, v: 3 } };
+  near(a.goalRolls!, 1 / weaponChance(table, { ...three, tier: "two" }), 1e-6, "average");
+  // Not the 239 rolls of "any three useful lines" any more.
+  assert.ok(a.goalRolls! > 5 * (1 / weaponChance(table, { ...three, tier: "v3" })));
   // The cubes cost their fee (Lv.250 = 1,250,000 each): spent, expected and profit are in that meso.
   const fee = cubeFee(250);
   assert.deepEqual([a.spent, a.resets, a.rolls, a.keptRolls], [4 * fee, 0, 4, null]);
@@ -373,7 +380,17 @@ test("stats: a better option of the same class as the old one counts as won (rea
   const b = buildPotStats(potEntries(back, trackPieces(back)), NO_CONV).pieces[0];
   assert.deepEqual([b.option, b.goalBy, b.goalRolls], [better.map((o) => o.value), "", null]);
   // Kept, so no bar and no profit — but what an option this good takes on average is there to read.
-  assert.deepEqual([b.expected, b.delta, b.keptBy], [null, null, "공 · 보공 3줄"]);
+  assert.deepEqual([b.expected, b.delta, b.keptBy], [null, null, "공 · 보공 3줄 · 꽉이탈 2줄"]);
   near(b.keptRolls!, a.goalRolls!, 1e-6, "average of the kept option");
   near(b.keptMeso!, b.keptRolls! * fee, 1, "meso of the kept option");
+
+  // Two options of the same tier and the same number of useful lines have the same chance: the one whose own
+  // numbers are harder to roll (보공 40 + 30 + 30 over 보공 40 + 공 9 + 보공 30) is the one that was taken.
+  const tieOld = opt("보스 몬스터 데미지 +40%", "공격력 +10%", "보스 몬스터 데미지 +35%");
+  const tieNew = opt("보스 몬스터 데미지 +40%", "보스 몬스터 데미지 +35%", "보스 몬스터 데미지 +35%");
+  const tie = [row({ ...weapon, before_potential_option: tieOld, after_potential_option: tieNew, date_create: at(40) })];
+  const c = buildPotStats(potEntries(tie, trackPieces(tie)), NO_CONV).pieces[0];
+  assert.deepEqual([c.option, c.goalBy], [tieNew.map((o) => o.value), "공 · 보공 3줄"]);
+  const back2 = [row({ ...weapon, before_potential_option: tieNew, after_potential_option: tieOld, date_create: at(50) })];
+  assert.deepEqual(buildPotStats(potEntries(back2, trackPieces(back2)), NO_CONV).pieces[0].goalRolls, null);
 });

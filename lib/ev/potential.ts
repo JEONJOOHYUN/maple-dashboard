@@ -218,20 +218,74 @@ function enumerate(lines: Token[][], ok: (a: Token, b: Token, c: Token) => boole
   return total;
 }
 
+/**
+ * Extra rule on top of the useful lines (user's names and meanings, 2026-11-12). "Top value" = the highest value
+ * line 1 can have for that option (보공 40 · 45 %, 공 12 · 13 %):
+ * v3 = none · half (반이탈) = a line 2 · 3 of the item's own grade · one (꽉이탈 1줄) = a line 2 · 3 at the top value ·
+ * two (꽉이탈 2줄) = that, and line 1 at the top value too · all (꽉이탈 3줄) = all three at the top value.
+ * Each one contains the next, so they get harder in this order.
+ */
+export type WeaponTier = "v3" | "half" | "one" | "two" | "all";
+export const WEAPON_TIERS: { id: WeaponTier; label: string; desc: string }[] = [
+  { id: "v3", label: "유효 3줄", desc: "등급 상관없이 세 줄 모두 유효" },
+  { id: "half", label: "반이탈", desc: "유효 3줄 + 2 · 3번째 줄 중 1줄 이상 레전드리 수치" },
+  { id: "one", label: "꽉이탈 1줄", desc: "유효 3줄 + 2 · 3번째 줄 중 1줄 이상 최고 수치" },
+  { id: "two", label: "꽉이탈 2줄", desc: "꽉이탈 1줄 + 첫 번째 줄도 최고 수치" },
+  { id: "all", label: "꽉이탈 3줄", desc: "세 줄 모두 최고 수치" },
+];
+/** Hardest first: the first one an option meets is its tier. */
+const TIERS_HARD_FIRST: WeaponTier[] = ["all", "two", "one", "half"];
+
+/** One line as the tier rules see it: a useful option, at the top value, of the item's own grade. */
+type TierLine = { useful: boolean; top: boolean; own: boolean };
+
+function tierMet(tier: WeaponTier, [first, ...later]: TierLine[]): boolean {
+  switch (tier) {
+    case "half":
+      return later.some((l) => l.useful && l.own);
+    case "one":
+      return later.some((l) => l.top);
+    case "two":
+      return first.top && later.some((l) => l.top);
+    case "all":
+      return first.top && later.every((l) => l.top);
+    default:
+      return true;
+  }
+}
+
 export type WeaponGoal = {
   attack: "atk" | "matk";
   /** Count ignore-defense lines as useful. */
   ied: boolean;
   /** Minimum lines of attack % / boss / ignore defense, and useful lines in total. */
   min: { a: number; b: number; i: number; v: number };
-  /** Extra rule on top: v3 = none, half = a line 2·3 of the item's grade, one / two = line 2·3 at the top value, all = all three top. */
-  tier: "v3" | "half" | "one" | "two" | "all";
+  tier: WeaponTier;
 };
 
-export function weaponChance(rows: Row[][], goal: WeaponGoal, fixFirst?: "a" | "b" | "i"): number {
-  // Top value per category (40 % boss / ignore defense, 12 · 13 % attack) = the highest value in line 1.
+/** Top value per option = the highest value line 1 can have (40 · 45 % boss / ignore defense, 12 · 13 % attack). */
+function topValues(rows: Row[][]): Record<string, number> {
   const best: Record<string, number> = {};
   for (const r of rows[0]) best[r[0]] = Math.max(best[r[0]] ?? 0, r[1]);
+  return best;
+}
+
+/**
+ * The tier an option a weapon actually has reaches (the hardest one whose rule it meets), so that its chance can
+ * be asked with weaponChance(). `lines` = [category, value] of lines 1 · 2 · 3 in order, categories as in the tables.
+ */
+export function weaponTierOf(rows: Row[][], attack: "atk" | "matk", ied: boolean, lines: [string, number][]): WeaponTier {
+  if (lines.length !== 3 || rows.length < 3) return "v3";
+  const best = topValues(rows);
+  const seen = lines.map(([cat, value], i): TierLine => {
+    const useful = cat === attack || cat === "boss" || (cat === "ied" && ied);
+    return { useful, top: useful && value >= (best[cat] ?? Infinity), own: rows[i].some((r) => r[0] === cat && r[1] === value && r[3] === 1) };
+  });
+  return TIERS_HARD_FIRST.find((tier) => tierMet(tier, seen)) ?? "v3";
+}
+
+export function weaponChance(rows: Row[][], goal: WeaponGoal, fixFirst?: "a" | "b" | "i"): number {
+  const best = topValues(rows);
   if (fixFirst) {
     const cat = fixFirst === "a" ? goal.attack : fixFirst === "b" ? "boss" : "ied";
     rows = fixFirstLine(rows, cat, best[cat] ?? 0);
@@ -248,19 +302,7 @@ export function weaponChance(rows: Row[][], goal: WeaponGoal, fixFirst?: "a" | "
     const n = (c: string) => xs.filter((t) => t.cat === c).length;
     if (n("a") < goal.min.a || n("b") < goal.min.b || n("i") < goal.min.i) return false;
     if (xs.filter(useful).length < goal.min.v) return false;
-    const later = [y, z];
-    switch (goal.tier) {
-      case "half":
-        return later.some((t) => useful(t) && t.own);
-      case "one":
-        return later.some(isTop);
-      case "two":
-        return later.every(isTop);
-      case "all":
-        return xs.every(isTop);
-      default:
-        return true;
-    }
+    return tierMet(goal.tier, xs.map((t) => ({ useful: useful(t), top: isTop(t), own: t.own })));
   });
 }
 

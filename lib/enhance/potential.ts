@@ -5,7 +5,7 @@
 // - potential_option_grade / additional_potential_option_grade = the item's grade AFTER the roll;
 //   item_upgrade_result "성공" = the roll raised the grade.
 // - unlike star force, the rows carry item level and equipment part.
-import { CUBES, NEXT_GRADE, NO_CONV, SLOTS, addWeaponChance, addWeaponNeed, customChance, gradeUp, lineTables, resetMeso, sumChance, weaponChance, type CubeId, type CustomCond, type Grade, type StatConv } from "../ev/potential.ts";
+import { CUBES, NEXT_GRADE, NO_CONV, SLOTS, WEAPON_TIERS, addWeaponChance, addWeaponNeed, customChance, gradeUp, lineTables, resetMeso, sumChance, weaponChance, weaponTierOf, type CubeId, type CustomCond, type Grade, type StatConv } from "../ev/potential.ts";
 
 export type RawOption = { value?: string; grade?: string };
 export type RawPotential = {
@@ -310,10 +310,15 @@ export function goalChance(row: Pick<PotRow, "part" | "level" | "meso" | "add" |
       const ied = count("ied");
       const useful = count(attack) + count("boss") + ied;
       if (useful > 0) {
-        const p = weaponChance(rows, { attack, ied: ied > 0, min: { a: 0, b: 0, i: 0, v: useful }, tier: "v3" });
+        // How good the lines are counts too: 보공 45 · 45 + 공 10 (two lines at the top value) is far rarer than
+        // "any three useful lines" (user, 2026-11-12). The option's tier is read with the calculator's own rules,
+        // so picking the same chip there gives the same average.
+        const tier = weaponTierOf(rows, attack, ied > 0, goal.lines);
+        const p = weaponChance(rows, { attack, ied: ied > 0, min: { a: 0, b: 0, i: 0, v: useful }, tier });
         // Without an ignore defence line the count is of attack % and boss damage only (emblems have no boss line).
         const name = ied > 0 ? "유효" : kind === "emblem" ? LABEL[attack] : `${magic ? "마" : "공"} · 보공`;
-        return hit(p, `${name} ${useful}줄`);
+        const grade = tier === "v3" ? "" : ` · ${WEAPON_TIERS.find((t) => t.id === tier)!.label}`;
+        return hit(p, `${name} ${useful}줄${grade}`);
       }
     }
   }
