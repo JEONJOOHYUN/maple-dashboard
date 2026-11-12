@@ -6,7 +6,7 @@ import { KeyGate, type Connected } from "@/components/enhance/key-gate";
 import { PotentialBoard } from "@/components/enhance/potential-board";
 import { StarforceBoard } from "@/components/enhance/starforce-board";
 import { PageHeader } from "@/components/page-header";
-import { createApi, fetchMainCharacter } from "@/lib/enhance/client";
+import { createApi, fetchMainCharacter, forgetPace } from "@/lib/enhance/client";
 import { withKey, withName, withoutKey, type SavedKey } from "@/lib/enhance/keys";
 import { clearAccount, clearEverything } from "@/lib/enhance/sync";
 import { useNow } from "@/lib/use-now";
@@ -43,9 +43,19 @@ export function EnhanceApp() {
     setSaved(null);
     setSession(null);
   };
+  /** What this browser keeps for one key besides its records: the pace found for it and its MVP · PC room setting. */
+  const dropSettings = (account: string) => {
+    forgetPace(account);
+    try {
+      localStorage.removeItem(`enhance:discount:${account}`);
+    } catch {
+      // nothing to remove
+    }
+  };
   const forget = () => {
     if (active) {
       void clearAccount(active.account);
+      dropSettings(active.account);
       setKeys((prev) => withoutKey(prev, active.account));
     }
     setSaved(null);
@@ -53,6 +63,12 @@ export function EnhanceApp() {
   };
   const forgetAll = () => {
     void clearEverything();
+    // Every key's settings by their names, not by the list: a key used with "기억" off is in no list.
+    try {
+      for (const k of Object.keys(localStorage)) if (k.startsWith("enhance:pace:") || k.startsWith("enhance:discount:")) localStorage.removeItem(k);
+    } catch {
+      // nothing to remove
+    }
     setKeys([]);
     setSaved(null);
     setSession(null);
@@ -65,7 +81,7 @@ export function EnhanceApp() {
   useEffect(() => {
     if (!unnamedKey || !unnamedAccount) return;
     const stop = new AbortController();
-    fetchMainCharacter(createApi(unnamedKey), stop.signal)
+    fetchMainCharacter(createApi(unnamedKey, unnamedAccount), stop.signal)
       .then((who) => {
         if (who && !stop.signal.aborted) setKeys((prev) => withName(withKey(prev, { key: unnamedKey, account: unnamedAccount }), unnamedAccount, who));
       })

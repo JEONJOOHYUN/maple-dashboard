@@ -16,7 +16,8 @@ const CLOSE_LAG = 35 * 60_000;
 const OPEN_TTL = 2 * 60_000;
 const EQUIP_TTL = DAY;
 const MAX_CHARACTERS = 30;
-const WORKERS = 3;
+// Days fetched at once. The request starts themselves are spaced by the client (see createApi), whatever this is.
+const WORKERS = 12;
 const EMIT_EVERY = 300;
 
 type Row = { t: number; who: string; item: string };
@@ -60,7 +61,7 @@ export class HistorySync<T extends Row> {
   private run: AbortController | null = null;
 
   constructor(key: string, account: string, sources: Source<T>[], lacks: (row: T, found: Record<string, FoundItem>) => boolean) {
-    this.api = createApi(key);
+    this.api = createApi(key, account);
     this.account = account;
     this.sources = sources;
     this.lacks = lacks;

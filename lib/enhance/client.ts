@@ -2,11 +2,40 @@
 // the history ("확률 정보") endpoints only return the key owner's account, and the key must not reach our server
 // (handoff 2026-11-11). CORS: open.api.nexon.com answers preflights for x-nxopen-api-key (checked 2026-11-12).
 //
-// A developer-stage key allows 5 calls per second and 1,000 per day, so request starts are spaced out.
+// Visitors are told to register a service-stage application (500 calls per second, 20,000,000 per day), so calls
+// start close together. A development-stage key allows 5 per second and 1,000 per day: the first "too many requests"
+// answer drops this key to that pace, and the browser remembers it for the key.
 import type { FoundItem } from "./items.ts";
 
 const BASE = "https://open.api.nexon.com/maplestory/v1";
-const GAP_MS = 230;
+/** Service stage: at most 100 request starts a second, far under the 500 allowed (two tabs still fit). */
+const FAST_GAP_MS = 10;
+/** Development stage: under 5 request starts a second. */
+const SLOW_GAP_MS = 230;
+
+const paceKey = (account: string) => `enhance:pace:${account}`;
+function knownSlow(account: string | undefined): boolean {
+  try {
+    return !!account && localStorage.getItem(paceKey(account)) === "slow";
+  } catch {
+    return false;
+  }
+}
+function rememberSlow(account: string | undefined) {
+  try {
+    if (account) localStorage.setItem(paceKey(account), "slow");
+  } catch {
+    // Storage blocked: the key is simply tried fast again next visit.
+  }
+}
+/** Forget the pace remembered for a key (when the key and its records are deleted). */
+export function forgetPace(account: string) {
+  try {
+    localStorage.removeItem(paceKey(account));
+  } catch {
+    // nothing to forget
+  }
+}
 
 /** badKey = wrong or revoked key · quota = call limit · param = date outside what the API keeps · busy = maintenance. */
 export type ApiErrorKind = "badKey" | "quota" | "param" | "busy" | "network" | "failed";
@@ -42,13 +71,15 @@ const sleep = (ms: number, signal?: AbortSignal) =>
 
 export type Api = { get<T>(path: string, params: Record<string, string>, signal?: AbortSignal): Promise<T> };
 
-export function createApi(key: string): Api {
-  // One line for every request start (retries too), so a burst can never pass 5 per second.
+/** `account` = the key's id: with it the pace found for this key is remembered across visits. */
+export function createApi(key: string, account?: string): Api {
+  let slow = knownSlow(account);
+  // One line for every request start (retries too), so a burst can never pass the pace of the key's stage.
   let last = 0;
   let line: Promise<void> = Promise.resolve();
   const turn = () => {
     const mine = line.then(async () => {
-      const wait = last + GAP_MS - Date.now();
+      const wait = last + (slow ? SLOW_GAP_MS : FAST_GAP_MS) - Date.now();
       if (wait > 0) await sleep(wait);
       last = Date.now();
     });
@@ -73,6 +104,11 @@ export function createApi(key: string): Api {
         const body = (await res.json().catch(() => null)) as { error?: { name?: string } } | null;
         const code = body?.error?.name ?? "";
         const kind = KINDS[code] ?? (res.status === 429 ? "quota" : "failed");
+        // A development-stage key: from here on its pace.
+        if (kind === "quota" && !slow) {
+          slow = true;
+          rememberSlow(account);
+        }
         // The per-second limit clears in a second (another tab may be calling too); the daily one does not,
         // so wait and try twice more before giving up.
         if (kind === "quota" && attempt < 2) {

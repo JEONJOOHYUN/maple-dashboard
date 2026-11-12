@@ -22,7 +22,7 @@ const PERIODS: { id: PeriodId; label: string; days: number }[] = [
 
 const ERRORS: Record<ApiErrorKind, string> = {
   badKey: "API 키가 올바르지 않음 → 키 다시 입력",
-  quota: "이 키의 호출 한도 초과 (하루 1,000회) → 받은 기록까지만 표시 · 내일 이어받기",
+  quota: "이 키의 호출 한도 초과 (개발 단계 키 = 하루 1,000건) → 받은 기록까지만 표시 · 내일 이어받기",
   param: "넥슨 API 응답 오류 → 받은 기록까지만 표시",
   busy: "넥슨 API 점검 중 → 받은 기록까지만 표시",
   network: "넥슨 서버 연결 실패 → 받은 기록까지만 표시",
