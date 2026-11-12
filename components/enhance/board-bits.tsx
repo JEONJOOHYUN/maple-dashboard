@@ -45,9 +45,11 @@ export function usePeriod() {
   // The boards only render after hydration, so the clock is never 0 here.
   const today = kstDate(useNow());
   const oldest = addDays(today, -729);
-  const [period, setPeriod] = useStored<PeriodId>("enhance:period", "30d");
+  // Opens on everything the API keeps (user, 2026-11-13): a service-stage key takes two years in seconds. A period
+  // picked before stays as it was saved.
+  const [period, setPeriod] = useStored<PeriodId>("enhance:period", "all");
   const [custom, setCustom] = useStored<{ from: string; to: string }>("enhance:custom", { from: "", to: "" });
-  const days = PERIODS.find((p) => p.id === period)?.days ?? 30;
+  const days = PERIODS.find((p) => p.id === period)?.days ?? 730;
   const clamp = (d: string) => (d < oldest ? oldest : d > today ? today : d);
   const to = period === "custom" && custom.to ? clamp(custom.to) : today;
   const from = period === "custom" ? clamp(custom.from && custom.from <= to ? custom.from : addDays(to, -29)) : addDays(today, -(days - 1));
