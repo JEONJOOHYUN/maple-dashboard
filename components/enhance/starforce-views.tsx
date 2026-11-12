@@ -366,17 +366,8 @@ export function ItemsView({
                   <b className="mt-1.5 font-num text-[28px] leading-[1.1] whitespace-nowrap">{eok(it.spent)}</b>
                   {it.worth > 0 ? (
                     <div className="mt-2 self-stretch text-left">
-                      {/* Left = the average (the tick), right = what the bar is. Swapped on the user's request (2026-11-12). */}
-                      <Gauge
-                        label={
-                          <>
-                            기댓값 <b className="text-foreground">{eok(it.worth)}</b>
-                          </>
-                        }
-                        used={it.spent}
-                        mean={it.worth}
-                      >
-                        <span className="text-muted-foreground">사용 메소</span>
+                      <Gauge label="사용 메소" used={it.spent} mean={it.worth}>
+                        <span className="text-muted-foreground">기댓값</span> <b>{eok(it.worth)}</b>
                       </Gauge>
                     </div>
                   ) : (

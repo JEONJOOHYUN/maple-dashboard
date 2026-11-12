@@ -1,9 +1,9 @@
 "use client";
 
 import { useMemo, useState, type ReactNode } from "react";
-import { eok } from "@/components/ev/ui";
-import { PeriodBar, SyncBanners, ViewTabs, WorldChips, useGroupsOff, usePeriod, useSync } from "@/components/enhance/board-bits";
-import { Card, Delta, Empty, SKIP_LABEL, Select } from "@/components/enhance/parts";
+import { Segment, eok } from "@/components/ev/ui";
+import { BasisButton, BasisRow, PeriodBar, SyncBanners, Toggle, ViewTabs, WorldChips, useGroupsOff, usePeriod, useSync } from "@/components/enhance/board-bits";
+import { Card, Empty, SKIP_LABEL, signed, tone } from "@/components/enhance/parts";
 import { CalendarView, InsightView, ItemDialog, ItemsView, LogView } from "@/components/enhance/starforce-views";
 import { useItemDict, type Rolled } from "@/components/enhance/use-item-dict";
 import { resolveItem, type ItemInfo, type ItemOverrides } from "@/lib/enhance/items";
@@ -77,8 +77,6 @@ export function StarforceBoard({ apiKey, account, onForget, switcher }: { apiKey
   const entries = useMemo(() => judged.filter((e) => !groupsOff.includes(worldGroup(e.row.world))), [judged, groupsOff]);
   const stats = useMemo(() => buildStats(entries), [entries]);
 
-  // Rows are oldest first: the last one is the newest try NEXON has given us.
-  const latest = snap.rows.at(-1)?.t ?? 0;
   const skipped = (Object.entries(stats.skipped) as [SkipReason, number][]).filter(([, n]) => n > 0);
   const unknown = stats.items.filter((it) => it.info.level <= 0);
   const noLevel = unknown.length;
@@ -91,7 +89,7 @@ export function StarforceBoard({ apiKey, account, onForget, switcher }: { apiKey
     { label: "성공", value: stats.success.toLocaleString("ko-KR"), css: "" },
     { label: "실패", value: stats.fail.toLocaleString("ko-KR"), css: "" },
     { label: "파괴", value: stats.destroy.toLocaleString("ko-KR"), css: stats.destroy ? "text-destructive" : "" },
-    { label: "사용 메소", value: eok(stats.spent), css: "" },
+    { label: "기댓값 대비 손익", value: signed(stats.delta), css: tone(stats.delta) },
   ];
 
   return (
@@ -101,34 +99,25 @@ export function StarforceBoard({ apiKey, account, onForget, switcher }: { apiKey
         loading={loading}
         onRefresh={refresh}
         lead={switcher}
+        filters={<WorldChips tallies={tallies} off={groupsOff} onToggle={toggleGroup} />}
+        aside={
+          <BasisButton summary={`MVP ${MVPS.find((m) => m.id === discount.mvp)?.label ?? "없음"} · PC방 ${discount.pcRoom ? "켜짐" : "꺼짐"}`}>
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs text-muted-foreground">MVP 등급</span>
+              <Segment label="MVP 등급" value={discount.mvp} onChange={(mvp) => setDiscount({ ...discount, mvp })} options={MVPS} />
+            </div>
+            <BasisRow label="PC방">
+              <Toggle label="PC방" on={discount.pcRoom} onChange={(pcRoom) => setDiscount({ ...discount, pcRoom })} />
+            </BasisRow>
+          </BasisButton>
+        }
         status={
           snap.at > 0 && (
-            <span>
-              {latest > 0 && <>마지막 강화 {kstStamp(latest)} · </>}
-              {kstStamp(snap.at)} 조회 · 게임 → 기록 반영 최대 5분
-            </span>
+            <span>{kstStamp(snap.at)} 조회</span>
           )
         }
       />
 
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px]">
-        <label className="inline-flex items-center gap-1.5 text-muted-foreground">
-          MVP
-          <Select aria-label="MVP 등급" value={discount.mvp} onChange={(e) => setDiscount({ ...discount, mvp: e.target.value as MvpGrade })}>
-            {MVPS.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.label}
-              </option>
-            ))}
-          </Select>
-        </label>
-        <label className="inline-flex items-center gap-1.5">
-          <input type="checkbox" checked={discount.pcRoom} onChange={(e) => setDiscount({ ...discount, pcRoom: e.target.checked })} className="size-4 accent-primary" />
-          PC방
-        </label>
-      </div>
-
-      <WorldChips tallies={tallies} off={groupsOff} onToggle={toggleGroup} unit="회" />
 
       <SyncBanners snap={snap} unit="일" onRetry={refresh} onForget={onForget} />
 
@@ -139,13 +128,14 @@ export function StarforceBoard({ apiKey, account, onForget, switcher }: { apiKey
           <Card>
             <div className="grid items-end gap-5 p-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] lg:p-7">
               <div className="flex flex-col gap-1.5">
-                <span className="text-[13px] text-muted-foreground">기댓값 대비 손익 · {period.label}</span>
+                {/* The meso spent is the big number, as on the potential board; the profit is one of the boxes (user, 2026-11-13). */}
+                <span className="text-[13px] text-muted-foreground">사용 메소 · {period.label}</span>
                 <span className="flex flex-wrap items-baseline gap-x-2">
-                  <Delta v={stats.delta} className="text-[38px] leading-[1.05] lg:text-[52px]" />
+                  <b className="font-num text-[38px] leading-[1.05] lg:text-[52px]">{eok(stats.spent)}</b>
                   <span className="text-sm text-muted-foreground">메소</span>
                 </span>
               </div>
-              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-[1fr_1fr_1fr_1.5fr]">
                 {tiles.map((t) => (
                   <div key={t.label} className="flex min-w-0 flex-col gap-1 rounded-lg bg-muted px-3 py-2.5">
                     <span className="text-xs text-muted-foreground">{t.label}</span>

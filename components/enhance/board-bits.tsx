@@ -2,10 +2,11 @@
 
 // What the star force board and the potential board share: the period, the sync wiring and its banners, the tab row.
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { AlertCircle, Loader2, RefreshCw, Search } from "lucide-react";
+import { AlertCircle, Loader2, RefreshCw, Search, SlidersHorizontal } from "lucide-react";
 import { Select } from "@/components/enhance/parts";
 import { eok } from "@/components/ev/ui";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { ApiErrorKind } from "@/lib/enhance/client";
 import { addDays, kstDate } from "@/lib/enhance/kst";
 import type { HistorySync, SyncSnap } from "@/lib/enhance/sync";
@@ -15,7 +16,7 @@ import { useStored } from "@/lib/use-stored";
 import { cn } from "@/lib/utils";
 
 type PeriodId = "7d" | "30d" | "1y" | "all" | "custom";
-// `short` = what the button says: the row also holds the star force · potential switch and the refresh button.
+// `short` = what the button says: the row also holds the world groups and the "계산 기준" button.
 const PERIODS: { id: PeriodId; label: string; short: string; days: number }[] = [
   { id: "7d", label: "최근 7일", short: "7일", days: 7 },
   { id: "30d", label: "최근 30일", short: "30일", days: 30 },
@@ -69,17 +70,43 @@ export function useSync<T extends { t: number; who: string; item: string }>(sync
 }
 
 /**
- * One tool row (user, 2026-11-13): `lead` (the star force · potential switch) and the period buttons on the left,
- * when the records were read and the refresh button on the right; the date fields under it. Changing or forgetting
- * the key is in the menu next to the page title.
+ * Two rows (user, 2026-11-13). First: `lead` (the star force · potential switch) on the left, when the records were
+ * read and the refresh button on the right. Second, under the switch: the period buttons and `filters` (the world
+ * groups) on the left, `aside` (the "계산 기준" button) on the right. The date fields come under it.
+ * Changing or forgetting the key is in the menu next to the page title.
  */
-export function PeriodBar({ state, status, loading, onRefresh, lead }: { state: PeriodState; status: ReactNode; loading: boolean; onRefresh: () => void; lead?: ReactNode }) {
+export function PeriodBar({
+  state,
+  status,
+  loading,
+  onRefresh,
+  lead,
+  filters,
+  aside,
+}: {
+  state: PeriodState;
+  status: ReactNode;
+  loading: boolean;
+  onRefresh: () => void;
+  lead?: ReactNode;
+  filters?: ReactNode;
+  aside?: ReactNode;
+}) {
   const { period, setPeriod, custom, setCustom, today, oldest, from, to } = state;
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        {lead}
+        <div className="ml-auto flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          {!loading && status}
+          <button type="button" onClick={onRefresh} disabled={loading} className={cn(plainButton, "inline-flex items-center gap-1.5 disabled:opacity-50")}>
+            <RefreshCw className={cn("size-3.5", loading && "animate-spin")} aria-hidden="true" />
+            새로 고침
+          </button>
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <div className="flex flex-wrap items-center gap-2">
-          {lead}
           <div role="group" aria-label="기간" className="flex flex-wrap gap-[3px] rounded-lg border border-border p-[3px]">
             {PERIODS.map((p) => (
               <button
@@ -97,14 +124,9 @@ export function PeriodBar({ state, status, loading, onRefresh, lead }: { state: 
               </button>
             ))}
           </div>
+          {filters}
         </div>
-        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          {!loading && status}
-          <button type="button" onClick={onRefresh} disabled={loading} className={cn(plainButton, "inline-flex items-center gap-1.5 disabled:opacity-50")}>
-            <RefreshCw className={cn("size-3.5", loading && "animate-spin")} aria-hidden="true" />
-            새로 고침
-          </button>
-        </div>
+        {aside}
       </div>
       {period === "custom" && (
         <div className="flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground">
@@ -125,18 +147,20 @@ export function useGroupsOff() {
   return [off, toggle] as const;
 }
 
+/** Nothing to tell apart when every record is a regular-world one. A seasonal or event group shows even alone:
+ * that is how one sees what the records are, and the only place to leave them out. */
+export const worldsShown = (tallies: GroupTally[], off: WorldGroup[]) => !tallies.every((t) => t.id === "regular" && !off.includes(t.id));
+
 /**
- * 일반 · 챌린저스 · 버닝 · 이벤트: press to leave a group out of everything below. Each shows what it holds
- * (`unit` = 회), so what was spent in a seasonal or event world reads apart from the rest.
- * A group that is switched off stays listed, so it can be switched back on.
+ * 일반 · 챌린저스 · 버닝 · 이벤트: press to leave a group out of everything below. The same bordered group as the
+ * period buttons above it, each with the meso it holds (no counts; user, 2026-11-13), so what was spent in a seasonal
+ * or event world reads apart from the rest. A group that is switched off stays listed, so it can be switched back on.
  */
-export function WorldChips({ tallies, off, onToggle, unit }: { tallies: GroupTally[]; off: WorldGroup[]; onToggle: (id: WorldGroup) => void; unit: string }) {
-  // Nothing to tell apart when every record is a regular-world one. A seasonal or event group shows even alone:
-  // that is how one sees what the records are, and the only place to leave them out.
-  if (tallies.every((t) => t.id === "regular" && !off.includes(t.id))) return null;
+export function WorldChips({ tallies, off, onToggle }: { tallies: GroupTally[]; off: WorldGroup[]; onToggle: (id: WorldGroup) => void }) {
+  if (!worldsShown(tallies, off)) return null;
   return (
-    <div role="group" aria-label="월드" className="flex flex-wrap gap-1.5 text-[13px]">
-      {tallies.map(({ id, n, spent }) => {
+    <div role="group" aria-label="월드" className="flex flex-wrap gap-[3px] rounded-lg border border-border p-[3px]">
+      {tallies.map(({ id, spent }) => {
         const on = !off.includes(id);
         return (
           <button
@@ -144,18 +168,62 @@ export function WorldChips({ tallies, off, onToggle, unit }: { tallies: GroupTal
             type="button"
             aria-pressed={on}
             onClick={() => onToggle(id)}
-            className={cn("rounded-full px-3 py-1.5 outline-none focus-visible:ring-3 focus-visible:ring-ring/50", on ? "bg-primary-soft text-primary-text" : "bg-muted text-muted-foreground")}
+            className={cn(
+              "inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[13px] outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+              on ? "bg-primary-soft font-bold text-primary-text" : "text-muted-foreground hover:text-foreground"
+            )}
           >
-            {GROUP_LABEL[id]}{" "}
-            <b className="font-num text-xs">
-              {n.toLocaleString("ko-KR")}
-              {unit}
-            </b>
-            {spent > 0 && <span className="font-num text-xs"> · {eok(spent)}</span>}
+            {GROUP_LABEL[id]}
+            {spent > 0 && <span className="font-num text-xs font-medium">{eok(spent)}</span>}
           </button>
         );
       })}
     </div>
+  );
+}
+
+/**
+ * "계산 기준": what the numbers are worked out with (MVP · PC room, the price of a prime cube), set once and rarely
+ * changed — one button that says what is set now and opens a small window, at the right end of the row (user, 2026-11-13).
+ */
+export function BasisButton({ summary, children }: { summary: string; children: ReactNode }) {
+  return (
+    <Popover>
+      <PopoverTrigger className={cn(plainButton, "ml-auto inline-flex items-center gap-1.5")}>
+        <SlidersHorizontal className="size-3.5" aria-hidden="true" />
+        계산 기준
+        <span className="text-muted-foreground">{summary}</span>
+      </PopoverTrigger>
+      <PopoverContent align="end" aria-label="계산 기준" className="w-72 gap-3.5 p-3.5">
+        {children}
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/** One setting of the window: its name on the left, the control on the right. */
+export function BasisRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-3 text-[13px]">
+      <span>{label}</span>
+      {children}
+    </div>
+  );
+}
+
+/** A plain on · off switch (no box around it). */
+export function Toggle({ on, onChange, label }: { on: boolean; onChange: (on: boolean) => void; label: string }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      onClick={() => onChange(!on)}
+      className={cn("flex h-6 w-10 shrink-0 rounded-full p-0.5 outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50", on ? "justify-end bg-primary" : "justify-start bg-input")}
+    >
+      <span className="size-5 rounded-full bg-white shadow-sm" />
+    </button>
   );
 }
 

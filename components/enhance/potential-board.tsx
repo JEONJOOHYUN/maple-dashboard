@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactN
 import Link from "next/link";
 import { Package, Split } from "lucide-react";
 import { NumberField, eok, parseNum } from "@/components/ev/ui";
-import { ItemFilter, NO_ITEM_FILTER, PeriodBar, SyncBanners, ViewTabs, WorldChips, itemMatches, liveFilter, useGroupsOff, usePeriod, useSync } from "@/components/enhance/board-bits";
+import { BasisButton, BasisRow, ItemFilter, NO_ITEM_FILTER, PeriodBar, SyncBanners, ViewTabs, WorldChips, itemMatches, liveFilter, useGroupsOff, usePeriod, useSync } from "@/components/enhance/board-bits";
 import { Card, Delta, Empty, Gauge, ItemIcon, Select, Tile } from "@/components/enhance/parts";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { useItemDict, type Rolled } from "@/components/enhance/use-item-dict";
@@ -35,6 +35,7 @@ const GRADE_CSS: Record<Grade, string> = {
 };
 const BADGE = "rounded border px-1.5 text-[11px] leading-[18px] font-semibold whitespace-nowrap";
 const CUBE_NAME: Record<PricedCube, string> = { prime: "프라임 큐브", primeAddi: "프라임 에디셔널 큐브" };
+const CUBE_SHORT: Record<PricedCube, string> = { prime: "프라임", primeAddi: "프라임 에디" };
 const PAGE = 100;
 
 /** Item name → picture address: what the character wears now, else the calculator's list, else the shared dictionary. */
@@ -515,7 +516,6 @@ export function PotentialBoard({ apiKey, account, onForget, switcher }: { apiKey
   const entries = useMemo(() => inPeriod.filter((e) => !groupsOff.includes(worldGroup(worldOf(e.row.who, e.row.t)))), [inPeriod, worldOf, groupsOff]);
   const stats = useMemo(() => buildPotStats(entries, conv), [entries, conv]);
 
-  const latest = snap.rows.at(-1)?.t ?? 0;
   const tiles = [
     { label: "재설정", value: rolls(stats.resets) },
     { label: "큐브", value: `${stats.cubes.toLocaleString("ko-KR")}개` },
@@ -529,35 +529,32 @@ export function PotentialBoard({ apiKey, account, onForget, switcher }: { apiKey
         loading={loading}
         onRefresh={refresh}
         lead={switcher}
+        filters={<WorldChips tallies={tallies} off={groupsOff} onToggle={toggleGroup} />}
+        aside={
+          pricedUsed.length > 0 && (
+            <BasisButton summary={pricedUsed.map((cube) => `${CUBE_SHORT[cube]} ${eok(prices[cube] ?? cubePriceDefault(cube))}`).join(" · ")}>
+              {pricedUsed.map((cube) => (
+                <BasisRow key={cube} label={`${CUBE_NAME[cube]} 1개`}>
+                  <NumberField
+                    label={`${CUBE_NAME[cube]} 1개 가격 (억 메소)`}
+                    value={priceText[cube] ?? ""}
+                    onChange={(t) => setPriceText({ ...priceText, [cube]: t })}
+                    placeholder={String(cubePriceDefault(cube) / 1e8)}
+                    decimal
+                    suffix="억"
+                    inputClassName="h-8 w-16"
+                  />
+                </BasisRow>
+              ))}
+            </BasisButton>
+          )
+        }
         status={
           snap.at > 0 && (
-            <span>
-              {latest > 0 && <>마지막 재설정 {kstStamp(latest)} · </>}
-              {kstStamp(snap.at)} 조회 · 게임 → 기록 반영 최대 30분
-            </span>
+            <span>{kstStamp(snap.at)} 조회</span>
           )
         }
       />
-      {pricedUsed.length > 0 && (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px] text-muted-foreground">
-          {pricedUsed.map((cube) => (
-            <label key={cube} className="inline-flex items-center gap-1.5">
-              {CUBE_NAME[cube]} 1개
-              <NumberField
-                label={`${CUBE_NAME[cube]} 1개 가격 (억 메소)`}
-                value={priceText[cube] ?? ""}
-                onChange={(t) => setPriceText({ ...priceText, [cube]: t })}
-                placeholder={String(cubePriceDefault(cube) / 1e8)}
-                decimal
-                suffix="억"
-                inputClassName="h-8 w-16"
-              />
-            </label>
-          ))}
-        </div>
-      )}
-
-      <WorldChips tallies={tallies} off={groupsOff} onToggle={toggleGroup} unit="회" />
 
       <SyncBanners snap={snap} unit="회" onRetry={refresh} onForget={onForget} />
 
