@@ -61,13 +61,14 @@ test("armor flames: harder targets are rarer, abyss beats eternal", () => {
 });
 
 test("Xenon flames: STR · DEX · LUK all count, attack and all stat by their weights", () => {
-  assert.ok(armorChance("eternal", 200, 250, "xenon") > armorChance("eternal", 200, 300, "xenon"));
+  assert.ok(armorChance("eternal", 200, 350, "xenon") > armorChance("eternal", 200, 400, "xenon"));
   near(armorChance("eternal", 200, 0, "xenon"), 1, 1e-9, "target 0");
-  // Best at Lv.200 with the default weights: three stat pairs at tier 7 (2 × 6 × 7 each) + all stat 7 % × 20 = 392.
-  assert.ok(armorChance("abyss", 200, 392, "xenon") > 0);
-  assert.equal(armorChance("abyss", 200, 393, "xenon"), 0);
-  // A pair with INT in it counts once, so the same target is rarer than for a job whose sub stat is worth nothing.
-  assert.ok(armorChance("eternal", 200, 250, "xenon", undefined, undefined, { attack: 7, allStat: 30 }) > armorChance("eternal", 200, 250, "xenon"));
+  // Best at Lv.200 with the default weights (maplescouter, 제논: all stat 1 % = 36.8): three stat pairs at tier 7
+  // (2 × 6 × 7 each) + all stat 7 % × 36.8 = 509.6.
+  assert.ok(armorChance("abyss", 200, 509, "xenon") > 0);
+  assert.equal(armorChance("abyss", 200, 510, "xenon"), 0);
+  // The weights are the user's to change: all stat worth more makes the same target easier.
+  assert.ok(armorChance("eternal", 200, 350, "xenon", undefined, undefined, { attack: 7.28, allStat: 50 }) > armorChance("eternal", 200, 350, "xenon"));
 });
 
 test("soul ether averages match mapletiptip", () => {

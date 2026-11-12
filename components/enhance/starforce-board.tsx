@@ -167,9 +167,9 @@ export function StarforceBoard({ apiKey, account, onForget, switcher }: { apiKey
                 </>
               )}
             </p>
-            <p className="flex items-start gap-1.5 px-5 pt-1.5 pb-3.5 text-xs text-muted-foreground lg:px-7">
-              <Info className="mt-px size-3.5 shrink-0 text-primary-text" aria-hidden="true" />
-              <span>스타포스 개편(2025-03-20) 전 기록 · 이벤트 재화 · 주문서(강화권)로 올린 강화는 제외</span>
+            <p className="flex items-start gap-1.5 px-5 pt-1.5 pb-3.5 text-xs text-primary-text lg:px-7">
+              <Info className="mt-px size-3.5 shrink-0" aria-hidden="true" />
+              <span>스타포스 개편 전 기록(2025-03-20) · 이벤트 재화 · 주문서(강화권)로 올린 강화는 제외</span>
             </p>
           </Card>
 

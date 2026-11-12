@@ -113,7 +113,7 @@ export function FlameTab() {
                   value={job}
                   onChange={(j) => {
                     setJob(j);
-                    setTargetText(j === "hp" ? "5000" : j === "xenon" ? "300" : "120");
+                    setTargetText(j === "hp" ? "5000" : j === "xenon" ? "400" : "120");
                   }}
                   options={[
                     { id: "stat", label: "주스탯 직업" },
@@ -131,7 +131,7 @@ export function FlameTab() {
               {job === "hp" ? "이상" : "급 이상"}
             </span>
             <div className="grid grid-cols-4 gap-1.5">
-              {(job === "hp" ? [4000, 4500, 5000, 5500] : job === "xenon" ? [200, 250, 300, 350] : [100, 120, 140, 160]).map((n) => (
+              {(job === "hp" ? [4000, 4500, 5000, 5500] : job === "xenon" ? [300, 350, 400, 450] : [100, 120, 140, 160]).map((n) => (
                 <Chip key={n} on={target === n} onClick={() => setTargetText(String(n))} className="px-0">
                   {job === "hp" ? n.toLocaleString("ko-KR") : `${n}급`}
                 </Chip>

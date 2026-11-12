@@ -92,12 +92,13 @@ export const DEFAULT_WEIGHTS: ArmorWeights = { sub: 10, attack: 4, allStat: 10 }
 export const DEFAULT_HP_WEIGHTS: HpWeights = { attack: 90, str: 1 };
 /**
  * Xenon: STR · DEX · LUK all count one for one (its damage goes with their sum); attack 1 and all stat 1 % in those
- * points. Estimated from the character 제논 (스카니아 Lv.290, NEXON Open API 2026-11-12: STR 60,760 · DEX 63,335 ·
- * LUK 67,745 · 공격력 11,121, gear all stat about 480 %): attack 1 ≈ 6~8, all stat 1 % ≈ 16~22 depending on how much
- * of the stat is not raised by % (symbols, union …) — rounded to 7 and 20, and the page lets people change them (확인 필요).
+ * points. From maplescouter.com for the character 제논 (스카니아 Lv.290, 2026-11-13 → 세부 스펙 효율): 공마 1당 주스탯
+ * 7.28 · 올스탯 1%당 주스탯 36.8. (The first values here, 7 and 20, were worked out from the Open API stats alone and
+ * had all stat far too low: the equipment list was missing five slots.) They differ per character: the page lets
+ * people change them.
  */
 export type XenonWeights = { attack: number; allStat: number };
-export const DEFAULT_XENON_WEIGHTS: XenonWeights = { attack: 7, allStat: 20 };
+export const DEFAULT_XENON_WEIGHTS: XenonWeights = { attack: 7.28, allStat: 36.8 };
 export type FlameJob = "stat" | "hp" | "xenon";
 
 export function tierValues(level: number) {
