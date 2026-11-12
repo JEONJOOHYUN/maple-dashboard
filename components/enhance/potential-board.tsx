@@ -1,11 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import Link from "next/link";
 import { Package, Split } from "lucide-react";
 import { NumberField, eok, parseNum } from "@/components/ev/ui";
 import { BasisButton, BasisRow, ItemFilter, NO_ITEM_FILTER, PeriodBar, SyncBanners, ViewTabs, WorldStrip, itemMatches, liveFilter, useGroupsOff, useKnownGroups, usePeriod, useSync } from "@/components/enhance/board-bits";
-import { Card, Delta, Empty, Gauge, ItemIcon, Select, Tile } from "@/components/enhance/parts";
+import { Card, Delta, Empty, Gauge, ItemIcon, Select, Tile, signed } from "@/components/enhance/parts";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { useItemDict, type Rolled } from "@/components/enhance/use-item-dict";
 import { useInsights, useWorldOf } from "@/components/enhance/use-worlds";
@@ -250,7 +249,8 @@ function PieceDialog({ piece, entries, found, onClose }: { piece: PieceStat | nu
   );
 }
 
-type Rank = { title: string; empty: string; pieces: PieceStat[]; value: (p: PieceStat) => string; sub: (p: PieceStat) => string };
+/** `css` = the colour of the value on the right. */
+type Rank = { title: string; empty: string; pieces: PieceStat[]; value: (p: PieceStat) => string; sub: (p: PieceStat) => string; css?: string };
 
 /** Lucky and unlucky item, main vs additional potential, and the items that took the most meso, resets and cubes. */
 function PotInsight({ stats, found, onOpen }: { stats: ReturnType<typeof buildPotStats>; found: Icons; onOpen: (key: string) => void }) {
@@ -259,17 +259,22 @@ function PotInsight({ stats, found, onOpen }: { stats: ReturnType<typeof buildPo
   const worst = priced.filter((p) => p.delta! < 0).sort((a, b) => a.delta! - b.delta!)[0];
   const side = (add: boolean) => {
     const list = stats.pieces.filter((p) => p.add === add);
-    return { items: list.length, resets: list.reduce((n, p) => n + p.resets, 0), cubes: list.reduce((n, p) => n + p.rolls - p.resets, 0), spent: list.reduce((n, p) => n + p.spent, 0) };
+    return { resets: list.reduce((n, p) => n + p.resets, 0), cubes: list.reduce((n, p) => n + p.rolls - p.resets, 0), spent: list.reduce((n, p) => n + p.spent, 0) };
   };
   const top = (pick: (p: PieceStat) => number) =>
     stats.pieces
       .filter((p) => pick(p) > 0)
       .sort((a, b) => pick(b) - pick(a))
       .slice(0, 3);
+  // Meso, cubes, and the luckiest: the most profit against the average (user, 2026-11-13).
+  const lucky = stats.pieces
+    .filter((p) => p.delta !== null && p.delta > 0)
+    .sort((a, b) => b.delta! - a.delta!)
+    .slice(0, 3);
   const ranks: Rank[] = [
-    { title: "메소를 많이 쓴 아이템", empty: "메소 재설정 없음", pieces: top((p) => p.spent), value: (p) => eok(p.spent), sub: (p) => `재설정 ${rolls(p.resets)}` },
-    { title: "재설정을 많이 돌린 아이템", empty: "메소 재설정 없음", pieces: top((p) => p.resets), value: (p) => rolls(p.resets), sub: (p) => `사용 ${eok(p.spent)}` },
+    { title: "메소를 많이 쓴 아이템", empty: "사용 메소 없음", pieces: top((p) => p.spent), value: (p) => eok(p.spent), sub: (p) => `재설정 ${rolls(p.resets)}` },
     { title: "큐브를 많이 쓴 아이템", empty: "큐브 사용 없음", pieces: top((p) => p.rolls - p.resets), value: (p) => `${(p.rolls - p.resets).toLocaleString("ko-KR")}개`, sub: (p) => p.types.find((t) => !t.includes("재설정")) ?? "" },
+    { title: "운이 좋은 아이템", empty: "이득 본 아이템 없음", pieces: lucky, value: (p) => signed(p.delta!), sub: (p) => p.goalBy || "등급 상승", css: "text-gain" },
   ];
   const luck = (label: string, p: PieceStat | undefined, css: string) => (
     <button
@@ -290,7 +295,7 @@ function PotInsight({ stats, found, onOpen }: { stats: ReturnType<typeof buildPo
     return (
       <div className="flex min-w-0 flex-col gap-0.5 rounded-lg bg-muted px-3 py-2.5">
         <span className="text-[11px] text-muted-foreground">{label}</span>
-        <b className="text-sm leading-snug">아이템 {t.items.toLocaleString("ko-KR")}개</b>
+        <b className="text-sm leading-snug">사용 메소</b>
         <b className="font-num text-lg">{t.spent > 0 ? eok(t.spent) : "—"}</b>
         <span className="text-[11px] text-muted-foreground">
           재설정 {rolls(t.resets)}
@@ -348,7 +353,7 @@ function PotInsight({ stats, found, onOpen }: { stats: ReturnType<typeof buildPo
                     </span>
                   </span>
                 </span>
-                <b className="font-num text-sm whitespace-nowrap">{rank.value(p)}</b>
+                <b className={cn("font-num text-sm whitespace-nowrap", rank.css)}>{rank.value(p)}</b>
               </button>
             ))}
           </Card>
@@ -590,12 +595,6 @@ export function PotentialBoard({ apiKey, account, onForget, switcher }: { apiKey
                 ))}
               </div>
             </div>
-            <p className="px-5 pb-3.5 text-xs text-muted-foreground lg:px-7">
-              아이템 {stats.pieces.length}개 ·{" "}
-              <Link href="/ev" className="underline underline-offset-2 hover:text-foreground">
-                주스탯 환산 = 기댓값 계산기 값
-              </Link>
-            </p>
           </Card>
 
           <ViewTabs views={VIEWS} value={view} onChange={setView} />
