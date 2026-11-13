@@ -170,25 +170,16 @@ export function hpTarget(level: number, grade: number, attack: number, hw: HpWei
   return hpScore(tierValues(level).hp * (8 - grade), attack, 0, hw);
 }
 
-/** Armor · accessories: chance that the converted score reaches `target` (급, or max HP for Demon Avenger). */
-export function armorChance(
-  flame: FlameId,
-  level: number,
-  target: number,
-  job: FlameJob = "stat",
-  w: ArmorWeights = DEFAULT_WEIGHTS,
-  hw: HpWeights = DEFAULT_HP_WEIGHTS,
-  xw: XenonWeights = DEFAULT_XENON_WEIGHTS
-): number {
+/** Armor scores are worked out in 0.01 steps. */
+const SCALE = 100;
+
+/** Chance of every converted score one roll can give (keys in SCALE steps), over all the ways the four lines fall. */
+function scoreChances(flame: FlameId, level: number, job: FlameJob, w: ArmorWeights, hw: HpWeights, xw: XenonWeights): Map<number, number> {
   const dist = bossTiers(flame);
   const options = relevantOptions(level, job, w, hw, xw);
   const R = options.length;
   const total = comb(POOL, LINES);
-  const SCALE = 100; // scores to 0.01 steps
-  // The target in the same steps as the scores: a goal worked out from the weights (hpTarget with attack 1 = HP
-  // 90.123) is then met by the roll it stands for, instead of missing it by the rounding (Codex review, 2026-11-13).
-  const need = Math.round(target * SCALE);
-  let p = 0;
+  const out = new Map<number, number>();
   for (let mask = 0; mask < 1 << R; mask++) {
     const picked = options.filter((_, i) => mask & (1 << i));
     if (picked.length > LINES) continue;
@@ -205,7 +196,64 @@ export function armorChance(
         }
       scores = next;
     }
-    for (const [s, ps] of scores) if (s >= need) p += pSet * ps;
+    for (const [s, ps] of scores) out.set(s, (out.get(s) ?? 0) + pSet * ps);
   }
-  return p;
+  return out;
+}
+
+/** Chance that the score reaches x, for any x, from scoreChances(). */
+function atLeast(chances: Map<number, number>): (x: number) => number {
+  const scores = [...chances].sort((a, b) => a[0] - b[0]);
+  const suffix = new Array<number>(scores.length + 1).fill(0);
+  for (let i = scores.length - 1; i >= 0; i--) suffix[i] = suffix[i + 1] + scores[i][1];
+  return (x) => {
+    // The target in the same steps as the scores: a goal worked out from the weights (hpTarget with attack 1 = HP
+    // 90.123) is then met by the roll it stands for, instead of missing it by the rounding (Codex review, 2026-11-13).
+    const need = Math.round(x * SCALE);
+    let lo = 0;
+    let hi = scores.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (scores[mid][0] >= need) hi = mid;
+      else lo = mid + 1;
+    }
+    return suffix[lo];
+  };
+}
+
+/** Armor · accessories: chance that the converted score reaches `target` (급, or max HP for Demon Avenger). */
+export function armorChance(
+  flame: FlameId,
+  level: number,
+  target: number,
+  job: FlameJob = "stat",
+  w: ArmorWeights = DEFAULT_WEIGHTS,
+  hw: HpWeights = DEFAULT_HP_WEIGHTS,
+  xw: XenonWeights = DEFAULT_XENON_WEIGHTS
+): number {
+  return atLeast(scoreChances(flame, level, job, w, hw, xw))(target);
+}
+
+/** Xenon goal chips at Lv.200; every level gets chips just as hard to roll as these. */
+const XENON_CHIPS_200 = [260, 300, 340, 380];
+
+/**
+ * Xenon goal chips for an item level (user, 2026-11-14: the same chips at every level said little). A chip stands
+ * for how likely its goal is with one meso reset at the default weights: at each level it is the highest round 10
+ * that is still as likely as that chip at Lv.200 — Lv.160 240 · 280 · 310 · 350, Lv.200 260 · 300 · 340 · 380,
+ * Lv.250 270 · 310 · 350 · 400 (all stat % is worth the same at every level, so they move less than the stat lines).
+ */
+export function xenonChips(level: number): number[] {
+  const at = (L: number) => atLeast(scoreChances("eternal", L, "xenon", DEFAULT_WEIGHTS, DEFAULT_HP_WEIGHTS, DEFAULT_XENON_WEIGHTS));
+  const ref = at(200);
+  const here = level === 200 ? ref : at(level);
+  const chips: number[] = [];
+  for (const x of XENON_CHIPS_200) {
+    const want = ref(x);
+    let best = 0;
+    for (let v = 10; v <= 2000 && here(v) >= want; v += 10) best = v;
+    // Never two chips the same (only on items too low for flames to reach these goals).
+    chips.push(Math.max(best, (chips.at(-1) ?? 0) + 10));
+  }
+  return chips;
 }

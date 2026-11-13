@@ -3,7 +3,7 @@
 import { Fragment, useMemo, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { Chip, Label, NumberField, Panel, Segment, count, eok, parseNum, pct } from "@/components/ev/ui";
-import { FLAMES, armorChance, bestWeaponGrade, hpScore, hpTarget, tierValues, weaponChance, DEFAULT_HP_WEIGHTS, DEFAULT_WEIGHTS, DEFAULT_XENON_WEIGHTS, type FlameJob } from "@/lib/ev/flame";
+import { FLAMES, armorChance, bestWeaponGrade, hpScore, hpTarget, tierValues, weaponChance, xenonChips, DEFAULT_HP_WEIGHTS, DEFAULT_WEIGHTS, DEFAULT_XENON_WEIGHTS, type FlameJob } from "@/lib/ev/flame";
 import { averageTries, triesAt } from "@/lib/ev/luck";
 import { cn } from "@/lib/utils";
 import { koreanUnits } from "@/lib/format";
@@ -15,6 +15,8 @@ export function FlameTab() {
   const [extraText, setExtraText] = useState("0");
   const [job, setJob] = useState<FlameJob>("stat");
   const [targetText, setTargetText] = useState("120");
+  // Xenon: which chip is picked (null = a goal typed in). The chips follow the item level, and so does the goal.
+  const [xenonChip, setXenonChip] = useState<number | null>(1);
   // Demon Avenger: the goal is said as "HP n추 + 공 m" and reached through the conversion below (user, 2026-11-13).
   const [hpGrade, setHpGrade] = useState(1);
   const [hpAtkText, setHpAtkText] = useState("0");
@@ -33,7 +35,9 @@ export function FlameTab() {
 
   const level = Math.max(1, Math.round(parseNum(levelText, 200)));
   const extra = parseNum(extraText, 0);
-  const target = parseNum(targetText, 0);
+  const chips = useMemo(() => (job === "xenon" ? xenonChips(level) : [100, 120, 140, 160]), [job, level]);
+  const pickedChip = job === "xenon" && xenonChip !== null ? chips[xenonChip] : null;
+  const target = pickedChip ?? parseNum(targetText, 0);
   const weights = { sub: parseNum(w.sub, 10) || 10, attack: parseNum(w.attack, 4), allStat: parseNum(w.allStat, 10) };
   const hpWeights = { attack: parseNum(hw.attack, DEFAULT_HP_WEIGHTS.attack), str: parseNum(hw.str, DEFAULT_HP_WEIGHTS.str) };
   const hpAtk = Math.max(0, parseNum(hpAtkText, 0));
@@ -141,7 +145,8 @@ export function FlameTab() {
                   value={job}
                   onChange={(j) => {
                     setJob(j);
-                    if (j !== "hp") setTargetText(j === "xenon" ? "300" : "120");
+                    if (j === "xenon") setXenonChip(1);
+                    else if (j === "stat") setTargetText("120");
                   }}
                   options={[
                     { id: "stat", label: "주스탯 직업" },
@@ -186,12 +191,28 @@ export function FlameTab() {
             ) : (
               <>
                 <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold">
-                  <NumberField label="목표" value={targetText} onChange={setTargetText} inputClassName="w-20" />
+                  <NumberField
+                    label="목표"
+                    value={pickedChip !== null ? String(pickedChip) : targetText}
+                    onChange={(t) => {
+                      setTargetText(t);
+                      setXenonChip(null);
+                    }}
+                    inputClassName="w-20"
+                  />
                   급 이상
                 </span>
                 <div className="grid grid-cols-4 gap-1.5">
-                  {(job === "xenon" ? [260, 300, 340, 380] : [100, 120, 140, 160]).map((n) => (
-                    <Chip key={n} on={target === n} onClick={() => setTargetText(String(n))} className="px-0">
+                  {chips.map((n, i) => (
+                    <Chip
+                      key={n}
+                      on={target === n}
+                      onClick={() => {
+                        setTargetText(String(n));
+                        setXenonChip(job === "xenon" ? i : null);
+                      }}
+                      className="px-0"
+                    >
                       {n}급
                     </Chip>
                   ))}

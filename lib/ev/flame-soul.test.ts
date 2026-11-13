@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { DEFAULT_HP_WEIGHTS, DEFAULT_XENON_WEIGHTS, armorChance, bestWeaponGrade, hpScore, hpTarget, weaponChance, tierValues } from "./flame.ts";
+import { DEFAULT_HP_WEIGHTS, DEFAULT_XENON_WEIGHTS, armorChance, bestWeaponGrade, hpScore, hpTarget, weaponChance, tierValues, xenonChips } from "./flame.ts";
 import { percentileOf } from "./luck.ts";
 import { soulPlan } from "./soul.ts";
 
@@ -69,6 +69,37 @@ test("Xenon flames: STR · DEX · LUK all count, attack and all stat by their we
   assert.equal(armorChance("abyss", 200, 495, "xenon"), 0);
   // The weights are the user's to change: all stat worth more makes the same target easier.
   assert.ok(armorChance("eternal", 200, 340, "xenon", undefined, undefined, { attack: 6.28, allStat: 50 }) > armorChance("eternal", 200, 340, "xenon"));
+});
+
+test("Xenon goal chips follow the item level, each as hard to roll as its Lv.200 chip (user, 2026-11-14)", () => {
+  assert.deepEqual(xenonChips(200), [260, 300, 340, 380]);
+  assert.deepEqual(xenonChips(150), [230, 260, 290, 320]);
+  assert.deepEqual(xenonChips(160), [240, 280, 310, 350]);
+  assert.deepEqual(xenonChips(250), [270, 310, 350, 400]);
+  const p = (level: number, x: number) => armorChance("eternal", level, x, "xenon");
+  for (const level of [140, 160, 250]) {
+    xenonChips(level).forEach((x, i) => {
+      const want = p(200, [260, 300, 340, 380][i]);
+      // At least as likely as the Lv.200 chip, and the next round 10 up is not.
+      assert.ok(p(level, x) >= want && p(level, x + 10) < want, `Lv.${level} chip ${x}`);
+    });
+  }
+  // Items too low for these goals still get four different chips.
+  assert.equal(new Set(xenonChips(30)).size, 4);
+});
+
+test("tier values split real items' bonus stats (NEXON Open API, 2026-11-14)", () => {
+  // Every flamed armor · accessory of seven characters (101 items, Lv.75 ~ 250) splits into four lines with these
+  // values; at Lv.250 single 13 or double 6 instead leave most of them unsplittable. A few of them:
+  const [l250, l200, l160] = [tierValues(250), tierValues(200), tierValues(160)];
+  // Lv.250 shirt: DEX 5 + STR·DEX 5 + DEX·LUK 5 (+ all stat %) = STR 35 · DEX 130 · LUK 35.
+  assert.deepEqual([5 * l250.double, 5 * l250.single + 10 * l250.double, 5 * l250.double], [35, 130, 35]);
+  // Lv.250 pants: STR 5 + STR·LUK 6 + DEX·LUK 5 = STR 102 · DEX 35 · LUK 77.
+  assert.deepEqual([5 * l250.single + 6 * l250.double, 5 * l250.double, 11 * l250.double], [102, 35, 77]);
+  // Lv.200 belt: LUK 6 + STR·LUK 6 + DEX·LUK 6 = STR 36 · DEX 36 · LUK 138.
+  assert.deepEqual([6 * l200.double, 6 * l200.double, 6 * l200.single + 12 * l200.double], [36, 36, 138]);
+  // Lv.160 shoes: STR 6 + LUK 6 + STR·LUK 5 = STR 79 · LUK 79.
+  assert.deepEqual([6 * l160.single + 5 * l160.double, 6 * l160.single + 5 * l160.double], [79, 79]);
 });
 
 test("soul ether averages", () => {
