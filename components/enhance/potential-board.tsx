@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Package, Split } from "lucide-react";
 import { NumberField, eok, parseNum } from "@/components/ev/ui";
-import { BasisButton, BasisRow, ItemFilter, NO_ITEM_FILTER, PeriodBar, SyncBanners, ViewTabs, WorldStrip, itemMatches, liveFilter, useGroupsOff, useKnownGroups, usePeriod, useSync } from "@/components/enhance/board-bits";
+import { BasisButton, BasisRow, ItemFilter, MoreCards, NO_ITEM_FILTER, PeriodBar, SyncBanners, ViewTabs, WorldStrip, itemMatches, liveFilter, useCardLimit, useGroupsOff, useKnownGroups, usePeriod, useSync } from "@/components/enhance/board-bits";
 import { Card, Delta, Empty, Gauge, ItemIcon, PickedTotal, Select, Tile, signed } from "@/components/enhance/parts";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { useItemDict, type Rolled } from "@/components/enhance/use-item-dict";
@@ -390,6 +390,7 @@ function PiecesView({ pieces, found, onOpen }: { pieces: PieceStat[]; found: Ico
   const list = ofKind
     .filter((p) => itemMatches(p.item, filter))
     .sort((a, b) => (sort === "spent" ? b.spent - a.spent : sort === "delta" ? (b.delta ?? -Infinity) - (a.delta ?? -Infinity) : b.last - a.last) || b.rolls - a.rolls);
+  const [limit, more] = useCardLimit(`${sort}|${kind}|${filter.picked}|${filter.query}`);
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -419,10 +420,11 @@ function PiecesView({ pieces, found, onOpen }: { pieces: PieceStat[]; found: Ico
       )}
       {list.length === 0 && <Empty>해당 아이템 없음</Empty>}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {list.map((piece) => (
+        {list.slice(0, limit).map((piece) => (
           <PieceCard key={piece.key} piece={piece} found={found} onOpen={() => onOpen(piece.key)} />
         ))}
       </div>
+      <MoreCards total={list.length} shown={limit} onMore={more} />
     </>
   );
 }

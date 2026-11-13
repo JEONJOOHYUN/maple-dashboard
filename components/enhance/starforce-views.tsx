@@ -3,7 +3,7 @@
 import { useRef, useState, type ReactNode } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, Package, Pencil } from "lucide-react";
 import { NumberField, Segment, eok, parseNum } from "@/components/ev/ui";
-import { ItemFilter, NO_ITEM_FILTER, itemMatches, liveFilter } from "@/components/enhance/board-bits";
+import { ItemFilter, MoreCards, NO_ITEM_FILTER, itemMatches, liveFilter, useCardLimit } from "@/components/enhance/board-bits";
 import { CHIP, Card, Delta, Empty, Gauge, ItemIcon, PickedTotal, SKIP_LABEL, Select, Tile, TryBadges, signed, signedShort, tone } from "@/components/enhance/parts";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import type { ItemOverrides } from "@/lib/enhance/items";
@@ -304,6 +304,7 @@ export function ItemsView({
     .sort(
     (a, b) => unknown(b) - unknown(a) || (sort === "spent" ? b.spent - a.spent : sort === "delta" ? b.delta - a.delta : b.last - a.last) || b.tries - a.tries
   );
+  const [limit, more] = useCardLimit(`${sort}|${hideLow}|${filter.picked}|${filter.query}`);
 
   return (
     <>
@@ -329,7 +330,12 @@ export function ItemsView({
       )}
       {items.length === 0 && <Empty>{visible.length === 0 ? "12성 이상 아이템 없음" : "해당 아이템 없음"}</Empty>}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {items.map((it) => {
+        {/* The card being typed in stays on screen wherever it sorts to: a level typed into an unknown item makes it
+            known after two digits, which moved it past the first screenful and took the field away mid-number
+            (Codex review, 2026-11-13). */}
+        {items
+          .filter((it, i) => i < limit || it.key === editing)
+          .map((it) => {
           const noLevel = it.info.level <= 0;
           const open = editing === it.key || noLevel;
           return (
@@ -411,6 +417,7 @@ export function ItemsView({
           );
         })}
       </div>
+      <MoreCards total={items.length} shown={limit} onMore={more} />
     </>
   );
 }

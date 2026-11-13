@@ -425,6 +425,33 @@ export function ItemFilter({ names, value, onChange }: { names: string[]; value:
   );
 }
 
+/** Cards of a 모아보기 grid shown at first: four rows of three. */
+const CARD_FIRST = 12;
+
+/**
+ * How many cards of a 모아보기 grid are shown (user, 2026-11-13: two years of records are hundreds of cards on one
+ * page). A screenful first, and "더 보기" brings all the rest at once (user: not twelve more at a time); back to the
+ * first screenful when what is listed changes (`key` = the sort and the filters), so a new list does not open long.
+ */
+export function useCardLimit(key: string) {
+  const [state, setState] = useState({ key, all: false });
+  // The list changed: forget that the old one was opened (a state reset during render, as React allows for a value
+  // that follows a prop). Remembering it by its key alone opened the whole list again on coming back to a sort or
+  // a filter used before (Codex review, 2026-11-13).
+  if (state.key !== key) setState({ key, all: false });
+  return [state.key === key && state.all ? Infinity : CARD_FIRST, () => setState({ key, all: true })] as const;
+}
+
+/** "더 보기" under a card grid; nothing when every card is shown. */
+export function MoreCards({ total, shown, onMore }: { total: number; shown: number; onMore: () => void }) {
+  if (total <= shown) return null;
+  return (
+    <button type="button" onClick={onMore} className={cn(plainButton, "h-11 w-full font-semibold text-primary-text")}>
+      더 보기 ({(total - shown).toLocaleString("ko-KR")}개 남음)
+    </button>
+  );
+}
+
 export function ViewTabs<T extends string>({ views, value, onChange }: { views: { id: T; label: string }[]; value: T; onChange: (id: T) => void }) {
   return (
     <div role="tablist" aria-label="강화 기록 보기" className="flex gap-0.5 overflow-x-auto border-b border-border [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
