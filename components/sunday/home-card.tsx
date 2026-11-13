@@ -30,22 +30,23 @@ export function SundayHomeCard({ week, recorded, bigDays }: { week: SundayPageDa
           ))}
         </ul>
         <div className="mt-auto flex flex-wrap items-center justify-between gap-x-4 gap-y-1 pt-2 text-xs text-muted-foreground">
-          <span className="flex flex-wrap gap-x-2">
+          {/* Phones: one window per line (user, 2026-11-14), the links on their own line under them. */}
+          <span className="flex flex-col gap-y-0.5 sm:flex-row sm:flex-wrap sm:gap-x-2">
             {bigDays.map((d) => (
               <span key={d.id} className="whitespace-nowrap">
                 {d.label.replace(" 타임", "")} <b className="text-foreground">{d.overdue ? "나올 때 지남" : d.when}</b>
               </span>
             ))}
           </span>
-          <span className="ml-auto flex items-center gap-3.5">
-            {recorded.updated && <span className="whitespace-nowrap">{recorded.updated} 갱신</span>}
+          {/* No update time here: only we need it (user, 2026-11-14) — on a phone it squeezed "공지사항" onto two lines. */}
+          <span className="ml-auto flex basis-full items-center justify-end gap-3.5 sm:basis-auto">
             <NoticeImage images={recorded.images} label={week.label} className="relative z-10 -my-2 py-2 whitespace-nowrap" />
             {recorded.noticeUrl && (
               <a
                 href={recorded.noticeUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="relative z-10 -my-2 inline-flex items-center gap-1 rounded-sm py-2 font-semibold text-primary-text outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
+                className="relative z-10 -my-2 inline-flex items-center gap-1 rounded-sm py-2 font-semibold whitespace-nowrap text-primary-text outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
               >
                 공지사항
                 <ExternalLink className="size-3" aria-hidden="true" />
