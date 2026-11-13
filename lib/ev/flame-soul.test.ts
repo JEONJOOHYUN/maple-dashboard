@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { DEFAULT_XENON_WEIGHTS, armorChance, bestWeaponGrade, weaponChance, tierValues } from "./flame.ts";
+import { DEFAULT_HP_WEIGHTS, DEFAULT_XENON_WEIGHTS, armorChance, bestWeaponGrade, hpScore, hpTarget, weaponChance, tierValues } from "./flame.ts";
 import { percentileOf } from "./luck.ts";
 import { soulPlan } from "./soul.ts";
 
@@ -57,13 +57,12 @@ test("armor flames: harder targets are rarer, abyss beats eternal", () => {
   near(armorChance("eternal", 200, 0), 1, 1e-9, "target 0");
   // Highest possible at Lv.200: four best options at tier 7 can never pass this.
   assert.equal(armorChance("abyss", 200, 1000), 0);
-  assert.ok(armorChance("eternal", 250, 4500, "hp") > 0);
 });
 
 test("Xenon flames: STR · DEX · LUK all count, attack and all stat by their weights", () => {
   assert.ok(armorChance("eternal", 200, 300, "xenon") > armorChance("eternal", 200, 340, "xenon"));
   near(armorChance("eternal", 200, 0, "xenon"), 1, 1e-9, "target 0");
-  // Best at Lv.200 with the default weights (maplescouter, the middle of three Xenons: all stat 1 % = 34.7): three
+  // Best at Lv.200 with the default weights (the middle of three Xenons: all stat 1 % = 34.7): three
   // stat pairs at tier 7 (2 × 6 × 7 each) + all stat 7 % × 34.7 = 494.9.
   assert.deepEqual(DEFAULT_XENON_WEIGHTS, { attack: 6.28, allStat: 34.7 });
   assert.ok(armorChance("abyss", 200, 494.9, "xenon") > 0);
@@ -72,7 +71,7 @@ test("Xenon flames: STR · DEX · LUK all count, attack and all stat by their we
   assert.ok(armorChance("eternal", 200, 340, "xenon", undefined, undefined, { attack: 6.28, allStat: 50 }) > armorChance("eternal", 200, 340, "xenon"));
 });
 
-test("soul ether averages match mapletiptip", () => {
+test("soul ether averages", () => {
   const ether = [2.1, 3.4, 4.3, 30.4];
   const r = soulPlan(0, 4, 0, ether);
   near(r.avgTries, 57.0, 0.1, "0 → 4");
@@ -84,9 +83,47 @@ test("soul ether averages match mapletiptip", () => {
   assert.ok(percentileOf(r.dist, 0.9) > percentileOf(r.dist, 0.1));
 });
 
-test("flame values per tier follow the namu.wiki formulas", () => {
+test("flame values per tier", () => {
   assert.deepEqual(tierValues(200), { single: 11, double: 6, hp: 600 });
   // Lv.250 counts as 220 for single stats; HP drops the ones digit.
   assert.deepEqual(tierValues(250), { single: 12, double: 7, hp: 700 });
   assert.equal(tierValues(135).hp, 390);
+  // Max HP at 3추 · 2추 · 1추 (tiers 5 · 6 · 7), as players know them (user, 2026-11-13).
+  const hp = (level: number) => [5, 6, 7].map((tier) => tierValues(level).hp * tier);
+  assert.deepEqual(hp(160), [2400, 2880, 3360]);
+  assert.deepEqual(hp(200), [3000, 3600, 4200]);
+  assert.deepEqual(hp(250), [3500, 4200, 4900]);
+});
+
+test("Demon Avenger flames: the goal is HP n추 + 공 m, in max HP through the conversion", () => {
+  // The default weights are one Lv.299 Demon Avenger's: its six Lv.250 armor flames (max HP 4,900 each; attack and
+  // STR as below) come to these scores (user's character, 2026-11-13).
+  assert.deepEqual(DEFAULT_HP_WEIGHTS, { attack: 67.8, str: 0.51 });
+  const worn: [number, number, number][] = [[4, 0, 5171], [5, 0, 5239], [6, 0, 5307], [6, 35, 5325], [5, 35, 5257], [5, 0, 5239]];
+  for (const [attack, str, score] of worn) assert.equal(Math.round(hpScore(4900, attack, str)), score);
+  // 1추 + 공 5 at Lv.200 with attack 1 = HP 90: 4,200 + 450.
+  assert.equal(hpTarget(200, 1, 5, { attack: 90, str: 1 }), 4650);
+  assert.equal(hpTarget(160, 3, 0), 2400);
+  assert.equal(hpTarget(250, 2, 0), 4200);
+  // With attack and STR worth nothing only the HP line counts: one of the four out of 19 (4 ÷ 19) at tier 7,
+  // 1 % with the reset and 3 % with the abyss flame; 3추 = tier 5 and up (71 % with the reset).
+  const only = { attack: 0, str: 0 };
+  near(armorChance("eternal", 200, hpTarget(200, 1, 0, only), "hp", undefined, only), (4 / 19) * 0.01, 1e-12, "eternal 1추");
+  near(armorChance("abyss", 200, hpTarget(200, 1, 0, only), "hp", undefined, only), (4 / 19) * 0.03, 1e-12, "abyss 1추");
+  near(armorChance("eternal", 200, hpTarget(200, 3, 0, only), "hp", undefined, only), (4 / 19) * 0.71, 1e-12, "eternal 3추");
+  // The strong flame stops at tier 6: no 1추.
+  assert.equal(armorChance("strong", 200, hpTarget(200, 1, 0, only), "hp", undefined, only), 0);
+  // With only attack counted besides HP, "1추 + 공 5" needs both lines (C(17,2) ÷ C(19,4) = 2 ÷ 57): HP at tier 7
+  // with attack 5 or more, or HP at tier 6 with attack… 600 short, which attack at 90 a point cannot make up (7 × 90).
+  const atk = { attack: 90, str: 0 };
+  near(armorChance("eternal", 200, hpTarget(200, 1, 5, atk), "hp", undefined, atk), (2 / 57) * (0.01 * 0.71 + 0.25 * 0), 1e-12, "1추 + 공 5");
+  // A person's own numbers change the answer: attack worth more makes a lower HP line with high attack count too.
+  const rich = { attack: 200, str: 0 };
+  assert.ok(armorChance("eternal", 200, hpTarget(200, 1, 5, atk), "hp", undefined, rich) > armorChance("eternal", 200, hpTarget(200, 1, 5, atk), "hp", undefined, atk));
+  // A weight with decimals: the goal and the roll it stands for land on the same 0.01 step (Codex review,
+  // 2026-11-13: 1추 + 공 4 at attack 1 = HP 90.123 used to miss its own roll). Every tier of the reset has attack 4 up.
+  const odd = { attack: 90.123, str: 0 };
+  near(armorChance("eternal", 200, hpTarget(200, 1, 4, odd), "hp", undefined, odd), (2 / 57) * 0.01, 1e-12, "decimal weight");
+  // STR lines count once STR is worth something.
+  assert.ok(armorChance("eternal", 200, 4200, "hp", undefined, { attack: 90, str: 5 }) > armorChance("eternal", 200, 4200, "hp", undefined, { attack: 90, str: 0 }));
 });

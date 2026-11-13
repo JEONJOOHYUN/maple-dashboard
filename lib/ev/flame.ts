@@ -1,9 +1,9 @@
 // Bonus stats (추가옵션) from rebirth flames on boss equipment.
 // Official (maplestory.nexon.com/Guide/OtherProbability/game/gameAddOption, 2026-11-08): tier chance per flame,
 // boss gear always 4 lines at tier + 2 (3~7), 19 options per slot type picked with equal chance, no repeats.
-// Nexon's page gives tier chances and the option list, not values; values per tier are namu.wiki's formulas
-// (namu.wiki/w/추가옵션, checked 2026-11-09): single stat ⌊L/20⌋+1 (Lv.250 counts as 220), double stat ⌊L/40⌋+1,
-// attack · magic 1, all stat 1 %, boss damage 2 %, damage 1 %, max HP (L with the ones digit dropped)×3.
+// Nexon's page gives tier chances and the option list, not values. Values per tier: single stat ⌊L/20⌋+1
+// (Lv.250 counts as 220), double stat ⌊L/40⌋+1, attack · magic 1, all stat 1 %, boss damage 2 %, damage 1 %,
+// max HP (L with the ones digit dropped)×3 — Lv.160 480, Lv.200 600 and Lv.250 700 a tier (user, 2026-11-13).
 // Weapon "%급" (user, 2026-11-08): boss % + damage % + all stat % + main stat 10 = 1 %.
 
 export type FlameId = "strong" | "eternal" | "abyss";
@@ -86,19 +86,28 @@ export type ArmorWeights = {
   attack: number;
   allStat: number;
 };
-export type HpWeights = { attack: number; str: number };
 export const DEFAULT_WEIGHTS: ArmorWeights = { sub: 10, attack: 4, allStat: 10 };
-/** Demon Avenger (HP): guesses fitted to maplescouter totals of Lv.250 gear (spec §4-8, 확인 필요). */
-export const DEFAULT_HP_WEIGHTS: HpWeights = { attack: 90, str: 1 };
+/**
+ * Demon Avenger: what attack 1 and STR 1 are worth in max HP. They differ per character, so the page lets people
+ * change them. The defaults are one Lv.299 Demon Avenger's (user, 2026-11-13): with them its six Lv.250 armor
+ * flames come to 5,171 ~ 5,325 (max HP 4,900 + attack 4 ~ 6, two of them with STR 35) — see the test.
+ */
+export type HpWeights = { attack: number; str: number };
+export const DEFAULT_HP_WEIGHTS: HpWeights = { attack: 67.8, str: 0.51 };
+/** A Demon Avenger flame in max HP: the max HP line as it is, attack and STR through the weights. */
+export function hpScore(hp: number, attack: number, str: number, hw: HpWeights = DEFAULT_HP_WEIGHTS): number {
+  return hp + attack * hw.attack + str * hw.str;
+}
 /**
  * Xenon: STR · DEX · LUK all count one for one (its damage goes with their sum); attack 1 and all stat 1 % in those
- * points. From maplescouter.com (세부 스펙 효율, 2026-11-13), the middle one of three Xenon characters (user): 공마 1당
- * 주스탯 · 올스탯 1%당 주스탯 = 7.28 · 36.8 (Lv.290), 6.28 · 34.7 (Lv.300), 5.1 · 31.5 (Lv.295). (The first values
- * here, 7 and 20, were worked out from the Open API stats alone and had all stat far too low: the equipment list was
- * missing five slots.) They differ per character: the page lets people change them.
+ * points. The middle one of three Xenon characters (user, 2026-11-13): 공마 1당 주스탯 · 올스탯 1%당 주스탯 =
+ * 7.28 · 36.8 (Lv.290), 6.28 · 34.7 (Lv.300), 5.1 · 31.5 (Lv.295). (The first values here, 7 and 20, were worked
+ * out from the Open API stats alone and had all stat far too low: the equipment list was missing five slots.)
+ * They differ per character: the page lets people change them.
  */
 export type XenonWeights = { attack: number; allStat: number };
 export const DEFAULT_XENON_WEIGHTS: XenonWeights = { attack: 6.28, allStat: 34.7 };
+/** "hp" = Demon Avenger: scores are in max HP, and the goal is said as "HP n추 + 공 m" (hpTarget). */
 export type FlameJob = "stat" | "hp" | "xenon";
 
 export function tierValues(level: number) {
@@ -131,7 +140,7 @@ function relevantOptions(level: number, job: FlameJob, w: ArmorWeights, hw: HpWe
   if (job === "hp") {
     return [
       (t) => t * v.hp, // max HP
-      (t) => t * hw.attack, // attack
+      (t) => t * hw.attack, // attack (1 a tier on armor)
       (t) => t * v.single * hw.str, // STR
       (t) => t * v.double * hw.str, // STR+DEX
       (t) => t * v.double * hw.str, // STR+INT
@@ -152,7 +161,16 @@ function relevantOptions(level: number, job: FlameJob, w: ArmorWeights, hw: HpWe
   ];
 }
 
-/** Armor · accessories: chance that the converted score reaches `target` (급, or HP for Demon Avenger). */
+/**
+ * Demon Avenger's goal the way players say it (user, 2026-11-13): "HP n추 + 공 m" = max HP at n추 (1추 = tier 7,
+ * 4,200 at Lv.200) plus attack m, in max HP through the person's own conversion. Any roll worth as much counts —
+ * a lower HP line with more attack or STR too.
+ */
+export function hpTarget(level: number, grade: number, attack: number, hw: HpWeights = DEFAULT_HP_WEIGHTS): number {
+  return hpScore(tierValues(level).hp * (8 - grade), attack, 0, hw);
+}
+
+/** Armor · accessories: chance that the converted score reaches `target` (급, or max HP for Demon Avenger). */
 export function armorChance(
   flame: FlameId,
   level: number,
@@ -167,6 +185,9 @@ export function armorChance(
   const R = options.length;
   const total = comb(POOL, LINES);
   const SCALE = 100; // scores to 0.01 steps
+  // The target in the same steps as the scores: a goal worked out from the weights (hpTarget with attack 1 = HP
+  // 90.123) is then met by the roll it stands for, instead of missing it by the rounding (Codex review, 2026-11-13).
+  const need = Math.round(target * SCALE);
   let p = 0;
   for (let mask = 0; mask < 1 << R; mask++) {
     const picked = options.filter((_, i) => mask & (1 << i));
@@ -184,7 +205,7 @@ export function armorChance(
         }
       scores = next;
     }
-    for (const [s, ps] of scores) if (s >= target * SCALE - 1e-9) p += pSet * ps;
+    for (const [s, ps] of scores) if (s >= need) p += pSet * ps;
   }
   return p;
 }
