@@ -314,14 +314,15 @@ export function weaponChance(rows: Row[][], goal: WeaponGoal, fixFirst?: "a" | "
  * How much one unit of each line is worth in main stat %. Players know these as
  * "세부 스펙 효율"; they differ per character, so the page lets people change them.
  */
-export type StatConv = { all: number; lvstr: number; atkf: number; cd: number };
+export type StatConv = { all: number; lvstr: number; atkf: number; cd: number; flat: number };
 /** Main stat % = 1 by definition. */
-export const NO_CONV: StatConv = { all: 1, lvstr: 0, atkf: 0, cd: 0 };
+export const NO_CONV: StatConv = { all: 1, lvstr: 0, atkf: 0, cd: 0, flat: 0 };
 
 /**
  * "세부 스펙 효율" values → StatConv. The numbers: one "+2 per 9 levels" line = main stat v9 %,
  * crit damage 3 % = main stat cd3 %, attack 1 = atk1 flat main stat, all stat 1 % = all1 flat main stat.
- * Flat main stat turns into % through the 9-level line: (2 × ⌊level / 9⌋) flat = v9 %.
+ * Flat main stat turns into % through the 9-level line: (2 × ⌊level / 9⌋) flat = v9 %. `flat` = what one point of
+ * a flat main stat line ("STR +14") is worth that way (user, 2026-11-13: it was the one line left out).
  */
 export function convFromSpec(s: { level: number; v9: number; cd3: number; atk1: number; all1: number }): StatConv {
   const flat9 = 2 * Math.floor(s.level / 9);
@@ -331,6 +332,7 @@ export function convFromSpec(s: { level: number; v9: number; cd3: number; atk1: 
     lvstr: s.v9 / 2,
     atkf: flatPerPct > 0 ? s.atk1 / flatPerPct : 0,
     cd: s.cd3 / 3,
+    flat: flatPerPct > 0 ? 1 / flatPerPct : 0,
   };
 }
 
@@ -414,6 +416,8 @@ function statValue(r: Row, conv: StatConv, attack: "atk" | "matk"): number {
       return r[1] * conv.all;
     case "lvstr":
       return r[1] * conv.lvstr;
+    case "fstr":
+      return r[1] * conv.flat;
     case "cd":
       return r[1] * conv.cd;
     case "atkf":

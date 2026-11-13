@@ -275,10 +275,50 @@ test("converted number: shown rounded down, and the chance is of the number show
   const goal = goalOf(["INT +6%", "마력 +11", "올스탯 +2%"], true)!;
   near(statWorth(goal, conv), 10.771, 0.001, "worth");
   const hit = goalChance(heart, "unique", goal, conv)!;
-  // "10.8 %급" with the average of 10.77 was 789 rolls here while the calculator said 876 for 10.8.
+  // "10.8 %급" with the average of 10.77 was one number here while the calculator gave another for 10.8.
   assert.equal(hit.by, "INT 10.7%급");
   assert.equal(hit.p, sumChance(lineTables("white", "unique", "heart", 200)!, { type: "stat", min: 10.7 - 1e-9, conv, attack: "matk" }));
-  near(1 / hit.p, 789.2, 0.1, "INT 10.7%급");
+  // Flat stat lines ("INT +12") count toward the number too (user, 2026-11-13): 789.2 rolls before they did.
+  near(1 / hit.p, 602.5, 0.1, "INT 10.7%급");
+  // The option's own flat stat line is in its worth: 64 flat = 6.31 % at Lv.296, so INT +12 is 1.18 %.
+  const flat = goalOf(["INT +6%", "INT +12", "마력 +11"], true)!;
+  near(statWorth(flat, conv), 6 + 12 * (6.31 / 64) + 11 * conv.atkf, 1e-9, "worth with a flat stat line");
+  assert.ok(statWorth(flat, conv) > statWorth(goalOf(["INT +6%", "DEX +12", "마력 +11"], true)!, conv), "another stat's flat line is worth nothing");
+  // Main potential is read plain: no conversion, so a flat line adds nothing there.
+  assert.equal(statWorth(flat, NO_CONV), 6);
+});
+
+test("additional potential: a flat stat line names the stat when nothing else does (Codex review, 2026-11-13)", () => {
+  const conv = convFromSpec(STAT_CONV_DEFAULT);
+  const heart = row({ ...ADD, additional_potential_option_grade: "유니크", item_equipment_part: "기계심장", item_level: 200 });
+  // STR +18 · 올스탯 2 % · 공격력 11: no STR % line, and still a STR option — the same number as on the calculator.
+  const goal = goalOf(["STR +18", "올스탯 +2%", "공격력 +11"], true)!;
+  assert.equal(goal.stat, "str");
+  const worth = 18 * conv.flat + 2 * conv.all + 11 * conv.atkf;
+  near(statWorth(goal, conv), worth, 1e-9, "worth");
+  const shown = Math.floor(worth * 10 + 1e-6) / 10;
+  const hit = goalChance(heart, "unique", goal, conv)!;
+  assert.equal(hit.by, `STR ${shown}%급`);
+  assert.equal(hit.p, sumChance(lineTables("white", "unique", "heart", 200)!, { type: "stat", min: shown - 1e-9, conv, attack: "atk" }));
+  // The flat line alone, with nothing else worth a thing.
+  const only = goalOf(["STR +18", "방어력 +120", "이동속도 +6"], true)!;
+  assert.equal(only.stat, "str");
+  const alone = goalChance(heart, "unique", only, conv)!;
+  const shownAlone = Math.floor(18 * conv.flat * 10 + 1e-6) / 10;
+  assert.equal(alone.by, `STR ${shownAlone}%급`);
+  assert.equal(alone.p, sumChance(lineTables("white", "unique", "heart", 200)!, { type: "stat", min: shownAlone - 1e-9, conv, attack: "atk" }));
+  // A stat % line still decides before a flat line of another stat does.
+  assert.equal(goalOf(["INT +6%", "STR +18", "마력 +11"], true)!.stat, "int");
+  // Main potential is read plain (no conversion): a flat line names nothing there.
+  assert.equal(goalOf(["STR +12", "방어력 +120", "이동속도 +6"], false), null);
+  // HP % on a warrior's piece (or one of no job) stays an HP option: the flat STR line next to it does not take
+  // it over. On a mage's piece HP % is no goal, so there the flat line of its own stat is what is left.
+  const warrior = { stats: ["str"] as const };
+  for (const rule of [warrior, {}]) {
+    const hp = goalOf(["최대 HP +11%", "STR +18", "최대 MP +8%"], true, rule)!;
+    assert.deepEqual([hp.stat, hp.conds], ["", [{ cat: "hp", min: 11 }]]);
+  }
+  assert.equal(goalOf(["최대 HP +11%", "INT +18", "최대 MP +8%"], true, { stats: ["int"] })!.stat, "int");
 });
 
 test("average rolls to go up a grade include the guarantee", () => {

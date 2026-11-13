@@ -111,6 +111,14 @@ test("stat conversion: Lv.296 example turns flat lines into main stat %", () => 
   assert.ok(Math.abs(c.atkf - 2.29 / (64 / 6.31)) < 1e-9);
   assert.equal(c.lvstr, 3.155);
   assert.ok(Math.abs(c.cd - 11.9 / 3) < 1e-9);
+  // One point of a flat main stat line: 6.31 % ÷ 64.
+  assert.ok(Math.abs(c.flat - 6.31 / 64) < 1e-12);
+  assert.equal(NO_CONV.flat, 0);
+  // A flat stat line counts through it: more ways to reach the same number than with that line worth nothing.
+  const rows = lineTables("white", "legendary", "shoes", 200)!;
+  const withFlat = sumChance(rows, { type: "stat", min: 10 - 1e-9, conv: c, attack: "atk" });
+  const without = sumChance(rows, { type: "stat", min: 10 - 1e-9, conv: { ...c, flat: 0 }, attack: "atk" });
+  assert.ok(withFlat > without && without > 0, `${withFlat} > ${without}`);
 });
 
 test("main stat goal with conversion only adds lines, never removes them", () => {

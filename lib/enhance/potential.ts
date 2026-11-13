@@ -343,8 +343,9 @@ const LABEL: Record<string, string> = {
   str: "STR", dex: "DEX", int: "INT", luk: "LUK", hp: "HP", all: "올스탯",
   boss: "보공", ied: "방무", atk: "공격력", matk: "마력", atkf: "공격력 +", matkf: "마력 +", dmg: "데미지", cd: "크뎀",
   drop: "드롭", meso: "메획", cool: "쿨감", lvstr: "9렙당 STR", lvdex: "9렙당 DEX", lvint: "9렙당 INT", lvluk: "9렙당 LUK",
+  fstr: "STR +", fdex: "DEX +", fint: "INT +", fluk: "LUK +",
 };
-const UNIT: Record<string, string> = { cool: "초", atkf: "", matkf: "", lvstr: "", lvdex: "", lvint: "", lvluk: "" };
+const UNIT: Record<string, string> = { cool: "초", atkf: "", matkf: "", lvstr: "", lvdex: "", lvint: "", lvluk: "", fstr: "", fdex: "", fint: "", fluk: "" };
 
 /**
  * The option an item was left with, read as "this much or more":
@@ -374,11 +375,18 @@ export function goalOf(option: string[], add: boolean, rule: StatRule = {}): Goa
   const pool = rule.stats ?? MAIN_STATS;
   const [topStat, topSum] = best(pool);
   const [topLv, lvSum] = best(pool.map((c) => `lv${c}`));
+  // Additional potential also has flat stat lines ("STR +18"): the stat is that one when nothing else names it, so
+  // STR +18 · 올스탯 2 % · 공격력 11 is a STR option here as it is on the calculator (Codex review, 2026-11-13).
+  const [topFlat, flatSum] = add ? best(pool.map((c) => `f${c}`)) : ["", 0];
   // A Xenon has no one main stat: its stat % lines go into the all stat total below. Main potential only — the
   // additional one mixes flat lines, which are turned into main stat % with the calculator's conversion as before.
   const xenon = rule.xenon === true && !add;
   const statSum = xenon ? 0 : topSum;
-  const stat = xenon ? "" : statSum > 0 ? topStat : lvSum > 0 ? topLv.slice(2) : "";
+  // HP % on a piece that can be a demon avenger's is what such an option is for (below): a flat STR line next to
+  // it does not make it a STR option (Codex review, 2026-11-13: HP 11 % + STR +18 read as "STR 1.7 %급").
+  const hpGoal = sum("hp") > 0 && (!rule.stats || rule.stats.every((c) => c === "str"));
+  const byFlat = !xenon && statSum <= 0 && lvSum <= 0 && flatSum > 0 && !hpGoal;
+  const stat = xenon ? "" : statSum > 0 ? topStat : lvSum > 0 ? topLv.slice(2) : byFlat ? topFlat.slice(1) : "";
   // Attack or magic attack: an INT item is a mage's; with no stat line the item's job says (mage gear is magic,
   // other class gear is not), and without one whichever the option has more of.
   const magic = stat ? stat === "int" : rule.stats ? rule.stats.every((c) => c === "int") : sum("matk") + sum("matkf") > sum("atk") + sum("atkf");
@@ -392,7 +400,9 @@ export function goalOf(option: string[], add: boolean, rule: StatRule = {}): Goa
   else if (sum("all") > 0) conds.push({ cat: "all", min: sum("all") });
   // HP % is what an item with no stat line at all is for (demon avenger gear): a warrior's piece, or one whose name
   // does not say. On a mage's robe whose LUK line was just left out, HP 10 % is no goal either.
-  else if (!stat && sum("hp") > 0 && (!rule.stats || rule.stats.every((c) => c === "str"))) conds.push({ cat: "hp", min: sum("hp") });
+  else if (!stat && hpGoal) conds.push({ cat: "hp", min: sum("hp") });
+  // A flat stat line that is all the option has of its stat is what the option is for.
+  else if (byFlat) conds.push({ cat: topFlat, min: flatSum });
   for (const cat of add ? WANTED_ADD : WANTED_MAIN) if (sum(cat) > 0 && !skip.has(cat)) conds.push({ cat, min: sum(cat) });
   if (conds.length === 0) return null;
   return { conds, label: conds.map(condLabel).join(" · "), stat, magic, sums, lines, ...(xenon ? { xenon } : {}) };
@@ -416,17 +426,19 @@ const inStat = (cat: string, stat: string, conv: StatConv) =>
   cat === stat ||
   (cat === "all" && conv.all > 0) ||
   (cat === `lv${stat}` && conv.lvstr > 0) ||
+  (cat === `f${stat}` && conv.flat > 0) ||
   (cat === "cd" && conv.cd > 0) ||
   ((cat === "atkf" || cat === "matkf") && conv.atkf > 0);
 
 /**
- * Main stat % the option is worth ("INT 15.8 %급"): its stat % plus all stat %, the "per 9 levels" line, crit damage
- * and flat attack turned into stat % with the calculator's conversion (the user's numbers).
+ * Main stat % the option is worth ("INT 15.8 %급"): its stat % plus all stat %, the "per 9 levels" line, the flat
+ * stat line ("INT +14"), crit damage and flat attack turned into stat % with the calculator's conversion (the
+ * user's numbers).
  */
 export function statWorth(goal: Goal, conv: StatConv): number {
   const sum = (cat: string) => goal.sums[cat] ?? 0;
   // An option with no main stat line of its own (all stat % only) is still worth main stat through the conversion.
-  const own = goal.stat ? sum(goal.stat) + sum(`lv${goal.stat}`) * conv.lvstr : 0;
+  const own = goal.stat ? sum(goal.stat) + sum(`lv${goal.stat}`) * conv.lvstr + sum(`f${goal.stat}`) * conv.flat : 0;
   return own + sum("all") * conv.all + sum("cd") * conv.cd + sum(goal.magic ? "matkf" : "atkf") * conv.atkf;
 }
 
@@ -449,9 +461,19 @@ function tablesOf(row: Pick<PotRow, "part" | "level" | "meso" | "add" | "type" |
   // An option with no main stat of its own is asked with STR standing in for it ("주스탯 15 %"). A kept line 1 that
   // is a stat line was then left out as another job's (a STR line on a mage's shoes): it must not pass for the
   // stand-in and count again (Codex review, 2026-11-13: that read a 2.6 % roll as 32 %). A Xenon's lines stay.
-  const statLine = MAIN_STATS.some((c) => cat === c || cat === `lv${c}`);
+  const statLine = MAIN_STATS.some((c) => cat === c || cat === `lv${c}` || cat === `f${c}`);
   const kept = !goal.stat && !goal.xenon && statLine ? "" : cat;
-  const standIn = !goal.stat ? kept : cat === goal.stat ? "str" : cat === `lv${goal.stat}` ? "lvstr" : cat === "str" || cat === "lvstr" ? "" : cat;
+  const standIn = !goal.stat
+    ? kept
+    : cat === goal.stat
+      ? "str"
+      : cat === `lv${goal.stat}`
+        ? "lvstr"
+        : cat === `f${goal.stat}`
+          ? "fstr"
+          : cat === "str" || cat === "lvstr" || cat === "fstr"
+            ? ""
+            : cat;
   // A Xenon's goal: every STR · DEX · LUK % line is an all stat line of a third its value (a kept line 1 too).
   const fix = (name: string): Row[][] => {
     const rows = prime ? fixFirstLine(table, name, value) : table;
