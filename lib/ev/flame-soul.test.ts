@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { DEFAULT_HP_WEIGHTS, DEFAULT_XENON_WEIGHTS, armorChance, bestWeaponGrade, hpScore, hpTarget, weaponChance, tierValues, xenonChips } from "./flame.ts";
+import { DEFAULT_HP_WEIGHTS, DEFAULT_XENON_WEIGHTS, armorChance, bestWeaponGrade, goalChips, hpScore, hpTarget, weaponChance, tierValues } from "./flame.ts";
 import { percentileOf } from "./luck.ts";
 import { soulPlan } from "./soul.ts";
 
@@ -71,21 +71,29 @@ test("Xenon flames: STR · DEX · LUK all count, attack and all stat by their we
   assert.ok(armorChance("eternal", 200, 340, "xenon", undefined, undefined, { attack: 6.28, allStat: 50 }) > armorChance("eternal", 200, 340, "xenon"));
 });
 
-test("Xenon goal chips follow the item level, each as hard to roll as its Lv.200 chip (user, 2026-11-14)", () => {
-  assert.deepEqual(xenonChips(200), [260, 300, 340, 380]);
-  assert.deepEqual(xenonChips(150), [230, 260, 290, 320]);
-  assert.deepEqual(xenonChips(160), [240, 280, 310, 350]);
-  assert.deepEqual(xenonChips(250), [270, 310, 350, 400]);
-  const p = (level: number, x: number) => armorChance("eternal", level, x, "xenon");
-  for (const level of [140, 160, 250]) {
-    xenonChips(level).forEach((x, i) => {
-      const want = p(200, [260, 300, 340, 380][i]);
-      // At least as likely as the Lv.200 chip, and the next round 10 up is not.
-      assert.ok(p(level, x) >= want && p(level, x + 10) < want, `Lv.${level} chip ${x}`);
-    });
+test("goal chips follow the item level, each about as hard to roll as its Lv.200 chip (user, 2026-11-14)", () => {
+  assert.deepEqual(goalChips("stat", 200), [100, 120, 140, 160]);
+  assert.deepEqual(goalChips("stat", 150), [80, 100, 110, 130]);
+  assert.deepEqual(goalChips("stat", 160), [90, 110, 120, 140]);
+  assert.deepEqual(goalChips("stat", 250), [110, 130, 150, 170]);
+  assert.deepEqual(goalChips("xenon", 200), [260, 300, 340, 380]);
+  assert.deepEqual(goalChips("xenon", 150), [240, 270, 300, 330]);
+  assert.deepEqual(goalChips("xenon", 160), [250, 280, 320, 350]);
+  assert.deepEqual(goalChips("xenon", 250), [270, 320, 360, 400]);
+  const base = { stat: [100, 120, 140, 160], xenon: [260, 300, 340, 380] };
+  for (const job of ["stat", "xenon"] as const) {
+    const p = (level: number, x: number) => armorChance("eternal", level, x, job);
+    for (const level of [140, 160, 250]) {
+      goalChips(job, level).forEach((x, i) => {
+        // No round 10 next to it is nearer the Lv.200 chip's chance (by ratio).
+        const want = p(200, base[job][i]);
+        const off = (v: number) => Math.abs(Math.log(p(level, v) / want));
+        assert.ok(off(x) <= off(x - 10) && off(x) <= off(x + 10), `${job} Lv.${level} chip ${x}`);
+      });
+    }
+    // Items too low for these goals still get four different chips.
+    assert.equal(new Set(goalChips(job, 30)).size, 4);
   }
-  // Items too low for these goals still get four different chips.
-  assert.equal(new Set(xenonChips(30)).size, 4);
 });
 
 test("tier values split real items' bonus stats (NEXON Open API, 2026-11-14)", () => {

@@ -3,7 +3,7 @@
 import { Fragment, useMemo, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { Chip, Label, NumberField, Panel, Segment, count, eok, parseNum, pct } from "@/components/ev/ui";
-import { FLAMES, armorChance, bestWeaponGrade, hpScore, hpTarget, tierValues, weaponChance, xenonChips, DEFAULT_HP_WEIGHTS, DEFAULT_WEIGHTS, DEFAULT_XENON_WEIGHTS, type FlameJob } from "@/lib/ev/flame";
+import { FLAMES, armorChance, bestWeaponGrade, goalChips, hpScore, hpTarget, tierValues, weaponChance, DEFAULT_HP_WEIGHTS, DEFAULT_WEIGHTS, DEFAULT_XENON_WEIGHTS, type FlameJob } from "@/lib/ev/flame";
 import { averageTries, triesAt } from "@/lib/ev/luck";
 import { cn } from "@/lib/utils";
 import { koreanUnits } from "@/lib/format";
@@ -15,8 +15,9 @@ export function FlameTab() {
   const [extraText, setExtraText] = useState("0");
   const [job, setJob] = useState<FlameJob>("stat");
   const [targetText, setTargetText] = useState("120");
-  // Xenon: which chip is picked (null = a goal typed in). The chips follow the item level, and so does the goal.
-  const [xenonChip, setXenonChip] = useState<number | null>(1);
+  // Main-stat jobs · Xenon: which chip is picked (null = a goal typed in). The chips follow the item level, and so
+  // does the goal.
+  const [chipIdx, setChipIdx] = useState<number | null>(1);
   // Demon Avenger: the goal is said as "HP n추 + 공 m" and reached through the conversion below (user, 2026-11-13).
   const [hpGrade, setHpGrade] = useState(1);
   const [hpAtkText, setHpAtkText] = useState("0");
@@ -35,8 +36,8 @@ export function FlameTab() {
 
   const level = Math.max(1, Math.round(parseNum(levelText, 200)));
   const extra = parseNum(extraText, 0);
-  const chips = useMemo(() => (job === "xenon" ? xenonChips(level) : [100, 120, 140, 160]), [job, level]);
-  const pickedChip = job === "xenon" && xenonChip !== null ? chips[xenonChip] : null;
+  const chips = useMemo(() => (job === "hp" ? [] : goalChips(job, level)), [job, level]);
+  const pickedChip = chipIdx !== null ? (chips[chipIdx] ?? null) : null;
   const target = pickedChip ?? parseNum(targetText, 0);
   const weights = { sub: parseNum(w.sub, 10) || 10, attack: parseNum(w.attack, 4), allStat: parseNum(w.allStat, 10) };
   const hpWeights = { attack: parseNum(hw.attack, DEFAULT_HP_WEIGHTS.attack), str: parseNum(hw.str, DEFAULT_HP_WEIGHTS.str) };
@@ -145,8 +146,7 @@ export function FlameTab() {
                   value={job}
                   onChange={(j) => {
                     setJob(j);
-                    if (j === "xenon") setXenonChip(1);
-                    else if (j === "stat") setTargetText("120");
+                    if (j !== "hp") setChipIdx(1);
                   }}
                   options={[
                     { id: "stat", label: "주스탯 직업" },
@@ -196,7 +196,7 @@ export function FlameTab() {
                     value={pickedChip !== null ? String(pickedChip) : targetText}
                     onChange={(t) => {
                       setTargetText(t);
-                      setXenonChip(null);
+                      setChipIdx(null);
                     }}
                     inputClassName="w-20"
                   />
@@ -209,7 +209,7 @@ export function FlameTab() {
                       on={target === n}
                       onClick={() => {
                         setTargetText(String(n));
-                        setXenonChip(job === "xenon" ? i : null);
+                        setChipIdx(i);
                       }}
                       className="px-0"
                     >

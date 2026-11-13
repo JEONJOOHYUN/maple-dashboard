@@ -234,24 +234,36 @@ export function armorChance(
   return atLeast(scoreChances(flame, level, job, w, hw, xw))(target);
 }
 
-/** Xenon goal chips at Lv.200; every level gets chips just as hard to roll as these. */
-const XENON_CHIPS_200 = [260, 300, 340, 380];
+/** Goal chips at Lv.200 per job; every level gets chips just as hard to roll as these. */
+const CHIPS_200: Record<"stat" | "xenon", number[]> = { stat: [100, 120, 140, 160], xenon: [260, 300, 340, 380] };
 
 /**
- * Xenon goal chips for an item level (user, 2026-11-14: the same chips at every level said little). A chip stands
- * for how likely its goal is with one meso reset at the default weights: at each level it is the highest round 10
- * that is still as likely as that chip at Lv.200 — Lv.160 240 · 280 · 310 · 350, Lv.200 260 · 300 · 340 · 380,
- * Lv.250 270 · 310 · 350 · 400 (all stat % is worth the same at every level, so they move less than the stat lines).
+ * Goal chips for an item level (user, 2026-11-14: the same chips at every level said little — 160급 at Lv.160 is a
+ * 7,000-reset goal, at Lv.250 a 270-reset one). A chip stands for how likely its goal is with one meso reset at the
+ * default weights: at each level it is the round 10 whose chance is nearest that chip's at Lv.200 (by ratio, the
+ * higher one on a tie). They change only where the tier values do, so they come in level bands — main stat Lv.160
+ * 90 · 110 · 120 · 140, Lv.200 100 · 120 · 140 · 160, Lv.250 110 · 130 · 150 · 170; Xenon Lv.160 250 · 280 · 320 ·
+ * 350, Lv.200 260 · 300 · 340 · 380, Lv.250 270 · 320 · 360 · 400 (all stat % is worth the same at every level, so
+ * Xenon's move less).
  */
-export function xenonChips(level: number): number[] {
-  const at = (L: number) => atLeast(scoreChances("eternal", L, "xenon", DEFAULT_WEIGHTS, DEFAULT_HP_WEIGHTS, DEFAULT_XENON_WEIGHTS));
+export function goalChips(job: "stat" | "xenon", level: number): number[] {
+  const at = (L: number) => atLeast(scoreChances("eternal", L, job, DEFAULT_WEIGHTS, DEFAULT_HP_WEIGHTS, DEFAULT_XENON_WEIGHTS));
   const ref = at(200);
   const here = level === 200 ? ref : at(level);
   const chips: number[] = [];
-  for (const x of XENON_CHIPS_200) {
+  for (const x of CHIPS_200[job]) {
     const want = ref(x);
-    let best = 0;
-    for (let v = 10; v <= 2000 && here(v) >= want; v += 10) best = v;
+    let best = 10;
+    let gap = Infinity;
+    for (let v = 10; v <= 2000; v += 10) {
+      const p = here(v);
+      if (p <= 0) break;
+      const d = Math.abs(Math.log(p / want));
+      if (d <= gap) {
+        gap = d;
+        best = v;
+      }
+    }
     // Never two chips the same (only on items too low for flames to reach these goals).
     chips.push(Math.max(best, (chips.at(-1) ?? 0) + 10));
   }
