@@ -390,7 +390,10 @@ test("stats: an option the item already had is not counted as won", () => {
   const kept: PotRow[] = [];
   for (let i = 0; i < 10; i++) kept.push(row({ before_potential_option: good, after_potential_option: junk, date_create: at(i) }));
   const a = buildPotStats(potEntries(kept, trackPieces(kept)), NO_CONV).pieces[0];
-  assert.deepEqual([a.option, a.goalBy, a.goalRolls, a.expected, a.delta], [["INT +13%", "INT +13%", "최대 MP +10%"], "", null, null, null]);
+  // No bar for it, and the meso that changed nothing is a loss (user, 2026-11-13: it used to be left out).
+  assert.deepEqual([a.option, a.goalBy, a.goalRolls, a.expected, a.delta], [["INT +13%", "INT +13%", "최대 MP +10%"], "", null, 0, -a.spent]);
+  const whole = buildPotStats(potEntries(kept, trackPieces(kept)), NO_CONV);
+  assert.deepEqual([whole.priced, whole.delta], [1, -a.spent]);
   // The option it already had: INT 26 % or better, as the calculator counts it, for reading only.
   assert.equal(a.keptBy, "INT 26%");
   near(a.keptRolls!, 1 / sumChance(lineTables("black", "legendary", "shoes", 250)!, { type: "stat", min: 26 - 1e-9, conv: NO_CONV, attack: "matk" }), 1e-6, "kept average");
@@ -435,8 +438,9 @@ test("stats: a better option of the same class as the old one counts as won (rea
   const back = [row({ ...weapon, before_potential_option: better, after_potential_option: old, date_create: at(30) })];
   const b = buildPotStats(potEntries(back, trackPieces(back)), NO_CONV).pieces[0];
   assert.deepEqual([b.option, b.goalBy, b.goalRolls], [better.map((o) => o.value), "", null]);
-  // Kept, so no bar and no profit — but what an option this good takes on average is there to read.
-  assert.deepEqual([b.expected, b.delta, b.keptBy], [null, null, "공 · 보공 3줄 · 꽉이탈 2줄"]);
+  // Kept, so no bar and what was spent is a loss — but what an option this good takes on average is there to read.
+  assert.ok(b.spent > 0);
+  assert.deepEqual([b.expected, b.delta, b.keptBy], [0, -b.spent, "공 · 보공 3줄 · 꽉이탈 2줄"]);
   near(b.keptRolls!, a.goalRolls!, 1e-6, "average of the kept option");
   near(b.keptMeso!, b.keptRolls! * fee, 1, "meso of the kept option");
 

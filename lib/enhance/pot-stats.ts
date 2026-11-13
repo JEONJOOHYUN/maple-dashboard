@@ -66,7 +66,8 @@ export type PieceStat = {
   goalMeso: number | null;
   /**
    * The item kept the option it already had: what that option (or better) takes on average, for reading only.
-   * It was not won by these rolls, so it is in no bar and no profit. "" · null when it cannot be told.
+   * It was not won by these rolls, so it is in no bar; the rolls count as spent with nothing gained (below).
+   * "" · null when it cannot be told.
    */
   keptBy: string;
   keptRolls: number | null;
@@ -100,7 +101,7 @@ export type PotStats = {
  * chance to compare with: the rolls were spent and the item is as it was (user, 2026-11-12). What such an option
  * takes on average is still handed back (`kept`), to be shown next to it.
  */
-function finalOption(list: PotEntry[], conv: StatConv, rules: StatRule[]): { option: string[]; goal: Goal | null; chance: number | null; by: string; kept: { p: number; by: string } | null } {
+function finalOption(list: PotEntry[], conv: StatConv, rules: StatRule[]): { option: string[]; goal: Goal | null; chance: number | null; by: string; kept: { p: number; by: string } | null; keptOld: boolean } {
   const last = list[list.length - 1].row;
   const grade = last.grade;
   const candidates = [last.before, ...list.filter((e) => e.row.t === last.t).map((e) => e.row.after)];
@@ -124,8 +125,8 @@ function finalOption(list: PotEntry[], conv: StatConv, rules: StatRule[]): { opt
   }
   const same = (a: string[], b: string[]) => a.length === b.length && a.every((line, i) => line === b[i]);
   const { option, goal, chance, by } = best;
-  if (option === last.before && !list.some((e) => same(e.row.after, last.before))) return { option, goal, chance: null, by: "", kept: chance ? { p: chance, by } : null };
-  return { option, goal, chance, by, kept: null };
+  if (option === last.before && !list.some((e) => same(e.row.after, last.before))) return { option, goal, chance: null, by: "", kept: chance ? { p: chance, by } : null, keptOld: true };
+  return { option, goal, chance, by, kept: null, keptOld: false };
 }
 
 /**
@@ -185,6 +186,9 @@ export function buildPotStats(entries: PotEntry[], conv: StatConv, xenons: Reado
     }
     // A last phase with nothing to show for it yet (no goal) still cost meso: it counts as spent with no worth.
     const spent = list.reduce((sum, e) => sum + e.cost, 0);
+    // The old option was kept: people roll on because they do not like what they have, so meso that changed
+    // nothing is a loss, not something to leave out of the profit (user, 2026-11-13). Worth 0 against what was spent.
+    if (final.keptOld && spent > 0 && expected === null) expected = 0;
     pieces.push({
       key,
       item: head.item,
