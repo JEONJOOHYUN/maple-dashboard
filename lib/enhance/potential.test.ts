@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { NO_CONV, SOUL_EXTRA, addWeaponChance, addWeaponSumChance, convFromScouter, customChance, fixFirstLine, lineTables, resetMeso, sumChance, weaponChance } from "../ev/potential.ts";
 import { STAT_CONV_DEFAULT } from "../ev/defaults.ts";
 import { buildPotStats, potEntries } from "./pot-stats.ts";
-import { cappedCategory, cubeFee, cubeOf, feeByInsight, gearJob, goalChance, goalOf, gradeBefore, kindOf, potKey, optionToken, parsePotential, pricedCube, rollMeso, rollsToUp, slotOf, statRule, statWorth, trackPieces, upChance, upRolls, type PotRow, type RawPotential } from "./potential.ts";
+import { cappedCategory, cubeFee, cubeOf, feeByInsight, gearJob, goalChance, goalOf, gradeBefore, kindOf, potKey, optionToken, parsePotential, pricedCube, rollMeso, rollsToUp, slotOf, statRule, statRules, statWorth, trackPieces, upChance, upRolls, type PotRow, type RawPotential } from "./potential.ts";
 
 const near = (actual: number, expected: number, tolerance: number, label: string) =>
   assert.ok(Math.abs(actual - expected) <= tolerance, `${label}: ${actual} is not within ${tolerance} of ${expected}`);
@@ -483,8 +483,11 @@ test("additional potential with all stat % and no main stat line is converted to
   const thief = [row({ target_item: "에테르넬 시프슈즈", before_potential_option: opt("방어력 +7%", "이동속도 +9", "점프력 +9"), after_potential_option: opt("올스탯 +10%", "올스탯 +10%", "올스탯 +7%") })];
   const onThief = buildPotStats(potEntries(thief, trackPieces(thief)), conv).pieces[0];
   const onXenon = buildPotStats(potEntries(thief, trackPieces(thief)), conv, new Set(["테스트"])).pieces[0];
-  assert.deepEqual([mage.goalBy, asXenon.goalBy, onThief.goalBy, onXenon.goalBy], ["주스탯 27%", "주스탯 27%", "주스탯 27%", "올스탯 27%"]);
-  assert.ok(onThief.goalRolls! < onXenon.goalRolls! / 5);
+  // A thief's pair is a Xenon's to wear too, so it reads as the rarer all stat goal whoever rolled it: a thief
+  // sells the pair that came out all stat alone (user, 2026-11-13).
+  assert.deepEqual([mage.goalBy, asXenon.goalBy, onThief.goalBy, onXenon.goalBy], ["주스탯 27%", "주스탯 27%", "올스탯 27%", "올스탯 27%"]);
+  assert.equal(onThief.goalRolls, onXenon.goalRolls);
+  assert.ok(mage.goalRolls! < onThief.goalRolls! / 5);
 });
 
 test("prime cubes: the cube has a price, and line 1 is the one the item keeps", () => {
@@ -647,8 +650,41 @@ test("stat lines of another job are not the item's main stat; a Xenon's stat lin
   // A mage's piece rolled on a Xenon character is a mage's; additional potential is read as before.
   assert.deepEqual(statRule({ item: "에테르넬 메이지슈즈", part: "신발" }, true), { stats: ["int"] });
   assert.equal(goalOf(["LUK +6%", "올스탯 +4%", "방어력 +7%"], true, xenon)!.xenon, undefined);
-  // The character's job reaches the pieces: the same rolls read "LUK 27%" for a thief and "올스탯 21%" for a Xenon.
-  const rolls = [row({ item_level: 200, target_item: "아케인셰이드 시프슈즈", before_potential_option: opt("방어력 +7%", "이동속도 +9", "점프력 +9"), after_potential_option: opt("올스탯 +9%", "올스탯 +9%", "LUK +9%") })];
+  // The character's job reaches the pieces where the name has no job: the same rolls on an eye accessory read
+  // "LUK 27%" for anyone else and "올스탯 21%" for a Xenon. (A thief's piece reads the same for both.)
+  const rolls = [row({ item_level: 160, item_equipment_part: "눈장식", target_item: "마력이 깃든 안대", before_potential_option: opt("방어력 +7%", "이동속도 +9", "점프력 +9"), after_potential_option: opt("올스탯 +9%", "올스탯 +9%", "LUK +9%") })];
   const by = (xenons: Set<string>) => buildPotStats(potEntries(rolls, trackPieces(rolls)), NO_CONV, xenons).pieces[0].goalBy;
   assert.deepEqual([by(new Set()), by(new Set(["테스트"]))], ["LUK 27%", "올스탯 21%"]);
+  // A Xenon also rolls a thief's or a pirate's piece to sell: stat lines alone are read as that job's, the rarer
+  // reading — LUK 30 % is not "올스탯 10 %" (user, 2026-11-13).
+  const soldBy = (xenons: string[], item: string, ...option: string[]) => {
+    const list = [row({ item_level: 200, target_item: item, before_potential_option: opt("방어력 +7%", "이동속도 +9", "점프력 +9"), after_potential_option: opt(...option) })];
+    return buildPotStats(potEntries(list, trackPieces(list)), NO_CONV, new Set(xenons)).pieces[0].goalBy;
+  };
+  const sold = (item: string, ...option: string[]) => soldBy(["테스트"], item, ...option);
+  // The other way round: a thief's piece that a thief rolled all stat alone is a Xenon's item to sell. With a LUK
+  // line it is the thief's own LUK 27 %: only a Xenon character's mixed option is read the Xenon way.
+  assert.equal(soldBy([], "아케인셰이드 시프슈즈", "올스탯 +9%", "올스탯 +9%", "올스탯 +6%"), "올스탯 24%");
+  assert.equal(soldBy([], "이글아이 원더러코트", "올스탯 +9%", "올스탯 +9%", "올스탯 +6%"), "올스탯 24%");
+  assert.equal(soldBy([], "아케인셰이드 시프슈즈", "올스탯 +9%", "올스탯 +9%", "LUK +9%"), "LUK 27%");
+  assert.equal(soldBy([], "아케인셰이드 파이렛슈즈", "올스탯 +9%", "올스탯 +9%", "STR +9%"), "STR 27%");
+  assert.equal(sold("아케인셰이드 시프슈즈", "올스탯 +9%", "올스탯 +9%", "LUK +9%"), "올스탯 21%");
+  // Additional potential of a thief's piece rolled by a thief stays the thief's: a STR line is not its main stat.
+  const thiefAdd = statRules({ item: "아케인셰이드 시프슈즈", part: "신발" }, false);
+  const addOption = ["캐릭터 기준 9레벨 당 STR +2", "올스탯 +4%", "공격력 +10"];
+  assert.equal(goalOf(addOption, true, thiefAdd[1]), null);
+  assert.equal(goalOf(addOption, true, thiefAdd[0])!.stat, "");
+  const addRolls = [row({ ...ADD, item_level: 200, target_item: "아케인셰이드 시프슈즈", before_additional_potential_option: opt("방어력 +7%", "이동속도 +9", "점프력 +9"), after_additional_potential_option: opt(...addOption) })];
+  assert.match(buildPotStats(potEntries(addRolls, trackPieces(addRolls)), convFromScouter(STAT_CONV_DEFAULT)).pieces[0].goalBy, /^주스탯 /);
+  assert.equal(soldBy([], "아케인셰이드 시프슈즈", "LUK +12%", "LUK +9%", "LUK +9%"), "LUK 30%");
+  assert.equal(soldBy([], "아케인셰이드 메이지슈즈", "올스탯 +9%", "올스탯 +9%", "올스탯 +6%"), "주스탯 24%");
+  assert.equal(sold("아케인셰이드 시프슈즈", "LUK +12%", "LUK +9%", "LUK +9%"), "LUK 30%");
+  assert.equal(sold("아케인셰이드 파이렛슈즈", "DEX +12%", "DEX +9%", "올스탯 +6%"), "DEX 27%");
+  // STR on a thief's piece is nobody's to buy: only the Xenon reads it.
+  assert.equal(sold("아케인셰이드 시프슈즈", "STR +12%", "DEX +9%", "올스탯 +9%"), "올스탯 16%");
+  assert.deepEqual(statRules({ item: "아케인셰이드 시프슈즈", part: "신발" }, true), [{ stats: ["luk"] }, { stats: ["str", "dex", "luk"], xenon: true }]);
+  assert.deepEqual(statRules({ item: "에테르넬 메이지슈즈", part: "신발" }, true), [{ stats: ["int"] }]);
+  assert.deepEqual(statRules({ item: "아케인셰이드 시프슈즈", part: "신발" }, false), [{ stats: ["luk"] }, { stats: ["str", "dex", "luk"], xenon: true, allOnly: true }]);
+  assert.deepEqual(statRules({ item: "마력이 깃든 안대", part: "눈장식" }, false), [{}]);
+  assert.deepEqual(statRules({ item: "마력이 깃든 안대", part: "눈장식" }, true), [{}, { stats: ["str", "dex", "luk"], xenon: true }]);
 });

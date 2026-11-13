@@ -300,9 +300,26 @@ export function gearJob(item: string, part: string): GearJob | null {
  * `xenon` = a Xenon's own gear (main potential only, see goalOf): all stat % is the goal, and STR · DEX · LUK % lines count toward it
  * at a third each (all stat 1 % raises all three; user, 2026-11-13) — "LUK 9 % + 올스탯 9 % + 9 %" is "올스탯 21 %".
  */
-export type StatRule = { stats?: readonly string[]; xenon?: boolean };
+export type StatRule = { stats?: readonly string[]; xenon?: boolean; allOnly?: boolean };
 
-/** The rule for an item rolled by a character: `xenon` = that character's job is Xenon. */
+/**
+ * The ways an item can be read: by the job of the gear, and the Xenon way next to it where a Xenon can wear it.
+ * A thief's or a pirate's piece is both (user, 2026-11-13): a Xenon rolls LUK on a thief's piece or STR · DEX on a
+ * pirate's to sell, and a thief sells the piece that came out all stat alone — for a character that is not a Xenon
+ * only that one, an option with no STR · DEX · LUK % line (`allOnly`): 올스탯 9 + 9 + LUK 9 is its own LUK 27 %.
+ * Gear with no job in its name is read the Xenon way only when a Xenon rolled it (`xenon`). The reading that makes
+ * the option the rarer one is the one it was kept for.
+ */
+export function statRules(row: Pick<PotRow, "item" | "part" | "soul">, xenon: boolean): StatRule[] {
+  if (row.soul) return [{}];
+  const job = gearJob(row.item, row.part);
+  const plain: StatRule = job ? { stats: JOB_STATS[job] } : {};
+  const wearable = job === "thief" || job === "pirate";
+  if (xenon && (wearable || !job)) return [plain, { stats: XENON_STATS, xenon: true }];
+  return wearable ? [plain, { stats: XENON_STATS, xenon: true, allOnly: true }] : [plain];
+}
+
+/** One reading of an item: by the job of the gear, or (`xenon`) the Xenon way where the gear is a Xenon's to wear. */
 export function statRule(row: Pick<PotRow, "item" | "part" | "soul">, xenon: boolean): StatRule {
   // A soul's tables name one stand-in stat, and its item is the weapon it sits on: read as before.
   if (row.soul) return {};
@@ -346,6 +363,10 @@ export function goalOf(option: string[], add: boolean, rule: StatRule = {}): Goa
     if (token) total.set(token[0], (total.get(token[0]) ?? 0) + token[1]);
   }
   const sum = (cat: string) => total.get(cat) ?? 0;
+  // The Xenon reading of somebody else's piece is for all stat alone, on main potential: with a stat line of its own
+  // it is not read this way, and additional potential never is — there the reading only widened the stats that
+  // count, and a "per 9 levels STR" line on a thief's shoes passed for main stat (Codex review, 2026-11-13).
+  if (rule.allOnly && (add || XENON_STATS.some((c) => sum(c) > 0))) return null;
   const best = (cats: readonly string[]) => cats.map((c) => [c, sum(c)] as const).sort((x, y) => y[1] - x[1])[0];
 
   // The stat this item is for: the largest stat % total, or (additional potential) the "per 9 levels" stat — among

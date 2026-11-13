@@ -6,7 +6,7 @@
 // Profit = expected − spent. A cube's cost is the fee it takes on use (rollMeso), a reset's its price.
 import type { Grade, StatConv } from "../ev/potential.ts";
 import { kstDate } from "./kst.ts";
-import { goalChance, goalExact, goalOf, gradeBefore, kindOf, potKey, rollMeso, rollsToUp, statRule, upChance, type CubePrices, type Goal, type Pieces, type PotRow, type StatRule } from "./potential.ts";
+import { goalChance, goalExact, goalOf, gradeBefore, kindOf, potKey, rollMeso, rollsToUp, statRules, upChance, type CubePrices, type Goal, type Pieces, type PotRow, type StatRule } from "./potential.ts";
 
 export type PotEntry = { row: PotRow; piece: number; taken: boolean; cost: number };
 export const potEntryKey = (e: Pick<PotEntry, "row" | "piece">) => `${potKey(e.row)}\u0000${e.piece}`;
@@ -100,13 +100,14 @@ export type PotStats = {
  * chance to compare with: the rolls were spent and the item is as it was (user, 2026-11-12). What such an option
  * takes on average is still handed back (`kept`), to be shown next to it.
  */
-function finalOption(list: PotEntry[], conv: StatConv, rule: StatRule): { option: string[]; goal: Goal | null; chance: number | null; by: string; kept: { p: number; by: string } | null } {
+function finalOption(list: PotEntry[], conv: StatConv, rules: StatRule[]): { option: string[]; goal: Goal | null; chance: number | null; by: string; kept: { p: number; by: string } | null } {
   const last = list[list.length - 1].row;
   const grade = last.grade;
   const candidates = [last.before, ...list.filter((e) => e.row.t === last.t).map((e) => e.row.after)];
   let best = { option: last.before, goal: null as Goal | null, chance: null as number | null, exact: null as number | null, by: "" };
   let first = true;
-  for (const option of candidates) {
+  // Each option in every way the item can be read (a Xenon's thief piece: as a thief's and as a Xenon's).
+  for (const [option, rule] of candidates.flatMap((option) => rules.map((rule) => [option, rule] as const))) {
     const goal = goalOf(option, last.add, rule);
     const hit = goal && grade ? goalChance(last, grade, goal, conv) : null;
     const chance = hit?.p ?? null;
@@ -129,8 +130,8 @@ function finalOption(list: PotEntry[], conv: StatConv, rule: StatRule): { option
 
 /**
  * `entries` oldest first. `conv` = how much other lines are worth in main stat % (the calculator's setting).
- * `xenons` = the characters whose job is Xenon (all stat % is their own goal, with STR · DEX · LUK % at a third each;
- * for everyone else all stat is main stat). Which stat lines count on an item also goes by the job in its name (statRule).
+ * `xenons` = the characters whose job is Xenon: their gear is read their way too (all stat %, with STR · DEX · LUK %
+ * at a third each) next to the way of the job in its name, and the rarer reading counts (statRules).
  */
 export function buildPotStats(entries: PotEntry[], conv: StatConv, xenons: ReadonlySet<string> = new Set()): PotStats {
   const groups = new Map<string, PotEntry[]>();
@@ -171,7 +172,7 @@ export function buildPotStats(entries: PotEntry[], conv: StatConv, xenons: Reado
       phase.meso += e.cost;
       if (e.row.up) phase.up = true;
     }
-    const final = finalOption(list, conv, statRule(head, xenons.has(head.who)));
+    const final = finalOption(list, conv, statRules(head, xenons.has(head.who)));
     const tailPhase = phases[phases.length - 1];
     let expected: number | null = null;
     for (const phase of phases) {

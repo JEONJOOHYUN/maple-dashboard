@@ -42,6 +42,15 @@ type Icons = Record<string, string | undefined>;
 const iconOf = (item: string, level: number, icons: Icons): ItemInfo => ({ level, spare: 0, icon: icons[item], source: "api" });
 const KIND_LABEL: Record<PotKind, string> = { main: "잠재능력", add: "에디셔널", soul: "소울" };
 const KINDS: PotKind[] = ["main", "add", "soul"];
+/**
+ * The kind as a small label in the corner of a card (user, 2026-11-13: in the line under the name it was easy to
+ * miss). Colours by the user: 잠재능력 black as the black cube, 에디셔널 green, 소울 our orange.
+ */
+const KIND_CSS: Record<PotKind, string> = {
+  main: "border-[#1c1a16] bg-[#1c1a16] text-white dark:border-white/30 dark:bg-black",
+  add: "border-[#11663a]/45 bg-[#11663a]/10 text-[#11663a] dark:border-[#7be0a0]/45 dark:bg-[#7be0a0]/12 dark:text-[#7be0a0]",
+  soul: "border-primary/50 bg-primary-soft text-primary-text",
+};
 const kindLabel = (x: { add: boolean; soul?: boolean }) => KIND_LABEL[kindOf(x)];
 /** A soul has no level of its own: its amplification stage stands where the item level is. */
 const levelLabel = (x: { soul?: boolean; level: number }) => (x.soul ? (x.level > 0 ? `증폭 ${x.level}단계` : "증폭 단계 모름") : `Lv.${x.level}`);
@@ -114,10 +123,11 @@ function PieceCard({ piece, found, onOpen }: { piece: PieceStat; found: Icons; o
       <span className="absolute top-3.5 left-3.5 text-xs text-muted-foreground">
         {kstShort(piece.first)} ~ {kstShort(piece.last)}
       </span>
+      <span className={cn(BADGE, "pointer-events-none absolute top-3 right-3", KIND_CSS[kindOf(piece)])}>{kindLabel(piece)}</span>
       <ItemIcon info={iconOf(piece.item, piece.level, found)} size={48} />
       <b className="mt-2 max-w-full truncate text-[15px]">{piece.item}</b>
       <span className="mt-0.5 max-w-full truncate text-xs text-muted-foreground">
-        {kindLabel(piece)} · {levelLabel(piece)} · {piece.who}
+        {levelLabel(piece)} · {piece.who}
         {piece.of > 1 && ` · ${piece.n}번째`}
       </span>
       <span className="mt-2.5 flex items-baseline gap-1.5 text-base whitespace-nowrap">
@@ -387,7 +397,7 @@ function PiecesView({ pieces, found, onOpen }: { pieces: PieceStat[]; found: Ico
           아이템별 모아보기 <span className="font-medium text-muted-foreground">{list.length}개</span>
         </b>
         <span className="flex flex-wrap items-center gap-2">
-          <ItemFilter names={names} value={filter} onChange={setFilter} />
+          {/* The kind comes first: the item list next to it holds the items of that kind (user, 2026-11-13). */}
           <Select aria-label="종류" value={kind} onChange={(e) => setKind(e.target.value as PotKind | "")} className="bg-card">
             <option value="">모든 종류</option>
             {KINDS.map((k) => (
@@ -396,6 +406,7 @@ function PiecesView({ pieces, found, onOpen }: { pieces: PieceStat[]; found: Ico
               </option>
             ))}
           </Select>
+          <ItemFilter names={names} value={filter} onChange={setFilter} />
           <Select aria-label="정렬" value={sort} onChange={(e) => setSort(e.target.value as Sort)} className="bg-card">
             <option value="spent">많이 쓴 순</option>
             <option value="delta">이득 큰 순</option>
