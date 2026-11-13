@@ -456,14 +456,16 @@ export function PotentialTab() {
         )}
 
         {goal === "opt" && weaponLike && optGrade && mode === "preset" && (
-          <div className="flex flex-col gap-2.5 rounded-lg border border-border bg-muted/40 p-3">
+          <div className="@container flex flex-col gap-2.5 rounded-lg border border-border bg-muted/40 p-3">
             <Label>
               노리는 줄
             </Label>
             {kind === "main" && (
-              <div className="flex flex-wrap gap-1.5 [&>*]:min-w-[4.5rem] [&>*]:flex-1">
-                {/* Rows always full: chips grow to share each row (5 in one row on desktop, 3 + 2 on phones). */}
-                {TIERS.map((t) => {
+              // Five in a row once each chip has room for its name ("꽉이탈 3줄" needs about 80px: 27rem for the row);
+              // narrower, 3 + 2 on half-width tracks with the last two in the middle, like the boss split's five
+              // cards, every chip the same size (user, 2026-11-14 — at a 1280px window the names broke in two).
+              <div className="grid grid-cols-6 gap-1.5 @min-[27rem]:grid-cols-5">
+                {TIERS.map((t, i) => {
                   // The tier and the line counts below are separate choices ("반이탈 + 보공 2줄", user 2026-11-14): a chip
                   // stays picked while the counts change, and its chance is with them. "유효 3줄" is itself a line count,
                   // so it is picked only at three useful lines and picking it asks for three.
@@ -480,7 +482,8 @@ export function PotentialTab() {
                         setMin(chipMin);
                       }}
                       className={cn(
-                        "flex flex-col items-start rounded-lg border px-2.5 py-1.5 text-left",
+                        "col-span-2 flex flex-col items-start rounded-lg border px-2.5 py-1.5 text-left @min-[27rem]:col-span-1",
+                        i === 3 && "col-start-2 @min-[27rem]:col-start-auto",
                         on ? "border-primary bg-primary-soft text-primary-text" : "border-border"
                       )}
                     >
