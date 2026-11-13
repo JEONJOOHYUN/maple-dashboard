@@ -1,11 +1,14 @@
 // NEXON Open API (MapleStory) — server only. The key is our own (NEXON_API_KEY) and never reaches the browser:
 // this module is imported only from server code (app/spec/page.tsx → lib/spec/load.ts).
 //
-// Dev key limits (2026-11-09 measured): 5 calls per second, 1,000 per day. Firing 7 calls at once made some fail,
-// so calls run one after another with a gap between starts. The gap is per server instance only.
+// The key is a service-stage one (user, 2026-11-13): 500 calls a second, so request starts are not spaced.
+// A development-stage key (5 a second, 1,000 a day — what a local .env.local may still hold) refuses a burst: the
+// first refusal drops this server instance to the spaced pace for as long as it lives (2026-11-09 measured: seven
+// calls at once made some fail).
 
 const BASE = "https://open.api.nexon.com/maplestory/v1";
-const GAP_MS = 220;
+const SLOW_GAP_MS = 220;
+let slow = false;
 
 export type NexonErrorKind = "noKey" | "notFound" | "quota" | "failed";
 
@@ -23,21 +26,24 @@ export class NexonError extends Error {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-// One queue for every request start (retries included): each turn waits until GAP_MS after the previous *actual*
-// start, so a delayed timer cannot release several requests at once (Codex review 2026-11-09). Responses still overlap.
+// One queue for every request start (retries included). At the spaced pace each turn waits until SLOW_GAP_MS after
+// the previous *actual* start, so a delayed timer cannot release several requests at once (Codex review 2026-11-09).
+// Responses still overlap.
 let lastStart = 0;
 let queue: Promise<void> = Promise.resolve();
 function waitTurn(): Promise<void> {
   const turn = queue.then(async () => {
-    const wait = lastStart + GAP_MS - Date.now();
-    if (wait > 0) await sleep(wait);
+    if (slow) {
+      const wait = lastStart + SLOW_GAP_MS - Date.now();
+      if (wait > 0) await sleep(wait);
+    }
     lastStart = Date.now();
   });
   queue = turn;
   return turn;
 }
 
-/** GET one endpoint, e.g. nexonGet("character/basic", { ocid }). Retries once on 429 before giving up. */
+/** GET one endpoint, e.g. nexonGet("character/basic", { ocid }). A refusal (429) is retried twice, spaced, before giving up. */
 export async function nexonGet<T>(path: string, params: Record<string, string>): Promise<T> {
   const key = process.env.NEXON_API_KEY;
   if (!key) throw new NexonError("noKey", "NEXON_API_KEY is not set");
@@ -49,7 +55,8 @@ export async function nexonGet<T>(path: string, params: Record<string, string>):
     const body = (await res.json().catch(() => null)) as { error?: { name?: string; message?: string } } | null;
     const code = body?.error?.name ?? "";
     if (res.status === 429 || code === "OPENAPI00007") {
-      if (attempt === 0) {
+      slow = true;
+      if (attempt < 2) {
         await sleep(1100);
         continue;
       }

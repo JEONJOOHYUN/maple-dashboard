@@ -187,7 +187,8 @@ export function bossPresets(raw: SpecRaw, rule: ClassRule | undefined) {
 // ---------- the check ----------
 // Wording (user, 2026-11-09): title = category, subtitle = what is missing, detail lines only when they add something
 // (no obvious "how": core shards, spend points, ...).
-export function checkSpec(raw: SpecRaw, now: Date = new Date(), data: Data = SPEC_DATA): SpecResult {
+/** `eventSkills` = the running event's skill ("보약"), by name: see event-skill.ts. */
+export function checkSpec(raw: SpecRaw, now: Date = new Date(), data: Data = SPEC_DATA, eventSkills: readonly string[] = []): SpecResult {
   const cls = raw.basic.character_class;
   const rule = data.classes[cls];
   const misses: Miss[] = [];
@@ -205,6 +206,8 @@ export function checkSpec(raw: SpecRaw, now: Date = new Date(), data: Data = SPE
     if (lv === undefined) add("공용 스킬", `${s.name} 안 배움`);
     else if (lv < s.max) add("공용 스킬", `${s.name} ${lv} / ${s.max}`, COMMON_HINT[s.name]);
   }
+  // 보약: only whether it was taken (the API does not say how its points were spent).
+  for (const name of eventSkills) if (!skillLv(name)) add("보약", `${name} 안 배움`);
   if (rule) {
     if (rule.atkBuff.length && !rule.atkBuff.some((n) => skillLv(n) !== undefined))
       add("공용 스킬", `${rule.atkBuff.join(" / ")} 안 배움`, "공격력 · 마력 4%");
@@ -298,7 +301,10 @@ export function checkSpec(raw: SpecRaw, now: Date = new Date(), data: Data = SPE
   const cores = raw.vmatrix.character_v_core_equipment ?? [];
   const coreLv = (name: string) => cores.find((c) => c.v_core_name === name)?.v_core_level ?? 0;
   const commonCores = WARRIOR_CLASSES.has(cls) ? [...BOSS_COMMON_CORES.slice(0, 2), WARRIOR_CORE, ...BOSS_COMMON_CORES.slice(2)] : BOSS_COMMON_CORES;
-  const lowCommon = commonCores.filter((n) => coreLv(n) < data.common.vCoreMin);
+  // Every 공용 코어 the character has is looked at (user, 2026-11-13: there are far more than the few named here —
+  // the class-group ones, the 쓸만한 ones, 블링크 …). The named ones are asked for even when they are missing.
+  const ownedCommon = cores.filter((c) => c.v_core_type === "공용 코어").map((c) => c.v_core_name);
+  const lowCommon = [...new Set([...commonCores, ...ownedCommon])].filter((n) => coreLv(n) < data.common.vCoreMin);
   if (lowCommon.length) add("5차 공용 코어", `${data.common.vCoreMin}레벨 미만 ${lowCommon.length}개`, lowCommon.map((n) => `${n} ${coreLv(n)}`).join(" · "));
   const zeroBoost = cores.filter((c) => c.v_core_type === "강화 코어" && c.v_core_level === 0);
   if (zeroBoost.length) add("5차 강화 코어", `0레벨 ${zeroBoost.length}개`, zeroBoost.map((c) => c.v_core_name).join(" · "));

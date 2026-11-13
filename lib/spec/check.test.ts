@@ -286,3 +286,30 @@ test("title: a usable boss title beats an expired or expiring copy in another pr
   raw.equipment.title_preset2 = { title_name: "보스 칭호 2", title_description: "보스 몬스터 데미지 +10%", date_option_expire: "2026-11-15T00:00+09:00" };
   assert.deepEqual(checkSpec(raw, now).misses.filter((m) => m.cat === "칭호").map((m) => m.what), ["옵션 만료 6일 남음"]);
 });
+
+test("5th job: every 공용 코어 the character has is looked at, the named ones even when missing", () => {
+  const raw = base();
+  const cores = raw.vmatrix.character_v_core_equipment!;
+  // Ones that are not in the named list: a class-group one, a 쓸만한 one, a movement one.
+  cores.push({ v_core_name: "메이플월드 여신의 축복", v_core_type: "공용 코어", v_core_level: 30 });
+  cores.push({ v_core_name: "쓸만한 샤프 아이즈", v_core_type: "공용 코어", v_core_level: 25 });
+  cores.push({ v_core_name: "블링크", v_core_type: "공용 코어", v_core_level: 1 });
+  // A skill core of the job itself is not a 공용 코어.
+  cores.push({ v_core_name: "스프레드 스로우", v_core_type: "직업 코어", v_core_level: 20 });
+  // A named one that is missing altogether.
+  raw.vmatrix.character_v_core_equipment = cores.filter((c) => c.v_core_name !== "에르다의 의지");
+  const miss = checkSpec(raw).misses.find((m) => m.cat === "5차 공용 코어")!;
+  assert.equal(miss.what, "30레벨 미만 3개");
+  assert.deepEqual(miss.detail, ["에르다의 의지 0 · 쓸만한 샤프 아이즈 25 · 블링크 1"]);
+});
+
+test("보약: the running event's skill is asked for by name, nothing when no event skill is running", () => {
+  const now = new Date("2026-11-13T12:00:00+09:00");
+  const find = (raw: SpecRaw, skills: string[]) => checkSpec(raw, now, SPEC_DATA, skills).misses.filter((m) => m.cat === "보약").map((m) => m.what);
+  assert.deepEqual(find(base(), ["아르고 호의 가호"]), ["아르고 호의 가호 안 배움"]);
+  const has = base();
+  has.skill0.character_skill!.push({ skill_name: "아르고 호의 가호", skill_level: 1 });
+  assert.deepEqual(find(has, ["아르고 호의 가호"]), []);
+  assert.deepEqual(find(base(), []), []);
+  assert.deepEqual(checkSpec(base(), now).misses.filter((m) => m.cat === "보약"), []);
+});
