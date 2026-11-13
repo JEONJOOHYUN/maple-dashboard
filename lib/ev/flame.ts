@@ -92,13 +92,13 @@ export const DEFAULT_WEIGHTS: ArmorWeights = { sub: 10, attack: 4, allStat: 10 }
 export const DEFAULT_HP_WEIGHTS: HpWeights = { attack: 90, str: 1 };
 /**
  * Xenon: STR · DEX · LUK all count one for one (its damage goes with their sum); attack 1 and all stat 1 % in those
- * points. From maplescouter.com for the character 제논 (스카니아 Lv.290, 2026-11-13 → 세부 스펙 효율): 공마 1당 주스탯
- * 7.28 · 올스탯 1%당 주스탯 36.8. (The first values here, 7 and 20, were worked out from the Open API stats alone and
- * had all stat far too low: the equipment list was missing five slots.) They differ per character: the page lets
- * people change them.
+ * points. From maplescouter.com (세부 스펙 효율, 2026-11-13), the middle one of three Xenon characters (user): 공마 1당
+ * 주스탯 · 올스탯 1%당 주스탯 = 7.28 · 36.8 (Lv.290), 6.28 · 34.7 (Lv.300), 5.1 · 31.5 (Lv.295). (The first values
+ * here, 7 and 20, were worked out from the Open API stats alone and had all stat far too low: the equipment list was
+ * missing five slots.) They differ per character: the page lets people change them.
  */
 export type XenonWeights = { attack: number; allStat: number };
-export const DEFAULT_XENON_WEIGHTS: XenonWeights = { attack: 7.28, allStat: 36.8 };
+export const DEFAULT_XENON_WEIGHTS: XenonWeights = { attack: 6.28, allStat: 34.7 };
 export type FlameJob = "stat" | "hp" | "xenon";
 
 export function tierValues(level: number) {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { armorChance, bestWeaponGrade, weaponChance, tierValues } from "./flame.ts";
+import { DEFAULT_XENON_WEIGHTS, armorChance, bestWeaponGrade, weaponChance, tierValues } from "./flame.ts";
 import { percentileOf } from "./luck.ts";
 import { soulPlan } from "./soul.ts";
 
@@ -61,14 +61,15 @@ test("armor flames: harder targets are rarer, abyss beats eternal", () => {
 });
 
 test("Xenon flames: STR · DEX · LUK all count, attack and all stat by their weights", () => {
-  assert.ok(armorChance("eternal", 200, 350, "xenon") > armorChance("eternal", 200, 400, "xenon"));
+  assert.ok(armorChance("eternal", 200, 300, "xenon") > armorChance("eternal", 200, 340, "xenon"));
   near(armorChance("eternal", 200, 0, "xenon"), 1, 1e-9, "target 0");
-  // Best at Lv.200 with the default weights (maplescouter, 제논: all stat 1 % = 36.8): three stat pairs at tier 7
-  // (2 × 6 × 7 each) + all stat 7 % × 36.8 = 509.6.
-  assert.ok(armorChance("abyss", 200, 509, "xenon") > 0);
-  assert.equal(armorChance("abyss", 200, 510, "xenon"), 0);
+  // Best at Lv.200 with the default weights (maplescouter, the middle of three Xenons: all stat 1 % = 34.7): three
+  // stat pairs at tier 7 (2 × 6 × 7 each) + all stat 7 % × 34.7 = 494.9.
+  assert.deepEqual(DEFAULT_XENON_WEIGHTS, { attack: 6.28, allStat: 34.7 });
+  assert.ok(armorChance("abyss", 200, 494.9, "xenon") > 0);
+  assert.equal(armorChance("abyss", 200, 495, "xenon"), 0);
   // The weights are the user's to change: all stat worth more makes the same target easier.
-  assert.ok(armorChance("eternal", 200, 350, "xenon", undefined, undefined, { attack: 7.28, allStat: 50 }) > armorChance("eternal", 200, 350, "xenon"));
+  assert.ok(armorChance("eternal", 200, 340, "xenon", undefined, undefined, { attack: 6.28, allStat: 50 }) > armorChance("eternal", 200, 340, "xenon"));
 });
 
 test("soul ether averages match mapletiptip", () => {
