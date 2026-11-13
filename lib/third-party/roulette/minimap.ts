@@ -12,7 +12,7 @@ const MINIMAP_SCALE = 4;
 /** 기본으로 보여주는 가로 범위 (공식 맵 크기). 맵 공유마당의 넓은 맵은 장애물이 있는 만큼 넓혀 보여준다 */
 const MINIMAP_MIN_X = 0;
 const MINIMAP_UNITS = 26;
-/** 미니맵은 좌측에 세로로 긴 스트립이다. 다른 HUD가 피해가려면 이 값이 필요하다 */
+/** 미니맵은 세로로 긴 스트립이다. maple-dashboard: 오른쪽 끝에 붙이고(user, 2026-11-13) 숨길 수 있다 */
 export const MINIMAP_INSET = 10;
 export const MINIMAP_WIDTH = MINIMAP_UNITS * MINIMAP_SCALE;
 
@@ -27,6 +27,7 @@ export class Minimap implements UIObject {
   /** 지금 맵의 가로 범위. 맵이 바뀔 때만 다시 계산한다 */
   private rangeStage: StageDef | null = null;
   private range = { minX: MINIMAP_MIN_X, maxX: MINIMAP_MIN_X + MINIMAP_UNITS };
+  private visible = true;
 
   constructor() {
     this.boundingBox = {
@@ -38,7 +39,15 @@ export class Minimap implements UIObject {
   }
 
   getBoundingBox(): Rect | null {
-    return this.boundingBox;
+    // Hidden: a box no pointer can be in. (null would mean "the whole canvas" to the mouse handler.)
+    return this.visible ? this.boundingBox : { x: -1, y: -1, w: 0, h: 0 };
+  }
+
+  /** Show or hide the map. Hiding gives the camera back if the pointer was on it. */
+  setVisible(visible: boolean) {
+    if (this.visible === visible) return;
+    this.visible = visible;
+    if (!visible) this.onMouseMove(undefined);
   }
 
   onViewportChange(callback: (pos?: VectorLike) => void) {
@@ -97,8 +106,8 @@ export class Minimap implements UIObject {
     this.range = { minX: Math.floor(minX), maxX: Math.ceil(maxX) };
   }
 
-  render(ctx: CanvasRenderingContext2D, params: RenderParameters, _width: number, height: number) {
-    if (!ctx) return;
+  render(ctx: CanvasRenderingContext2D, params: RenderParameters, width: number, height: number) {
+    if (!ctx || !this.visible) return;
     const { stage } = params;
     if (!stage) return;
     this.updateRange(stage);
@@ -109,13 +118,15 @@ export class Minimap implements UIObject {
     this.scale = Math.min(MINIMAP_SCALE, maxHeight / stage.goalY, MINIMAP_WIDTH / units);
     this.boundingBox.w = units * this.scale;
     this.boundingBox.h = stage.goalY * this.scale;
+    // Against the right edge of the canvas, whatever its width.
+    this.boundingBox.x = Math.max(MINIMAP_INSET, width - MINIMAP_INSET - this.boundingBox.w);
 
     this.lastParams = params;
 
     this.ctx = ctx;
     ctx.save();
     ctx.fillStyle = params.theme.minimapBackground;
-    ctx.translate(MINIMAP_INSET, MINIMAP_INSET);
+    ctx.translate(this.boundingBox.x, MINIMAP_INSET);
     ctx.scale(this.scale, this.scale);
     ctx.translate(-this.range.minX, 0);
     ctx.fillRect(this.range.minX, 0, units, stage.goalY);

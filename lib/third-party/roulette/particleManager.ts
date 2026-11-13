@@ -3,6 +3,11 @@ import { Particle } from './particle';
 export class ParticleManager {
   private _particles: Particle[] = [];
 
+  /** Particles still on screen (0 = the confetti is over). */
+  get count() {
+    return this._particles.length;
+  }
+
   update(deltaTime: number) {
     this._particles.forEach((particle) => {
       particle.update(deltaTime);

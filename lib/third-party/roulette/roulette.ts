@@ -1,6 +1,8 @@
 // Game loop, based on lazygyu's roulette (MIT, see LICENSE). Changed for maple-dashboard:
 // no ads, no recording, no built-in rank / fast-forward overlays (the page shows those), the canvas
 // lives in a container we pass in, one colour per person, finish order is exposed, and destroy() stops it.
+// The frame loop rests once a race is over (see _restIfOver): the original keeps stepping the physics and
+// redrawing for as long as the page is open.
 import { Camera } from './camera';
 import { initialZoom, Skills, Themes, zoomThreshold } from './constants';
 import type { GameObject } from './gameObject';
@@ -29,6 +31,8 @@ function clipWinnerRange({ start, end }: WinnerRange, marbleCount: number): Winn
 /** Rank smoothing: follow the distance-to-goal over this many seconds, swap only past RANK_MARGIN. */
 const RANK_EMA_SEC = 0.4;
 const RANK_MARGIN = 0.25;
+/** How long (real ms) a finished race stays on screen, wheels still turning, before the frame loop rests. */
+const REST_AFTER_MS = 2000;
 
 export type PinballMember = { name: string; count: number; color: string; /** Picture URL for this person's marbles. */ skin?: string };
 
@@ -70,6 +74,14 @@ export class Roulette extends EventTarget {
   private _destroyed = false;
   private _raf = 0;
   private _members: PinballMember[] = [];
+  private _minimap: Minimap | null = null;
+  private _minimapVisible = true;
+  /** A race has been started with the marbles on the board (cleared when they are lined up again). */
+  private _raced = false;
+  /** The frame loop is stopped: nothing is stepped or drawn until _wake(). */
+  private _resting = false;
+  /** Real ms the finished race has had nothing left to show. */
+  private _quiet = 0;
   protected _theme: ColorTheme = Themes.dark;
   private _cleanup: (() => void)[] = [];
 
@@ -115,7 +127,8 @@ export class Roulette extends EventTarget {
     if (!this._lastTime) this._lastTime = Date.now();
     const currentTime = Date.now();
     // After a hidden tab, do not try to catch up hundreds of steps at once: cap the real gap, then apply the speed.
-    this._elapsed += Math.min(currentTime - this._lastTime, 100) * this._speed;
+    const realMs = Math.min(currentTime - this._lastTime, 100);
+    this._elapsed += realMs * this._speed;
     this._lastTime = currentTime;
 
     const timeScale = this._timeScale;
@@ -144,6 +157,37 @@ export class Roulette extends EventTarget {
     });
 
     this._render();
+    if (this._restIfOver(realMs)) return;
+    this._raf = window.requestAnimationFrame(this._update);
+  };
+
+  /**
+   * Once a race is over — every marble in, the confetti gone — nothing on the board changes except the wheels of the
+   * course, and the loop went on stepping the physics and redrawing 60 times a second for as long as the page was
+   * open (user, 2026-11-13: "한 번 실행하고 나면 계속 안 멈추고 실행"). After a short pause it stops: the last frame
+   * stays on the canvas, and a 'rest' event tells the page it can stop asking for the ranks.
+   * Before the first race, and while the marbles wait at the top, the board keeps moving as it did.
+   */
+  private _restIfOver(realMs: number): boolean {
+    const over = this._raced && !this._isRunning && this._marbles.length === 0 && this._particleManager.count === 0 && this._effects.length === 0;
+    this._quiet = over ? this._quiet + realMs : 0;
+    if (this._quiet < REST_AFTER_MS) return false;
+    this._resting = true;
+    this.dispatchEvent(new Event('rest'));
+    return true;
+  }
+
+  /**
+   * Something needs the board drawn again (a new race, new marbles, another theme, the pointer on the minimap, a
+   * new size): the loop starts over, and rests again by itself when there is still nothing to show.
+   */
+  private _wake = () => {
+    this._quiet = 0;
+    if (!this._resting || this._destroyed) return;
+    this._resting = false;
+    // No catching up on the time spent resting.
+    this._lastTime = 0;
+    this._elapsed = 0;
     this._raf = window.requestAnimationFrame(this._update);
   };
 
@@ -287,6 +331,8 @@ export class Roulette extends EventTarget {
     if (this._destroyed) return;
     this.attachEvent();
     const minimap = new Minimap();
+    this._minimap = minimap;
+    minimap.setVisible(this._minimapVisible);
     minimap.onViewportChange((pos) => {
       if (pos) {
         this._camera.setPosition(pos, false);
@@ -327,13 +373,25 @@ export class Roulette extends EventTarget {
       canvas.addEventListener(type, fn);
       this._cleanup.push(() => canvas.removeEventListener(type, fn));
     };
-    on('pointerdown', (e) => this.mouseHandler('MouseDown', e));
+    // A pointer on the board wakes a resting loop: the minimap moves the camera, which has to be drawn.
+    on('pointerenter', () => this._wake());
+    on('pointerdown', (e) => {
+      this._wake();
+      this.mouseHandler('MouseDown', e);
+    });
     on('pointerup', (e) => {
       this.mouseHandler('MouseUp', e);
       // A finger lifted off the minimap must give the camera back (a mouse keeps hovering, so it stays).
       if (e.pointerType !== 'mouse') this.releasePointer();
     });
-    on('pointermove', (e) => this.mouseHandler('MouseMove', e));
+    on('pointermove', (e) => {
+      this._wake();
+      this.mouseHandler('MouseMove', e);
+    });
+    // The renderer resizes (and so clears) the canvas with its container: a resting board has to be drawn again.
+    const resized = new ResizeObserver(() => this._wake());
+    resized.observe(canvas);
+    this._cleanup.push(() => resized.disconnect());
     on('pointerleave', () => this.releasePointer());
     on('pointercancel', () => this.releasePointer());
     on('contextmenu', (e) => e.preventDefault());
@@ -361,6 +419,8 @@ export class Roulette extends EventTarget {
     const n = this._marbles.length;
     this.setWinnerRange(last ? n - 1 : 0, last ? n - 1 : 0);
     this._isRunning = true;
+    this._raced = true;
+    this._wake();
     this._camera.startFollowingMarbles();
     this.physics.start();
     this._marbles.forEach((marble) => (marble.isActive = true));
@@ -370,8 +430,16 @@ export class Roulette extends EventTarget {
     if (value > 0) this._speed = value;
   }
 
+  /** Show or hide the map of the course (the page has the button). */
+  setMinimap(visible: boolean) {
+    this._minimapVisible = visible;
+    this._minimap?.setVisible(visible);
+    this._wake();
+  }
+
   setTheme(name: keyof typeof Themes) {
     this._theme = Themes[name];
+    this._wake();
   }
 
   private setWinnerRange(start: number, end: number) {
@@ -423,5 +491,8 @@ export class Roulette extends EventTarget {
     this._goalDist = Infinity;
     this._focusOnRival = false;
     this._isRunning = false;
+    // Marbles lined up again: the board waits for a start, moving as before a first race.
+    this._raced = false;
+    this._wake();
   }
 }
