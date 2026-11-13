@@ -1,5 +1,5 @@
 // Star force expected cost (KMS, after the 2025-03 30-star revamp).
-// Source: namu.wiki "메이플스토리/스타포스 강화" (checked 2026-11-08) — success / destroy rates with star catch,
+// Checked 2026-11-08 — success / destroy rates with star catch,
 // cost formula, prevention (+200 % of the base cost, no discount) and the restore table. Nexon's probability
 // guide has no star force page, so these are the community-documented values. Details: .agents/project-spec.md §4-8.
 //
@@ -8,9 +8,9 @@
 // - Destroyed at 15~22: either restore to that star ("확정 복구", N spare items + meso) or go back to 12
 //   with one spare item. Destroyed at 23 or more: restore is only sold up to 22, so with restore chosen at 22
 //   the item comes back at 22 for the 22-star price; otherwise back to 12
-//   (mesu.live source getRestoreTargetStar · starforce.gg numbers, checked 2026-11-11).
+//   (checked 2026-11-11).
 // - Prevention ("파괴 방지") only for tries at 15, 16 and 17.
-// - Events (starforce.gg notes, 2026-11-08): 30 % off try cost, destroy -30 % only up to the 21→22 try,
+// - Events (2026-11-08): 30 % off try cost, destroy -30 % only up to the 21→22 try,
 //   and Shining Star Force also -20 % on the restore price.
 
 /** Base success rate per current star (0~29), before star catch. */
@@ -27,7 +27,7 @@ const DESTROY = [
 const DIVISOR: Record<number, number> = { 10: 571, 11: 314, 12: 214, 13: 157, 14: 107, 15: 200, 16: 200, 17: 150, 18: 70, 19: 45, 20: 200, 21: 125 };
 /**
  * Restore ("확정 복구") price per star: spare items needed and meso ≈ k·L³.
- * k fitted from the namu table (140 / 160 / 200 / 250 levels agree within ~1 %).
+ * k fitted from the price table (140 / 160 / 200 / 250 levels agree within ~1 %).
  */
 const RESTORE: Record<number, { items: number; k: number }> = {
   15: { items: 1, k: 54.2 },
@@ -42,7 +42,7 @@ const RESTORE: Record<number, { items: number; k: number }> = {
 
 /**
  * Restore meso (억) for stars 15~22 at the item levels that have a published price
- * (namu.wiki table; the same numbers as mesu.live's restoreResourceTable, checked 2026-11-11).
+ * (checked 2026-11-11).
  * Lv.130 · 135 items stop at 20 stars, so they only have 15~19. Other levels use the k·L³ fit above.
  */
 const RESTORE_EOK: Record<number, number[]> = {
@@ -125,7 +125,7 @@ export function rates(star: number, opt: Pick<StarOptions, "event" | "starCatch"
   const p = opt.starCatch ? Math.min(1, p0 * 1.05) : p0;
   // Star catch takes its extra success out of fail and destroy in proportion.
   let d = p >= 1 ? 0 : (d0 * (1 - p)) / (1 - p0);
-  // The destroy cut only applies up to the 21→22 try (starforce.gg: "21성 이하 파괴확률 30% 감소").
+  // The destroy cut only applies up to the 21→22 try ("21성 이하 파괴확률 30% 감소").
   if ((opt.event === "destroy30" || opt.event === "shining") && star <= 21) d *= 0.7;
   return { success: p, destroy: d };
 }
@@ -175,7 +175,7 @@ export function starSteps(opt: StarOptions): StarStep[] {
         destroys: (d * (1 + back.destroys)) / p,
         tries: (1 + d * back.tries) / p,
       };
-      // Shining Star Force also takes 20 % off the restore price (starforce.gg event note).
+      // Shining Star Force also takes 20 % off the restore price.
       const restoreSale = opt.event === "shining" ? 0.8 : 1;
       // Above 22: comes back at 22 when restore is used there (the same trade-off as at 22, so the same choice).
       const r22 = s > 22 && steps[22]?.restore ? restorePrice(opt.level, 22) : null;

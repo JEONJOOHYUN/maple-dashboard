@@ -1,4 +1,4 @@
-// Symbols whose growth is already enough for more levels but the meso was not paid ("체납", like maplescouter's tax page):
+// Symbols whose growth is already enough for more levels but the meso was not paid ("체납"):
 // level reachable with the current growth, meso to get there, stat / force gained.
 // Growth needed per level (matches the source tables): arcane Lv² + 11, authentic / grand authentic 9·Lv² + 20·Lv.
 // Costs: data/symbols.json (per-level upgrade meso, in-game values as of 2026-10-25; totals checked against the source page).

@@ -89,8 +89,7 @@ export const MVP_MESO_WON = 1500;
 export const MESO_MARKET_MP = 2100;
 
 /**
- * Potential "main stat" goal: how much other lines are worth, in maplescouter.com terms
- * (result page → 스펙 효율 → 세부 스펙 효율). Example character 청운적운 (Lv.296 아크메이지(썬,콜)), 2026-11-09.
+ * Potential "main stat" goal: how much other lines are worth ("세부 스펙 효율"). Example character 청운적운 (Lv.296 아크메이지(썬,콜)), 2026-11-09.
  * Every value differs per character, so the page lets people type their own.
  */
 export const STAT_CONV_DEFAULT = { level: 296, v9: 6.31, cd3: 11.9, atk1: 2.29, all1: 11.6 };

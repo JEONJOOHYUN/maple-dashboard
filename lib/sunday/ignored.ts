@@ -1,5 +1,5 @@
 // Titles printed in Sunday Maple notices that the history deliberately leaves out: rewards tied to a running event
-// (same rule as the Inven list the history comes from). matchNotice() matches them and drops them, so they do not
+// matchNotice() matches them and drops them, so they do not
 // send a week to review. Wording copied from the notice images (checked 2026-11-10: "춤의 조각" is correct).
 export const IGNORED_TITLES = [
   "메이플 패션위크 일일 미션 보상 2배", // 2023-10-29 ~ 11-19

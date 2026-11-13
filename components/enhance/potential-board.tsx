@@ -16,7 +16,7 @@ import { PRICED_CUBES, cubePriceDefault, feeByInsight, kindOf, trackPieces, type
 import { PotentialSync, StarforceSync } from "@/lib/enhance/sync";
 import { groupTallies, worldGroup } from "@/lib/enhance/worlds";
 import { STAT_CONV_DEFAULT } from "@/lib/ev/defaults";
-import { GRADE_LABEL, NEXT_GRADE, convFromScouter, type Grade } from "@/lib/ev/potential";
+import { GRADE_LABEL, NEXT_GRADE, convFromSpec, type Grade } from "@/lib/ev/potential";
 import { useStored } from "@/lib/use-stored";
 import { cn } from "@/lib/utils";
 
@@ -497,7 +497,7 @@ export function PotentialBoard({ apiKey, account, onForget, switcher }: { apiKey
       const v = parseFloat(convText[k] ?? "");
       return Number.isFinite(v) ? v : STAT_CONV_DEFAULT[k];
     };
-    return convFromScouter({ level: n("level"), v9: n("v9"), cd3: n("cd3"), atk1: n("atk1"), all1: n("all1") });
+    return convFromSpec({ level: n("level"), v9: n("v9"), cd3: n("cd3"), atk1: n("atk1"), all1: n("all1") });
   }, [convText]);
   const [openPiece, setOpenPiece] = useState("");
 

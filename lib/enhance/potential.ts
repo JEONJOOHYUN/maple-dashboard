@@ -134,7 +134,7 @@ export function cubeOf(row: PotRow): CubeId | null {
   return null;
 }
 
-/** 통찰력 level from which the fee is waived: items up to Lv.70 at 60, up to Lv.120 at 90 (user, 2026-11-12; namu.wiki/w/잠재능력 agrees). */
+/** 통찰력 level from which the fee is waived: items up to Lv.70 at 60, up to Lv.120 at 90 (user, 2026-11-12). */
 const INSIGHT_FREE_70 = 60;
 const INSIGHT_FREE_120 = 90;
 
@@ -143,7 +143,7 @@ const INSIGHT_FREE_120 = 90;
  * Lv.121 and up 20 L² always · Lv.71~120 2.5 L², free from 통찰력 90 · Lv.31~70 0.25 L², free from 통찰력 60 ·
  * Lv.30 and under free. `insight` = the character's level today (the history has no level of its own), undefined
  * when it is not known: then the fee counts as waived, as it is for most characters that roll cubes.
- * Formula from the user; namu.wiki has 0.5 L² for Lv.31~70 — a few hundred meso a cube either way.
+ * Formula from the user (0.5 L² is also seen for Lv.31~70 — a few hundred meso a cube either way).
  */
 export function cubeFee(level: number, insight?: number): number {
   if (level >= 121) return level * level * 20;
@@ -421,7 +421,7 @@ const inStat = (cat: string, stat: string, conv: StatConv) =>
 
 /**
  * Main stat % the option is worth ("INT 15.8 %급"): its stat % plus all stat %, the "per 9 levels" line, crit damage
- * and flat attack turned into stat % with the calculator's conversion (the user's maplescouter numbers).
+ * and flat attack turned into stat % with the calculator's conversion (the user's numbers).
  */
 export function statWorth(goal: Goal, conv: StatConv): number {
   const sum = (cat: string) => goal.sums[cat] ?? 0;

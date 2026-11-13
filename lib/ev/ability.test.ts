@@ -92,7 +92,7 @@ test("passive first: only line 1 can hold it, and locking it is not worth it for
   assert.ok(Math.abs(pas.fame - plan.fame) < 1);
 });
 
-test("values: official table and circulators (chuchu.gg counts 1 ÷ P, we count the extra (1 − P) ÷ P)", () => {
+test("values: official table and circulators (the extra ones, (1 − P) ÷ P, not 1 ÷ P)", () => {
   assert.ok(Math.abs(valueChance("boss", "legendary", 20) - 0.1) < 1e-12);
   assert.ok(Math.abs(valueChance("stat", "legendary", 10) - 0.6) < 1e-12);
   assert.equal(valueChance("pas", "legendary", 1), 1);
@@ -101,7 +101,7 @@ test("values: official table and circulators (chuchu.gg counts 1 ÷ P, we count 
     { key: "boss", grade: "legendary", goal: 20 },
     { key: "stat", grade: "legendary", goal: 10 },
   ]);
-  assert.ok(Math.abs(1 / pbs.p - 16.6667) < 0.001, "chuchu 16.7");
+  assert.ok(Math.abs(1 / pbs.p - 16.6667) < 0.001, "1 ÷ P = 16.7");
   assert.ok(Math.abs(pbs.count - 15.6667) < 0.001);
 });
 
@@ -124,7 +124,7 @@ test("values: two options together → circulate them to the goal, lock, then re
   assert.equal(pasBoss.action.method, "advanced");
   // Boss 20 % is 10 % a roll; passive is always +1 → 10 circulators.
   assert.ok(Math.abs(pasBoss.action.circCount - 10) < 1e-9);
-  // Not above chuchu.gg's fixed route for the same prices (branch-weighted 432.6억 at 2.2억 a circulator, 2026-11-11).
+  // Not above the fixed route for the same prices (branch-weighted 432.6억 at 2.2억 a circulator, 2026-11-11).
   const cheap = abilityPlan(["pas", "boss", "stat"], "l3", { ...opts, values: { goal, circPrice: 2.2e8 } });
   const total = cheap.fame * 400 + cheap.meso + cheap.circ * 2.2e8;
   assert.ok(total <= 432.6e8 && total > 380e8, String(total));

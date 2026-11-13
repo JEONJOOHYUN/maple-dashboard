@@ -16,14 +16,14 @@ const base: StarOptions = {
 const near = (actual: number, expected: number, tolerance: number, label: string) =>
   assert.ok(Math.abs(actual - expected) <= tolerance, `${label}: ${actual} is not within ${tolerance} of ${expected}`);
 
-test("try cost follows the namu formula", () => {
-  // 29→30 at Lv.200 is about 3.89억 (mapletiptip shows the same).
+test("try cost follows the formula", () => {
+  // 29→30 at Lv.200 is about 3.89억.
   near(baseCost(200, 29), 389_360_000, 100_000, "29→30");
   // Stars 0~9 use (S+1)/36.
   assert.equal(baseCost(200, 0), Math.round((1000 + 200 ** 3 / 36) / 100) * 100);
 });
 
-test("star catch matches the namu table", () => {
+test("star catch matches the table", () => {
   const r15 = rates(15, { event: "none", starCatch: true });
   near(r15.success, 0.315, 1e-9, "15 success");
   near(r15.destroy, 0.02055, 1e-6, "15 destroy");
@@ -39,12 +39,12 @@ test("max star by item level", () => {
   assert.equal(starSteps({ ...base, level: 130 }).length, 20);
 });
 
-test("cheapest choice per star matches the namu break-even table (Lv.200, no event)", () => {
+test("cheapest choice per star matches the break-even table (Lv.200, no event)", () => {
   const pick = (spareEok: number, star: number) => {
     const s = starSteps({ ...base, spareMeso: spareEok * 1e8 })[star];
     return s.protect ? "protect" : s.restore ? "restore" : "floor";
   };
-  // namu: 15성 restore below 65.08억, prevention above.
+  // 15성 restore below 65.08억, prevention above.
   assert.equal(pick(64, 15), "restore");
   assert.equal(pick(66.5, 15), "protect");
   // 16성: 12성 below 27.11억, restore up to 71.25억, prevention above.
@@ -85,10 +85,10 @@ test("ranges add up and grow with the spare price", () => {
   assert.equal(low.destroys, 0);
 });
 
-test("matches starforce.gg (컴언 Lv.200, Shining, no MVP / PC room, spare 190억, optimized)", () => {
-  // Table read from starforce.gg/ev on 2026-11-08 (12성 start, cumulative 억 메소).
+test("cumulative cost (컴언 Lv.200, Shining, no MVP / PC room, spare 190억, optimized)", () => {
+  // Table checked on 2026-11-08 (12성 start, cumulative 억 메소).
   const steps = starSteps({ ...base, event: "shining", spareMeso: 190e8 });
-  const gg: [number, number][] = [
+  const checked: [number, number][] = [
     [13, 0.63],
     [15, 4.33],
     [17, 17.64],
@@ -100,7 +100,7 @@ test("matches starforce.gg (컴언 Lv.200, Shining, no MVP / PC room, spare 190�
     [23, 1653],
     [25, 13348],
   ];
-  for (const [to, eok] of gg) {
+  for (const [to, eok] of checked) {
     const got = starRange(steps, 12, to).meso / 1e8;
     assert.ok(Math.abs(got - eok) <= Math.max(0.02, eok * 0.0005), `12→${to}: ${got} vs ${eok}`);
   }

@@ -52,8 +52,8 @@ export const CUBES: CubeInfo[] = [
 ];
 
 /**
- * Meso per reset by item level band and the item's grade now (namu.wiki/w/잠재능력 "재설정", checked 2026-11-09;
- * matches its ceiling totals, e.g. rare 10 tries × 450만 = 0.45억 at Lv.200~249).
+ * Meso per reset by item level band and the item's grade now (checked 2026-11-09;
+ * matches the ceiling totals, e.g. rare 10 tries × 450만 = 0.45억 at Lv.200~249).
  * Bands: Lv.250+ · 200~249 · 160~199 · ~159. Grades: rare · epic · unique · legendary.
  */
 const RESET_MESO = {
@@ -90,7 +90,7 @@ export type SlotKind = "weapon" | "sub" | "emblem" | "armor" | "acc" | "soul";
 export type SlotExtra = "cool" | "crit" | "drop" | null;
 export type Slot = { id: string; label: string; group: "wpn" | "arm" | "acc" | "soul"; kind: SlotKind; extra: SlotExtra; sub: string };
 
-// Slots as on mesu.live + soul. Force shield · soul ring · shield are the same as the secondary weapon.
+// Slots + soul. Force shield · soul ring · shield are the same as the secondary weapon.
 export const SLOTS: Slot[] = [
   { id: "weapon", label: "무기", group: "wpn", kind: "weapon", extra: null, sub: "공 · 보공 · 방무" },
   { id: "sub", label: "보조무기", group: "wpn", kind: "sub", extra: null, sub: "무기와 같음" },
@@ -155,7 +155,7 @@ export function fixFirstLine(rows: Row[][], cat: string, value: number): Row[][]
 type Token = { key: string; p: number; cat: string; value: number; own: boolean; limit?: string };
 
 /**
- * Options that cannot fill all three lines (official cube guide, same rule as mesu.live): "쓸만한" skills and
+ * Options that cannot fill all three lines (official cube guide): "쓸만한" skills and
  * 피격 후 무적시간 at most once, 피격 시 데미지 % 무시 and 피격 시 무적 at most twice. Once the cap is reached the option
  * is left out of the later lines and the rest of that line is scaled up to 100 %.
  */
@@ -311,19 +311,19 @@ export function weaponChance(rows: Row[][], goal: WeaponGoal, fixFirst?: "a" | "
 }
 
 /**
- * How much one unit of each line is worth in main stat %. Players read these off maplescouter.com
- * ("세부 스펙 효율"); they differ per character, so the page lets people change them.
+ * How much one unit of each line is worth in main stat %. Players know these as
+ * "세부 스펙 효율"; they differ per character, so the page lets people change them.
  */
 export type StatConv = { all: number; lvstr: number; atkf: number; cd: number };
 /** Main stat % = 1 by definition. */
 export const NO_CONV: StatConv = { all: 1, lvstr: 0, atkf: 0, cd: 0 };
 
 /**
- * maplescouter values → StatConv. Its numbers: one "+2 per 9 levels" line = main stat v9 %,
+ * "세부 스펙 효율" values → StatConv. The numbers: one "+2 per 9 levels" line = main stat v9 %,
  * crit damage 3 % = main stat cd3 %, attack 1 = atk1 flat main stat, all stat 1 % = all1 flat main stat.
  * Flat main stat turns into % through the 9-level line: (2 × ⌊level / 9⌋) flat = v9 %.
  */
-export function convFromScouter(s: { level: number; v9: number; cd3: number; atk1: number; all1: number }): StatConv {
+export function convFromSpec(s: { level: number; v9: number; cd3: number; atk1: number; all1: number }): StatConv {
   const flat9 = 2 * Math.floor(s.level / 9);
   const flatPerPct = s.v9 > 0 && flat9 > 0 ? flat9 / s.v9 : 0;
   return {
@@ -338,7 +338,7 @@ export function convFromScouter(s: { level: number; v9: number; cd3: number; atk
  * Which line is the main stat: "str" = any single main stat (STR stands in), "all" = Xenon (all stat %),
  * "hp" = Demon Avenger (max HP %). The official table gives all stat / HP their own values and chances
  * (e.g. hat Lv.200 legendary line 1: STR 12 % at 9.76 %, all stat 9 % at 7.32 %, HP 12 % at 9.76 %).
- * For Xenon and Demon Avenger only that line counts; the maplescouter conversions are for single-stat classes.
+ * For Xenon and Demon Avenger only that line counts; the conversions are for single-stat classes.
  */
 export type MainStat = "str" | "all" | "hp";
 
@@ -494,7 +494,7 @@ export type AddWeaponGoal = "a21" | "a21x" | "a3";
  * Also used for souls (lineTables("soul", grade, "soul", amplification stage)).
  * STR stands in for any main stat; magic users read 마력 for 공격력.
  */
-/** Soul "+@": all stat %, main stat %, damage %, boss damage % (same as mapletiptip.com, user 2026-11-09). */
+/** Soul "+@": all stat %, main stat %, damage %, boss damage % (user 2026-11-09). */
 export const SOUL_EXTRA = ["all", "str", "dmg", "boss"];
 
 export function addWeaponChance(rows: Row[][], attack: "atk" | "matk", goal: AddWeaponGoal, fixFirst = false, extraCats?: string[]): number {

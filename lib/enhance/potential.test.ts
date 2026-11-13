@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { NO_CONV, SOUL_EXTRA, addWeaponChance, addWeaponSumChance, convFromScouter, customChance, fixFirstLine, lineTables, resetMeso, sumChance, weaponChance } from "../ev/potential.ts";
+import { NO_CONV, SOUL_EXTRA, addWeaponChance, addWeaponSumChance, convFromSpec, customChance, fixFirstLine, lineTables, resetMeso, sumChance, weaponChance } from "../ev/potential.ts";
 import { STAT_CONV_DEFAULT } from "../ev/defaults.ts";
 import { buildPotStats, potEntries } from "./pot-stats.ts";
 import { cappedCategory, cubeFee, cubeOf, feeByInsight, gearJob, goalChance, goalOf, gradeBefore, kindOf, potKey, optionToken, parsePotential, pricedCube, rollMeso, rollsToUp, slotOf, statRule, statRules, statWorth, trackPieces, upChance, upRolls, type PotRow, type RawPotential } from "./potential.ts";
@@ -121,7 +121,7 @@ test("armour: the goal is the option's worth in main stat %", () => {
   // About 1 in 121 at Lv.250 legendary shoes (the calculator's table).
   near(1 / hit.p, 120.7, 0.5, "INT 26%");
   assert.equal(goalChance(row({ item_equipment_part: "처음 보는 부위" }), "legendary", goal, NO_CONV), null);
-  const conv = convFromScouter(STAT_CONV_DEFAULT);
+  const conv = convFromSpec(STAT_CONV_DEFAULT);
   // Main potential shows the plain % (all stat one for one); its average is the calculator's for that number.
   const main = goalChance(row(), "legendary", goalOf(["INT +13%", "INT +10%", "올스탯 +7%"], false)!, conv)!;
   assert.equal(main.by, "INT 30%");
@@ -269,7 +269,7 @@ test("accessories: drop rate and meso lines count together, next to the stat", (
 });
 
 test("converted number: shown rounded down, and the chance is of the number shown", () => {
-  const conv = convFromScouter(STAT_CONV_DEFAULT);
+  const conv = convFromSpec(STAT_CONV_DEFAULT);
   // 기계심장 에디셔널 유니크: INT 6 % + 마력 11 + 올스탯 2 % = 10.77 % with the default conversion.
   const heart = row({ ...ADD, additional_potential_option_grade: "유니크", item_equipment_part: "기계심장", item_level: 200 });
   const goal = goalOf(["INT +6%", "마력 +11", "올스탯 +2%"], true)!;
@@ -452,7 +452,7 @@ test("stats: a better option of the same class as the old one counts as won (rea
 });
 
 test("additional potential with all stat % and no main stat line is converted too (user, 2026-11-12)", () => {
-  const conv = convFromScouter(STAT_CONV_DEFAULT);
+  const conv = convFromSpec(STAT_CONV_DEFAULT);
   const gloves = row({ ...ADD, item_equipment_part: "장갑", item_level: 200 });
   const goal = goalOf(["크리티컬 데미지 +3%", "올스탯 +6%", "최대 HP +5%"], true)!;
   near(statWorth(goal, conv), 6 * conv.all + 3 * conv.cd, 1e-9, "worth");
@@ -675,7 +675,7 @@ test("stat lines of another job are not the item's main stat; a Xenon's stat lin
   assert.equal(goalOf(addOption, true, thiefAdd[1]), null);
   assert.equal(goalOf(addOption, true, thiefAdd[0])!.stat, "");
   const addRolls = [row({ ...ADD, item_level: 200, target_item: "아케인셰이드 시프슈즈", before_additional_potential_option: opt("방어력 +7%", "이동속도 +9", "점프력 +9"), after_additional_potential_option: opt(...addOption) })];
-  assert.match(buildPotStats(potEntries(addRolls, trackPieces(addRolls)), convFromScouter(STAT_CONV_DEFAULT)).pieces[0].goalBy, /^주스탯 /);
+  assert.match(buildPotStats(potEntries(addRolls, trackPieces(addRolls)), convFromSpec(STAT_CONV_DEFAULT)).pieces[0].goalBy, /^주스탯 /);
   assert.equal(soldBy([], "아케인셰이드 시프슈즈", "LUK +12%", "LUK +9%", "LUK +9%"), "LUK 30%");
   assert.equal(soldBy([], "아케인셰이드 메이지슈즈", "올스탯 +9%", "올스탯 +9%", "올스탯 +6%"), "주스탯 24%");
   assert.equal(sold("아케인셰이드 시프슈즈", "LUK +12%", "LUK +9%", "LUK +9%"), "LUK 30%");

@@ -13,7 +13,7 @@ import { type MainStat,
   NEXT_GRADE,
   SLOTS,
   bestValues,
-  convFromScouter,
+  convFromSpec,
   customChance,
   slotOptions,
   fixFirstLine,
@@ -53,7 +53,7 @@ const GRADE_COLOR: Record<Grade, string> = {
 };
 const TIERS = WEAPON_TIERS;
 type Extra = "stat" | "cool" | "crit" | "drop";
-// cd8 = what was typed in the main-potential "크뎀 8%" box; cd3 (maplescouter's unit) stays the source of truth.
+// cd8 = what was typed in the main-potential "크뎀 8%" box; cd3 (the unit of the conversion fields) stays the source of truth.
 type ConvText = Record<keyof typeof STAT_CONV_DEFAULT, string> & { cd8?: string };
 const CONV_TEXT_DEFAULT = Object.fromEntries(Object.entries(STAT_CONV_DEFAULT).map(([k, v]) => [k, String(v)])) as ConvText;
 const ADD_GOALS: { id: AddWeaponGoal; label: (need: number, a: string) => string }[] = [
@@ -110,7 +110,7 @@ export function PotentialTab() {
   const picked = (chosen ?? cubes.filter((c) => c.name.includes("재설정")).map((c) => c.id)).filter((id) => cubes.some((c) => c.id === id));
   const conv = useMemo(() => {
     const n = (k: keyof typeof STAT_CONV_DEFAULT) => parseNum(convText[k] ?? "", STAT_CONV_DEFAULT[k]);
-    return convFromScouter({ level: n("level"), v9: n("v9"), cd3: n("cd3"), atk1: n("atk1"), all1: n("all1") });
+    return convFromSpec({ level: n("level"), v9: n("v9"), cd3: n("cd3"), atk1: n("atk1"), all1: n("all1") });
   }, [convText]);
 
   const extraOptions: { id: Extra; label: string }[] = [
@@ -687,9 +687,6 @@ export function PotentialTab() {
                     환산 기준
                     {!convOpen && <span className="font-normal text-muted-foreground">· {convChanged ? "바꾼 값 사용 중" : "기본값"}</span>}
                   </button>
-                  <a href="https://maplescouter.com" target="_blank" rel="noreferrer" className="text-[11px] text-primary-text underline underline-offset-2">
-                    maplescouter 세부 스펙 효율
-                  </a>
                 </div>
                 {convOpen && (
                 <>

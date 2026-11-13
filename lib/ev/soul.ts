@@ -1,5 +1,5 @@
-// Soul amplification (소울 증폭) with soul ether. Rules from mapletiptip.com/calculator/soul (2026-11-08);
-// not found on Nexon's probability guide (확인 필요). The averages below match mapletiptip's table.
+// Soul amplification (소울 증폭) with soul ether. Rules checked 2026-11-08;
+// not found on Nexon's probability guide (확인 필요).
 // Per stage: first chance, + per failure, guaranteed after N failures, meso fee per try (억).
 export const SOUL_STAGES = [
   { first: 0.05, step: 0.01, cap: 25, feeEok: 5 },

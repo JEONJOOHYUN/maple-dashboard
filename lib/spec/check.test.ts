@@ -210,7 +210,7 @@ test("unknown class: class rules skipped", () => {
   assert.deepEqual(r.misses, []);
 });
 
-test("symbols: only levels the collected growth already covers (maplescouter tax page, 준민나로12)", () => {
+test("symbols: only levels the collected growth already covers (준민나로12)", () => {
   const gaps = symbolGaps([
     { symbol_name: "아케인심볼 : 소멸의 여로", symbol_level: 20, symbol_growth_count: 0, symbol_luk: "2200" },
     { symbol_name: "어센틱심볼 : 세르니움", symbol_level: 10, symbol_growth_count: 1100, symbol_luk: "2300" },
@@ -224,7 +224,7 @@ test("symbols: only levels the collected growth already covers (maplescouter tax
   assert.deepEqual(gaps.map((g) => [g.region, g.level, g.to]), [
     ["세르니움", 10, 11], ["아르크스", 7, 9], ["오디움", 5, 7], ["도원경", 4, 7], ["아르테리아", 4, 5], ["레헬른", 15, 17],
   ]);
-  // maplescouter: 7.92 · 13.78 · 10.35 · 15.36 · 4.03억, total 51.44억
+  // Checked: 7.92 · 13.78 · 10.35 · 15.36 · 4.03억, total 51.44억
   const auth = gaps.filter((g) => g.kind === "authentic");
   assert.deepEqual(auth.map((g) => Math.round(g.meso! / 1e6) / 100), [7.92, 13.78, 10.35, 15.36, 4.03]);
   assert.equal(Math.round(auth.reduce((s, g) => s + g.meso!, 0) / 1e6) / 100, 51.44);

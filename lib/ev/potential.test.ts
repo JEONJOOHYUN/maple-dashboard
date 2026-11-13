@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { averageTries } from "./luck.ts";
-import { NO_CONV, OPTIONS, SOUL_EXTRA, addWeaponChance, customChance, slotOptions, comboChance, practicalTargets, bestValues, convFromScouter, fixFirstLine, gradeUp, lineTables, resetMeso, soulChance, statTargets, sumChance, weaponChance, type WeaponGoal, WEAPON_TIERS, weaponTierOf } from "./potential.ts";
+import { NO_CONV, OPTIONS, SOUL_EXTRA, addWeaponChance, customChance, slotOptions, comboChance, practicalTargets, bestValues, convFromSpec, fixFirstLine, gradeUp, lineTables, resetMeso, soulChance, statTargets, sumChance, weaponChance, type WeaponGoal, WEAPON_TIERS, weaponTierOf } from "./potential.ts";
 
 const near = (actual: number, expected: number, tolerance: number, label: string) =>
   assert.ok(Math.abs(actual - expected) <= tolerance, `${label}: ${actual} is not within ${tolerance} of ${expected}`);
@@ -14,13 +14,13 @@ test("black cube legendary weapon line 1 matches the official table", () => {
   near(boss35[2], 0.097561, 1e-6, "boss 35 % on line 1");
 });
 
-test("weapon goals match the numbers checked against mesu.live (spec §4-8)", () => {
+test("weapon goals match the checked numbers (spec §4-8)", () => {
   const rows = lineTables("black", "legendary", "weapon", 200)!;
   near(weaponChance(rows, v3), 0.0141, 0.0002, "useful 3 lines");
   near(weaponChance(rows, { ...v3, ied: false }), 0.0042, 0.0001, "3 lines without ignore defense");
   near(weaponChance(rows, { ...v3, min: { a: 2, b: 0, i: 0, v: 2 } }), 0.0106, 0.0002, "2+ attack lines");
   near(weaponChance(rows, { ...v3, min: { a: 2, b: 1, i: 0, v: 3 } }), 0.0012, 0.0001, "2 attack + 1 boss");
-  // Attack % sum ≥ 30 (12 · 9 · 9 or better) = 0.0219792 % on mesu.live.
+  // Attack % sum ≥ 30 (12 · 9 · 9 or better) = 0.0219792 %.
   near(weaponChance(rows, { ...v3, min: { a: 3, b: 0, i: 0, v: 3 } }), 0.000219792, 0.000001, "attack 3 lines");
 });
 
@@ -104,8 +104,8 @@ test("soul: official option tables by amplification stage", async () => {
   assert.ok(lineTables("soul", "rare", "soul", 1));
 });
 
-test("maplescouter conversion: Lv.296 example turns flat lines into main stat %", () => {
-  const c = convFromScouter({ level: 296, v9: 6.31, cd3: 11.9, atk1: 2.29, all1: 11.6 });
+test("stat conversion: Lv.296 example turns flat lines into main stat %", () => {
+  const c = convFromSpec({ level: 296, v9: 6.31, cd3: 11.9, atk1: 2.29, all1: 11.6 });
   // 2 x floor(296 / 9) = 64 flat main stat = 6.31 %, so 1 % = 10.14 flat.
   assert.ok(Math.abs(c.all - 11.6 / (64 / 6.31)) < 1e-9);
   assert.ok(Math.abs(c.atkf - 2.29 / (64 / 6.31)) < 1e-9);
@@ -115,7 +115,7 @@ test("maplescouter conversion: Lv.296 example turns flat lines into main stat %"
 
 test("main stat goal with conversion only adds lines, never removes them", () => {
   const rows = lineTables("white", "legendary", "hat", 200)!;
-  const conv = convFromScouter({ level: 296, v9: 6.31, cd3: 11.9, atk1: 2.29, all1: 11.6 });
+  const conv = convFromSpec({ level: 296, v9: 6.31, cd3: 11.9, atk1: 2.29, all1: 11.6 });
   const plain = sumChance(rows, { type: "stat", min: 18 });
   const withConv = sumChance(rows, { type: "stat", min: 18, conv, attack: "atk" });
   assert.ok(withConv > plain);
@@ -130,7 +130,7 @@ test("additional reset: meso reset and white cube share one entry, grade-up diff
   assert.deepEqual(gradeUp("white", "unique", false, true), { p: 0.007, cap: 215 });
 });
 
-test("meso reset cost by level band and grade (namu.wiki table)", () => {
+test("meso reset cost by level band and grade", () => {
   assert.equal(resetMeso("black", "legendary", 200), 45_000_000);
   assert.equal(resetMeso("black", "rare", 250), 5_000_000);
   assert.equal(resetMeso("white", "unique", 160), 70_550_000);
@@ -238,7 +238,7 @@ test("additional gloves: crit damage 1 % lines do not count (3 % only, user 2026
 });
 
 test("target chips = realistic three-line sums, dense below the top (user, 2026-11-10)", () => {
-  const conv = convFromScouter({ level: 296, v9: 6.31, cd3: 11.9, atk1: 2.29, all1: 11.6 });
+  const conv = convFromSpec({ level: 296, v9: 6.31, cd3: 11.9, atk1: 2.29, all1: 11.6 });
   const black = lineTables("black", "legendary", "hat", 200)!;
   const white = lineTables("white", "legendary", "hat", 200)!;
   // Additional armor tops out at 8 + 6 + 6 = 20 (8 % on lines 2 · 3 is a 0.02 % line).
@@ -258,7 +258,7 @@ test("target chips = realistic three-line sums, dense below the top (user, 2026-
 
 test("custom goal: sums over the three lines, sets are alternatives", () => {
   const rows = lineTables("black", "legendary", "weapon", 200)!;
-  // Same goal as "attack 3 lines" above (attack % total ≥ 30 = 0.0219792 % on mesu.live).
+  // Same goal as "attack 3 lines" above (attack % total ≥ 30 = 0.0219792 %).
   near(customChance(rows, [[{ cat: "atk", min: 30 }]]), 0.000219792, 0.000001, "attack total 30");
   const bossAtk = customChance(rows, [[{ cat: "boss", min: 60 }, { cat: "atk", min: 9 }]]);
   const atkBoss = customChance(rows, [[{ cat: "boss", min: 30 }, { cat: "atk", min: 18 }]]);
@@ -298,10 +298,10 @@ test("slot options: only what the slot can roll, with reachable totals", () => {
       }
 });
 
-test("custom goal follows mesu.live: all stat % counts for the four stats, capped options are not repeated", () => {
+test("custom goal: all stat % counts for the four stats, capped options are not repeated", () => {
   const pct = (cube: "black" | "white", grade: "unique" | "legendary", slot: string, level: number, sets: { cat: string; min: number }[][]) =>
     customChance(lineTables(cube, grade, slot, level)!, sets) * 100;
-  // Numbers read from mesu.live/calc/potential on 2026-11-11.
+  // Numbers checked on 2026-11-11.
   near(pct("black", "legendary", "hat", 200, [[{ cat: "str", min: 33 }]]), 0.0240677431, 0.00001, "hat STR 33");
   near(pct("black", "legendary", "earring", 200, [[{ cat: "str", min: 27 }]]), 0.5669008935, 0.0001, "earring STR 27");
   near(pct("black", "unique", "top", 200, [[{ cat: "str", min: 21 }]]), 0.1679482535, 0.0001, "unique top STR 21");
@@ -319,7 +319,7 @@ test("custom goal follows mesu.live: all stat % counts for the four stats, cappe
   assert.ok(hat.find((o) => o.cat === "str")!.sums.includes(15), "STR 9 + all stat 6");
 });
 
-test("soul tables keep decimal values (증폭 1 · 3단계: 공격력 +1.5 % · +4.5 %), checked against mapletiptip 2026-11-11", () => {
+test("soul tables keep decimal values (증폭 1 · 3단계: 공격력 +1.5 % · +4.5 %), checked 2026-11-11", () => {
   for (const stage of [1, 2, 3, 4]) {
     const rows = lineTables("soul", "legendary", "soul", stage)!;
     near(addWeaponChance(rows, "atk", "a21", false, SOUL_EXTRA), 0.004684, 0.000001, `stage ${stage} attack goal`);

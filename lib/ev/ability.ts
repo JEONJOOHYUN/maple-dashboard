@@ -1,5 +1,5 @@
 // Ability (어빌리티) expected cost with the cheapest locking plan.
-// Option chances: Nexon probability guide (data/ability.json). Reset prices: namu.wiki "메이플스토리/어빌리티"
+// Option chances: Nexon probability guide (data/ability.json). Reset prices as in game
 // (2026-11-08): fame reset on a legendary ability 8,000 / 11,000 / 16,000 fame for 0 / 1 / 2 locks,
 // advanced reset 20,000 / 30,000 / 40,000 fame + 200만 / 600만 / 1,500만 meso. Sunday halves fame.
 //
@@ -265,7 +265,7 @@ export function abilityPlan(
   const famePrice = Math.max(opts.famePricePerUnit, 1e-3);
   const circPrice = opts.values ? Math.max(opts.values.circPrice, 1) : 0;
   // Three legendary lines only come from the advanced reset, and a build with legendary lines 2 · 3 is rolled with it
-  // to the end (user, 2026-11-11; the same route as chuchu.gg). The fame reset is for L1+U2.
+  // to the end (user, 2026-11-11). The fame reset is for L1+U2.
   const methods: Method[] = mode === "l3" ? ["advanced"] : ["fame"];
   const gradeOf = (line: number) =>
     (mode === "l3" || line === 0 ? "legendary" : "unique") as
@@ -611,7 +611,7 @@ export function valueChance(
 /**
  * Abyss circulators to also reach the wanted values. A circulator rerolls the values of all three lines and keeps
  * options and grades. When the options are done the values are already random, so the chance they are all fine
- * is P and the expected circulators are (1 − P) ÷ P. (chuchu.gg shows 1 ÷ P, one more.)
+ * is P and the expected circulators are (1 − P) ÷ P. (Not 1 ÷ P: that counts one more.)
  */
 export function circulatorCount(
   lines: { key: AbilityKey; grade: "legendary" | "unique"; goal: number }[],

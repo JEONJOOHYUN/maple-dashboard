@@ -112,7 +112,7 @@ export function SundayView({ data }: { data: SundayPageData }) {
 
       <ul className="flex flex-col gap-1 text-xs leading-relaxed text-muted-foreground">
         <li>
-          기록 · 넥슨 썬데이 메이플 공지, 인벤 역대 썬데이메이플 정리 <span className="whitespace-nowrap">(2023-08 ~ {data.dataEnd})</span>
+          기록 · 넥슨 썬데이 메이플 공지 <span className="whitespace-nowrap">(2023-08 ~ {data.dataEnd})</span>
         </li>
         <li>예측 · 2025-03 스타포스 개편 이후 기록의 주기 통계</li>
         <li>적중 · 최근 52주 중 45주는 고른 5개 안에 실제 혜택 포함</li>

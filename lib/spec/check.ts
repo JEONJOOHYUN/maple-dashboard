@@ -62,7 +62,7 @@ type Data = {
 };
 export const SPEC_DATA = classesJson as unknown as Data;
 
-// Boss-relevant 5th job common cores (Claude's pick, 2026-11-09): the damage / bind / survival ones maplescouter also warns about.
+// Boss-relevant 5th job common cores (Claude's pick, 2026-11-09): the damage / bind / survival ones.
 // Movement and party-buff cores (로프 커넥트, 쓸만한 …) are left out.
 const BOSS_COMMON_CORES = ["스파이더 인 미러", "크레스트 오브 더 솔라", "에르다 노바", "에르다의 의지"];
 // 바디 오브 스틸 is a warrior-only core: other classes cannot have it (청운적운 · 귤민 have none, 푸소 does; user, 2026-11-11).
@@ -155,7 +155,7 @@ function pickBest(scores: { i: number; s: number[] }[]): number | null {
   }).i;
 }
 
-// ---------- boss preset (rules checked against maplescouter, spec §4-11 "대조 결과") ----------
+// ---------- boss preset (rules: spec §4-11 "대조 결과") ----------
 export function bossPresets(raw: SpecRaw, rule: ClassRule | undefined) {
   const eqScores = [1, 2, 3].flatMap((i) => {
     const items = preset<Item[]>(raw.equipment, "item_equipment_preset_", i) ?? [];
@@ -244,7 +244,7 @@ export function checkSpec(raw: SpecRaw, now: Date = new Date(), data: Data = SPE
   const KIND_LABEL: Record<string, string> = {
     boss: "보스 데미지", dmg: "데미지", cd: "크리티컬 데미지", ied: "방어율 무시", atk: "공격력/마력", stat: "올스탯", hp: "최대 HP", cool: "재사용", buff: "버프 지속", crit: "크리티컬 확률",
   };
-  // Target order = maplescouter reverse-calculation (spec §4-11 table): boss ≈ dmg ≈ cd ≈ stat > ied > atk > buff.
+  // Target order (spec §4-11 table): boss ≈ dmg ≈ cd ≈ stat > ied > atk > buff.
   // Crit rate counts too (user, 2026-11-09: "유효 확률").
   const targets = ["boss", "dmg", "cd", cls === HP_CLASS ? "hp" : "stat", ...(rule?.artifactCooldown ? ["cool"] : []), "ied", "atk", "buff", "crit"];
   const effects = raw.artifact.union_artifact_effect ?? [];
