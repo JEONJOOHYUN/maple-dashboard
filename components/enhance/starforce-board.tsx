@@ -40,8 +40,10 @@ export function StarforceBoard({ apiKey, account, onForget, switcher }: { apiKey
   const period = usePeriod();
   const { from, to } = period;
   const [view, setView] = useState<View>("insight");
-  // One switch for the log and the item cards (tries · items under 12 stars), remembered in this browser.
-  const [hideLow, setHideLow] = useStored<boolean>("enhance:hideLow", true);
+  // One switch for the log and the item cards (tries · items under 12 stars). Checked every time the board opens
+  // (user, 2026-11-13): it used to be remembered, and the link to the cards waiting for a level unchecks it, so one
+  // click on that link left it off for good.
+  const [hideLow, setHideLow] = useState(true);
   const [groupsOff, toggleGroup] = useGroupsOff();
   /** Key of the item whose tries are open in the window ("" = closed). */
   const [openItem, setOpenItem] = useState("");

@@ -3,8 +3,9 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Package, Split } from "lucide-react";
 import { NumberField, eok, parseNum } from "@/components/ev/ui";
-import { BasisButton, BasisRow, ItemFilter, MoreCards, NO_ITEM_FILTER, PeriodBar, SyncBanners, ViewTabs, WorldStrip, itemMatches, liveFilter, useCardLimit, useGroupsOff, useKnownGroups, usePeriod, useSync } from "@/components/enhance/board-bits";
+import { BasisButton, BasisRow, CARD_PAGE, ItemFilter, NO_ITEM_FILTER, PeriodBar, ROW_PAGE, SyncBanners, ViewTabs, WorldStrip, itemMatches, liveFilter, useGroupsOff, useKnownGroups, usePeriod, useSync } from "@/components/enhance/board-bits";
 import { Card, Delta, Empty, Gauge, ItemIcon, PickedTotal, Select, Tile, signed } from "@/components/enhance/parts";
+import { Pager, usePage } from "@/components/pager";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { useItemDict, type Rolled } from "@/components/enhance/use-item-dict";
 import { useInsights, useWorldOf, useXenons } from "@/components/enhance/use-worlds";
@@ -390,10 +391,11 @@ function PiecesView({ pieces, found, onOpen }: { pieces: PieceStat[]; found: Ico
   const list = ofKind
     .filter((p) => itemMatches(p.item, filter))
     .sort((a, b) => (sort === "spent" ? b.spent - a.spent : sort === "delta" ? (b.delta ?? -Infinity) - (a.delta ?? -Infinity) : b.last - a.last) || b.rolls - a.rolls);
-  const [limit, more] = useCardLimit(`${sort}|${kind}|${filter.picked}|${filter.query}`);
+  const pager = usePage(`${sort}|${kind}|${filter.picked}|${filter.query}`, list.length, CARD_PAGE);
+  const top = useRef<HTMLDivElement>(null);
   return (
     <>
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div ref={top} className="flex scroll-mt-4 flex-wrap items-center justify-between gap-2">
         <b className="text-sm">
           아이템별 모아보기 <span className="font-medium text-muted-foreground">{list.length}개</span>
         </b>
@@ -420,11 +422,11 @@ function PiecesView({ pieces, found, onOpen }: { pieces: PieceStat[]; found: Ico
       )}
       {list.length === 0 && <Empty>해당 아이템 없음</Empty>}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-        {list.slice(0, limit).map((piece) => (
+        {list.slice(pager.from, pager.to).map((piece) => (
           <PieceCard key={piece.key} piece={piece} found={found} onOpen={() => onOpen(piece.key)} />
         ))}
       </div>
-      <MoreCards total={list.length} shown={limit} onMore={more} />
+      <Pager page={pager.page} pages={pager.pages} onPage={pager.go} anchor={top} />
     </>
   );
 }
@@ -434,32 +436,34 @@ function RollsView({ entries, characters, found }: { entries: PotEntry[]; charac
   const [item, setItem] = useState("");
   const [kind, setKind] = useState("");
   const [only, setOnly] = useState(false);
-  const [limit, setLimit] = useState(PAGE);
   // Items of the chosen character (every item when no character is chosen).
   const items = [...new Set(entries.filter((e) => !who || e.row.who === who).map((e) => e.row.item))].sort((a, b) => a.localeCompare(b, "ko"));
   const list = entries.filter(
     (e) => (!who || e.row.who === who) && (!item || e.row.item === item) && (!kind || kindOf(e.row) === kind) && (!only || e.taken || e.row.up)
   );
-  const shown = list.slice(-limit).reverse();
+  // Newest first, a page at a time.
+  const pager = usePage(`${who}|${item}|${kind}|${only}`, list.length, ROW_PAGE);
+  const top = useRef<HTMLDivElement>(null);
+  const shown = list.slice(list.length - pager.to, list.length - pager.from).reverse();
   return (
     <Card className="overflow-hidden">
-      <div className="flex flex-wrap items-center gap-2.5 border-b border-border px-4 py-3">
+      <div ref={top} className="flex scroll-mt-4 flex-wrap items-center gap-2.5 border-b border-border px-4 py-3">
         <b className="text-sm">
           재설정 내역 <span className="font-medium text-muted-foreground">{list.length.toLocaleString("ko-KR")}건</span>
         </b>
-        <Select aria-label="캐릭터" value={who} onChange={(e) => (setWho(e.target.value), setItem(""), setLimit(PAGE))}>
+        <Select aria-label="캐릭터" value={who} onChange={(e) => (setWho(e.target.value), setItem(""))}>
           <option value="">모든 캐릭터</option>
           {characters.map((c) => (
             <option key={c}>{c}</option>
           ))}
         </Select>
-        <Select aria-label="아이템" value={item} onChange={(e) => (setItem(e.target.value), setLimit(PAGE))} className="max-w-[180px]">
+        <Select aria-label="아이템" value={item} onChange={(e) => setItem(e.target.value)} className="max-w-[180px]">
           <option value="">모든 아이템</option>
           {items.map((name) => (
             <option key={name}>{name}</option>
           ))}
         </Select>
-        <Select aria-label="종류" value={kind} onChange={(e) => (setKind(e.target.value), setLimit(PAGE))}>
+        <Select aria-label="종류" value={kind} onChange={(e) => setKind(e.target.value)}>
           <option value="">모든 종류</option>
           {KINDS.map((k) => (
             <option key={k} value={k}>
@@ -468,7 +472,7 @@ function RollsView({ entries, characters, found }: { entries: PotEntry[]; charac
           ))}
         </Select>
         <label className="inline-flex items-center gap-1.5 text-[13px]">
-          <input type="checkbox" checked={only} onChange={(e) => (setOnly(e.target.checked), setLimit(PAGE))} className="size-4 accent-primary" />
+          <input type="checkbox" checked={only} onChange={(e) => setOnly(e.target.checked)} className="size-4 accent-primary" />
           선택 · 등급 상승만
         </label>
       </div>
@@ -476,11 +480,7 @@ function RollsView({ entries, characters, found }: { entries: PotEntry[]; charac
       {shown.map((e) => (
         <RollRow key={e.row.id} entry={e} found={found} showItem />
       ))}
-      {list.length > limit && (
-        <button type="button" onClick={() => setLimit(limit + PAGE)} className="w-full border-t border-border py-3 text-[13px] font-semibold text-primary-text outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50">
-          더 보기 ({(list.length - limit).toLocaleString("ko-KR")}건 남음)
-        </button>
-      )}
+      <Pager page={pager.page} pages={pager.pages} onPage={pager.go} anchor={top} className="border-t border-border py-3" />
     </Card>
   );
 }
