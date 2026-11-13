@@ -1,3 +1,5 @@
+import { nexonUrl } from "../nexon/url.ts";
+import { splitBenefit, type BenefitRow } from "./benefit.ts";
 import { THEMES, bundleLabel, bundleTheme, isBigBundle, type ThemeId } from "./bundles.ts";
 import { SUNDAYS, addWeeks, dateLabel, kstDate, noticeUrl, upcomingSunday, type SundayWeek } from "./history.ts";
 import { bigDayWindow, predictSunday, themesOf, type BundleOdds } from "./predict.ts";
@@ -12,7 +14,13 @@ export type WeekView = {
   /** One-line detail under the title: other bundles, or the raw benefits when the title already names the only bundle. */
   detail: string;
   items: string[];
+  /** The benefits as name · amount (the amount shown apart, in bold); the time of a benefit stays with its name. */
+  rows: BenefitRow[];
   noticeUrl: string | null;
+  /** "11월 13일(금) 10:53" (KST): when the Cron read this week from the notice; null for weeks of the bundled history. */
+  updated: string | null;
+  /** The notice's own pictures (NEXON's addresses, checked): shown in a window on "원본 그림". */
+  images: string[];
 };
 
 export type OddsView = BundleOdds & { label: string; theme: ThemeId | null };
@@ -32,7 +40,8 @@ export type BigDayView = {
 };
 
 export type SundayPageData = {
-  thisWeek: { date: string; label: string; isToday: boolean; announced: boolean; recorded: WeekView | null };
+  /** `daysLeft` = days until the Sunday, 0 on the day itself. */
+  thisWeek: { date: string; label: string; isToday: boolean; daysLeft: number; announced: boolean; recorded: WeekView | null };
   prediction: {
     date: string;
     label: string;
@@ -81,8 +90,22 @@ export function weekView(w: SundayWeek): WeekView {
     bundles: [...w.bundles].map(bundleLabel),
     detail: (others.length ? others : w.items.map((it) => it.name)).join(" · "),
     items: w.items.map((it) => it.name + (it.time ? ` (${it.time})` : "")),
+    rows: w.items.map((it) => {
+      const row = splitBenefit(it.name);
+      return it.time ? { ...row, name: `${row.name} (${it.time})` } : row;
+    }),
     noticeUrl: w.notice.length ? noticeUrl(w.notice[w.notice.length - 1]) : null,
+    updated: w.updated ? timeLabel(w.updated) : null,
+    images: (w.images ?? []).map(nexonUrl).filter(Boolean),
   };
+}
+
+/** "11월 13일(금) 10:53" in Korea time, or null when the text is not a time. */
+function timeLabel(iso: string): string | null {
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return null;
+  const kst = new Date(t + 9 * 3_600_000).toISOString();
+  return `${dateLabel(kst.slice(0, 10))} ${kst.slice(11, 16)}`;
 }
 
 const odds = (r: BundleOdds): OddsView => ({ ...r, label: bundleLabel(r.id), theme: bundleTheme(r.id) ?? null });
@@ -101,7 +124,14 @@ export function getSundayPageData(now: Date, weeks: SundayWeek[] = SUNDAYS): Sun
   const recent = weeks.filter((w) => w.date < sunday || w === recordedWeek).slice(-8).reverse();
 
   return {
-    thisWeek: { date: sunday, label: dateLabel(sunday), isToday: today === sunday, announced, recorded: recordedWeek ? weekView(recordedWeek) : null },
+    thisWeek: {
+      date: sunday,
+      label: dateLabel(sunday),
+      isToday: today === sunday,
+      daysLeft: Math.round((Date.parse(sunday) - Date.parse(today)) / 86_400_000),
+      announced,
+      recorded: recordedWeek ? weekView(recordedWeek) : null,
+    },
     prediction: {
       date: target,
       label: dateLabel(target),

@@ -1,5 +1,6 @@
 import { ExternalLink, Sparkles, Star, Sun, Swords, TriangleAlert, type LucideIcon } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
+import { NoticeImage } from "@/components/sunday/notice-image";
 import { THEMES, type ThemeId } from "@/lib/sunday/bundles";
 import type { OddsView, SundayPageData, WeekView } from "@/lib/sunday/view";
 import { cn } from "@/lib/utils";
@@ -136,19 +137,22 @@ function ThisWeekBand({ week, recorded: r }: { week: SundayPageData["thisWeek"];
           {r.special && <span className="rounded-md border border-primary px-1.5 text-[11px]">스페셜</span>}
         </span>
         <h2 className={BAND_TITLE}>{r.title}</h2>
-        {(r.themes.length > 0 || r.noticeUrl) && (
+        {(r.themes.length > 0 || r.noticeUrl || r.updated || r.images.length > 0) && (
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
             {r.themes.map((id) => (
               <ThemeChip key={id} id={id} />
             ))}
             {r.noticeUrl && <NoticeLink href={r.noticeUrl} />}
+            <NoticeImage images={r.images} label={week.label} className="text-[13px]" />
+            {r.updated && <span className="text-xs text-muted-foreground">{r.updated} 갱신</span>}
           </div>
         )}
       </div>
       <ol className="flex flex-col gap-2">
         {r.items.map((text, i) => (
           <li key={text} className="flex items-baseline gap-2.5 rounded-lg bg-muted px-3.5 py-2.5 text-sm leading-normal lg:text-[15px]">
-            <b className="font-num text-primary-text">{String(i + 1).padStart(2, "0")}</b>
+            {/* Never narrower than its two digits: next to a line that wraps, "01" broke into "0" over "1" on a phone. */}
+            <b className="shrink-0 font-num whitespace-nowrap text-primary-text">{String(i + 1).padStart(2, "0")}</b>
             <span>{text}</span>
           </li>
         ))}

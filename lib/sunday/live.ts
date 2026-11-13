@@ -14,13 +14,14 @@ const loadPublishedRows = unstable_cache(
   async (): Promise<StoredWeek[]> => {
     const { data, error } = await supabase
       .from("sunday_weeks")
-      .select("sunday, notice_id, special, items")
+      .select("sunday, notice_id, special, items, updated_at, images")
       .in("status", ["auto", "confirmed"])
       .order("sunday");
     if (error) throw error;
     return (data ?? []) as StoredWeek[];
   },
-  ["sunday-weeks"],
+  // "-v3": the rows carry updated_at · images (rows cached before them would come back without).
+  ["sunday-weeks-v3"],
   { revalidate: 3600, tags: [SUNDAY_WEEKS_TAG] },
 );
 

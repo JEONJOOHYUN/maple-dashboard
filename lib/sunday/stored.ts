@@ -6,7 +6,7 @@ import type { HistoryItem } from "./bundles.ts";
 export type StoredStatus = "auto" | "review" | "confirmed";
 
 /** A published row as the site reads it (status auto or confirmed). */
-export type StoredWeek = { sunday: string; notice_id: number | null; special: boolean; items: HistoryItem[] };
+export type StoredWeek = { sunday: string; notice_id: number | null; special: boolean; items: HistoryItem[]; updated_at?: string | null; images?: unknown };
 
 export type SaveDecision =
   | { action: "skip"; reason: "no-notice" | "in-history" | "already-published" | "review-unchanged" }
@@ -62,6 +62,10 @@ export function mergeStored(history: SundayWeek[], rows: StoredWeek[]): SundayWe
   const have = new Set(history.map((w) => w.date));
   const extra = rows
     .filter((r) => !have.has(r.sunday))
-    .map((r) => toWeek({ date: r.sunday, event: null, special: r.special, notice: r.notice_id ? [r.notice_id] : [], items: r.items }));
+    .map((r) => ({
+      ...toWeek({ date: r.sunday, event: null, special: r.special, notice: r.notice_id ? [r.notice_id] : [], items: r.items }),
+      ...(r.updated_at ? { updated: r.updated_at } : {}),
+      ...(Array.isArray(r.images) ? { images: r.images.filter((x): x is string => typeof x === "string") } : {}),
+    }));
   return extra.length ? [...history, ...extra].sort((a, b) => (a.date < b.date ? -1 : 1)) : history;
 }

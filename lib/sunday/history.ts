@@ -23,6 +23,10 @@ export type SundayWeek = {
   items: HistoryItem[];
   bundles: Set<string>;
   note?: string;
+  /** When the site got this week (ISO time): only weeks read from the notice by the Cron have one. */
+  updated?: string;
+  /** The pictures of the notice the week was read from (NEXON's addresses), for weeks read by the Cron. */
+  images?: string[];
 };
 
 const groupByName = new Map(benefits.map((b) => [b.name, b.group]));

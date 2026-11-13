@@ -78,6 +78,20 @@ test("page data: recorded week, Friday notice time, stale data", async () => {
   assert.equal(sat.thisWeek.date, "2026-11-08");
   assert.equal(sat.thisWeek.recorded?.title, "사냥데이");
   assert.equal(sat.prediction.date, "2026-11-15");
+  // The home card: days left (0 on the Sunday itself), and each benefit as name · amount.
+  assert.deepEqual([sat.thisWeek.daysLeft, getSundayPageData(new Date("2026-11-08T03:00:00Z")).thisWeek.daysLeft], [1, 0]);
+  assert.equal(sat.thisWeek.recorded!.rows.length, sat.thisWeek.recorded!.items.length);
+  assert.equal(sat.thisWeek.recorded!.updated, null);
+  // A week the Cron read carries the time it was read, shown in Korea time.
+  const { mergeStored } = await import("./stored.ts");
+  const { SUNDAYS } = await import("./history.ts");
+  const stored = mergeStored(SUNDAYS, [{ sunday: "2026-11-15", notice_id: 1409, special: false, items: [{ name: "주문의 흔적 강화 비용 50% 할인" }], updated_at: "2026-11-13T01:53:31.000Z", images: ["https://lwi.nexon.com/maplestory/2026/a.png", "https://example.com/b.png", 7] }]);
+  const live = getSundayPageData(new Date("2026-11-13T03:00:00Z"), stored).thisWeek;
+  assert.deepEqual([live.daysLeft, live.recorded?.updated, live.recorded?.rows[0]], [2, "11월 13일(금) 10:53", { name: "주문의 흔적 강화 비용", amount: "50% 할인" }]);
+  assert.equal(live.recorded?.noticeUrl, "https://maplestory.nexon.com/News/Event/1409");
+  // The notice's pictures: NEXON's addresses only. A week of the bundled history has none.
+  assert.deepEqual(live.recorded?.images, ["https://lwi.nexon.com/maplestory/2026/a.png"]);
+  assert.deepEqual(sat.thisWeek.recorded!.images, []);
   // Friday 2026-11-13 09:59 KST: not announced yet; 10:00 KST: announced, still unrecorded -> predict 11-15
   assert.equal(getSundayPageData(new Date("2026-11-13T00:59:00Z")).thisWeek.announced, false);
   const fri = getSundayPageData(new Date("2026-11-13T01:00:00Z"));
