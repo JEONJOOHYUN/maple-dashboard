@@ -502,8 +502,9 @@ export function StarforceTab() {
                 ))}
             </div>
           </div>
+          {/* 520px: at a 1280px window the panel is 551px wide (560 scrolled by 9px and cut "담기"); phones still scroll. */}
           <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-            <table className="w-full min-w-[560px] text-[13px]">
+            <table className="w-full min-w-[520px] text-[13px]">
               <thead>
                 <tr className="border-b border-border text-left text-[11px] text-muted-foreground">
                   <th className="py-2 font-medium">구간</th>
