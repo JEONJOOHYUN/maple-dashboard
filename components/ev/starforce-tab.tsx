@@ -71,6 +71,11 @@ const ITEM_GROUPS = (() => {
  * every group fills whole rows (에테르넬 4 + 3 + one more) with no item left alone on a row.
  */
 const ITEM_COLS = 8;
+/**
+ * Row height of the table beside the settings panel (user, 2026-11-13): fixed, the one at which the 18 rows of
+ * 12 → 30성 end on the panel's bottom. The same for every item and start star; stacked panels keep the plain row.
+ */
+const ROW_CSS = "lg:h-[43.5px]";
 const findItem = (id: string) => {
   for (const g of STAR_ITEMS) {
     const it = g.items.find((x) => x.id === id);
@@ -513,10 +518,10 @@ export function StarforceTab() {
                 {rows.map((r) => (
                   <tr
                     key={`${r.from}-${r.to}`}
-                    className="border-b border-border/60 last:border-0"
+                    className={cn("border-b border-border/60 last:border-0", ROW_CSS)}
                   >
-                    <td className="py-2 whitespace-nowrap">
-                      {r.from} → {r.to}성
+                    <td className="py-2 font-num whitespace-nowrap">
+                      {r.from} <span className="font-sans">→</span> {r.to}성
                     </td>
                     <td className="py-2 text-right font-num whitespace-nowrap">
                       {money(r.meso)}
@@ -598,8 +603,8 @@ export function StarforceTab() {
                           Lv.{c.level} · {c.cond}
                         </span>
                       </td>
-                      <td className="py-2 whitespace-nowrap">
-                        {c.from} → {c.to}성
+                      <td className="py-2 font-num whitespace-nowrap">
+                        {c.from} <span className="font-sans">→</span> {c.to}성
                       </td>
                       <td className="py-2 text-right font-num whitespace-nowrap">
                         {money(c.meso)}
