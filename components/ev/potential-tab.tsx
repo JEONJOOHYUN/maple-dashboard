@@ -187,9 +187,10 @@ export function PotentialTab() {
     setCombo(next);
   };
 
-  const isV3 = min.a === 0 && min.b === 0 && min.i === 0 && min.v === 3;
   const weaponGoal: WeaponGoal = { attack, ied, min, tier: kind === "main" ? tier : "v3" };
   const optGrade = grade === "rare" || grade === "epic" ? null : grade;
+  // Table the weapon chips show their chance with (the meso reset's, as its result card).
+  const blackRows = optGrade ? lineTables("black", optGrade, slotId, level) : null;
   const custom = goal === "opt" && !soul && !!optGrade && mode === "custom";
   const soulRows = soul ? lineTables("soul", grade, "soul", soulStage) : null;
   const soulNeed = soulRows ? addWeaponNeed(soulRows, attack) : 0;
@@ -313,12 +314,15 @@ export function PotentialTab() {
             ? `${GRADE_LABEL[grade]} ${slot.label} · ${comboText}`
             : `${GRADE_LABEL[grade]} ${slot.label} · ${extraOptions.find((o) => o.id === target)!.label} ${sumTargets[tIdx]?.label ?? ""} ${sumTargets[tIdx]?.sub ?? ""}`;
 
-  const attackName = "공격력(마력) %";
+  // No "%" in the name: the range under it ("+9% ~ +12%") already says which line (user, 2026-11-14).
+  const attackName = "공격력(마력)";
+  // The values a line of the option can have, low to high: any of them counts (user, 2026-11-14: "+9% ~ +12%").
+  const range = (cat: string) => (!best[cat] ? "" : lowest(cat) < best[cat] ? `+${lowest(cat)}% ~ +${best[cat]}%` : `+${best[cat]}%`);
   const steppers = (
     [
-      ["a", `${attackName} 최소`, best[attack] ? `+${best[attack]}% 까지` : ""],
-      ["b", "보스 데미지 최소", best.boss ? `+${best.boss}% 까지` : ""],
-      ["i", "방어율 무시 최소", best.ied ? `+${best.ied}% 까지` : ""],
+      ["a", attackName, range(attack)],
+      ["b", "보스 데미지", range("boss")],
+      ["i", "방어율 무시", range("ied")],
       ["v", "합쳐서 유효 줄", ied ? "위 옵션 아무거나" : "방무 빼고"],
     ] as const
   ).filter(([k]) => !(k === "b" && !best.boss));
@@ -460,20 +464,24 @@ export function PotentialTab() {
               <div className="flex flex-wrap gap-1.5 [&>*]:min-w-[4.5rem] [&>*]:flex-1">
                 {/* Rows always full: chips grow to share each row (5 in one row on desktop, 3 + 2 on phones). */}
                 {TIERS.map((t) => {
-                  const rows = lineTables("black", optGrade, slotId, level);
-                  const p = rows ? weaponChance(rows, { attack, ied, min: { a: 0, b: 0, i: 0, v: 3 }, tier: t.id }) : 0;
+                  // The tier and the line counts below are separate choices ("반이탈 + 보공 2줄", user 2026-11-14): a chip
+                  // stays picked while the counts change, and its chance is with them. "유효 3줄" is itself a line count,
+                  // so it is picked only at three useful lines and picking it asks for three.
+                  const chipMin = t.id === "v3" ? { ...min, v: 3 } : min;
+                  const on = tier === t.id && (t.id !== "v3" || min.v === 3);
+                  const p = blackRows ? weaponChance(blackRows, { attack, ied, min: chipMin, tier: t.id }) : 0;
                   return (
                     <button
                       key={t.id}
                       type="button"
-                      aria-pressed={isV3 && tier === t.id}
+                      aria-pressed={on}
                       onClick={() => {
-                        setMin({ a: 0, b: 0, i: 0, v: 3 });
                         setTier(t.id);
+                        setMin(chipMin);
                       }}
                       className={cn(
                         "flex flex-col items-start rounded-lg border px-2.5 py-1.5 text-left",
-                        isV3 && tier === t.id ? "border-primary bg-primary-soft text-primary-text" : "border-border"
+                        on ? "border-primary bg-primary-soft text-primary-text" : "border-border"
                       )}
                     >
                       <b className="text-[13px]">{t.label}</b>
@@ -483,7 +491,12 @@ export function PotentialTab() {
                 })}
               </div>
             )}
-            {kind === "main" && tier !== "v3" && <span className="text-[11px] text-muted-foreground">{TIERS.find((t) => t.id === tier)!.desc}</span>}
+            {/* The rules are written for three useful lines; say the count asked for when it was lowered. */}
+            {kind === "main" && tier !== "v3" && (
+              <span className="text-[11px] text-muted-foreground">
+                {TIERS.find((t) => t.id === tier)!.desc.replace("유효 3줄", min.v ? `유효 ${min.v}줄` : "아무 줄")}
+              </span>
+            )}
             {kind === "add" && (
               <div className="flex flex-col gap-1.5">
                 <div className="grid grid-cols-3 gap-1.5">

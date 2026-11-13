@@ -35,6 +35,15 @@ test("이탈 chips get harder in order: 반이탈 · 꽉이탈 1 · 2 · 3줄 (u
   for (let i = 1; i < tiers.length; i++) assert.ok(tiers[i] < tiers[i - 1]);
 });
 
+test("이탈 chips go together with the line counts: 반이탈 + 보공 2줄 (user, 2026-11-14)", () => {
+  const rows = lineTables("black", "legendary", "weapon", 200)!;
+  const boss2 = { a: 0, b: 2, i: 0, v: 3 };
+  const half = weaponChance(rows, { ...v3, tier: "half" });
+  const boss = weaponChance(rows, { ...v3, min: boss2 });
+  const both = weaponChance(rows, { ...v3, min: boss2, tier: "half" });
+  assert.ok(both > 0 && both < half && both < boss, `${both} should be below 반이탈 ${half} and 보공 2줄 ${boss}`);
+});
+
 test("the tier of an option a weapon actually has", () => {
   const rows = lineTables("black", "legendary", "weapon", 250)!;
   const tier = (...lines: [string, number][]) => weaponTierOf(rows, "atk", lines.some(([c]) => c === "ied"), lines);
