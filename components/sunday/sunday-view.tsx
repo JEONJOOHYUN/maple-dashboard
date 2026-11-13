@@ -137,14 +137,14 @@ function ThisWeekBand({ week, recorded: r }: { week: SundayPageData["thisWeek"];
           {r.special && <span className="rounded-md border border-primary px-1.5 text-[11px]">스페셜</span>}
         </span>
         <h2 className={BAND_TITLE}>{r.title}</h2>
-        {(r.themes.length > 0 || r.noticeUrl || r.updated || r.images.length > 0) && (
+        {/* No update time: only we need it (user, 2026-11-14), as on the home card. */}
+        {(r.themes.length > 0 || r.noticeUrl || r.images.length > 0) && (
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
             {r.themes.map((id) => (
               <ThemeChip key={id} id={id} />
             ))}
             {r.noticeUrl && <NoticeLink href={r.noticeUrl} />}
             <NoticeImage images={r.images} label={week.label} className="text-[13px]" />
-            {r.updated && <span className="text-xs text-muted-foreground">{r.updated} 갱신</span>}
           </div>
         )}
       </div>
