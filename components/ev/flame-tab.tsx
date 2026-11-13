@@ -133,7 +133,7 @@ export function FlameTab() {
             </div>
           </div>
         ) : (
-          <div className="flex flex-col gap-2.5">
+          <div className="flex flex-1 flex-col gap-2.5">
             <Label
               aside={
                 <Segment
@@ -199,7 +199,8 @@ export function FlameTab() {
               </>
             )}
 
-            <div className="flex flex-col gap-2 rounded-md border border-border bg-card p-2.5">
+            {/* At the foot of the panel: the same place for the three jobs, whichever has more chips (user, 2026-11-13). */}
+            <div className="mt-auto flex flex-col gap-2 rounded-md border border-border bg-card p-2.5">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <button type="button" onClick={() => setConvOpen((o) => !o)} aria-expanded={convOpen} className="flex items-center gap-1 text-[12px] font-bold">
                   <ChevronDown className={cn("size-3.5 transition-transform", !convOpen && "-rotate-90")} aria-hidden="true" />
