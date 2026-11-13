@@ -3,24 +3,24 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Brand } from "@/components/brand";
+import { NavIcon } from "@/components/nav-icon";
 import { Badge } from "@/components/ui/badge";
 import { homeItem, navGroups, type NavItem } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
 function SideLink({ item, active }: { item: NavItem; active: boolean }) {
-  const Icon = item.icon;
   return (
     <Link
       href={item.href}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "flex w-full items-center gap-2.5 rounded-lg px-3 py-[9px] text-sm transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+        "flex w-full items-center gap-2.5 rounded-lg px-3 py-[7px] text-sm transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
         active
           ? "bg-sidebar-accent font-semibold text-sidebar-accent-foreground"
           : "font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
       )}
     >
-      <Icon className="size-[18px] shrink-0" aria-hidden="true" />
+      <NavIcon slug={item.slug} icon={item.icon} className="size-[22px]" />
       {item.label}
       {!item.ready && (
         <Badge variant="outline" className="ml-auto h-[18px] px-1.5 text-[10px] font-medium text-muted-foreground">

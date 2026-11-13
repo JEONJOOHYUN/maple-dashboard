@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Construction } from "lucide-react";
+import { NavIcon, hasArt } from "@/components/nav-icon";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -29,15 +29,18 @@ export default async function PlaceholderPage({ params }: Props) {
   const { tool } = await params;
   const page = placeholderPages.find((p) => p.slug === tool);
   if (!page) notFound();
-  const Icon = page.icon ?? Construction;
 
   return (
     <div className="flex flex-col gap-4 lg:gap-[22px]">
       <PageHeader title={page.title} description={page.description} />
       <section className="flex flex-col items-center gap-4 rounded-lg border border-dashed border-border bg-card px-5 py-12 text-center">
-        <span className="flex size-12 items-center justify-center rounded-lg bg-primary-soft text-primary-text">
-          <Icon className="size-6" aria-hidden="true" />
-        </span>
+        {hasArt(page.slug) ? (
+          <NavIcon slug={page.slug} className="size-16" />
+        ) : (
+          <span className="flex size-12 items-center justify-center rounded-lg bg-primary-soft text-primary-text">
+            <NavIcon slug={page.slug} icon={page.icon} className="size-6" />
+          </span>
+        )}
         <Badge variant="outline" className="text-muted-foreground">
           준비 중
         </Badge>
