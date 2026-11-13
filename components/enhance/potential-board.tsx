@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactN
 import { Package, Split } from "lucide-react";
 import { NumberField, eok, parseNum } from "@/components/ev/ui";
 import { BasisButton, BasisRow, ItemFilter, NO_ITEM_FILTER, PeriodBar, SyncBanners, ViewTabs, WorldStrip, itemMatches, liveFilter, useGroupsOff, useKnownGroups, usePeriod, useSync } from "@/components/enhance/board-bits";
-import { Card, Delta, Empty, Gauge, ItemIcon, Select, Tile, signed } from "@/components/enhance/parts";
+import { Card, Delta, Empty, Gauge, ItemIcon, PickedTotal, Select, Tile, signed } from "@/components/enhance/parts";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { useItemDict, type Rolled } from "@/components/enhance/use-item-dict";
 import { useInsights, useWorldOf, useXenons } from "@/components/enhance/use-worlds";
@@ -403,6 +403,9 @@ function PiecesView({ pieces, found, onOpen }: { pieces: PieceStat[]; found: Ico
           </Select>
         </span>
       </div>
+      {filter.picked && list.length > 0 && (
+        <PickedTotal spent={list.reduce((sum, p) => sum + p.spent, 0)} delta={list.some((p) => p.delta !== null) ? list.reduce((sum, p) => sum + (p.delta ?? 0), 0) : null} />
+      )}
       {list.length === 0 && <Empty>해당 아이템 없음</Empty>}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {list.map((piece) => (

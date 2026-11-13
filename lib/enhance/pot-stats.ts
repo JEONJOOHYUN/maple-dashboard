@@ -6,10 +6,7 @@
 // Profit = expected − spent. A cube's cost is the fee it takes on use (rollMeso), a reset's its price.
 import type { Grade, StatConv } from "../ev/potential.ts";
 import { kstDate } from "./kst.ts";
-import { goalChance, goalExact, goalOf, gradeBefore, kindOf, potKey, rollMeso, rollsToUp, upChance, type CubePrices, type Goal, type Pieces, type PotRow } from "./potential.ts";
-
-/** Item names of gear a Xenon cannot wear (메이지 · 나이트 · 아처 pieces of the class sets). */
-const OTHER_JOB_GEAR = /메이지|나이트|아처/;
+import { goalChance, goalExact, goalOf, gradeBefore, kindOf, potKey, rollMeso, rollsToUp, statRule, upChance, type CubePrices, type Goal, type Pieces, type PotRow, type StatRule } from "./potential.ts";
 
 export type PotEntry = { row: PotRow; piece: number; taken: boolean; cost: number };
 export const potEntryKey = (e: Pick<PotEntry, "row" | "piece">) => `${potKey(e.row)}\u0000${e.piece}`;
@@ -103,15 +100,15 @@ export type PotStats = {
  * chance to compare with: the rolls were spent and the item is as it was (user, 2026-11-12). What such an option
  * takes on average is still handed back (`kept`), to be shown next to it.
  */
-function finalOption(list: PotEntry[], conv: StatConv, xenon: boolean): { option: string[]; goal: Goal | null; chance: number | null; by: string; kept: { p: number; by: string } | null } {
+function finalOption(list: PotEntry[], conv: StatConv, rule: StatRule): { option: string[]; goal: Goal | null; chance: number | null; by: string; kept: { p: number; by: string } | null } {
   const last = list[list.length - 1].row;
   const grade = last.grade;
   const candidates = [last.before, ...list.filter((e) => e.row.t === last.t).map((e) => e.row.after)];
   let best = { option: last.before, goal: null as Goal | null, chance: null as number | null, exact: null as number | null, by: "" };
   let first = true;
   for (const option of candidates) {
-    const goal = goalOf(option, last.add);
-    const hit = goal && grade ? goalChance(last, grade, goal, conv, { xenon }) : null;
+    const goal = goalOf(option, last.add, rule);
+    const hit = goal && grade ? goalChance(last, grade, goal, conv) : null;
     const chance = hit?.p ?? null;
     const exact = goal && grade && chance !== null ? goalExact(last, grade, goal) : null;
     // Two options of the same class (both "three useful lines") have the same chance: the one whose own numbers are
@@ -132,7 +129,8 @@ function finalOption(list: PotEntry[], conv: StatConv, xenon: boolean): { option
 
 /**
  * `entries` oldest first. `conv` = how much other lines are worth in main stat % (the calculator's setting).
- * `xenons` = the characters whose job is Xenon (all stat % is their own goal; for everyone else it is main stat).
+ * `xenons` = the characters whose job is Xenon (all stat % is their own goal, with STR · DEX · LUK % at a third each;
+ * for everyone else all stat is main stat). Which stat lines count on an item also goes by the job in its name (statRule).
  */
 export function buildPotStats(entries: PotEntry[], conv: StatConv, xenons: ReadonlySet<string> = new Set()): PotStats {
   const groups = new Map<string, PotEntry[]>();
@@ -173,9 +171,7 @@ export function buildPotStats(entries: PotEntry[], conv: StatConv, xenons: Reado
       phase.meso += e.cost;
       if (e.row.up) phase.up = true;
     }
-    // A Xenon's all stat goal is for its own gear: thief · pirate pieces and accessories. A mage's, warrior's or
-    // archer's piece rolled on a Xenon character is for someone else, and all stat on it is main stat again.
-    const final = finalOption(list, conv, xenons.has(head.who) && !OTHER_JOB_GEAR.test(head.item));
+    const final = finalOption(list, conv, statRule(head, xenons.has(head.who)));
     const tailPhase = phases[phases.length - 1];
     let expected: number | null = null;
     for (const phase of phases) {

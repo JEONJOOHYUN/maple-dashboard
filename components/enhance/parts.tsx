@@ -38,6 +38,26 @@ export function Delta({ v, className }: { v: number; className?: string }) {
   return <b className={cn("font-num whitespace-nowrap", tone(v), className)}>{signed(v)}</b>;
 }
 
+/**
+ * One line over the 모아보기 cards when a single item is picked (user, 2026-11-13): what the cards of that item add up
+ * to. `delta` = null when none of them has a profit to add.
+ */
+export function PickedTotal({ spent, delta }: { spent: number; delta: number | null }) {
+  return (
+    <Card className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 py-2.5 text-[13px]">
+      <b>이 아이템 합계</b>
+      <span className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+        <span>
+          <span className="text-muted-foreground">사용 메소</span> <b className="font-num whitespace-nowrap">{eok(spent)}</b>
+        </span>
+        <span>
+          <span className="text-muted-foreground">손익</span> {delta === null ? <b className="text-muted-foreground">제외</b> : <Delta v={delta} />}
+        </span>
+      </span>
+    </Card>
+  );
+}
+
 /** Small label on a card (a count, a streak). */
 export const CHIP = "rounded border border-border px-1.5 text-[11px] leading-[18px] font-semibold whitespace-nowrap";
 

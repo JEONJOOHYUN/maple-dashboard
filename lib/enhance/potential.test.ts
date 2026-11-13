@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { NO_CONV, SOUL_EXTRA, addWeaponChance, addWeaponSumChance, convFromScouter, customChance, fixFirstLine, lineTables, resetMeso, sumChance, weaponChance } from "../ev/potential.ts";
 import { STAT_CONV_DEFAULT } from "../ev/defaults.ts";
 import { buildPotStats, potEntries } from "./pot-stats.ts";
-import { cappedCategory, cubeFee, cubeOf, feeByInsight, goalChance, goalOf, gradeBefore, kindOf, potKey, optionToken, parsePotential, pricedCube, rollMeso, rollsToUp, slotOf, statWorth, trackPieces, upChance, upRolls, type PotRow, type RawPotential } from "./potential.ts";
+import { cappedCategory, cubeFee, cubeOf, feeByInsight, gearJob, goalChance, goalOf, gradeBefore, kindOf, potKey, optionToken, parsePotential, pricedCube, rollMeso, rollsToUp, slotOf, statRule, statWorth, trackPieces, upChance, upRolls, type PotRow, type RawPotential } from "./potential.ts";
 
 const near = (actual: number, expected: number, tolerance: number, label: string) =>
   assert.ok(Math.abs(actual - expected) <= tolerance, `${label}: ${actual} is not within ${tolerance} of ${expected}`);
@@ -215,15 +215,17 @@ test("gloves with crit damage and hats with cooldown: the special option plus th
   // Only all stat lines: an all-stat item (a Xenon item). A main stat line does not count for it — so it is rarer
   // than the same total on a main stat item.
   const allOnly = goalOf(["크리티컬 데미지 +8%", "올스탯 +9%", "올스탯 +6%"], false)!;
-  const onlyAll = goalChance(gloves, "legendary", allOnly, NO_CONV, { xenon: true })!;
+  const onlyAll = goalChance(gloves, "legendary", goalOf(["크리티컬 데미지 +8%", "올스탯 +9%", "올스탯 +6%"], false, { xenon: true })!, NO_CONV)!;
   // Anyone else: all stat is main stat, so a main stat line counts toward the same 15 % (user, 2026-11-13).
   const asMain = goalChance(gloves, "legendary", allOnly, NO_CONV)!;
   assert.deepEqual([asMain.by, asMain.p], ["크뎀 1줄 + 주스탯 15%", customChance(gRows, [[{ cat: "cd", min: 8 }, { cat: "str", min: 15 }]])]);
   assert.ok(onlyAll.p < asMain.p);
-  assert.deepEqual([onlyAll.by, onlyAll.p], ["크뎀 1줄 + 올스탯 15%", customChance(gRows, [[{ cat: "cd", min: 8 }, { cat: "all", min: 15 }]])]);
+  assert.equal(onlyAll.by, "크뎀 1줄 + 올스탯 15%");
+  near(onlyAll.p, customChance(gRows, [[{ cat: "cd", min: 8 }, { cat: "all", min: 15 }]]), 1e-12, "크뎀 1줄 + 올스탯 15%");
   assert.ok(onlyAll.p < withAll.p);
-  const hatAll = goalChance(row({ item_equipment_part: "모자", item_level: 200 }), "legendary", goalOf([COOL1, "올스탯 +9%", "올스탯 +6%"], false)!, NO_CONV, { xenon: true })!;
-  assert.deepEqual([hatAll.by, hatAll.p], ["쿨감 1초 + 올스탯 15%", customChance(lineTables("black", "legendary", "hat", 200)!, [[{ cat: "cool", min: 1 }, { cat: "all", min: 15 }]])]);
+  const hatAll = goalChance(row({ item_equipment_part: "모자", item_level: 200 }), "legendary", goalOf([COOL1, "올스탯 +9%", "올스탯 +6%"], false, { xenon: true })!, NO_CONV)!;
+  assert.equal(hatAll.by, "쿨감 1초 + 올스탯 15%");
+  near(hatAll.p, customChance(lineTables("black", "legendary", "hat", 200)!, [[{ cat: "cool", min: 1 }, { cat: "all", min: 15 }]]), 1e-12, "쿨감 1초 + 올스탯 15%");
   const c = goalChance(gloves, "legendary", goalOf(["크리티컬 데미지 +8%", "방어력 +7%", "이동속도 +9"], false)!, NO_CONV)!;
   assert.equal(c.by, "크뎀 1줄");
   near(c.p, sumChance(gRows, { type: "combo", special: "cd", lines: 1, stat: 0, minSpecial: 3 }), 1e-12, "크뎀 1줄, as on the calculator");
@@ -470,7 +472,7 @@ test("additional potential with all stat % and no main stat line is converted to
   assert.equal(all27.p, int27.p);
   near(1 / all27.p, 166.5, 0.5, "주스탯 27%");
   // Only a Xenon keeps it as a goal of its own, where a main stat line does not count: far rarer.
-  const xenon = goalChance(shoes, "legendary", goalOf(["올스탯 +10%", "올스탯 +10%", "올스탯 +7%"], false)!, conv, { xenon: true })!;
+  const xenon = goalChance(shoes, "legendary", goalOf(["올스탯 +10%", "올스탯 +10%", "올스탯 +7%"], false, { xenon: true })!, conv)!;
   assert.equal(xenon.by, "올스탯 27%");
   assert.ok(xenon.p < all27.p / 5);
   // The job comes with the character: the same rolls are judged one way for a Xenon and the other way for a mage.
@@ -590,4 +592,63 @@ test("soul potential: its own history, price, table and goal (history/soul-poten
   const piece = buildPotStats(potEntries(used, trackPieces(used)), NO_CONV).pieces[0];
   assert.deepEqual([piece.soul, piece.add, piece.spent, piece.goalBy], [true, false, resetMeso("soul", "legendary", 4), `공격력 ${top + next}%`]);
   near(piece.expected!, resetMeso("soul", "legendary", 4)! / hit.p, 1, "expected");
+});
+
+test("stat lines of another job are not the item's main stat; a Xenon's stat lines count a third as all stat (user, 2026-11-13)", () => {
+  // The job is in the name of class gear: 루타비스 words too. Accessories are anyone's.
+  assert.deepEqual(
+    ["에테르넬 메이지글러브", "하이네스 던위치햇", "트릭스터 레인져팬츠", "이글아이 어새신셔츠", "하이네스 원더러햇", "앱솔랩스 나이트슈즈", "하이네스 워리어헬름", "마력이 깃든 안대"].map((name) => gearJob(name, "모자")),
+    ["mage", "mage", "archer", "thief", "pirate", "warrior", "warrior", null]
+  );
+  assert.equal(gearJob("레드 워리어 마이스터 심볼", "얼굴장식"), null);
+  // A mage's gloves: the LUK line is nobody's main stat there, so the option is its two crit lines alone.
+  const mage = statRule({ item: "에테르넬 메이지글러브", part: "장갑" }, false);
+  const gloves = row({ item_equipment_part: "장갑", item_level: 200, target_item: "아케인셰이드 메이지글러브" });
+  const option = ["크리티컬 데미지 +8%", "크리티컬 데미지 +8%", "LUK +9%"];
+  assert.equal(goalChance(gloves, "legendary", goalOf(option, false)!, NO_CONV)!.by, "크뎀 2줄 + LUK 9%");
+  assert.equal(goalChance(gloves, "legendary", goalOf(option, false, mage)!, NO_CONV)!.by, "크뎀 2줄");
+  // Its own stat and all stat still count; nothing but another job's stat is no goal at all.
+  assert.equal(goalOf(["INT +12%", "LUK +12%", "올스탯 +6%"], false, mage)!.label, "INT 18%");
+  assert.equal(goalOf(["LUK +12%", "LUK +9%", "방어력 +7%"], false, mage), null);
+  // HP % is a demon avenger's: a goal on a warrior's piece (and on gear with no job in its name), not on a mage's.
+  assert.equal(goalOf(["최대 HP +10%", "LUK +7%", "STR +7%"], false, mage), null);
+  assert.equal(goalOf(["최대 HP +10%", "LUK +7%", "방어력 +7%"], false, statRule({ item: "아케인셰이드 나이트숄더", part: "어깨장식" }, false))!.label, "HP 10%");
+  // A prime cube that keeps another job's stat on line 1: the kept line is worth nothing, it does not pass for the
+  // main stat the all stat lines are asked as (Codex review, 2026-11-13).
+  const primeShoes = row({ potential_type: undefined, cube_type: "프라임 큐브", item_level: 200, target_item: "아케인셰이드 메이지슈즈" });
+  const keptStr = goalChance(primeShoes, "legendary", goalOf(["STR +12%", "올스탯 +9%", "올스탯 +6%"], false, mage)!, NO_CONV)!;
+  assert.equal(keptStr.by, "주스탯 15%");
+  near(keptStr.p, sumChance(fixFirstLine(lineTables("black", "legendary", "shoes", 200)!, "", 0), { type: "stat", min: 15 - 1e-9, conv: NO_CONV, attack: "atk" }), 1e-12, "kept STR line on a mage's shoes");
+  assert.ok(keptStr.p < 0.05);
+  // The same on gloves, where the stat is asked next to the crit line.
+  const primeGloves = row({ potential_type: undefined, cube_type: "프라임 큐브", item_equipment_part: "장갑", item_level: 200, target_item: "아케인셰이드 메이지글러브" });
+  const keptOnGloves = goalChance(primeGloves, "legendary", goalOf(["STR +12%", "크리티컬 데미지 +8%", "올스탯 +6%"], false, mage)!, NO_CONV)!;
+  assert.equal(keptOnGloves.by, "크뎀 1줄 + 주스탯 6%");
+  near(keptOnGloves.p, customChance(fixFirstLine(lineTables("black", "legendary", "gloves", 200)!, "", 0), [[{ cat: "cd", min: 8 }, { cat: "str", min: 6 }]]), 1e-12, "kept STR line on a mage's gloves");
+  // A pirate's piece: STR or DEX, whichever the option has more of.
+  assert.equal(goalOf(["DEX +12%", "STR +9%", "INT +9%"], false, statRule({ item: "아케인셰이드 파이렛햇", part: "모자" }, false))!.label, "DEX 12%");
+  // No job in the name: as before.
+  assert.deepEqual(statRule({ item: "마력이 깃든 안대", part: "눈장식" }, false), {});
+
+  // A Xenon on its own gear: LUK 9 % is all stat 3 %.
+  const xenon = statRule({ item: "아케인셰이드 시프슈즈", part: "신발" }, true);
+  const mixed = goalOf(["올스탯 +9%", "올스탯 +9%", "LUK +9%"], false, xenon)!;
+  assert.equal(mixed.label, "올스탯 21%");
+  const shoes = row({ item_level: 200, target_item: "아케인셰이드 시프슈즈" });
+  const hit = goalChance(shoes, "legendary", mixed, NO_CONV)!;
+  assert.equal(hit.by, "올스탯 21%");
+  // Likelier than three all stat lines, rarer than the same lines read as "LUK 27 %".
+  const all24 = goalChance(shoes, "legendary", goalOf(["올스탯 +9%", "올스탯 +9%", "올스탯 +6%"], false, xenon)!, NO_CONV)!;
+  const luk27 = goalChance(shoes, "legendary", goalOf(["올스탯 +9%", "올스탯 +9%", "LUK +9%"], false)!, NO_CONV)!;
+  assert.ok(hit.p > all24.p && hit.p < luk27.p);
+  // Thirds: LUK 12 + 12 + 9 = 올스탯 11 %, and one decimal rounded down otherwise.
+  assert.equal(goalOf(["LUK +12%", "DEX +12%", "STR +9%"], false, xenon)!.label, "올스탯 11%");
+  assert.equal(goalOf(["LUK +13%", "올스탯 +9%", "INT +12%"], false, xenon)!.label, "올스탯 13.3%");
+  // A mage's piece rolled on a Xenon character is a mage's; additional potential is read as before.
+  assert.deepEqual(statRule({ item: "에테르넬 메이지슈즈", part: "신발" }, true), { stats: ["int"] });
+  assert.equal(goalOf(["LUK +6%", "올스탯 +4%", "방어력 +7%"], true, xenon)!.xenon, undefined);
+  // The character's job reaches the pieces: the same rolls read "LUK 27%" for a thief and "올스탯 21%" for a Xenon.
+  const rolls = [row({ item_level: 200, target_item: "아케인셰이드 시프슈즈", before_potential_option: opt("방어력 +7%", "이동속도 +9", "점프력 +9"), after_potential_option: opt("올스탯 +9%", "올스탯 +9%", "LUK +9%") })];
+  const by = (xenons: Set<string>) => buildPotStats(potEntries(rolls, trackPieces(rolls)), NO_CONV, xenons).pieces[0].goalBy;
+  assert.deepEqual([by(new Set()), by(new Set(["테스트"]))], ["LUK 27%", "올스탯 21%"]);
 });

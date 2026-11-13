@@ -4,7 +4,7 @@ import { useRef, useState, type ReactNode } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, Package, Pencil } from "lucide-react";
 import { NumberField, Segment, eok, parseNum } from "@/components/ev/ui";
 import { ItemFilter, NO_ITEM_FILTER, itemMatches, liveFilter } from "@/components/enhance/board-bits";
-import { CHIP, Card, Delta, Empty, Gauge, ItemIcon, SKIP_LABEL, Select, Tile, TryBadges, signed, signedShort, tone } from "@/components/enhance/parts";
+import { CHIP, Card, Delta, Empty, Gauge, ItemIcon, PickedTotal, SKIP_LABEL, Select, Tile, TryBadges, signed, signedShort, tone } from "@/components/enhance/parts";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import type { ItemOverrides } from "@/lib/enhance/items";
 import { starAfter } from "@/lib/enhance/judge";
@@ -324,6 +324,9 @@ export function ItemsView({
           </Select>
         </span>
       </div>
+      {filter.picked && items.length > 0 && (
+        <PickedTotal spent={items.reduce((sum, it) => sum + it.spent, 0)} delta={items.some((it) => it.judged > 0) ? items.reduce((sum, it) => sum + (it.judged > 0 ? it.delta : 0), 0) : null} />
+      )}
       {items.length === 0 && <Empty>{visible.length === 0 ? "12성 이상 아이템 없음" : "해당 아이템 없음"}</Empty>}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {items.map((it) => {

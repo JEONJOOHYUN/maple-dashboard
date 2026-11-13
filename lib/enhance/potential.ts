@@ -257,8 +257,68 @@ const WANTED_ADD = ["boss", "ied", "atk", "matk", "atkf", "matkf", "dmg", "cd", 
  * `stat` = the item's main stat ("" when the option has none), `magic` = magic attack rather than attack,
  * `sums` = every ranked line total by category, `lines` = the option line by line: ["", 0] for a line that is not
  * ranked, [its category, 0] for an unranked one that cannot repeat (cappedCategory).
+ * `xenon` = read as a Xenon's (StatRule): the "all" condition then holds STR · DEX · LUK % at a third each.
  */
-export type Goal = { conds: CustomCond[]; label: string; stat: string; magic: boolean; sums: Record<string, number>; lines: [string, number][] };
+export type Goal = { conds: CustomCond[]; label: string; stat: string; magic: boolean; sums: Record<string, number>; lines: [string, number][]; xenon?: boolean };
+
+// ── Whose gear it is: the stats that count on it ──
+
+/** The job a piece of class gear is for. */
+export type GearJob = "warrior" | "mage" | "archer" | "thief" | "pirate";
+
+/**
+ * The job word in the name of class gear (user, 2026-11-13). 에테르넬 · 아케인셰이드 · 앱솔랩스 use 나이트 · 메이지 ·
+ * 아처 · 시프 · 파이렛; the 루타비스 set (하이네스 · 이글아이 · 트릭스터) uses 워리어 · 던위치 · 레인져 · 어새신 · 원더러 —
+ * spellings as in the item names the API returned (public.item_dict, 2026-11-13: 하이네스 워리어헬름, 이글아이
+ * 던위치로브, 트릭스터 레인져팬츠, 하이네스 어새신보닛, 이글아이 원더러코트 …).
+ */
+const JOB_WORDS: [RegExp, GearJob][] = [
+  [/나이트|워리어/, "warrior"],
+  [/메이지|던위치/, "mage"],
+  [/아처|레인져/, "archer"],
+  [/시프|어새신/, "thief"],
+  [/파이렛|원더러/, "pirate"],
+];
+/** Main stats of each job's gear. Pirates are STR or DEX, by the character. */
+const JOB_STATS: Record<GearJob, readonly string[]> = { warrior: ["str"], mage: ["int"], archer: ["dex"], thief: ["luk"], pirate: ["str", "dex"] };
+/** A Xenon's damage goes with STR + DEX + LUK. */
+const XENON_STATS: readonly string[] = ["str", "dex", "luk"];
+
+/**
+ * The job an item is for, told by its name; null when the name does not say (most gear: then nothing is left out).
+ * Accessories are anyone's whatever they are called (레드 워리어 마이스터 심볼 is a face accessory).
+ */
+export function gearJob(item: string, part: string): GearJob | null {
+  if (SLOTS.find((x) => x.id === slotOf(part))?.kind === "acc") return null;
+  return JOB_WORDS.find(([re]) => re.test(item))?.[1] ?? null;
+}
+
+/**
+ * How the stat lines of an option are read.
+ * `stats` = the main stats that count on the item (undefined = any of the four): a LUK line on a mage's gloves is
+ * not that item's main stat (user, 2026-11-13: 메이지글러브 with 크뎀 2줄 + LUK 10 % ranked as a lucky item).
+ * `xenon` = a Xenon's own gear (main potential only, see goalOf): all stat % is the goal, and STR · DEX · LUK % lines count toward it
+ * at a third each (all stat 1 % raises all three; user, 2026-11-13) — "LUK 9 % + 올스탯 9 % + 9 %" is "올스탯 21 %".
+ */
+export type StatRule = { stats?: readonly string[]; xenon?: boolean };
+
+/** The rule for an item rolled by a character: `xenon` = that character's job is Xenon. */
+export function statRule(row: Pick<PotRow, "item" | "part" | "soul">, xenon: boolean): StatRule {
+  // A soul's tables name one stand-in stat, and its item is the weapon it sits on: read as before.
+  if (row.soul) return {};
+  const job = gearJob(row.item, row.part);
+  // A Xenon wears thief and pirate gear (and what has no job in its name). A mage's, warrior's or archer's piece
+  // rolled on a Xenon character is for someone else.
+  if (xenon && (!job || job === "thief" || job === "pirate")) return { stats: XENON_STATS, xenon: true };
+  return job ? { stats: JOB_STATS[job] } : {};
+}
+
+/** One decimal, rounded down: the number shown, and the chance asked is of that number or more. */
+const floor1 = (v: number) => Math.floor(v * 10 + 1e-6) / 10;
+const EPS = 1e-9;
+
+/** All stat % a Xenon gets from an option: its all stat lines plus a third of its STR · DEX · LUK % lines. */
+export const xenonAll = (sums: Record<string, number>) => floor1((sums.all ?? 0) + XENON_STATS.reduce((sum, c) => sum + (sums[c] ?? 0), 0) / 3);
 
 export const condLabel = (c: CustomCond) => `${LABEL[c.cat] ?? c.cat} ${c.min}${UNIT[c.cat] ?? "%"}`;
 
@@ -274,9 +334,10 @@ const UNIT: Record<string, string> = { cool: "초", atkf: "", matkf: "", lvstr: 
  * - main stat = the one of STR · DEX · INT · LUK with the largest total (all stat % counts toward it); the others are not wanted.
  * - attack and magic attack: only the larger of the two.
  * - every other wanted line as it is (boss damage, crit damage, drop rate …); HP % only when there is no stat line.
+ * `rule` narrows the stats that can be the main one to the item's job, or reads the option as a Xenon's (StatRule).
  * Returns null when no line is wanted (the item is still being rolled, or was rolled for something we do not rank).
  */
-export function goalOf(option: string[], add: boolean): Goal | null {
+export function goalOf(option: string[], add: boolean, rule: StatRule = {}): Goal | null {
   const total = new Map<string, number>();
   const lines: [string, number][] = [];
   for (const text of option) {
@@ -285,25 +346,35 @@ export function goalOf(option: string[], add: boolean): Goal | null {
     if (token) total.set(token[0], (total.get(token[0]) ?? 0) + token[1]);
   }
   const sum = (cat: string) => total.get(cat) ?? 0;
-  const best = (cats: string[]) => cats.map((c) => [c, sum(c)] as const).sort((x, y) => y[1] - x[1])[0];
+  const best = (cats: readonly string[]) => cats.map((c) => [c, sum(c)] as const).sort((x, y) => y[1] - x[1])[0];
 
-  // The stat this item is for: the largest stat % total, or (additional potential) the "per 9 levels" stat.
-  const [topStat, statSum] = best(MAIN_STATS);
-  const [topLv, lvSum] = best(MAIN_STATS.map((c) => `lv${c}`));
-  const stat = statSum > 0 ? topStat : lvSum > 0 ? topLv.slice(2) : "";
-  // Attack or magic attack: an INT item is a mage's; with no stat line, whichever the option has more of.
-  const magic = stat ? stat === "int" : sum("matk") + sum("matkf") > sum("atk") + sum("atkf");
+  // The stat this item is for: the largest stat % total, or (additional potential) the "per 9 levels" stat — among
+  // the stats of the item's job when its name says one. A line of another job's stat is then no main stat line.
+  const pool = rule.stats ?? MAIN_STATS;
+  const [topStat, topSum] = best(pool);
+  const [topLv, lvSum] = best(pool.map((c) => `lv${c}`));
+  // A Xenon has no one main stat: its stat % lines go into the all stat total below. Main potential only — the
+  // additional one mixes flat lines, which are turned into main stat % with the calculator's conversion as before.
+  const xenon = rule.xenon === true && !add;
+  const statSum = xenon ? 0 : topSum;
+  const stat = xenon ? "" : statSum > 0 ? topStat : lvSum > 0 ? topLv.slice(2) : "";
+  // Attack or magic attack: an INT item is a mage's; with no stat line the item's job says (mage gear is magic,
+  // other class gear is not), and without one whichever the option has more of.
+  const magic = stat ? stat === "int" : rule.stats ? rule.stats.every((c) => c === "int") : sum("matk") + sum("matkf") > sum("atk") + sum("atkf");
   const skip = new Set<string>(magic ? ["atk", "atkf"] : ["matk", "matkf"]);
   for (const c of MAIN_STATS) if (c !== stat) skip.add(`lv${c}`);
 
+  const sums = Object.fromEntries(total);
   const conds: CustomCond[] = [];
-  if (statSum > 0) conds.push({ cat: stat, min: statSum + sum("all") });
+  if (xenon && xenonAll(sums) > 0) conds.push({ cat: "all", min: xenonAll(sums) });
+  else if (statSum > 0) conds.push({ cat: stat, min: statSum + sum("all") });
   else if (sum("all") > 0) conds.push({ cat: "all", min: sum("all") });
-  // HP % is what an item with no stat line at all is for (demon avenger gear).
-  else if (!stat && sum("hp") > 0) conds.push({ cat: "hp", min: sum("hp") });
+  // HP % is what an item with no stat line at all is for (demon avenger gear): a warrior's piece, or one whose name
+  // does not say. On a mage's robe whose LUK line was just left out, HP 10 % is no goal either.
+  else if (!stat && sum("hp") > 0 && (!rule.stats || rule.stats.every((c) => c === "str"))) conds.push({ cat: "hp", min: sum("hp") });
   for (const cat of add ? WANTED_ADD : WANTED_MAIN) if (sum(cat) > 0 && !skip.has(cat)) conds.push({ cat, min: sum(cat) });
   if (conds.length === 0) return null;
-  return { conds, label: conds.map(condLabel).join(" · "), stat, magic, sums: Object.fromEntries(total), lines };
+  return { conds, label: conds.map(condLabel).join(" · "), stat, magic, sums, lines, ...(xenon ? { xenon } : {}) };
 }
 
 // ── Equipment part → the calculator's slot ──
@@ -354,9 +425,18 @@ function tablesOf(row: Pick<PotRow, "part" | "level" | "meso" | "add" | "type" |
   if (!table) return null;
   const [cat, value] = goal.lines[0] ?? ["", 0];
   const prime = (CUBES.find((c) => c.id === cube)?.fixFirst ?? false) && goal.lines.length > 0;
-  const standIn = !goal.stat ? cat : cat === goal.stat ? "str" : cat === `lv${goal.stat}` ? "lvstr" : cat === "str" || cat === "lvstr" ? "" : cat;
-  const fix = (name: string): Row[][] => (prime ? fixFirstLine(table, name, value) : table);
-  return { slot, table, rows: fix(cat), std: fix(standIn), first: prime ? { cat, value } : undefined };
+  // An option with no main stat of its own is asked with STR standing in for it ("주스탯 15 %"). A kept line 1 that
+  // is a stat line was then left out as another job's (a STR line on a mage's shoes): it must not pass for the
+  // stand-in and count again (Codex review, 2026-11-13: that read a 2.6 % roll as 32 %). A Xenon's lines stay.
+  const statLine = MAIN_STATS.some((c) => cat === c || cat === `lv${c}`);
+  const kept = !goal.stat && !goal.xenon && statLine ? "" : cat;
+  const standIn = !goal.stat ? kept : cat === goal.stat ? "str" : cat === `lv${goal.stat}` ? "lvstr" : cat === "str" || cat === "lvstr" ? "" : cat;
+  // A Xenon's goal: every STR · DEX · LUK % line is an all stat line of a third its value (a kept line 1 too).
+  const fix = (name: string): Row[][] => {
+    const rows = prime ? fixFirstLine(table, name, value) : table;
+    return goal.xenon ? rows.map((line) => line.map((r): Row => (XENON_STATS.includes(r[0]) ? ["all", r[1] / 3, r[2], r[3]] : r))) : rows;
+  };
+  return { slot, table, rows: fix(kept), std: fix(standIn), first: prime ? { cat, value } : undefined };
 }
 
 /**
@@ -381,9 +461,7 @@ export function goalChance(
   row: Pick<PotRow, "part" | "level" | "meso" | "add" | "type" | "soul">,
   grade: Grade,
   goal: Goal,
-  conv: StatConv,
-  /** `xenon` = the character that rolled is a Xenon: an all stat % line is then its own goal, not a main stat one. */
-  options: { xenon?: boolean } = {}
+  conv: StatConv
 ): { p: number; by: string } | null {
   const tables = tablesOf(row, grade, goal);
   if (!tables) return null;
@@ -402,15 +480,15 @@ export function goalChance(
   // lines plus all stat % (all stat raises the main stat; user, 2026-11-12).
   // An option with all stat % lines and no main stat line is still a main stat one — 올스탯 27 % on a mage's shoes is
   // "주스탯 27 %", and any option with that much main stat is as good (user, 2026-11-13: read as its own "올스탯 27 %"
-  // goal it looked many times rarer than it is). Only for a Xenon is all stat a goal of its own, where a main stat
-  // line is not "this or better": that is told by the character's job, not by the option.
-  const xenon = options.xenon ?? false;
+  // goal it looked many times rarer than it is). Only for a Xenon is all stat the goal itself (goalOf with the
+  // character's job): its STR · DEX · LUK % lines are in the total at a third each, as they are in `rows` (tablesOf).
+  const xenon = goal.xenon === true;
   const statCat = goal.stat || (xenon ? "all" : "str");
   const statName = goal.stat ? LABEL[goal.stat] : xenon ? "올스탯" : "주스탯";
-  const statTotal = (goal.stat ? pct(goal.stat) : 0) + pct("all");
+  const statTotal = xenon ? xenonAll(goal.sums) : (goal.stat ? pct(goal.stat) : 0) + pct("all");
   const plusStat = statTotal > 0 ? ` + ${statName} ${statTotal}%` : "";
   /** Chance of `special` adding up to `min` or more, together with the main stat total when the option has one. */
-  const withStat = (special: string, min: number) => customChance(rows, [[{ cat: special, min }, ...(statTotal > 0 ? [{ cat: statCat, min: statTotal }] : [])]]);
+  const withStat = (special: string, min: number) => customChance(rows, [[{ cat: special, min }, ...(statTotal > 0 ? [{ cat: statCat, min: statTotal - (xenon ? EPS : 0) }] : [])]]);
   const hit = (p: number, by: string) => (p > 0 ? { p, by } : null);
 
   if (kind === "soul") {
@@ -479,8 +557,8 @@ export function goalChance(
   const used = row.add ? conv : NO_CONV;
   // An option with all stat % and no main stat line is worth main stat too (user, 2026-11-12 · 13): 크뎀 3 % +
   // 올스탯 6 % on additional gloves is one number, not "크뎀 3 %" alone, and 올스탯 27 % on shoes is "주스탯 27 %".
-  // Only a Xenon's main potential keeps it as its own goal ("올스탯 27 %").
-  const byStat = (kind === "armor" || kind === "acc") && (goal.stat !== "" || ((goal.sums.all ?? 0) > 0 && (row.add || !xenon)));
+  // Only a Xenon's main potential keeps it as its own goal ("올스탯 27 %"): that one is asked below, as a condition.
+  const byStat = (kind === "armor" || kind === "acc") && !xenon && (goal.stat !== "" || (goal.sums.all ?? 0) > 0);
   if (byStat) {
     // Main potential: the number is the plain one. The chance is still the calculator's — "27 % or more" with its
     // conversion — so the same number gives the same average on both pages.
@@ -510,7 +588,12 @@ export function goalChance(
  * found the all stat lines alone, and INT 8 % read about 15 times rarer than STR 8 % (Codex review, 2026-11-13).
  */
 const tableConds = (goal: Goal, soul: boolean | undefined): CustomCond[] =>
-  soul && goal.stat ? goal.conds.map((c) => (c.cat === goal.stat ? { ...c, cat: "str" } : c)) : goal.conds;
+  soul && goal.stat
+    ? goal.conds.map((c) => (c.cat === goal.stat ? { ...c, cat: "str" } : c))
+    : goal.xenon
+      ? // Thirds do not add up exactly (13 ÷ 3 × 3): the total is asked a hair under the number shown.
+        goal.conds.map((c) => (c.cat === "all" ? { ...c, min: c.min - EPS } : c))
+      : goal.conds;
 
 /**
  * Chance per roll of every wanted total of the goal at once (보공 90 % and 공격력 10 % together). Not an average to
