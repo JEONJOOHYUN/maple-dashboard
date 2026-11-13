@@ -53,6 +53,24 @@ const MVPS: { id: MvpGrade; label: string }[] = [
 ];
 const CUSTOM = "custom";
 const DEFAULT_ITEM = "astra";
+/**
+ * The item picker's groups (user, 2026-11-13): levels under 160 hold an item or two each, so they share one group
+ * instead of a row per level. The label is read from the levels that are there.
+ */
+const MERGE_BELOW = 160;
+const ITEM_GROUPS = (() => {
+  const low = STAR_ITEMS.filter((g) => g.level < MERGE_BELOW);
+  const groups = STAR_ITEMS.filter((g) => g.level >= MERGE_BELOW).map((g) => ({ label: `Lv.${g.level}`, items: g.items }));
+  if (low.length === 0) return groups;
+  const first = low[0].level;
+  const last = low[low.length - 1].level;
+  return [{ label: first === last ? `Lv.${first}` : `Lv.${first} ~ ${last}`, items: low.flatMap((g) => g.items) }, ...groups];
+})();
+/**
+ * Eight icons to a row (user, 2026-11-13): an item drawn with several icons takes that many cells, and at eight
+ * every group fills whole rows (에테르넬 4 + 3 + one more) with no item left alone on a row.
+ */
+const ITEM_COLS = 8;
 const findItem = (id: string) => {
   for (const g of STAR_ITEMS) {
     const it = g.items.find((x) => x.id === id);
@@ -253,15 +271,15 @@ export function StarforceTab() {
         <Panel>
           <Label>장비</Label>
           <div className="flex flex-col gap-2.5">
-            {STAR_ITEMS.map((g) => (
-              <div
-                key={g.level}
-                className="grid grid-cols-[44px_minmax(0,1fr)] items-start gap-2"
-              >
-                <span className="pt-3 font-num text-[11px] text-muted-foreground">
-                  Lv.{g.level}
+            {ITEM_GROUPS.map((g) => (
+              <div key={g.label} className="flex flex-col gap-1.5">
+                <span className="font-num text-[11px] text-muted-foreground">
+                  {g.label}
                 </span>
-                <div className="flex flex-wrap gap-1.5">
+                <div
+                  className="grid gap-1.5"
+                  style={{ gridTemplateColumns: `repeat(${ITEM_COLS}, minmax(0, 1fr))` }}
+                >
                   {g.items.map((it) => (
                     // Our own name bubble instead of the browser's title box.
                     <Tooltip key={it.id}>
@@ -270,8 +288,10 @@ export function StarforceTab() {
                         aria-pressed={item === it.id}
                         aria-label={`${it.name} · 노작값 ${eok(it.spareEok * 1e8)}`}
                         onClick={() => pickItem(it.id)}
+                        // A name without a picture needs two cells to be read.
+                        style={{ gridColumn: `span ${Math.min(ITEM_COLS, it.icons.length || 2)}` }}
                         className={cn(
-                          "flex h-11 min-w-11 items-center justify-center gap-0.5 rounded-lg border px-1.5 transition-colors",
+                          "flex h-11 min-w-0 items-center justify-around rounded-lg border transition-colors",
                           item === it.id
                             ? "border-primary bg-primary-soft ring-1 ring-primary"
                             : "border-border bg-card hover:border-primary/60",
@@ -284,7 +304,7 @@ export function StarforceTab() {
                               key={code}
                               src={itemImage(code)}
                               alt=""
-                              className="size-8 object-contain"
+                              className="size-7 object-contain"
                             />
                           ))
                         ) : (
