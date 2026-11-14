@@ -100,7 +100,6 @@ export function AbilityTab() {
       : { both: abilityPlan(preset.keys, m, opts, m === "l1u2" ? presetLead(preset) : undefined), a: null, b: null };
   const planned = useMemo(() => planFor(mode), [preset, hunt, pairOn, mode, opts]); // eslint-disable-line react-hooks/exhaustive-deps
   const plan = planned.both;
-  const other = useMemo(() => planFor(mode === "l3" ? "l1u2" : "l3").both, [preset, hunt, pairOn, mode, opts]); // eslint-disable-line react-hooks/exhaustive-deps
   /** Which rows are the 드메 preset's in a two-preset plan (goal 1). */
   const huntGoal = pairOn ? 1 : preset.hunting ? 0 : -1;
   const seen2 = seen2Sel?.plan === plan ? seen2Sel.key : null;
@@ -132,8 +131,8 @@ export function AbilityTab() {
     a.kind === "keep"
       ? "그대로 계속"
       : a.kind === "lock"
-        ? `잠금 → ${METHOD_NAME[a.method]}`
-        : `서큘레이터로 ${two ? "두 줄 " : ""}목표 수치 → 잠금 → ${METHOD_NAME[a.method]}`;
+        ? "잠금"
+        : `서큘레이터로 ${two ? "두 줄 " : ""}목표 수치 → 잠금`;
   // Same move for every row → say it once in the step title.
   const sameAction = (list: { action: PlanAction }[]) =>
     list.every(
@@ -165,32 +164,21 @@ export function AbilityTab() {
     const d = costNum(more) - costNum(less);
     return total(more) !== null ? eok(d) : fameText(d);
   };
-  /** What the other moves of a row would leave, and how much more than the cheapest one ("다르게 하면"). */
-  const altText = (row: { choices: PlanChoice[] }) => {
-    const [best, ...rest] = row.choices;
-    if (!best || rest.length === 0) return undefined;
-    // Without a fame price there is no one number for fame, meso and circulators together: each move shows what it
-    // leaves, with no "+ more" or "about the same" (fame alone would call a move with ten more circulators equal;
-    // Codex review, 2026-11-14).
-    const priced = total(best) !== null;
-    const near = (a: number, b: number) => Math.abs(a - b) <= Math.max(a, b) * 0.001;
-    // Two other moves that leave about the same (lock vs circulate-then-lock) are one piece of news: keep the first.
-    const same = (a: PlanChoice, b: PlanChoice) =>
-      priced ? near(costNum(a), costNum(b)) : near(a.fame, b.fame) && near(a.meso, b.meso) && near(a.circ, b.circ);
-    const shown = rest.filter((c, i) => !rest.slice(0, i).some((p) => same(p, c)));
-    return shown
-      .map((c) => {
-        const what =
-          c.action.kind === "keep"
-            ? "그대로 계속"
-            : c.action.kind === "lock"
-              ? "잠그면"
-              : `서큘레이터 ${circN(c.action.circCount)} → 잠그면`;
-        if (!priced) return `${what} ${costText(c)}${c.circ > 0.05 ? ` + 서큘레이터 ${circN(c.circ)}` : ""}`;
-        const close = costNum(c) - costNum(best) <= costNum(best) * 0.001;
-        return `${what} ${costText(c).replace(/^약 /, "")} (${close ? "거의 같음" : `+${diffText(c, best)}`})`;
-      })
-      .join(" · ");
+  /**
+   * The other natural move and how much more it leaves: "안 잠그면 +X" when the plan locks, "잠그면 +X" when it goes on.
+   * Only with a fame price (one number to compare) and from 1 % up (user, 2026-11-14: less text, nothing repeated).
+   */
+  const altShort = (row: { action: PlanAction; choices: PlanChoice[] }) => {
+    const best = row.choices[0];
+    if (!best || total(best) === null) return undefined;
+    const other =
+      row.action.kind === "keep"
+        ? row.choices.find((c) => c.action.kind !== "keep")
+        : row.choices.find((c) => c.action.kind === "keep");
+    if (!other) return undefined;
+    const more = costNum(other) - costNum(best);
+    if (more < costNum(best) * 0.01) return undefined;
+    return `${row.action.kind === "keep" ? "잠그면" : "안 잠그면"} +${diffText(other, best)}`;
   };
   /** The wanted value of these options on this grade (드메: drop and meso move together). */
   const valueSelect = (ks: AbilityKey[], g: "legendary" | "unique", label: string) => {
@@ -234,7 +222,8 @@ export function AbilityTab() {
 
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-      <Panel>
+      {/* Its own height, not stretched to the long result column (user, 2026-11-14: the two sides looked unbalanced). */}
+      <Panel className="lg:self-start">
         <Label>자주 노리는 조합</Label>
         <div className="flex flex-wrap gap-1.5">
           {ABILITY_PRESETS.map((p) => (
@@ -358,23 +347,17 @@ export function AbilityTab() {
               <span className="ml-1 text-base">명성치</span>
             </span>
           )}
-          <span className="text-xs font-semibold opacity-85">
-            평균 · 명성치 {fameText(view.fame)}
-            {view.meso > 0 ? ` + 재설정 ${eok(view.meso)}` : ""}
-            {circMeso > 0 ? ` + 서큘레이터 ${eok(circMeso)}` : ""}
-          </span>
           {pairOn && !pickedRow && planned.a && planned.b && (
             <span className="text-xs font-semibold opacity-85">
-              따로 하면 {costText(sumCost(planned.a, planned.b)).replace(/^약 /, "")} ({preset.label}{" "}
-              {costText(planned.a).replace(/^약 /, "")} + {hunt.label} {costText(planned.b).replace(/^약 /, "")}) ·{" "}
+              따로 하면 {costText(sumCost(planned.a, planned.b)).replace(/^약 /, "")} ·{" "}
               {diffText(sumCost(planned.a, planned.b), plan)} 절약
             </span>
           )}
           {/* Either build counts on the first preset, so it alone costs less than the boss build alone (user, 2026-11-14). */}
           {pairOn && !pickedRow && plan.first && (
             <span className="text-xs font-semibold opacity-85">
-              첫 프리셋은 먼저 맞는 쪽까지 {costText(plan.first).replace(/^약 /, "")} · {preset.label} 먼저{" "}
-              {Math.round(plan.first.chance[0] * 100)}% · {hunt.label} 먼저 {Math.round(plan.first.chance[1] * 100)}%
+              첫 프리셋(먼저 맞는 쪽까지) {costText(plan.first).replace(/^약 /, "")} · {hunt.label}가 먼저{" "}
+              {Math.round(plan.first.chance[1] * 100)}%
             </span>
           )}
           {pickedRow && total(plan) !== null && (
@@ -386,15 +369,6 @@ export function AbilityTab() {
             </span>
           )}
         </div>
-        {!pickedRow && (
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-card px-4 py-2.5 text-[13px]">
-            <span className="text-muted-foreground">
-              {modeLabel(preset, mode === "l3" ? "l1u2" : "l3")}
-              {pairOn ? " (드메도)" : ""}로 하면
-            </span>
-            <b className="font-num">{costText(other)}</b>
-          </div>
-        )}
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <Box
             k="명성치"
@@ -439,17 +413,20 @@ export function AbilityTab() {
                 : undefined
             }
           >
-            {/* Every row, even when it is "keep going": what locking it instead would leave is the point (user, 2026-11-14). */}
-            {plan.afterFirst.map((b) => (
-              <StepRow
-                key={b.key}
-                label={ABILITY_OPTIONS[b.key].short}
-                tag={b.goal === huntGoal && pairOn ? hunt.label : undefined}
-                action={firstSame ? undefined : actionText(b.action, false)}
-                cost={costText(b)}
-                alts={altText(b)}
-              />
-            ))}
+            {/* Every option "go on" (locking line 1 never pays, user 2026-11-14): the title says it, no rows that
+                only repeat the total. */}
+            {!(firstSame && plan.afterFirst[0].action.kind === "keep") &&
+              plan.afterFirst.map((b, i) => (
+                <StepRow
+                  key={b.key}
+                  label={ABILITY_OPTIONS[b.key].short}
+                  tag={b.goal === huntGoal && pairOn ? hunt.label : undefined}
+                  action={firstSame ? undefined : actionText(b.action, false)}
+                  cost={costText(b)}
+                  alts={firstSame ? undefined : altShort(b)}
+                  unit={i === 0}
+                />
+              ))}
           </Step>
           <Step
             n={3}
@@ -463,7 +440,7 @@ export function AbilityTab() {
               />
             }
           >
-            {lowerRows.map((b) => (
+            {lowerRows.map((b, i) => (
               <StepRow
                 key={b.key}
                 label={ABILITY_OPTIONS[b.key].short}
@@ -475,7 +452,8 @@ export function AbilityTab() {
                     : undefined
                 }
                 cost={costText(b)}
-                alts={altText(b)}
+                alts={lowerSame ? undefined : altShort(b)}
+                unit={i === 0}
                 selected={picked === b.key}
               />
             ))}
@@ -483,9 +461,12 @@ export function AbilityTab() {
           {!preset.hunting && (
           <Step
             n={4}
-            title={`${picked && twoRows.length ? `${ABILITY_OPTIONS[picked].short} 다음 ` : ""}하나 더 뜨면${twoSame ? ` → ${actionText(twoRows[0].action, true)}` : ""}`}
+            title={`${picked && twoRows.length ? `${ABILITY_OPTIONS[picked].short} 다음 ` : ""}하나 더 뜨면${picked && twoSame ? ` → ${actionText(twoRows[0].action, true)}` : ""}`}
             note={
-              picked && twoRows.length === 0
+              // Every pair at once made the column long (user, 2026-11-14): only what can follow the option picked in step 3.
+              !picked
+                ? "3단계에서 뜬 옵션을 고르면 이어서 보여 줌"
+                : twoRows.length === 0
                 ? // Kept (locked or circulated, then locked): the other 드메 option finishes it. Not kept: it is rerolled.
                   pickedRow?.goal === huntGoal && pickedRow.action.kind !== "keep"
                   ? `${hunt.label}는 두 줄 · 나머지 하나가 뜨면 끝`
@@ -503,8 +484,9 @@ export function AbilityTab() {
               ) : undefined
             }
           >
-            {twoRows.length > 0 &&
-              twoRows.map((b) => (
+            {picked &&
+              twoRows.length > 0 &&
+              twoRows.map((b, i) => (
                 <StepRow
                   key={b.keys.join(">")}
                   label={
@@ -521,7 +503,8 @@ export function AbilityTab() {
                       : undefined
                   }
                   cost={costText(b)}
-                  alts={altText(b)}
+                  alts={twoSame ? undefined : altShort(b)}
+                  unit={i === 0}
                   selected={pickedTwo === b}
                 />
               ))}
@@ -654,6 +637,7 @@ function StepRow({
   extra,
   cost,
   alts,
+  unit,
   selected,
 }: {
   label: string;
@@ -662,8 +646,10 @@ function StepRow({
   action?: string;
   extra?: string;
   cost: string;
-  /** The other moves and what they would leave ("다르게 하면"). */
+  /** The other natural move and how much more it leaves ("안 잠그면 +X"). */
   alts?: string;
+  /** Say "남은 평균" under the cost (the first row of a step). */
+  unit?: boolean;
   selected?: boolean;
 }) {
   return (
@@ -682,17 +668,15 @@ function StepRow({
             </span>
           )}
           {action ? ` → ${action}` : ""}
+          {alts && <span className="text-[11px] text-muted-foreground"> · {alts}</span>}
         </span>
         {extra && (
           <span className="text-[11px] text-muted-foreground">{extra}</span>
         )}
-        {alts && (
-          <span className="text-[11px] text-muted-foreground">다르게 하면 · {alts}</span>
-        )}
       </span>
       <span className="flex flex-col items-end">
         <b className="font-num text-[13px] whitespace-nowrap">{cost}</b>
-        <span className="text-[10px] text-muted-foreground">남은 평균</span>
+        {unit && <span className="text-[10px] text-muted-foreground">남은 평균</span>}
       </span>
     </div>
   );
