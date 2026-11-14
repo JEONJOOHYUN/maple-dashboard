@@ -199,7 +199,7 @@ export function KeyGate({ saved, onConnect, onForgetAll }: { saved: SavedKey[]; 
         {STEPS.map((step, i) => (
           <Fragment key={i}>
             <p className="flex gap-2.5 text-[13px] leading-relaxed">
-              <b className="font-num text-primary-text">0{i + 1}</b>
+              <b className="shrink-0 font-num text-primary-text">0{i + 1}</b>
               <span>{step}</span>
             </p>
             {i === 0 && (
@@ -226,7 +226,11 @@ export function KeyGate({ saved, onConnect, onForgetAll }: { saved: SavedKey[]; 
             )}
           </Fragment>
         ))}
-        <p className="text-xs leading-relaxed text-muted-foreground">개발 단계로 받은 키도 가능 → 하루 1,000건 · 느리게 받음</p>
+        <div className="flex flex-col gap-1 text-xs leading-relaxed text-muted-foreground">
+          {/* A key someone already made for another MapleStory service is theirs to use here too (user, 2026-11-15). */}
+          <p>다른 메이플 서비스 키도 가능 → 새로 안 받아도 됨</p>
+          <p>개발 단계로 받은 키도 가능 → 하루 1,000건 · 느리게 받음</p>
+        </div>
       </section>
     </div>
   );
