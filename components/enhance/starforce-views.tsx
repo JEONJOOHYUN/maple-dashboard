@@ -3,8 +3,8 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, Package, Pencil } from "lucide-react";
 import { NumberField, Segment, eok, parseNum } from "@/components/ev/ui";
-import { CARD_PAGE, ItemFilter, NO_ITEM_FILTER, ROW_PAGE, itemMatches, liveFilter } from "@/components/enhance/board-bits";
-import { CHIP, Card, Delta, Empty, Gauge, ItemIcon, PickedTotal, RANK_TOP, RankDialog, RankHead, RoundSelect, SKIP_LABEL, Select, Tile, TryBadges, signed, signedShort, tone } from "@/components/enhance/parts";
+import { CARD_PAGE, CharacterFilter, ItemFilter, NO_ITEM_FILTER, PICK_W, ROW_PAGE, itemMatches, liveFilter } from "@/components/enhance/board-bits";
+import { CHIP, Card, Delta, Empty, Gauge, ItemIcon, PickedTotal, RANK_TOP, RankDialog, RankHead, RoundSelect, SKIP_LABEL, Select, SortMenu, type Sort, Tile, TryBadges, signed, signedShort, tone } from "@/components/enhance/parts";
 import { Pager, usePage } from "@/components/pager";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import type { ItemOverrides } from "@/lib/enhance/items";
@@ -225,15 +225,16 @@ const PAGE = 100;
 
 export function LogView({ entries, characters, hideLow, onHideLow }: { entries: Entry[]; characters: string[]; hideLow: boolean; onHideLow: (v: boolean) => void }) {
   const [who, setWho] = useState("");
-  const [item, setItem] = useState("");
+  const [picked, setItem] = useState(NO_ITEM_FILTER);
   const [result, setResult] = useState("");
   // Items of the chosen character (every item when no character is chosen).
   const items = [...new Set(entries.filter((e) => !who || e.row.who === who).map((e) => e.row.item))].sort((a, b) => a.localeCompare(b, "ko"));
+  const item = liveFilter(picked, items);
   const list = entries.filter(
-    (e) => (!who || e.row.who === who) && (!item || e.row.item === item) && (!result || e.row.r === result) && (!hideLow || e.row.from >= FLOOR_STAR)
+    (e) => (!who || e.row.who === who) && itemMatches(e.row.item, item) && (!result || e.row.r === result) && (!hideLow || e.row.from >= FLOOR_STAR)
   );
   // Newest first, a page at a time (user, 2026-11-13: pages rather than a list that grows with "더 보기").
-  const pager = usePage(`${who}|${item}|${result}|${hideLow}`, list.length, ROW_PAGE);
+  const pager = usePage(`${who}|${item.picked}|${item.query}|${result}|${hideLow}`, list.length, ROW_PAGE);
   const top = useRef<HTMLDivElement>(null);
   const shown = list.slice(list.length - pager.to, list.length - pager.from).reverse();
 
@@ -243,18 +244,8 @@ export function LogView({ entries, characters, hideLow, onHideLow }: { entries: 
         <b className="text-sm">
           강화 내역 <span className="font-medium text-muted-foreground">{list.length.toLocaleString("ko-KR")}건</span>
         </b>
-        <Select aria-label="캐릭터" value={who} onChange={(e) => (setWho(e.target.value), setItem(""))}>
-          <option value="">모든 캐릭터</option>
-          {characters.map((c) => (
-            <option key={c}>{c}</option>
-          ))}
-        </Select>
-        <Select aria-label="아이템" value={item} onChange={(e) => setItem(e.target.value)} className="max-w-[180px]">
-          <option value="">모든 아이템</option>
-          {items.map((name) => (
-            <option key={name}>{name}</option>
-          ))}
-        </Select>
+        <CharacterFilter names={characters} value={who} onChange={(name) => (setWho(name), setItem(NO_ITEM_FILTER))} className={PICK_W.who} />
+        <ItemFilter names={items} value={item} onChange={setItem} className={PICK_W.item} />
         <Select aria-label="결과" value={result} onChange={(e) => setResult(e.target.value)}>
           <option value="">모든 결과</option>
           <option value="success">성공</option>
@@ -276,8 +267,6 @@ export function LogView({ entries, characters, hideLow, onHideLow }: { entries: 
 }
 
 /* ───────────── 모아보기 ───────────── */
-
-type Sort = "spent" | "delta" | "recent";
 
 export function ItemsView({
   stats,
@@ -327,29 +316,18 @@ export function ItemsView({
 
   return (
     <>
-      <div ref={top} className="flex scroll-mt-4 flex-wrap items-center justify-between gap-2">
+      {/* B안 (user, 2026-11-14): the title, then one row of fields — character and item find a name, the round, and the
+          order with the low-star switch in its menu. On a phone the fields go two to a row. */}
+      <div ref={top} className="flex scroll-mt-4 flex-col gap-2.5">
         <b className="text-sm">
           아이템별 모아보기 <span className="font-medium text-muted-foreground">{items.length}개</span>
         </b>
-        <span className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <RoundSelect rounds={rounds} value={round?.id ?? ""} onChange={setRound} />
-          <label className="inline-flex items-center gap-1.5 text-[13px]">
-            <input type="checkbox" checked={hideLow} onChange={(e) => onHideLow(e.target.checked)} className="size-4 accent-primary" />
-            12성 미만 숨기기
-          </label>
-          <Select aria-label="캐릭터" value={who} onChange={(e) => setWho(e.target.value)} className="max-w-[160px] bg-card">
-            <option value="">모든 캐릭터</option>
-            {characters.map((c) => (
-              <option key={c}>{c}</option>
-            ))}
-          </Select>
-          <ItemFilter names={names} value={filter} onChange={setFilter} />
-          <Select aria-label="정렬" value={sort} onChange={(e) => setSort(e.target.value as Sort)} className="bg-card">
-            <option value="spent">많이 쓴 순</option>
-            <option value="delta">이득 큰 순</option>
-            <option value="recent">최근 순</option>
-          </Select>
-        </span>
+        <div className="flex flex-wrap items-center gap-2">
+          <CharacterFilter names={characters} value={who} onChange={setWho} className={PICK_W.who} />
+          <ItemFilter names={names} value={filter} onChange={setFilter} className={PICK_W.item} />
+          <RoundSelect rounds={rounds} value={round?.id ?? ""} onChange={setRound} className={PICK_W.round} />
+          <SortMenu value={sort} onChange={setSort} hideLow={hideLow} onHideLow={onHideLow} className="ml-auto" />
+        </div>
       </div>
       {filter.picked && items.length > 0 && (
         <PickedTotal spent={items.reduce((sum, it) => sum + it.spent, 0)} delta={items.some((it) => it.judged > 0) ? items.reduce((sum, it) => sum + (it.judged > 0 ? it.delta : 0), 0) : null} />

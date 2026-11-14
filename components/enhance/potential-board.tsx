@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Package, Split } from "lucide-react";
 import { NumberField, eok, parseNum } from "@/components/ev/ui";
-import { BasisButton, BasisRow, CARD_PAGE, ItemFilter, NO_ITEM_FILTER, PeriodBar, ROW_PAGE, SyncBanners, ViewTabs, WorldStrip, itemMatches, liveFilter, useGroupsOff, useKnownGroups, usePeriod, useSync } from "@/components/enhance/board-bits";
-import { Card, Delta, Empty, Gauge, ItemIcon, PickedTotal, RANK_TOP, RankDialog, RankHead, RoundSelect, Select, Tile, signed } from "@/components/enhance/parts";
+import { BasisButton, BasisRow, CARD_PAGE, CharacterFilter, ItemFilter, NO_ITEM_FILTER, PICK_W, PeriodBar, ROW_PAGE, SyncBanners, ViewTabs, WorldStrip, itemMatches, liveFilter, useGroupsOff, useKnownGroups, usePeriod, useSync } from "@/components/enhance/board-bits";
+import { Card, Delta, Empty, Gauge, ItemIcon, PickedTotal, RANK_TOP, RankDialog, RankHead, RoundSelect, Select, SortMenu, Tile, signed, type Sort } from "@/components/enhance/parts";
 import { Pager, usePage } from "@/components/pager";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { useItemDict, type Rolled } from "@/components/enhance/use-item-dict";
@@ -344,13 +344,16 @@ function PotInsight({ stats, found, onOpen }: { stats: ReturnType<typeof buildPo
   const kind = (which: PotKind) => {
     const label = KIND_LABEL[which];
     const t = side(which);
-    // The same four lines as the lucky · unlucky boxes next to it, so the two cards are one height.
+    // The same four lines as the lucky · unlucky boxes next to it, so the two cards are one height. In the colours of
+    // the kind's badge (user, 2026-11-14: in plain grey the three went unread); the small lines take the box's own
+    // colour, as grey on the black box would not read.
     return (
-      <div key={which} className="flex min-w-0 flex-col gap-0.5 rounded-lg bg-muted px-3 py-2.5">
-        <span className="text-[11px] text-muted-foreground">{label}</span>
+      <div key={which} className={cn("flex min-w-0 flex-col gap-0.5 rounded-lg border px-3 py-2.5", KIND_CSS[which])}>
+        <span className="text-[11px] font-semibold opacity-85">{label}</span>
         <b className="text-sm leading-snug">사용 메소</b>
-        <b className="font-num text-lg">{t.spent > 0 ? eok(t.spent) : "—"}</b>
-        <span className="text-[11px] text-muted-foreground">
+        {/* Three boxes on a phone are narrow: "128.48억" broke before 억 at the larger size. */}
+        <b className={cn("font-num whitespace-nowrap", kinds.length > 2 ? "text-base sm:text-lg" : "text-lg")}>{t.spent > 0 ? eok(t.spent) : "—"}</b>
+        <span className="text-[11px] opacity-85">
           재설정 {rolls(t.resets)}
           {t.cubes > 0 && ` · 큐브 ${t.cubes.toLocaleString("ko-KR")}개`}
         </span>
@@ -388,8 +391,6 @@ function PotInsight({ stats, found, onOpen }: { stats: ReturnType<typeof buildPo
     </>
   );
 }
-
-type Sort = "spent" | "delta" | "recent";
 
 function PiecesView({
   pieces: all,
@@ -431,12 +432,12 @@ function PiecesView({
   const top = useRef<HTMLDivElement>(null);
   return (
     <>
-      <div ref={top} className="flex scroll-mt-4 flex-wrap items-center justify-between gap-2">
+      {/* B안 (user, 2026-11-14), as on the star force board. */}
+      <div ref={top} className="flex scroll-mt-4 flex-col gap-2.5">
         <b className="text-sm">
           아이템별 모아보기 <span className="font-medium text-muted-foreground">{list.length}개</span>
         </b>
-        <span className="flex flex-wrap items-center gap-2">
-          <RoundSelect rounds={rounds} value={round?.id ?? ""} onChange={setRound} />
+        <div className="flex flex-wrap items-center gap-2">
           {/* The kind comes first: the item list next to it holds the items of that kind (user, 2026-11-13). */}
           <Select aria-label="종류" value={kind} onChange={(e) => setKind(e.target.value as PotKind | "")} className="bg-card">
             <option value="">모든 종류</option>
@@ -446,19 +447,11 @@ function PiecesView({
               </option>
             ))}
           </Select>
-          <Select aria-label="캐릭터" value={who} onChange={(e) => setWho(e.target.value)} className="max-w-[160px] bg-card">
-            <option value="">모든 캐릭터</option>
-            {characters.map((c) => (
-              <option key={c}>{c}</option>
-            ))}
-          </Select>
-          <ItemFilter names={names} value={filter} onChange={setFilter} />
-          <Select aria-label="정렬" value={sort} onChange={(e) => setSort(e.target.value as Sort)} className="bg-card">
-            <option value="spent">많이 쓴 순</option>
-            <option value="delta">이득 큰 순</option>
-            <option value="recent">최근 순</option>
-          </Select>
-        </span>
+          <CharacterFilter names={characters} value={who} onChange={setWho} className={PICK_W.who} />
+          <ItemFilter names={names} value={filter} onChange={setFilter} className={PICK_W.item} />
+          <RoundSelect rounds={rounds} value={round?.id ?? ""} onChange={setRound} className={PICK_W.round} />
+          <SortMenu value={sort} onChange={setSort} className="ml-auto" />
+        </div>
       </div>
       {filter.picked && list.length > 0 && (
         <PickedTotal spent={list.reduce((sum, p) => sum + p.spent, 0)} delta={list.some((p) => p.delta !== null) ? list.reduce((sum, p) => sum + (p.delta ?? 0), 0) : null} />
@@ -476,16 +469,17 @@ function PiecesView({
 
 function RollsView({ entries, characters, found }: { entries: PotEntry[]; characters: string[]; found: Icons }) {
   const [who, setWho] = useState("");
-  const [item, setItem] = useState("");
+  const [picked, setItem] = useState(NO_ITEM_FILTER);
   const [kind, setKind] = useState("");
   const [only, setOnly] = useState(false);
   // Items of the chosen character (every item when no character is chosen).
   const items = [...new Set(entries.filter((e) => !who || e.row.who === who).map((e) => e.row.item))].sort((a, b) => a.localeCompare(b, "ko"));
+  const item = liveFilter(picked, items);
   const list = entries.filter(
-    (e) => (!who || e.row.who === who) && (!item || e.row.item === item) && (!kind || kindOf(e.row) === kind) && (!only || e.taken || e.row.up)
+    (e) => (!who || e.row.who === who) && itemMatches(e.row.item, item) && (!kind || kindOf(e.row) === kind) && (!only || e.taken || e.row.up)
   );
   // Newest first, a page at a time.
-  const pager = usePage(`${who}|${item}|${kind}|${only}`, list.length, ROW_PAGE);
+  const pager = usePage(`${who}|${item.picked}|${item.query}|${kind}|${only}`, list.length, ROW_PAGE);
   const top = useRef<HTMLDivElement>(null);
   const shown = list.slice(list.length - pager.to, list.length - pager.from).reverse();
   return (
@@ -494,18 +488,8 @@ function RollsView({ entries, characters, found }: { entries: PotEntry[]; charac
         <b className="text-sm">
           재설정 내역 <span className="font-medium text-muted-foreground">{list.length.toLocaleString("ko-KR")}건</span>
         </b>
-        <Select aria-label="캐릭터" value={who} onChange={(e) => (setWho(e.target.value), setItem(""))}>
-          <option value="">모든 캐릭터</option>
-          {characters.map((c) => (
-            <option key={c}>{c}</option>
-          ))}
-        </Select>
-        <Select aria-label="아이템" value={item} onChange={(e) => setItem(e.target.value)} className="max-w-[180px]">
-          <option value="">모든 아이템</option>
-          {items.map((name) => (
-            <option key={name}>{name}</option>
-          ))}
-        </Select>
+        <CharacterFilter names={characters} value={who} onChange={(name) => (setWho(name), setItem(NO_ITEM_FILTER))} className={PICK_W.who} />
+        <ItemFilter names={items} value={item} onChange={setItem} className={PICK_W.item} />
         <Select aria-label="종류" value={kind} onChange={(e) => setKind(e.target.value)}>
           <option value="">모든 종류</option>
           {KINDS.map((k) => (

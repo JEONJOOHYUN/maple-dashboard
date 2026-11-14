@@ -4,6 +4,7 @@ import { useRef, type ComponentProps, type ReactNode } from "react";
 import { ChevronDown, Package } from "lucide-react";
 import { eok } from "@/components/ev/ui";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { EventRound } from "@/lib/enhance/events";
 import type { ItemInfo } from "@/lib/enhance/items";
 import type { SkipReason } from "@/lib/enhance/judge";
@@ -147,18 +148,82 @@ export function ItemIcon({ info, size = 36 }: { info: ItemInfo; size?: number })
   );
 }
 
-/** 모아보기 event round pick: "모든 기록" or one round. Hidden while there are no rounds. */
-export function RoundSelect({ rounds, value, onChange }: { rounds: EventRound[]; value: string; onChange: (id: string) => void }) {
+const ALL_ROUNDS = "\u0000all";
+/**
+ * Menus of a long list stay under their field, shorter and scrolling when the room below runs out: by default they
+ * flipped above it once the list was taller than that room (user, 2026-11-14).
+ */
+export const BELOW = { side: "none" } as const;
+
+/**
+ * 모아보기 event round pick: "모든 기록" or one round. Hidden while there are no rounds.
+ * A menu like the item list (opens below, 256px, scrolls): two years of rounds made a native list taller than the
+ * room under it, so it opened upwards (user, 2026-11-14).
+ */
+export function RoundSelect({ rounds, value, onChange, className }: { rounds: EventRound[]; value: string; onChange: (id: string) => void; className?: string }) {
   if (rounds.length === 0) return null;
+  const picked = rounds.find((r) => r.id === value);
   return (
-    <Select aria-label="이벤트 회차" value={value} onChange={(e) => onChange(e.target.value)} className="max-w-[240px] bg-card">
-      <option value="">모든 기록</option>
-      {rounds.map((r) => (
-        <option key={r.id} value={r.id}>
-          {r.label}
-        </option>
-      ))}
-    </Select>
+    <DropdownMenu>
+      <DropdownMenuTrigger aria-label="이벤트 회차" className={cn(MENU_TRIGGER, "sm:max-w-[240px]", className)}>
+        <span className="truncate">{picked?.label ?? "모든 기록"}</span>
+        <ChevronDown className="pointer-events-none absolute top-1/2 right-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" collisionAvoidance={BELOW} className="max-h-[min(16rem,var(--available-height))] w-64">
+        <DropdownMenuRadioGroup value={picked ? picked.id : ALL_ROUNDS} onValueChange={(next) => onChange(next === ALL_ROUNDS ? "" : String(next))}>
+          <DropdownMenuRadioItem value={ALL_ROUNDS} closeOnClick>
+            모든 기록
+          </DropdownMenuRadioItem>
+          {rounds.map((r) => (
+            <DropdownMenuRadioItem key={r.id} value={r.id} closeOnClick>
+              <span className="truncate">{r.label}</span>
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/** A menu button that reads like the fields next to it. */
+const MENU_TRIGGER =
+  "relative inline-flex h-8 min-w-0 items-center rounded-md border border-border bg-card pr-8 pl-2.5 text-left text-[13px] text-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50";
+
+export type Sort = "spent" | "delta" | "recent";
+const SORT_LABEL: Record<Sort, string> = { spent: "많이 쓴 순", delta: "이득 큰 순", recent: "최근 순" };
+
+/**
+ * 모아보기 order, and (star force) the low-star switch in the same menu (B안, user 2026-11-14). The button says when
+ * low stars are hidden, so the switch is not lost inside the menu.
+ */
+export function SortMenu({ value, onChange, hideLow, onHideLow, className }: { value: Sort; onChange: (sort: Sort) => void; hideLow?: boolean; onHideLow?: (v: boolean) => void; className?: string }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger aria-label="정렬" className={cn(MENU_TRIGGER, className)}>
+        <span className="truncate">
+          {SORT_LABEL[value]}
+          {onHideLow && hideLow ? " · 12성 이상" : ""}
+        </span>
+        <ChevronDown className="pointer-events-none absolute top-1/2 right-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" collisionAvoidance={BELOW} className="w-48">
+        <DropdownMenuRadioGroup value={value} onValueChange={(next) => onChange(next as Sort)}>
+          {(Object.keys(SORT_LABEL) as Sort[]).map((sort) => (
+            <DropdownMenuRadioItem key={sort} value={sort} closeOnClick>
+              {SORT_LABEL[sort]}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+        {onHideLow && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuCheckboxItem checked={!!hideLow} onCheckedChange={(checked) => onHideLow(checked)}>
+              12성 미만 숨기기
+            </DropdownMenuCheckboxItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

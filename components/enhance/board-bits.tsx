@@ -1,11 +1,12 @@
 "use client";
 
 // What the star force board and the potential board share: the period, the sync wiring and its banners, the tab row.
-import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { AlertCircle, ChevronDown, Loader2, RefreshCw, Search, SlidersHorizontal } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { AlertCircle, Loader2, RefreshCw, Search, SlidersHorizontal, X } from "lucide-react";
 import { eok } from "@/components/ev/ui";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
+import { BELOW } from "@/components/enhance/parts";
+import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from "@/components/ui/combobox";
+import { InputGroupAddon, InputGroupButton } from "@/components/ui/input-group";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { ApiErrorKind } from "@/lib/enhance/client";
 import { addDays, kstDate } from "@/lib/enhance/kst";
@@ -306,124 +307,137 @@ export const NO_ITEM_FILTER: ItemFilterState = { query: "", picked: "" };
  */
 export const liveFilter = (filter: ItemFilterState, names: string[]): ItemFilterState => (filter.picked && !names.includes(filter.picked) ? { ...filter, picked: "" } : filter);
 
-const ALL_ITEMS = "__all__";
-
 /**
- * Finds one item among the 모아보기 cards (user, 2026-11-13).
- * - The search box does not filter while it is typed in: it lists, right under it, the item names that have the text
- *   in them ("언" → 컴플리트 언더컨트롤), to take one with a click or the arrow keys. Enter with none taken shows
- *   every card whose name has the text; emptying the box shows everything again.
- * - The button next to it opens every item as a list a few rows tall, the rest by scrolling.
+ * One field to find a name (user, 2026-11-14 — B안: the item search and the item list are one field, the character
+ * the same way). Typing narrows the list under it ("언" → 컴플리트 언더컨트롤, spaces ignored) but filters nothing yet;
+ * a name is taken with a click or the arrow keys and Enter, the arrow opens every name, the cross or an emptied box
+ * shows everything again. `free` (items): Enter with no name taken keeps every name that has the text in it.
+ * The box shows the filter in force: text typed and left without Enter goes back to it when the list closes.
  */
-export function ItemFilter({ names, value, onChange }: { names: string[]; value: ItemFilterState; onChange: (next: ItemFilterState) => void }) {
+function NamePick({
+  label,
+  allLabel,
+  names,
+  value,
+  onChange,
+  free = false,
+  className,
+}: {
+  label: string;
+  allLabel: string;
+  names: string[];
+  value: ItemFilterState;
+  onChange: (next: ItemFilterState) => void;
+  free?: boolean;
+  className?: string;
+}) {
   const all = useMemo(() => [...new Set(names)].sort((a, b) => a.localeCompare(b, "ko")), [names]);
-  const [text, setText] = useState(value.picked || value.query);
+  // null = not typing: the box shows the filter in force.
+  const [text, setText] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
-  const [active, setActive] = useState(-1);
-  const listId = useId();
-  const hits = text.trim() ? all.filter((name) => plain(name).includes(plain(text))) : [];
-  const shown = open && hits.length > 0;
+  const highlighted = useRef<string | undefined>(undefined);
+  const shown = text ?? (value.picked || value.query);
   const close = () => {
     setOpen(false);
-    setActive(-1);
-  };
-  const pick = (name: string) => {
-    setText(name);
-    close();
-    onChange({ query: "", picked: name });
+    setText(null);
+    highlighted.current = undefined;
   };
   return (
-    <>
-      <span className="relative inline-flex">
-        <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-        <Input
-          type="search"
-          role="combobox"
-          aria-label="아이템 검색"
-          aria-autocomplete="list"
-          aria-expanded={shown}
-          aria-controls={listId}
-          aria-activedescendant={shown && active >= 0 ? `${listId}-${active}` : undefined}
-          placeholder="아이템 검색"
-          value={text}
-          onChange={(e) => {
-            const next = e.target.value;
-            setText(next);
-            setActive(-1);
-            setOpen(true);
-            // An emptied box is "everything again" at once; anything else waits for Enter or a pick.
-            if (next === "") onChange(NO_ITEM_FILTER);
-          }}
-          onFocus={() => setOpen(true)}
-          onBlur={close}
-          onKeyDown={(e) => {
-            if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-              if (hits.length === 0) return;
-              e.preventDefault();
-              setOpen(true);
-              setActive((i) => (e.key === "ArrowDown" ? (i + 1) % hits.length : i <= 0 ? hits.length - 1 : i - 1));
-            } else if (e.key === "Enter") {
-              e.preventDefault();
-              if (shown && active >= 0 && hits[active]) pick(hits[active]);
-              else {
-                close();
-                onChange({ query: text.trim(), picked: "" });
-              }
-            } else if (e.key === "Escape") close();
-          }}
-          className="h-8 w-40 rounded-md bg-card pl-8 text-[13px] md:text-[13px]"
-        />
-        {shown && (
-          <ul id={listId} role="listbox" aria-label="아이템" className="absolute top-full left-0 z-30 mt-1 max-h-60 w-64 max-w-[80vw] overflow-y-auto rounded-lg bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10">
-            {hits.map((name, i) => (
-              <li
-                key={name}
-                id={`${listId}-${i}`}
-                role="option"
-                aria-selected={i === active}
-                // The press must not take the focus out of the box (that would close the list before the click lands).
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => pick(name)}
-                onMouseEnter={() => setActive(i)}
-                className={cn("cursor-default truncate rounded-md px-2 py-1.5 text-[13px]", i === active && "bg-accent text-accent-foreground")}
-              >
-                {name}
-              </li>
-            ))}
-          </ul>
+    <Combobox
+      items={all}
+      value={value.picked || null}
+      onValueChange={(next) => {
+        setText(null);
+        onChange({ query: "", picked: typeof next === "string" ? next : "" });
+      }}
+      inputValue={shown}
+      onInputValueChange={(next, details) => {
+        // Only what is typed, or the cross. Base UI also writes the picked name in (which `shown` already is) and
+        // empties the box as the list closes ("input-clear"): taken as the user's, that undid an Enter search.
+        if (details.reason !== "input-change" && details.reason !== "clear-press") return;
+        setText(next);
+        highlighted.current = undefined;
+        if (next === "") onChange(NO_ITEM_FILTER);
+      }}
+      open={open}
+      onOpenChange={(next) => (next ? setOpen(true) : close())}
+      onItemHighlighted={(item) => {
+        highlighted.current = typeof item === "string" ? item : undefined;
+      }}
+      filter={(item, query) => plain(String(item)).includes(plain(query))}
+      autoHighlight={!free}
+    >
+      <ComboboxInput
+        aria-label={label}
+        placeholder={allLabel}
+        showClear={shown !== ""}
+        // Left with the list shut (nothing matched to open it): back to the filter in force, as closing does.
+        onBlur={() => {
+          if (!open) setText(null);
+        }}
+        onKeyDown={(e) => {
+          if (!free || e.key !== "Enter" || highlighted.current || text === null) return;
+          // The Enter that ends a Hangul syllable is not the search: Base UI holds the syllable back until the
+          // composition ends, so the text was one letter short (Codex review, 2026-11-14). The next Enter searches.
+          if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+          e.preventDefault();
+          // What the box shows, rather than the last state: the composed syllable is in it.
+          const query = e.currentTarget.value.trim();
+          onChange(query ? { query, picked: "" } : NO_ITEM_FILTER);
+          close();
+        }}
+        className={cn("h-8 rounded-md border-border bg-card text-[13px] dark:bg-card [&_input]:text-[13px] md:[&_input]:text-[13px]", className)}
+      >
+        <InputGroupAddon align="inline-start">
+          <Search className="size-3.5" aria-hidden="true" />
+        </InputGroupAddon>
+        {/* Base UI's cross shows only for a name taken from the list: a typed search gets the same cross here. */}
+        {text === null && !value.picked && value.query && (
+          <InputGroupAddon align="inline-end">
+            <InputGroupButton
+              data-slot="combobox-clear"
+              size="icon-xs"
+              variant="ghost"
+              aria-label={`${label} 검색 지우기`}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => onChange(NO_ITEM_FILTER)}
+            >
+              <X aria-hidden="true" />
+            </InputGroupButton>
+          </InputGroupAddon>
         )}
-      </span>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          aria-label="아이템 고르기"
-          className="relative inline-flex h-8 max-w-[180px] min-w-0 items-center rounded-md border border-border bg-card pr-8 pl-2.5 text-[13px] text-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-        >
-          <span className="truncate">{value.picked || "모든 아이템"}</span>
-          <ChevronDown className="pointer-events-none absolute top-1/2 right-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="max-h-64 w-60">
-          <DropdownMenuRadioGroup
-            value={value.picked || ALL_ITEMS}
-            onValueChange={(next) => {
-              const name = next === ALL_ITEMS ? "" : String(next);
-              setText(name);
-              onChange({ query: "", picked: name });
-            }}
-          >
-            <DropdownMenuRadioItem value={ALL_ITEMS} closeOnClick>
-              모든 아이템
-            </DropdownMenuRadioItem>
-            {all.map((name) => (
-              <DropdownMenuRadioItem key={name} value={name} closeOnClick>
-                <span className="truncate">{name}</span>
-              </DropdownMenuRadioItem>
-            ))}
-          </DropdownMenuRadioGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </>
+      </ComboboxInput>
+      <ComboboxContent collisionAvoidance={BELOW} className="w-64">
+        <ComboboxEmpty>없음</ComboboxEmpty>
+        <ComboboxList>
+          {(name: string) => (
+            <ComboboxItem key={name} value={name} className="text-[13px]">
+              <span className="truncate">{name}</span>
+            </ComboboxItem>
+          )}
+        </ComboboxList>
+      </ComboboxContent>
+    </Combobox>
   );
 }
+
+/** The item field of 모아보기 and the 내역 lists: a name from the list, or (Enter) every name with the typed text. */
+export function ItemFilter({ names, value, onChange, className }: { names: string[]; value: ItemFilterState; onChange: (next: ItemFilterState) => void; className?: string }) {
+  return <NamePick label="아이템" allLabel="모든 아이템" names={names} value={value} onChange={onChange} free className={className} />;
+}
+
+/** The character field, the same field as the items' (user, 2026-11-14): one name from the list. */
+export function CharacterFilter({ names, value, onChange, className }: { names: string[]; value: string; onChange: (name: string) => void; className?: string }) {
+  return <NamePick label="캐릭터" allLabel="모든 캐릭터" names={names} value={{ query: "", picked: value }} onChange={(next) => onChange(next.picked)} className={className} />;
+}
+
+/** Widths in a filter row: shared by the phone (two to a row) and wider screens (their own width). */
+export const PICK_W = {
+  who: "min-w-[9.5rem] flex-1 sm:w-40 sm:flex-none",
+  item: "min-w-[9.5rem] flex-1 sm:w-52 sm:flex-none",
+  // Wraps to the next row on a phone rather than shrinking to "모든…" (five fields on the potential board).
+  round: "min-w-[9.5rem] flex-1 sm:min-w-0 sm:flex-none",
+};
 
 /** Cards on one page of a 모아보기 grid (four rows of three) and rows on one page of a 내역 list. */
 export const CARD_PAGE = 12;
