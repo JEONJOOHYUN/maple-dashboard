@@ -324,12 +324,14 @@ export function PinballGame() {
             {status === "error" && <span className="text-xs text-destructive">물리 엔진 불러오기 실패 · 새로고침</span>}
           </section>
         </div>
-          <section className="order-3 flex min-w-0 flex-col gap-2 rounded-lg border border-border bg-card p-4 lg:order-none lg:min-h-44 lg:flex-1 lg:gap-3">
+          {/* The card takes the room left under the settings; a longer list scrolls inside it instead of spilling out
+              below the card when the window is short (user, 2026-11-14). */}
+          <section className="order-3 flex min-w-0 flex-col gap-2 rounded-lg border border-border bg-card p-4 lg:order-none lg:min-h-44 lg:flex-1 lg:gap-3 lg:overflow-hidden">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <b className="text-[15px]">순위</b>
               <span className="text-xs text-muted-foreground">한 사람은 한 번만 · {rule === "first" ? "가장 먼저 들어온 구슬로" : "가장 늦게 들어온 구슬로"}</span>
             </div>
-            <ol className="flex flex-col gap-1 lg:gap-1.5">
+            <ol className="flex flex-col gap-1 lg:-mr-2 lg:min-h-0 lg:flex-1 lg:gap-1.5 lg:overflow-y-auto lg:pr-2 lg:[scrollbar-width:thin]">
               {ordered.map((r, k) => {
                 const win = winner === r.name;
                 return (
