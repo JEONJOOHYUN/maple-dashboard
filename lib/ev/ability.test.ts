@@ -7,6 +7,10 @@ type Grade = "epic" | "unique" | "legendary";
 const rows = (data as unknown as { rows: [string, number, number, number][] }).rows;
 const P: Record<Grade, number[]> = { epic: rows.map((r) => r[1]), unique: rows.map((r) => r[2]), legendary: rows.map((r) => r[3]) };
 const idx = (k: AbilityKey) => rows.findIndex((r) => r[0] === ABILITY_OPTIONS[k].name);
+// Screen defaults: highest values, 200만 per 5,000 fame (400 a fame), circulator 2.6억.
+const maxGoal = (k: AbilityKey, g: "legendary" | "unique") => Math.max(...valueChoices(k, g));
+const valued = { sunday: false, famePricePerUnit: 400, values: { goal: maxGoal, circPrice: 2.6e8 } };
+const money = (c: { fame: number; meso: number; circ: number }) => c.fame * 400 + c.meso + c.circ * 2.6e8;
 
 // Seeded random so the test is stable.
 function rng(seed: number) {
@@ -132,15 +136,103 @@ test("values: two options together → circulate them to the goal, lock, then re
   assert.ok(cbh.afterTwo.every((a) => a.action.kind === "circ"));
 });
 
-test("second option depends on discovery order (Codex review): boss maxed first, then passive just locks", () => {
+test("every discovery order has a row (Codex review); circulators wait until both lower lines are known (user, 2026-11-15)", () => {
   const goal = (k: AbilityKey, g: "legendary" | "unique") => Math.max(...valueChoices(k, g));
   const p = abilityPlan(["pas", "boss", "stat"], "l3", { sunday: false, famePricePerUnit: 400, values: { goal, circPrice: 2.6e8 } });
   assert.equal(p.afterTwo.length, 6);
+  // Boss below 20 % is locked as it is: circulating it now is about as dear and gets rerolled when 상추뎀 comes next.
+  assert.ok(p.afterFirstLower.every((r) => r.action.kind === "lock"));
   const bossThenPas = p.afterTwo.find((a) => a.keys.join() === "boss,pas")!;
   const pasThenBoss = p.afterTwo.find((a) => a.keys.join() === "pas,boss")!;
-  assert.equal(bossThenPas.action.kind, "lock");
-  assert.equal(bossThenPas.action.circCount, 0);
-  assert.equal(pasThenBoss.action.kind, "circ");
+  for (const r of [bossThenPas, pasThenBoss]) {
+    assert.equal(r.action.kind, "circ");
+    assert.ok(Math.abs(r.action.circCount - 10) < 1e-9);
+  }
+  assert.equal(p.afterTwo.find((a) => a.keys.join() === "boss,stat")!.action.kind, "lock");
+});
+
+test("the last step comes from the plan: lines circulated to the goal are not circulated again (user, 2026-11-15)", () => {
+  const p = abilityPlan(["pas", "boss", "stat"], "l3", valued);
+  const fin = (keys: string) => p.afterTwo.find((a) => a.keys.join() === keys)!.finish!;
+  // 패시브 + 보공 (circulated to 20 %): reset line 1 until 상추뎀 shows 10 %, no circulator.
+  assert.deepEqual(fin("pas,boss").map((f) => [f.last, f.lines, f.move]), [["stat", [0], "keep"]]);
+  // 보공 + 상추뎀 locked below the goal: once 패시브 shows up on line 1, circulate all three lines (1 ÷ (0.1 × 0.6)).
+  const bs = fin("boss,stat");
+  assert.deepEqual(bs.map((f) => [f.last, f.move]), [["pas", "circ"]]);
+  assert.ok(Math.abs(bs[0].circCount - 1 / 0.06) < 1e-6);
+  // What is left is counted after the move (Codex review): only the circulators, not the search for 패시브.
+  assert.ok(Math.abs(money(bs[0]) - (2.6e8 / 0.06)) < 1, String(money(bs[0])));
+  assert.deepEqual(fin("pas,stat").map((f) => [f.last, f.move]), [["boss", "circ"]]);
+  // L1+U2: boss and 상추뎀 at their goals, passive (always +1) on line 1 ends it, nothing left.
+  const l1 = abilityPlan(["pas", "boss", "stat"], "l1u2", valued, 0);
+  const done = l1.afterTwo.flatMap((r) => r.finish ?? []).find((f) => f.move === "done")!;
+  assert.equal(done.last, "pas");
+  assert.equal(money(done), 0);
+});
+
+test("circulators are used once on a path for 패보상 · 재보체 3줄: nothing circulated before the last circulation", () => {
+  for (const keys of [["pas", "boss", "stat"], ["cool", "boss", "hp"]] as AbilityKey[][]) {
+    const p = abilityPlan(keys, "l3", valued);
+    assert.ok(p.afterFirstLower.every((r) => r.action.kind !== "circ"), keys.join());
+    for (const r of p.afterTwo)
+      if (r.action.kind === "circ") assert.ok(r.finish!.every((f) => f.move !== "circ"), r.keys.join());
+  }
+});
+
+test("showing the wanted value can change the move: 패보재 3줄 boss goes on below 20 %, is locked at 20 %", () => {
+  const p = abilityPlan(["pas", "boss", "cool"], "l3", valued);
+  const boss = p.afterFirstLower.find((r) => r.key === "boss")!;
+  assert.equal(boss.action.kind, "keep");
+  assert.equal(boss.atGoal?.kind, "lock");
+  // What follows assumes it was locked at 20 % (and what is left then is less than going on).
+  assert.equal(boss.nextAtGoal, true);
+  assert.ok(money(boss.atGoalLeft!) < money(boss));
+  assert.ok(p.afterTwo.some((r) => r.keys[0] === "boss"));
+  // Where the value changes nothing there is no second move.
+  assert.equal(p.afterFirstLower.find((r) => r.key === "pas")!.atGoal, undefined);
+});
+
+test("line 1 lists only options that count there (L1+U2: the lead), and every row says its line", () => {
+  const l1 = abilityPlan(["pas", "boss", "stat"], "l1u2", valued, 0);
+  assert.deepEqual(l1.afterFirst.map((r) => r.key), ["pas"]);
+  const l3 = abilityPlan(["pas", "boss", "stat"], "l3", valued);
+  assert.deepEqual(l3.afterFirst.map((r) => r.key), ["pas", "boss", "stat"]);
+  for (const p of [l1, l3]) {
+    assert.ok(p.afterFirst.every((r) => r.line === 0));
+    assert.ok(p.afterFirstLower.every((r) => r.line === 1));
+  }
+});
+
+test("드메 ends by resetting until the other option shows the wanted value (not as soon as it shows up)", () => {
+  const p = abilityPlan(["drop", "meso"], "l1u2", valued, [0, 1]);
+  const drop = p.afterFirstLower.find((r) => r.key === "drop")!;
+  assert.deepEqual(drop.finish!.map((f) => [f.last, f.lines, f.move]), [["meso", [0], "keep"]]);
+  // Both legendary: the other one may finish on line 1 or 3.
+  const l3 = abilityPlan(["drop", "meso"], "l3", valued);
+  assert.deepEqual(l3.afterFirstLower.find((r) => r.key === "drop")!.finish!.map((f) => f.lines), [[0, 2]]);
+});
+
+test("every finish is keep · circ · done, with all the other options of its goal on the item", () => {
+  const presets: [AbilityKey[], number[] | undefined][] = [
+    [["pas", "boss", "stat"], [0]],
+    [["boss", "stat", "atk"], [0]],
+    [["pas", "boss", "crit"], [0]],
+    [["cool", "boss", "stat"], [0]],
+    [["pas", "boss", "cool"], [0]],
+    [["cool", "boss", "hp"], [0]],
+    [["drop", "meso"], [0, 1]],
+  ];
+  for (const [keys, lead] of presets)
+    for (const mode of ["l3", "l1u2"] as const) {
+      const p = abilityPlan(keys, mode, valued, mode === "l1u2" ? lead : undefined);
+      for (const r of [...p.afterFirst, ...p.afterFirstLower, ...p.afterTwo])
+        for (const f of r.finish ?? []) {
+          assert.ok(["keep", "circ", "done"].includes(f.move));
+          assert.equal(f.locked.length + 1, keys.length, keys.join());
+          assert.ok(!f.locked.includes(f.last));
+          assert.ok(f.lines.length > 0 && Number.isFinite(money(f)));
+        }
+    }
 });
 
 test("second option: what is left after two lines (resets included) is less than after one", () => {
@@ -163,10 +255,6 @@ test("an option that is not kept has no follow-up step (Codex review: 패보크 
   assert.ok(p.afterTwo.every((a) => a.keys[0] !== "boss"));
 });
 
-const maxGoal = (k: AbilityKey, g: "legendary" | "unique") => Math.max(...valueChoices(k, g));
-const valued = { sunday: false, famePricePerUnit: 400, values: { goal: maxGoal, circPrice: 2.6e8 } };
-const money = (c: { fame: number; meso: number; circ: number }) => c.fame * 400 + c.meso + c.circ * 2.6e8;
-
 test("drop and meso: official values, legendary 18 ~ 20 and unique 13 ~ 15", () => {
   assert.deepEqual(valueChoices("drop", "legendary"), [18, 19, 20]);
   assert.deepEqual(valueChoices("meso", "unique"), [13, 14, 15]);
@@ -186,12 +274,14 @@ test("드메 is two lines: drop or meso on line 1, the other below; no third-opt
   assert.deepEqual(l1.afterFirst.map((r) => r.key), ["drop", "meso"]);
 });
 
-test("every row lists each kind of move once, the chosen one first and never dearer than the others", () => {
+test("every row lists each kind of move once, the chosen one first and never dearer than the others by a circulator", () => {
   const p = abilityPlan(["pas", "boss", "stat"], "l3", valued);
   for (const row of [...p.afterFirst, ...p.afterFirstLower, ...p.afterTwo]) {
     assert.equal(row.choices[0].action.kind, row.action.kind);
     assert.ok(Math.abs(money(row.choices[0]) - money(row)) < 1);
-    for (const c of row.choices.slice(1)) assert.ok(money(c) >= money(row) - 1, `${c.action.kind} ${money(c)} < ${money(row)}`);
+    // Rerolling lines already at the goal must save a circulator to be chosen, so the chosen move may cost a little
+    // more on average than such a circulation (boss on line 2: locking leaves about 0.035억 more than circulating).
+    for (const c of row.choices.slice(1)) assert.ok(money(c) >= money(row) - 2.6e8, `${c.action.kind} ${money(c)} < ${money(row)}`);
     assert.equal(new Set(row.choices.map((c) => c.action.kind)).size, row.choices.length);
   }
   // The user's case: boss first on a lower line. Locking it beats rolling on.

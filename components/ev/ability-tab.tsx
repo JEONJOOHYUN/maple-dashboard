@@ -27,8 +27,9 @@ import {
   type AbilityPreset,
   type Method,
   type PlanAction,
-  type PlanChoice,
+  type PlanFinish,
   type PlanOpts,
+  type PlanStep,
 } from "@/lib/ev/ability";
 import { CREDIT_SHOP } from "@/lib/ev/defaults";
 import { cn } from "@/lib/utils";
@@ -133,10 +134,20 @@ export function AbilityTab() {
       : a.kind === "lock"
         ? "잠금"
         : `서큘레이터로 ${two ? "두 줄 " : ""}목표 수치 → 잠금`;
-  // Same move for every row → say it once in the step title.
-  const sameAction = (list: { action: PlanAction }[]) =>
+  const gradeAt = (line: number) =>
+    (mode === "l3" || line === 0 ? "legendary" : "unique") as "legendary" | "unique";
+  /** "20%": the wanted value of this option on that line. */
+  const goalText = (k: AbilityKey, line: number) => `${goalOf(k, gradeAt(line))}${unitOf(k)}`;
+  /** The row's move, and the other one when showing the wanted value changes it ("그대로 계속 · 20% 이상이면 잠금"). */
+  const rowAction = (r: PlanStep, k: AbilityKey, two: boolean) =>
+    r.atGoal
+      ? `${actionText(r.action, two)} · ${goalText(k, r.line)} 이상이면 ${actionText(r.atGoal, two)}`
+      : actionText(r.action, two);
+  // Same move for every row (and no "at the wanted value" variant) → say it once in the step title.
+  const sameAction = (list: { action: PlanAction; atGoal?: PlanAction }[]) =>
     list.every(
       (x) =>
+        !x.atGoal &&
         x.action.kind === list[0].action.kind &&
         x.action.method === list[0].action.method,
     );
@@ -154,10 +165,58 @@ export function AbilityTab() {
   // Step 4 chips only make sense once step 3 is picked (they list what can follow it).
   const pickedTwo =
     picked && seen2 ? (twoRows.find((r) => r.keys[1] === seen2) ?? null) : null;
-  const view = pickedTwo ?? pickedRow ?? plan;
+  // What follows a row may assume it showed the wanted value (below it, it is not kept): then the summary is that case.
+  const leftOf = (r: PlanStep): Cost & { resets: number } => (r.nextAtGoal && r.atGoalLeft ? r.atGoalLeft : r);
+  const view: Cost & { resets: number } = pickedTwo ? leftOf(pickedTwo) : pickedRow ? leftOf(pickedRow) : plan;
+  /** "보공" or, when what follows assumes the wanted value, "보공 20%". */
+  const seenName = (r: PlanStep, k: AbilityKey) =>
+    r.nextAtGoal ? `${ABILITY_OPTIONS[k].short} ${goalText(k, r.line)}` : ABILITY_OPTIONS[k].short;
   const circMeso = view.circ * circPrice;
   const lowerSame = lowerRows.length > 0 && sameAction(lowerRows);
   const twoSame = twoRows.length > 0 && sameAction(twoRows);
+  // The last step comes from the plan too (user, 2026-11-15: a fixed "모자라면 → 서큘레이터" told people to reroll lines
+  // they had just circulated). With the options picked above: that one way; otherwise every way the plan can end.
+  const lineName = (lines: number[]) => `${lines.map((l) => ["첫째", "둘째", "셋째"][l]).join(" · ")} 줄`;
+  const lastLabel = (f: PlanFinish) => `${lineName(f.lines)} ${ABILITY_OPTIONS[f.last].short}`;
+  /** withLast: "첫째 줄 보공 뜨면 → …" (the overview); without it the row label already names the line. */
+  const finishText = (f: PlanFinish, withLast: boolean) => {
+    const last = withLast ? `${lastLabel(f)} ` : "";
+    // Only below the wanted values (Codex review): all of them at the goal already is the end.
+    const circ = `수치 모자라면 서큘레이터로 ${f.locked.length + 1 === 2 ? "두" : "세"} 줄 목표 수치`;
+    return f.move === "keep"
+      ? `${last}${goalText(f.last, f.lines[0])} 이상 뜰 때까지 재설정`
+      : f.move === "done"
+        ? withLast ? `${last}뜨면 끝` : "끝"
+        : withLast ? `${last}뜨면 → ${circ}` : circ;
+  };
+  type FinishRow = { id: string; label: string; action: string; f: PlanFinish; goal: number };
+  const finishRows: FinishRow[] = (() => {
+    const one = pickedTwo ?? (pickedRow?.finish ? pickedRow : null);
+    if (one)
+      return (one.finish ?? []).map((f) => ({
+        id: `${f.move}:${f.lines.join()}`,
+        label: lastLabel(f),
+        action: finishText(f, false),
+        f,
+        goal: one.goal,
+      }));
+    const from: PlanStep[] = picked ? twoRows : [...plan.afterTwo, ...plan.afterFirstLower];
+    const out = new Map<string, FinishRow>();
+    for (const r of from)
+      for (const f of r.finish ?? []) {
+        const pair = [...f.locked].sort().join("+");
+        const id = `${pair}|${f.last}|${f.move}|${f.lines.join()}`;
+        if (!out.has(id))
+          out.set(id, {
+            id,
+            label: f.locked.map((k) => ABILITY_OPTIONS[k].short).join(" + "),
+            action: finishText(f, true),
+            f,
+            goal: r.goal,
+          });
+      }
+    return [...out.values()].sort((a, b) => costNum(a.f) - costNum(b.f));
+  })();
   const sumCost = (a: Cost, b: Cost): Cost => ({ fame: a.fame + b.fame, meso: a.meso + b.meso, circ: a.circ + b.circ });
   /** "146.2억" (money when there is a fame price, else fame). */
   const diffText = (more: Cost, less: Cost) => {
@@ -168,7 +227,7 @@ export function AbilityTab() {
    * The other natural move and how much more it leaves: "안 잠그면 +X" when the plan locks, "잠그면 +X" when it goes on.
    * Only with a fame price (one number to compare) and from 1 % up (user, 2026-11-14: less text, nothing repeated).
    */
-  const altShort = (row: { action: PlanAction; choices: PlanChoice[] }) => {
+  const altShort = (row: PlanStep, k: AbilityKey) => {
     const best = row.choices[0];
     if (!best || total(best) === null) return undefined;
     const other =
@@ -178,7 +237,9 @@ export function AbilityTab() {
     if (!other) return undefined;
     const more = costNum(other) - costNum(best);
     if (more < costNum(best) * 0.01) return undefined;
-    return `${row.action.kind === "keep" ? "잠그면" : "안 잠그면"} +${diffText(other, best)}`;
+    // With "20% 이상이면 잠금" next to it, say that this one is about locking below the wanted value.
+    const below = row.atGoal ? `${goalText(k, row.line)} 미만에 ` : "";
+    return `${below}${row.action.kind === "keep" ? "잠그면" : "안 잠그면"} +${diffText(other, best)}`;
   };
   /** The wanted value of these options on this grade (드메: drop and meso move together). */
   const valueSelect = (ks: AbilityKey[], g: "legendary" | "unique", label: string) => {
@@ -330,10 +391,10 @@ export function AbilityTab() {
           <span className="text-[13px] font-semibold">
             {preset.label}
             {pairOn ? ` + ${hunt.label} · 프리셋 2개` : ""} · {modeLabel(preset, mode)}{" "}
-            {pickedTwo
-              ? `· ${ABILITY_OPTIONS[pickedTwo.keys[0]].short} 다음 ${withSubject(ABILITY_OPTIONS[pickedTwo.keys[1]].short)} 뜬 뒤 남은 비용`
+            {pickedTwo && pickedRow
+              ? `· ${seenName(pickedRow, pickedRow.key)} 다음 ${withSubject(seenName(pickedTwo, pickedTwo.keys[1]))} 뜬 뒤 남은 비용`
               : pickedRow
-                ? `· ${withSubject(ABILITY_OPTIONS[pickedRow.key].short)} 둘째 · 셋째 줄에 뜬 뒤 남은 비용`
+                ? `· ${withSubject(seenName(pickedRow, pickedRow.key))} 둘째 · 셋째 줄에 뜬 뒤 남은 비용`
                 : "띄우는 데 드는 것"}
           </span>
           {total(view) !== null ? (
@@ -421,9 +482,9 @@ export function AbilityTab() {
                   key={b.key}
                   label={ABILITY_OPTIONS[b.key].short}
                   tag={b.goal === huntGoal && pairOn ? hunt.label : undefined}
-                  action={firstSame ? undefined : actionText(b.action, false)}
+                  action={firstSame ? undefined : rowAction(b, b.key, false)}
                   cost={costText(b)}
-                  alts={firstSame ? undefined : altShort(b)}
+                  alts={firstSame ? undefined : altShort(b, b.key)}
                   unit={i === 0}
                 />
               ))}
@@ -445,14 +506,14 @@ export function AbilityTab() {
                 key={b.key}
                 label={ABILITY_OPTIONS[b.key].short}
                 tag={b.goal === huntGoal && pairOn ? hunt.label : undefined}
-                action={lowerSame ? undefined : actionText(b.action, false)}
+                action={lowerSame ? undefined : rowAction(b, b.key, false)}
                 extra={
                   b.action.kind === "circ"
                     ? `서큘레이터 ${circN(b.action.circCount)}`
                     : undefined
                 }
                 cost={costText(b)}
-                alts={lowerSame ? undefined : altShort(b)}
+                alts={lowerSame ? undefined : altShort(b, b.key)}
                 unit={i === 0}
                 selected={picked === b.key}
               />
@@ -461,17 +522,19 @@ export function AbilityTab() {
           {!preset.hunting && (
           <Step
             n={4}
-            title={`${picked && twoRows.length ? `${ABILITY_OPTIONS[picked].short} 다음 ` : ""}하나 더 뜨면${picked && twoSame ? ` → ${actionText(twoRows[0].action, true)}` : ""}`}
+            title={`${picked && twoRows.length ? `${ABILITY_OPTIONS[picked].short}${pickedRow?.nextAtGoal ? ` ${goalText(picked, pickedRow.line)}` : ""} 다음 ` : ""}하나 더 뜨면${picked && twoSame ? ` → ${actionText(twoRows[0].action, true)}` : ""}`}
             note={
               // Every pair at once made the column long (user, 2026-11-14): only what can follow the option picked in step 3.
               !picked
                 ? "3단계에서 뜬 옵션을 고르면 이어서 보여 줌"
-                : twoRows.length === 0
-                ? // Kept (locked or circulated, then locked): the other 드메 option finishes it. Not kept: it is rerolled.
-                  pickedRow?.goal === huntGoal && pickedRow.action.kind !== "keep"
-                  ? `${hunt.label}는 두 줄 · 나머지 하나가 뜨면 끝`
-                  : `${withTopic(ABILITY_OPTIONS[picked].short)} 잠그지 않음 · 다음 결과로 2 · 3단계부터 다시`
-                : undefined
+                : pickedRow?.finish
+                  ? // A two-line goal (드메): the other option finishes it, in the last step.
+                    `${pickedRow.nextAtGoal ? `${goalText(picked, pickedRow.line)} 미만이면 잠그지 않음 · ` : ""}${hunt.label}는 두 줄 · 마지막 단계로`
+                  : twoRows.length === 0
+                    ? `${withTopic(ABILITY_OPTIONS[picked].short)} 잠그지 않음 · 다음 결과로 2 · 3단계부터 다시`
+                    : pickedRow?.nextAtGoal
+                      ? `${goalText(picked, pickedRow.line)} 미만이면 잠그지 않음 · 다음 결과로 2 · 3단계부터 다시`
+                      : undefined
             }
             aside={
               picked && twoRows.length > 0 ? (
@@ -496,14 +559,14 @@ export function AbilityTab() {
                           .map((k) => ABILITY_OPTIONS[k].short)
                           .join(" 다음 ")
                   }
-                  action={twoSame ? undefined : actionText(b.action, true)}
+                  action={twoSame ? undefined : rowAction(b, b.keys[1], true)}
                   extra={
                     b.action.kind === "circ"
                       ? `서큘레이터 ${circN(b.action.circCount)}`
                       : undefined
                   }
                   cost={costText(b)}
-                  alts={twoSame ? undefined : altShort(b)}
+                  alts={twoSame ? undefined : altShort(b, b.keys[1])}
                   unit={i === 0}
                   selected={pickedTwo === b}
                 />
@@ -512,9 +575,29 @@ export function AbilityTab() {
           )}
           <Step
             n={preset.hunting ? 4 : 5}
-            title="다 떴는데 수치가 모자라면 → 서큘레이터"
-            note="서큘레이터는 잠근 줄 수치도 다시 굴림"
-          />
+            title="마지막 하나가 뜨면"
+            note={
+              finishRows.length > 0
+                ? undefined
+                : pickedTwo
+                  ? `${withTopic(ABILITY_OPTIONS[pickedTwo.keys[1]].short)} 잠그지 않음 · 다음 결과로 4단계부터 다시`
+                  : picked
+                    ? "위 단계대로 잠그면 이어서 보여 줌"
+                    : undefined
+            }
+          >
+            {finishRows.map((r, i) => (
+              <StepRow
+                key={r.id}
+                label={r.label}
+                tag={r.goal === huntGoal && pairOn ? hunt.label : undefined}
+                action={r.action}
+                extra={r.f.move === "circ" ? `서큘레이터 ${circN(r.f.circCount)}` : undefined}
+                cost={costNum(r.f) < 1 ? "0" : costText(r.f)}
+                unit={i === 0}
+              />
+            ))}
+          </Step>
         </div>
       </section>
     </div>

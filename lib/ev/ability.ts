@@ -221,12 +221,34 @@ export type PlanStep = PlanCost & {
   choices: PlanChoice[];
   /** Which goal the move works towards (index in the goals; one goal: always 0). */
   goal: number;
+  /** The line it showed up on (0 = the first line). The row assumes its value is below the goal. */
+  line: number;
+  /** The move when it already shows the wanted value, when that differs from going on (keep below it, lock at it). */
+  atGoal?: PlanAction;
+  /** What is left after the `atGoal` move. */
+  atGoalLeft?: PlanCost;
+  /** The steps after this one assume it showed up at the wanted value (below it, it is not kept). */
+  nextAtGoal?: boolean;
+  /** Only the last option of the goal is missing after this move: how the goal ends (one entry per kind of move). */
+  finish?: PlanFinish[];
+};
+
+/** The last missing option of a goal shows up: what to do when its value is below the goal, and what is left after. */
+export type PlanFinish = PlanCost & {
+  /** The options already on the ability, and the last one. */
+  locked: AbilityKey[];
+  last: AbilityKey;
+  /** Lines it can finish on (0 = the first line). */
+  lines: number[];
+  /** keep = reset on until it shows up at the wanted value, circ = circulators on every line of the goal, done = it is always at the value. */
+  move: "keep" | "circ" | "done";
+  circCount: number;
 };
 
 export type AbilityPlan = PlanCost & {
   /** Reset to use from scratch (nothing locked). */
   start: Method;
-  /** One wanted option shows up first on line 1 (in L1+U2 only a lead option can; the others on line 2). */
+  /** One wanted option shows up first on line 1 (in L1+U2 only the lead options, the others never count there). */
   afterFirst: (PlanStep & { key: AbilityKey })[];
   /** Same, but on line 2 or 3. */
   afterFirstLower: (PlanStep & { key: AbilityKey })[];
@@ -275,6 +297,11 @@ export type PlanOpts = {
  * Several goals (`tails` given): one ability made into whichever goal comes, and `tails[g]` is what is still to pay
  * after goal g (another preset made into the other goal). Locks stay within one goal.
  * Solved exactly by value iteration (locks only grow, flags only go to "met").
+ *
+ * Circulating early and circulating later often cost about the same on average, but a later circulation rerolls the
+ * lines circulated before, and those circulators are lost. So a circulation that rerolls a line already locked at the
+ * goal counts one circulator more when choosing (user, 2026-11-15: a guide that circulates and then circulates again
+ * for next to nothing is wrong to follow). The costs shown stay the real ones.
  */
 function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: PlanCost[]): AbilityPlan {
   const keys: AbilityKey[] = [];
@@ -395,24 +422,26 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: PlanCost[]): Abilit
     );
   };
 
-  /** next null = finished (goal = the goal finished). */
-  type Choice = { next: FState | null; circ: number; kind: PlanAction["kind"]; goal: number | null };
+  /** next null = finished (goal = the goal finished). pen = the reroll surcharge (for choosing only, not a cost). */
+  type Choice = { next: FState | null; circ: number; kind: PlanAction["kind"]; goal: number | null; pen: number };
   const valueOf = (c: Choice) =>
-    c.circ * circPrice + (c.next === null ? tailMoney(c.goal) : (V.get(c.next) ?? Infinity));
+    c.circ * circPrice + c.pen + (c.next === null ? tailMoney(c.goal) : (V.get(c.next) ?? Infinity));
   /** Every move after seeing `lines` from `s`; the first one is "keep going as is". */
   const candidates = (lines: Map<number, Line>, s: FState): Choice[] => {
-    const out: Choice[] = [{ next: s, circ: 0, kind: "keep", goal: null }];
+    const out: Choice[] = [{ next: s, circ: 0, kind: "keep", goal: null, pen: 0 }];
+    const locked = decF(s);
+    // Any circulation from here rerolls the locked lines; one already at the goal (and not always at it) is lost.
+    const pen = [...locked].some(([l, v]) => v.full && pFull(l, v.t) < 1) ? circPrice : 0;
     goals.forEach((_, g) => {
       if (!meets(lines, g)) return;
       const mine = [...lines].filter(([, v]) => goalOf[v.t] === g);
-      if (mine.every(([, v]) => v.full)) out.push({ next: null, circ: 0, kind: "keep", goal: g });
+      if (mine.every(([, v]) => v.full)) out.push({ next: null, circ: 0, kind: "keep", goal: g, pen: 0 });
       else if (circPrice > 0) {
         // All its options on the item: circulate every line until all of them meet the goal.
         const p = mine.reduce((x, [l, v]) => x * pFull(l, v.t), 1);
-        if (p > 0) out.push({ next: null, circ: 1 / p, kind: "circ", goal: g });
+        if (p > 0) out.push({ next: null, circ: 1 / p, kind: "circ", goal: g, pen });
       }
     });
-    const locked = decF(s);
     const lockedGoal = locked.size ? goalOf[[...locked.values()][0].t] : null;
     // Lock sets that keep the current locks and add wanted lines of one goal (at most two locks).
     const extra = [...lines.keys()].filter(
@@ -426,12 +455,12 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: PlanCost[]): Abilit
     for (const set of sets) {
       const X = new Map(locked);
       for (const l of set) X.set(l, lines.get(l)!);
-      if (set.length) out.push({ next: encF(X), circ: 0, kind: "lock", goal: null });
+      if (set.length) out.push({ next: encF(X), circ: 0, kind: "lock", goal: null, pen: 0 });
       if (circPrice > 0 && [...X.values()].some((v) => !v.full)) {
         // Circulators reroll every line, so all lines of X must meet the goal at once.
         const p = [...X].reduce((x, [l, v]) => x * pFull(l, v.t), 1);
         const met = new Map([...X].map(([l, v]) => [l, { t: v.t, full: true }]));
-        if (p > 0) out.push({ next: encF(met), circ: 1 / p, kind: "circ", goal: null });
+        if (p > 0) out.push({ next: encF(met), circ: 1 / p, kind: "circ", goal: null, pen });
       }
     }
     return out;
@@ -461,7 +490,7 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: PlanCost[]): Abilit
         for (const r of res) {
           const c = decide(r.lines, s);
           if (c.next === s) stay += r.p;
-          else sum += r.p * (c.circ * circPrice + (c.next === null ? tailMoney(c.goal) : V.get(c.next)!));
+          else sum += r.p * (c.circ * circPrice + c.pen + (c.next === null ? tailMoney(c.goal) : V.get(c.next)!));
         }
         const next = stay < 1 - 1e-15 ? sum / (1 - stay) : Infinity;
         if (next === v || Math.abs(next - v) <= 1e-12 * next) break;
@@ -558,16 +587,79 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: PlanCost[]): Abilit
     void _next;
     return rest;
   };
-  // One option first on line 1 (always legendary). L1+U2: only a lead option can sit there, the others show up on line 2.
-  const lineFor = (t: number) => (goalAt(t).mode === "l1u2" && !leadOK(t) ? 1 : 0);
-  const afterFirst = keys.map((key, t) => ({
-    key,
-    ...strip(after(new Map([[lineFor(t), fresh(lineFor(t), t)]]), goalOf[t])),
-  }));
+  /** Option t may count on this line (L1+U2: line 1 only for a lead option, lines 2 · 3 not for the sole lead). */
+  const canCount = (line: number, t: number) =>
+    goalAt(t).mode === "l3" || (line === 0 ? leadOK(t) : !soleLead(t));
+
+  /**
+   * From `s`, only one option of its goal is missing: the move when it shows up (below the wanted value, unless it is
+   * always at it) on each line where it finishes the goal. One entry per kind of move.
+   */
+  const finishFrom = (s: FState): PlanFinish[] | undefined => {
+    const L = decF(s);
+    if (!L.size) return undefined;
+    const g = goalOf[[...L.values()][0].t];
+    const have = new Set([...L.values()].map((v) => v.t));
+    const missing = keys.map((_, t) => t).filter((t) => goalOf[t] === g && !have.has(t));
+    if (missing.length !== 1) return undefined;
+    const c = missing[0];
+    const byMove = new Map<string, PlanFinish>();
+    for (const line of [0, 1, 2]) {
+      if (L.has(line) || !canCount(line, c)) continue;
+      const lines = new Map(L).set(line, fresh(line, c));
+      if (!meets(lines, g)) continue;
+      const d = decide(lines, s);
+      const move: PlanFinish["move"] = d.kind === "circ" ? "circ" : d.next === null ? "done" : "keep";
+      // Same move, same circulators (Codex review: what is left is counted after the move, like every other row).
+      const id = `${move}:${Math.round(d.circ * 1e6)}`;
+      const cur = byMove.get(id);
+      if (cur) cur.lines.push(line);
+      else
+        byMove.set(id, {
+          ...leftAfter(d),
+          locked: [...L.values()].map((v) => keys[v.t]),
+          last: keys[c],
+          lines: [line],
+          move,
+          circCount: d.circ,
+        });
+    }
+    return byMove.size ? [...byMove.values()] : undefined;
+  };
+
+  /**
+   * Option t shows up on `line` from state `from`, its value below the goal (unless it is always at it). Also the move
+   * when it shows the wanted value, if that is a different idea (keep below it, lock at it): then the steps after it
+   * follow that case. `finish` = how the goal ends when only its last option is left after the move.
+   */
+  const row = (from: FState, line: number, t: number) => {
+    const base = decF(from);
+    const below = new Map(base).set(line, fresh(line, t));
+    const r = after(below, goalOf[t], from);
+    let next = r.next;
+    let atGoal: PlanAction | undefined;
+    let atGoalLeft: PlanCost | undefined;
+    let nextAtGoal: boolean | undefined;
+    if (!below.get(line)!.full) {
+      const c = decide(new Map(base).set(line, { t, full: true }), from);
+      if (r.action.kind === "keep" && c.kind !== "keep") {
+        atGoal = actionOf(c);
+        atGoalLeft = leftAfter(c);
+        if (r.next === from) {
+          next = c.next;
+          nextAtGoal = true;
+        }
+      }
+    }
+    const finish = next !== null && next !== from ? finishFrom(next) : undefined;
+    return { ...r, next, line, atGoal, atGoalLeft, nextAtGoal, finish };
+  };
+
+  // One option first on line 1 (always legendary). In L1+U2 only a lead option counts there; the others are left out
+  // (on line 1 they are just rerolled).
+  const afterFirst = keys.flatMap((key, t) => (canCount(0, t) ? [{ key, ...strip(row("", 0, t)) }] : []));
   // One option first on line 2 (lines 2 and 3 behave the same). The one option that has to be line 1 cannot sit there.
-  const lowerFirst = keys.map((key, t) =>
-    soleLead(t) ? null : { key, t, ...after(new Map([[1, fresh(1, t)]]), goalOf[t]) },
-  );
+  const lowerFirst = keys.map((key, t) => (soleLead(t) ? null : { key, t, ...row("", 1, t) }));
   const afterFirstLower = lowerFirst
     .filter((x) => x !== null)
     .map((x) => {
@@ -584,18 +676,14 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: PlanCost[]): Abilit
   for (let first = 0; first < n; first++) {
     const done = lowerFirst[first];
     if (!done || goalAt(first).keys.length < 3) continue;
-    // Not kept (no lock): the next reset rerolls it, so there is no "second option" step after it (Codex review).
+    // Not kept (no lock, not even at the goal): the next reset rerolls it, so no "second option" step (Codex review).
     if (!done.next) continue;
     for (let second = 0; second < n; second++) {
       if (second === first || goalOf[second] !== goalOf[first]) continue;
       const secondLine = goalAt(second).mode === "l1u2" && soleLead(second) ? 0 : 2;
-      const from: FState = done.next ?? "";
-      const lines = from ? decF(from) : new Map<number, Line>();
-      if (!lines.has(1)) lines.set(1, fresh(1, first));
-      lines.set(secondLine, fresh(secondLine, second));
       afterTwo.push({
         keys: [keys[first], keys[second]],
-        ...strip(after(lines, goalOf[first], from)),
+        ...strip(row(done.next, secondLine, second)),
       });
     }
   }
