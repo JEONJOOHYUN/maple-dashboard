@@ -1,8 +1,10 @@
 "use client";
 
-import type { ComponentProps, ReactNode } from "react";
+import { useRef, type ComponentProps, type ReactNode } from "react";
 import { ChevronDown, Package } from "lucide-react";
 import { eok } from "@/components/ev/ui";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import type { EventRound } from "@/lib/enhance/events";
 import type { ItemInfo } from "@/lib/enhance/items";
 import type { SkipReason } from "@/lib/enhance/judge";
 import type { SfRow } from "@/lib/enhance/parse";
@@ -32,6 +34,45 @@ export const SKIP_LABEL: Record<SkipReason, string> = {
 
 export function Card({ className, children }: { className?: string; children: ReactNode }) {
   return <section className={cn("min-w-0 rounded-lg border border-border bg-card", className)}>{children}</section>;
+}
+
+/** How many rows a ranking card shows; the rest are in its window. */
+export const RANK_TOP = 3;
+
+/**
+ * A ranking card's title, with "더보기" on the right when the list is longer than the card shows (user, 2026-11-14).
+ * In the title row so the button sits at the same height on every card of a row, whatever their lengths.
+ */
+export function RankHead({ title, more, onMore }: { title: string; more: boolean; onMore: () => void }) {
+  return (
+    <div className="flex items-center justify-between gap-2 px-4 pt-3.5 pb-2">
+      <h2 className="text-sm font-bold">{title}</h2>
+      {more && (
+        <button type="button" onClick={onMore} className="rounded-sm text-xs font-semibold text-primary-text outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50">
+          더보기
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** The whole ranking a card shows the top of, in a window like an item's; a row opens that item (user, 2026-11-14). */
+export function RankDialog({ title, count, open, onClose, children }: { title: string; count: number; open: boolean; onClose: () => void; children: ReactNode }) {
+  // Focus goes to the list, not to its first row.
+  const listRef = useRef<HTMLDivElement>(null);
+  return (
+    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
+      <DialogContent initialFocus={listRef} className="flex max-h-[86vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg" data-clarity-mask="true">
+        <div className="flex flex-col gap-1 border-b border-border p-4 pr-12">
+          <DialogTitle className="text-base leading-tight font-bold">{title}</DialogTitle>
+          <DialogDescription className="text-xs">{count.toLocaleString("ko-KR")}개 · 누르면 그 아이템의 내역</DialogDescription>
+        </div>
+        <div ref={listRef} tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto outline-none [&>*:first-child]:border-t-0">
+          {children}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 export function Delta({ v, className }: { v: number; className?: string }) {
@@ -103,6 +144,21 @@ export function ItemIcon({ info, size = 36 }: { info: ItemInfo; size?: number })
         <Package className="size-4" aria-hidden="true" />
       )}
     </span>
+  );
+}
+
+/** 모아보기 event round pick: "모든 기록" or one round. Hidden while there are no rounds. */
+export function RoundSelect({ rounds, value, onChange }: { rounds: EventRound[]; value: string; onChange: (id: string) => void }) {
+  if (rounds.length === 0) return null;
+  return (
+    <Select aria-label="이벤트 회차" value={value} onChange={(e) => onChange(e.target.value)} className="max-w-[240px] bg-card">
+      <option value="">모든 기록</option>
+      {rounds.map((r) => (
+        <option key={r.id} value={r.id}>
+          {r.label}
+        </option>
+      ))}
+    </Select>
   );
 }
 

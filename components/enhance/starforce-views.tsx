@@ -1,16 +1,17 @@
 "use client";
 
-import { useRef, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, Package, Pencil } from "lucide-react";
 import { NumberField, Segment, eok, parseNum } from "@/components/ev/ui";
 import { CARD_PAGE, ItemFilter, NO_ITEM_FILTER, ROW_PAGE, itemMatches, liveFilter } from "@/components/enhance/board-bits";
-import { CHIP, Card, Delta, Empty, Gauge, ItemIcon, PickedTotal, SKIP_LABEL, Select, Tile, TryBadges, signed, signedShort, tone } from "@/components/enhance/parts";
+import { CHIP, Card, Delta, Empty, Gauge, ItemIcon, PickedTotal, RANK_TOP, RankDialog, RankHead, RoundSelect, SKIP_LABEL, Select, Tile, TryBadges, signed, signedShort, tone } from "@/components/enhance/parts";
 import { Pager, usePage } from "@/components/pager";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import type { ItemOverrides } from "@/lib/enhance/items";
 import { starAfter } from "@/lib/enhance/judge";
 import { dayStart, kstFull, kstShort, kstWeekday } from "@/lib/enhance/kst";
-import { entryKey, reachedFloor, type Entry, type ItemStat, type Stats, type Tally } from "@/lib/enhance/stats";
+import { eventRounds, inRound, starEventKind, starEventOn, type EventRound } from "@/lib/enhance/events";
+import { buildStats, entryKey, reachedFloor, type Entry, type ItemStat, type Stats, type Tally } from "@/lib/enhance/stats";
 import { FLOOR_STAR } from "@/lib/ev/starforce";
 import { cn } from "@/lib/utils";
 
@@ -57,7 +58,10 @@ const itemBox = (label: string, it: ItemStat | undefined, onOpen: (key: string) 
     ? { label, title: it.item, value: it.delta, sub: `${it.judged.toLocaleString("ko-KR")}회 · 파괴 ${it.destroy} · 사용 ${eok(it.spent)}`, onOpen: () => onOpen(it.key) }
     : { label, title: "해당 없음", value: null, sub: "" };
 
-/** Top three items of one kind: `sub` goes under the name after the character, `value` on the right in `color`. */
+/**
+ * The items of one ranking, best first: the card shows the top three, "더보기" opens the whole list (user,
+ * 2026-11-14). `sub` goes under the name after the character, `value` on the right in `color`.
+ */
 function RankCard({
   title,
   empty,
@@ -75,30 +79,39 @@ function RankCard({
   color: string;
   onOpen: (key: string) => void;
 }) {
+  const [all, setAll] = useState(false);
+  // The window's list runs past 9: room for two digits there.
+  const row = (it: ItemStat, i: number, wide = false) => (
+    <button
+      key={it.key}
+      type="button"
+      onClick={() => (setAll(false), onOpen(it.key))}
+      className={cn(
+        "grid w-full items-center gap-2.5 border-t border-border px-4 py-2.5 text-left outline-none hover:bg-muted/60 focus-visible:ring-3 focus-visible:ring-ring/50",
+        wide ? "grid-cols-[30px_minmax(0,1fr)_auto]" : "grid-cols-[18px_minmax(0,1fr)_auto]"
+      )}
+    >
+      <b className="font-num text-[15px] text-muted-foreground">{i + 1}</b>
+      <span className="flex min-w-0 items-center gap-2.5">
+        <ItemIcon info={it.info} />
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <b className="truncate text-sm">{it.item}</b>
+          <span className="text-xs text-muted-foreground">
+            {it.who} · {sub(it)}
+          </span>
+        </span>
+      </span>
+      <b className={cn("font-num text-sm whitespace-nowrap", color)}>{value(it)}</b>
+    </button>
+  );
   return (
     <Card className="overflow-hidden">
-      <h2 className="px-4 pt-3.5 pb-2 text-sm font-bold">{title}</h2>
+      <RankHead title={title} more={items.length > RANK_TOP} onMore={() => setAll(true)} />
       {items.length === 0 && <p className="border-t border-border px-4 py-6 text-center text-[13px] text-muted-foreground">{empty}</p>}
-      {items.map((it, i) => (
-        <button
-          key={it.key}
-          type="button"
-          onClick={() => onOpen(it.key)}
-          className="grid w-full grid-cols-[18px_minmax(0,1fr)_auto] items-center gap-2.5 border-t border-border px-4 py-2.5 text-left outline-none hover:bg-muted/60 focus-visible:ring-3 focus-visible:ring-ring/50"
-        >
-          <b className="font-num text-[15px] text-muted-foreground">{i + 1}</b>
-          <span className="flex min-w-0 items-center gap-2.5">
-            <ItemIcon info={it.info} />
-            <span className="flex min-w-0 flex-col gap-0.5">
-              <b className="truncate text-sm">{it.item}</b>
-              <span className="text-xs text-muted-foreground">
-                {it.who} · {sub(it)}
-              </span>
-            </span>
-          </span>
-          <b className={cn("font-num text-sm whitespace-nowrap", color)}>{value(it)}</b>
-        </button>
-      ))}
+      {items.slice(0, RANK_TOP).map((it, i) => row(it, i))}
+      <RankDialog title={title} count={items.length} open={all} onClose={() => setAll(false)}>
+        {items.map((it, i) => row(it, i, true))}
+      </RankDialog>
     </Card>
   );
 }
@@ -107,19 +120,10 @@ export function InsightView({ stats, onOpen }: { stats: Stats; onOpen: (key: str
   const judged = stats.items.filter((it) => it.judged > 0);
   const best = judged.filter((it) => it.delta > 0).sort((a, b) => b.delta - a.delta)[0];
   const worst = judged.filter((it) => it.delta < 0).sort((a, b) => a.delta - b.delta)[0];
-  // A run of one is not a streak.
-  const wins = stats.items
-    .filter((it) => it.win.n > 1)
-    .sort((a, b) => b.win.n - a.win.n || b.win.to - a.win.to)
-    .slice(0, 3);
-  const booms = stats.items
-    .filter((it) => it.destroy > 0)
-    .sort((a, b) => b.destroy - a.destroy || a.tries - b.tries)
-    .slice(0, 3);
-  const fails = stats.items
-    .filter((it) => it.streak.n > 1)
-    .sort((a, b) => b.streak.n - a.streak.n || b.streak.star - a.streak.star)
-    .slice(0, 3);
+  // A run of one is not a streak. Whole lists: the cards show the top three.
+  const wins = stats.items.filter((it) => it.win.n > 1).sort((a, b) => b.win.n - a.win.n || b.win.to - a.win.to);
+  const booms = stats.items.filter((it) => it.destroy > 0).sort((a, b) => b.destroy - a.destroy || a.tries - b.tries);
+  const fails = stats.items.filter((it) => it.streak.n > 1).sort((a, b) => b.streak.n - a.streak.n || b.streak.star - a.streak.star);
   const peak = Math.max(1, ...stats.weekdays.map(Math.abs));
 
   return (
@@ -277,6 +281,7 @@ type Sort = "spent" | "delta" | "recent";
 
 export function ItemsView({
   stats,
+  entries,
   overrides,
   onOverrides,
   onOpen,
@@ -284,26 +289,40 @@ export function ItemsView({
   onHideLow,
 }: {
   stats: Stats;
+  entries: Entry[];
   overrides: ItemOverrides;
   onOverrides: (next: ItemOverrides) => void;
-  onOpen: (key: string) => void;
+  /** `round` = the picked event round: the window then counts the same tries as the card. */
+  onOpen: (key: string, round?: EventRound) => void;
   hideLow: boolean;
   onHideLow: (v: boolean) => void;
 }) {
   const [sort, setSort] = useState<Sort>("spent");
   const [editing, setEditing] = useState("");
   const [picked, setFilter] = useState(NO_ITEM_FILTER);
+  // One character, as in the 강화 내역 (user, 2026-11-14): the item list next to it follows it.
+  const [pickedWho, setWho] = useState("");
+  // One event round (user, 2026-11-14: "회차별"): the cards count only the event tries of that round.
+  const rounds = useMemo(() => eventRounds(entries, (e) => e.row.t, (e) => starEventKind(e.row)), [entries]);
+  const [roundId, setRound] = useState("");
+  const round = rounds.find((r) => r.id === roundId);
+  const inRoundList = useMemo(() => (round ? entries.filter((e) => inRound(round, e.row.t, starEventOn(e.row))) : null), [round, entries]);
+  const shown = useMemo(() => (inRoundList ? buildStats(inRoundList) : stats), [inRoundList, stats]);
   // Items whose level is unknown come first: they are the ones waiting for an answer.
   const unknown = (it: ItemStat) => (it.info.level > 0 ? 0 : 1);
-  const visible = stats.items.filter((it) => !hideLow || reachedFloor(it));
-  const names = visible.map((it) => it.item);
+  const visible = shown.items.filter((it) => !hideLow || reachedFloor(it));
+  const characters = [...new Set(visible.map((it) => it.who))].sort((a, b) => a.localeCompare(b, "ko"));
+  // A character with nothing left on screen (another period, the low-star switch) is dropped, like a picked item.
+  const who = characters.includes(pickedWho) ? pickedWho : "";
+  const ofWho = visible.filter((it) => !who || it.who === who);
+  const names = ofWho.map((it) => it.item);
   const filter = liveFilter(picked, names);
-  const items = visible
+  const items = ofWho
     .filter((it) => itemMatches(it.item, filter))
     .sort(
     (a, b) => unknown(b) - unknown(a) || (sort === "spent" ? b.spent - a.spent : sort === "delta" ? b.delta - a.delta : b.last - a.last) || b.tries - a.tries
   );
-  const pager = usePage(`${sort}|${hideLow}|${filter.picked}|${filter.query}`, items.length, CARD_PAGE);
+  const pager = usePage(`${round?.id ?? ""}|${sort}|${hideLow}|${who}|${filter.picked}|${filter.query}`, items.length, CARD_PAGE);
   const top = useRef<HTMLDivElement>(null);
 
   return (
@@ -313,10 +332,17 @@ export function ItemsView({
           아이템별 모아보기 <span className="font-medium text-muted-foreground">{items.length}개</span>
         </b>
         <span className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <RoundSelect rounds={rounds} value={round?.id ?? ""} onChange={setRound} />
           <label className="inline-flex items-center gap-1.5 text-[13px]">
             <input type="checkbox" checked={hideLow} onChange={(e) => onHideLow(e.target.checked)} className="size-4 accent-primary" />
             12성 미만 숨기기
           </label>
+          <Select aria-label="캐릭터" value={who} onChange={(e) => setWho(e.target.value)} className="max-w-[160px] bg-card">
+            <option value="">모든 캐릭터</option>
+            {characters.map((c) => (
+              <option key={c}>{c}</option>
+            ))}
+          </Select>
           <ItemFilter names={names} value={filter} onChange={setFilter} />
           <Select aria-label="정렬" value={sort} onChange={(e) => setSort(e.target.value as Sort)} className="bg-card">
             <option value="spent">많이 쓴 순</option>
@@ -344,7 +370,7 @@ export function ItemsView({
               <button
                 type="button"
                 aria-label={`${it.item} 강화 내역 보기`}
-                onClick={() => onOpen(it.key)}
+                onClick={() => onOpen(it.key, round)}
                 className="absolute inset-0 rounded-lg outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
               />
               <span className="absolute top-3.5 left-3.5 text-xs text-muted-foreground">

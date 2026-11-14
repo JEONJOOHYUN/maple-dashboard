@@ -1,5 +1,6 @@
 // Everything the star force views show, counted in one pass over the tries of the chosen period.
 import { FLOOR_STAR } from "../ev/starforce.ts";
+import { starEventOn } from "./events.ts";
 import type { ItemInfo } from "./items.ts";
 import { itemKey, starAfter, type Judged, type SkipReason } from "./judge.ts";
 import { kstDate, kstWeekday } from "./kst.ts";
@@ -190,7 +191,8 @@ export function buildStats(entries: Entry[]): Stats {
     o[row.r]++;
 
     weekdays[kstWeekday(row.t)] += j.delta;
-    const on = row.set !== "none" || row.sr > 0 || row.plus > 0;
+    // The same line the 모아보기 event rounds use (events.ts).
+    const on = starEventOn(row);
     const side = on ? event : plain;
     side.tries++;
     side.spent += j.cost;

@@ -1,14 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Package, Split } from "lucide-react";
 import { NumberField, eok, parseNum } from "@/components/ev/ui";
 import { BasisButton, BasisRow, CARD_PAGE, ItemFilter, NO_ITEM_FILTER, PeriodBar, ROW_PAGE, SyncBanners, ViewTabs, WorldStrip, itemMatches, liveFilter, useGroupsOff, useKnownGroups, usePeriod, useSync } from "@/components/enhance/board-bits";
-import { Card, Delta, Empty, Gauge, ItemIcon, PickedTotal, Select, Tile, signed } from "@/components/enhance/parts";
+import { Card, Delta, Empty, Gauge, ItemIcon, PickedTotal, RANK_TOP, RankDialog, RankHead, RoundSelect, Select, Tile, signed } from "@/components/enhance/parts";
 import { Pager, usePage } from "@/components/pager";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { useItemDict, type Rolled } from "@/components/enhance/use-item-dict";
 import { useInsights, useWorldOf, useXenons } from "@/components/enhance/use-worlds";
+import { eventRounds, inRound, type EventRound } from "@/lib/enhance/events";
 import { itemIcon, type ItemInfo } from "@/lib/enhance/items";
 import { DAY, dayStart, kstFull, kstShort, kstStamp } from "@/lib/enhance/kst";
 import { buildPotStats, potEntries, potEntryKey, type PieceStat, type PotEntry } from "@/lib/enhance/pot-stats";
@@ -265,8 +266,48 @@ function PieceDialog({ piece, entries, found, onClose }: { piece: PieceStat | nu
   );
 }
 
-/** `css` = the colour of the value on the right. */
+/** `css` = the colour of the value on the right. `pieces` = the whole ranking, best first. */
 type Rank = { title: string; empty: string; pieces: PieceStat[]; value: (p: PieceStat) => string; sub: (p: PieceStat) => string; css?: string };
+
+/** One ranking: the top three on the card, "더보기" opens the whole list (user, 2026-11-14). */
+function RankCard({ rank, found, onOpen }: { rank: Rank; found: Icons; onOpen: (key: string) => void }) {
+  const [all, setAll] = useState(false);
+  // The window's list runs past 9: room for two digits there.
+  const row = (p: PieceStat, i: number, wide = false) => (
+    <button
+      key={p.key}
+      type="button"
+      onClick={() => (setAll(false), onOpen(p.key))}
+      className={cn(
+        "grid w-full items-center gap-2.5 border-t border-border px-4 py-2.5 text-left outline-none hover:bg-muted/60 focus-visible:ring-3 focus-visible:ring-ring/50",
+        wide ? "grid-cols-[30px_minmax(0,1fr)_auto]" : "grid-cols-[18px_minmax(0,1fr)_auto]"
+      )}
+    >
+      <b className="font-num text-[15px] text-muted-foreground">{i + 1}</b>
+      <span className="flex min-w-0 items-center gap-2.5">
+        <ItemIcon info={iconOf(p.item, p.level, found)} />
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <b className="truncate text-sm">{p.item}</b>
+          <span className="truncate text-xs text-muted-foreground">
+            {kindLabel(p)}
+            {p.of > 1 && ` ${p.n}번째`} · {rank.sub(p)}
+          </span>
+        </span>
+      </span>
+      <b className={cn("font-num text-sm whitespace-nowrap", rank.css)}>{rank.value(p)}</b>
+    </button>
+  );
+  return (
+    <Card className="overflow-hidden">
+      <RankHead title={rank.title} more={rank.pieces.length > RANK_TOP} onMore={() => setAll(true)} />
+      {rank.pieces.length === 0 && <p className="border-t border-border px-4 py-6 text-center text-[13px] text-muted-foreground">{rank.empty}</p>}
+      {rank.pieces.slice(0, RANK_TOP).map((p, i) => row(p, i))}
+      <RankDialog title={rank.title} count={rank.pieces.length} open={all} onClose={() => setAll(false)}>
+        {rank.pieces.map((p, i) => row(p, i, true))}
+      </RankDialog>
+    </Card>
+  );
+}
 
 /** Lucky and unlucky item, main vs additional potential, and the items that took the most meso, resets and cubes. */
 function PotInsight({ stats, found, onOpen }: { stats: ReturnType<typeof buildPotStats>; found: Icons; onOpen: (key: string) => void }) {
@@ -278,16 +319,10 @@ function PotInsight({ stats, found, onOpen }: { stats: ReturnType<typeof buildPo
     const list = stats.pieces.filter((p) => kindOf(p) === which);
     return { resets: list.reduce((n, p) => n + p.resets, 0), cubes: list.reduce((n, p) => n + p.rolls - p.resets, 0), spent: list.reduce((n, p) => n + p.spent, 0) };
   };
-  const top = (pick: (p: PieceStat) => number) =>
-    stats.pieces
-      .filter((p) => pick(p) > 0)
-      .sort((a, b) => pick(b) - pick(a))
-      .slice(0, 3);
+  // Whole lists: the cards show the top three.
+  const top = (pick: (p: PieceStat) => number) => stats.pieces.filter((p) => pick(p) > 0).sort((a, b) => pick(b) - pick(a));
   // Meso, cubes, and the luckiest: the most profit against the average (user, 2026-11-13).
-  const lucky = stats.pieces
-    .filter((p) => p.delta !== null && p.delta > 0)
-    .sort((a, b) => b.delta! - a.delta!)
-    .slice(0, 3);
+  const lucky = stats.pieces.filter((p) => p.delta !== null && p.delta > 0).sort((a, b) => b.delta! - a.delta!);
   const ranks: Rank[] = [
     { title: "메소를 많이 쓴 아이템", empty: "사용 메소 없음", pieces: top((p) => p.spent), value: (p) => eok(p.spent), sub: (p) => `재설정 ${rolls(p.resets)}` },
     { title: "큐브를 많이 쓴 아이템", empty: "큐브 사용 없음", pieces: top((p) => p.rolls - p.resets), value: (p) => `${(p.rolls - p.resets).toLocaleString("ko-KR")}개`, sub: (p) => p.types.find((t) => !t.includes("재설정")) ?? "" },
@@ -347,31 +382,7 @@ function PotInsight({ stats, found, onOpen }: { stats: ReturnType<typeof buildPo
       </div>
       <div className="grid items-start gap-3.5 lg:grid-cols-2 xl:grid-cols-3">
         {ranks.map((rank) => (
-          <Card key={rank.title} className="overflow-hidden">
-            <h2 className="px-4 pt-3.5 pb-2 text-sm font-bold">{rank.title}</h2>
-            {rank.pieces.length === 0 && <p className="border-t border-border px-4 py-6 text-center text-[13px] text-muted-foreground">{rank.empty}</p>}
-            {rank.pieces.map((p, i) => (
-              <button
-                key={p.key}
-                type="button"
-                onClick={() => onOpen(p.key)}
-                className="grid w-full grid-cols-[18px_minmax(0,1fr)_auto] items-center gap-2.5 border-t border-border px-4 py-2.5 text-left outline-none hover:bg-muted/60 focus-visible:ring-3 focus-visible:ring-ring/50"
-              >
-                <b className="font-num text-[15px] text-muted-foreground">{i + 1}</b>
-                <span className="flex min-w-0 items-center gap-2.5">
-                  <ItemIcon info={iconOf(p.item, p.level, found)} />
-                  <span className="flex min-w-0 flex-col gap-0.5">
-                    <b className="truncate text-sm">{p.item}</b>
-                    <span className="truncate text-xs text-muted-foreground">
-                      {kindLabel(p)}
-                      {p.of > 1 && ` ${p.n}번째`} · {rank.sub(p)}
-                    </span>
-                  </span>
-                </span>
-                <b className={cn("font-num text-sm whitespace-nowrap", rank.css)}>{rank.value(p)}</b>
-              </button>
-            ))}
-          </Card>
+          <RankCard key={rank.title} rank={rank} found={found} onOpen={onOpen} />
         ))}
       </div>
     </>
@@ -380,18 +391,43 @@ function PotInsight({ stats, found, onOpen }: { stats: ReturnType<typeof buildPo
 
 type Sort = "spent" | "delta" | "recent";
 
-function PiecesView({ pieces, found, onOpen }: { pieces: PieceStat[]; found: Icons; onOpen: (key: string) => void }) {
+function PiecesView({
+  pieces: all,
+  entries,
+  build,
+  found,
+  onOpen,
+}: {
+  pieces: PieceStat[];
+  entries: PotEntry[];
+  build: (list: PotEntry[]) => PieceStat[];
+  found: Icons;
+  /** `round` = the picked 미라클 타임 round: the window then counts the same rolls as the card. */
+  onOpen: (key: string, round?: EventRound) => void;
+}) {
   const [sort, setSort] = useState<Sort>("spent");
+  // One 미라클 타임 round (user, 2026-11-14: "회차별"): the cards count only the miracle-time rolls of that round.
+  const rounds = useMemo(() => eventRounds(entries, (e) => e.row.t, (e) => (e.row.mt ? "미라클 타임" : "")), [entries]);
+  const [roundId, setRound] = useState("");
+  const round = rounds.find((r) => r.id === roundId);
+  const inRoundList = useMemo(() => (round ? entries.filter((e) => inRound(round, e.row.t, e.row.mt)) : null), [round, entries]);
+  const pieces = useMemo(() => (inRoundList ? build(inRoundList) : all), [inRoundList, build, all]);
   const [picked, setFilter] = useState(NO_ITEM_FILTER);
   // 잠재능력 · 에디셔널 · 소울: "" = all of them. The item list follows the kind picked.
   const [kind, setKind] = useState<PotKind | "">("");
+  // One character, as in the 재설정 내역 (user, 2026-11-14): the item list follows it too.
+  const [pickedWho, setWho] = useState("");
   const ofKind = pieces.filter((p) => !kind || kindOf(p) === kind);
-  const names = ofKind.map((p) => p.item);
+  const characters = [...new Set(ofKind.map((p) => p.who))].sort((a, b) => a.localeCompare(b, "ko"));
+  // A character with nothing of this kind (or this period) is dropped, like a picked item.
+  const who = characters.includes(pickedWho) ? pickedWho : "";
+  const ofWho = ofKind.filter((p) => !who || p.who === who);
+  const names = ofWho.map((p) => p.item);
   const filter = liveFilter(picked, names);
-  const list = ofKind
+  const list = ofWho
     .filter((p) => itemMatches(p.item, filter))
     .sort((a, b) => (sort === "spent" ? b.spent - a.spent : sort === "delta" ? (b.delta ?? -Infinity) - (a.delta ?? -Infinity) : b.last - a.last) || b.rolls - a.rolls);
-  const pager = usePage(`${sort}|${kind}|${filter.picked}|${filter.query}`, list.length, CARD_PAGE);
+  const pager = usePage(`${round?.id ?? ""}|${sort}|${kind}|${who}|${filter.picked}|${filter.query}`, list.length, CARD_PAGE);
   const top = useRef<HTMLDivElement>(null);
   return (
     <>
@@ -400,6 +436,7 @@ function PiecesView({ pieces, found, onOpen }: { pieces: PieceStat[]; found: Ico
           아이템별 모아보기 <span className="font-medium text-muted-foreground">{list.length}개</span>
         </b>
         <span className="flex flex-wrap items-center gap-2">
+          <RoundSelect rounds={rounds} value={round?.id ?? ""} onChange={setRound} />
           {/* The kind comes first: the item list next to it holds the items of that kind (user, 2026-11-13). */}
           <Select aria-label="종류" value={kind} onChange={(e) => setKind(e.target.value as PotKind | "")} className="bg-card">
             <option value="">모든 종류</option>
@@ -407,6 +444,12 @@ function PiecesView({ pieces, found, onOpen }: { pieces: PieceStat[]; found: Ico
               <option key={k} value={k}>
                 {KIND_LABEL[k]}
               </option>
+            ))}
+          </Select>
+          <Select aria-label="캐릭터" value={who} onChange={(e) => setWho(e.target.value)} className="max-w-[160px] bg-card">
+            <option value="">모든 캐릭터</option>
+            {characters.map((c) => (
+              <option key={c}>{c}</option>
             ))}
           </Select>
           <ItemFilter names={names} value={filter} onChange={setFilter} />
@@ -423,7 +466,7 @@ function PiecesView({ pieces, found, onOpen }: { pieces: PieceStat[]; found: Ico
       {list.length === 0 && <Empty>해당 아이템 없음</Empty>}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {list.slice(pager.from, pager.to).map((piece) => (
-          <PieceCard key={piece.key} piece={piece} found={found} onOpen={() => onOpen(piece.key)} />
+          <PieceCard key={piece.key} piece={piece} found={found} onOpen={() => onOpen(piece.key, round)} />
         ))}
       </div>
       <Pager page={pager.page} pages={pager.pages} onPage={pager.go} anchor={top} />
@@ -494,6 +537,10 @@ export function PotentialBoard({ apiKey, account, onForget, switcher }: { apiKey
   const [convText] = useStored<ConvText>("ev:statConv", {});
   const conv = useMemo(() => convFromText(convText, STAT_CONV_DEFAULT), [convText]);
   const [openPiece, setOpenPiece] = useState("");
+  // The 미라클 타임 round the open window counts, when it was opened from one in 모아보기. Its rolls are taken from
+  // the current entries on every update, so rolls, fees and worlds that arrive later show up in it too.
+  const [openRound, setOpenRound] = useState<EventRound | null>(null);
+  const openWith = (key: string, round?: EventRound) => (setOpenRound(round ?? null), setOpenPiece(key));
 
   const [sync] = useState(() => new PotentialSync(apiKey, account));
   const { snap, loading, refresh } = useSync(sync, from, to, PotentialSync.serverSnapshot);
@@ -550,6 +597,9 @@ export function PotentialBoard({ apiKey, account, onForget, switcher }: { apiKey
   // All stat % is main stat for every job but Xenon: which characters are one comes with the account's list.
   const xenons = useXenons(apiKey, account);
   const stats = useMemo(() => buildPotStats(entries, conv, xenons), [entries, conv, xenons]);
+  const buildPieces = useCallback((list: PotEntry[]) => buildPotStats(list, conv, xenons).pieces, [conv, xenons]);
+  const openEntries = useMemo(() => (openRound ? entries.filter((e) => inRound(openRound, e.row.t, e.row.mt)) : entries), [openRound, entries]);
+  const openPieces = useMemo(() => (openRound ? buildPieces(openEntries) : stats.pieces), [openRound, openEntries, buildPieces, stats.pieces]);
 
   const tiles = [
     { label: "재설정", value: rolls(stats.resets) },
@@ -629,10 +679,10 @@ export function PotentialBoard({ apiKey, account, onForget, switcher }: { apiKey
 
           <ViewTabs views={VIEWS} value={view} onChange={setView} />
 
-          {view === "insight" && <PotInsight stats={stats} found={icons} onOpen={setOpenPiece} />}
+          {view === "insight" && <PotInsight stats={stats} found={icons} onOpen={openWith} />}
           {view === "log" && <RollsView entries={entries} characters={stats.characters} found={icons} />}
-          {view === "items" && <PiecesView pieces={stats.pieces} found={icons} onOpen={setOpenPiece} />}
-          <PieceDialog key={openPiece} piece={stats.pieces.find((p) => p.key === openPiece) ?? null} entries={entries} found={icons} onClose={() => setOpenPiece("")} />
+          {view === "items" && <PiecesView pieces={stats.pieces} entries={entries} build={buildPieces} found={icons} onOpen={openWith} />}
+          <PieceDialog key={openPiece} piece={openPieces.find((p) => p.key === openPiece) ?? null} entries={openEntries} found={icons} onClose={() => setOpenPiece("")} />
         </>
       )}
     </div>

@@ -11,6 +11,7 @@ import { resolveItem, type ItemInfo, type ItemOverrides } from "@/lib/enhance/it
 import { NO_DISCOUNT, judge, trackCopies, type Discount } from "@/lib/enhance/judge";
 import type { MvpGrade } from "@/lib/ev/starforce";
 import { DAY, dayStart, kstStamp } from "@/lib/enhance/kst";
+import { inRound, starEventOn, type EventRound } from "@/lib/enhance/events";
 import { buildStats, reachedFloor, type Entry } from "@/lib/enhance/stats";
 import { StarforceSync } from "@/lib/enhance/sync";
 import { groupTallies, worldGroup } from "@/lib/enhance/worlds";
@@ -47,6 +48,10 @@ export function StarforceBoard({ apiKey, account, onForget, switcher }: { apiKey
   const [groupsOff, toggleGroup] = useGroupsOff();
   /** Key of the item whose tries are open in the window ("" = closed). */
   const [openItem, setOpenItem] = useState("");
+  // The round the open window counts, when it was opened from one in 모아보기. Its tries are taken from the current
+  // entries on every update, so rows that arrive while the window is open show up in it too.
+  const [openRound, setOpenRound] = useState<EventRound | null>(null);
+  const openWith = (key: string, round?: EventRound) => (setOpenRound(round ?? null), setOpenItem(key));
   const [overrides, setOverrides] = useStored<ItemOverrides>("enhance:items", NO_OVERRIDES);
   // The API does not say which discounts a try had, so the user sets them once for every try. They belong to the
   // account (a friend's MVP grade is not mine); the setting made before keys could be changed is where each starts.
@@ -80,6 +85,8 @@ export function StarforceBoard({ apiKey, account, onForget, switcher }: { apiKey
   const groups = useKnownGroups(account, tallies);
   const entries = useMemo(() => judged.filter((e) => !groupsOff.includes(worldGroup(e.row.world))), [judged, groupsOff]);
   const stats = useMemo(() => buildStats(entries), [entries]);
+  const openEntries = useMemo(() => (openRound ? entries.filter((e) => inRound(openRound, e.row.t, starEventOn(e.row))) : entries), [openRound, entries]);
+  const openStats = useMemo(() => (openRound ? buildStats(openEntries) : stats), [openRound, openEntries, stats]);
 
   const unknown = stats.items.filter((it) => it.info.level <= 0);
   const noLevel = unknown.length;
@@ -177,11 +184,11 @@ export function StarforceBoard({ apiKey, account, onForget, switcher }: { apiKey
 
           <ViewTabs views={VIEWS} value={view} onChange={setView} />
 
-          {view === "insight" && <InsightView stats={stats} onOpen={setOpenItem} />}
+          {view === "insight" && <InsightView stats={stats} onOpen={openWith} />}
           {view === "log" && <LogView entries={entries} characters={stats.characters} hideLow={hideLow} onHideLow={setHideLow} />}
-          {view === "items" && <ItemsView stats={stats} overrides={overrides} onOverrides={setOverrides} onOpen={setOpenItem} hideLow={hideLow} onHideLow={setHideLow} />}
+          {view === "items" && <ItemsView stats={stats} entries={entries} overrides={overrides} onOverrides={setOverrides} onOpen={openWith} hideLow={hideLow} onHideLow={setHideLow} />}
           {view === "cal" && <CalendarView stats={stats} from={from} to={to} />}
-          <ItemDialog key={openItem} item={stats.items.find((it) => it.key === openItem) ?? null} entries={entries} onClose={() => setOpenItem("")} />
+          <ItemDialog key={openItem} item={openStats.items.find((it) => it.key === openItem) ?? null} entries={openEntries} onClose={() => setOpenItem("")} />
         </>
       )}
     </div>
