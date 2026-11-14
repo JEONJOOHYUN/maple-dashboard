@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { MESO_MARKET_FEE_RATE, computeBossSplit } from "./boss-split-math.ts";
+import { MESO_MARKET_FEE_RATE, computeBossSplit, wholeMeso } from "./boss-split-math.ts";
 
 const near = (a: number, b: number, label: string) => assert.ok(Math.abs(a - b) < 1e-6, `${label}: ${a} vs ${b}`);
 
@@ -35,4 +35,37 @@ test("the leader's own flag is ignored, custom ratios keep their proportions, em
   near(a[2].finalMeso / a[0].finalMeso, 0.2 / 0.5, "ratio kept for the same-server member");
   near(a[0].beforeMeso, a[0].finalMeso, "leader keeps the share as is");
   assert.deepEqual(computeBossSplit(0, [0.5, 0.5], 0.05, [false, true]).map((s) => s.beforeMeso), [0, 0]);
+});
+
+/** The exact amount each card stands for: the leader's final share, each member's amount out of the net. */
+const exactOf = (shares: ReturnType<typeof computeBossSplit>) => shares.map((s, i) => (i === 0 ? s.finalMeso : s.beforeMeso));
+
+test("whole meso: the cards add up to the net, each within a meso of its exact amount", () => {
+  for (const [ratios, other] of [
+    [[0.2, 0.2, 0.2, 0.2, 0.2], [false, false, true, false, false]],
+    [[0.5, 0.5], [false, true]],
+    [[1 / 6, 1 / 6, 1 / 6, 1 / 6, 1 / 6, 1 / 6], [false, true, true, false, true, false]],
+  ] as const) {
+    const net = 1234567890 * 0.97;
+    const exact = exactOf(computeBossSplit(net, [...ratios], 0.03, [...other]));
+    const whole = wholeMeso(net, exact);
+    assert.equal(whole.reduce((sum, v) => sum + v, 0), Math.round(net));
+    whole.forEach((v, i) => assert.ok(Math.abs(v - exact[i]) < 1, `card ${i}: ${v} vs ${exact[i]}`));
+  }
+});
+
+test("whole meso: a leader on 0 % never goes below zero", () => {
+  // The case that rounded every member up: net 970,000,002 but members 970,000,003.
+  const net = 1000000002 * 0.97;
+  const whole = wholeMeso(net, exactOf(computeBossSplit(net, [0, 0.33, 0.33, 0.34], 0.03)));
+  assert.ok(whole.every((v) => v >= 0));
+  assert.equal(whole.reduce((sum, v) => sum + v, 0), Math.round(net));
+  assert.equal(wholeMeso(0, [1, 2]).join(), "0,0");
+});
+
+test("whole meso: a negative share is no split, never a payout above the net", () => {
+  // −10 % and 110 % add up to 100 %; the calculator does not show it, and the split pays nothing either.
+  const net = 1000000000 * 0.97;
+  const whole = wholeMeso(net, exactOf(computeBossSplit(net, [-0.1, 1.1], 0.03)));
+  assert.deepEqual(whole, [0, 0]);
 });

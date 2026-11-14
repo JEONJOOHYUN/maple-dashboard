@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { Copy, ImageIcon, Info, Plus, X } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
-import { MESO_MARKET_FEE_RATE, computeBossSplit } from "@/lib/boss-split/boss-split-math";
+import { MESO_MARKET_FEE_RATE, computeBossSplit, wholeMeso } from "@/lib/boss-split/boss-split-math";
 import { formatKoreanMeso, formatNumber } from "@/lib/format";
 import { handleMesoInput } from "@/lib/meso-input";
 import { renderSplitImage } from "@/lib/boss-split/split-image";
@@ -86,7 +86,10 @@ export function BossSplitCalculator() {
     [mode, count, percents]
   );
   const percentSum = sharePercents.reduce((sum, p) => sum + p, 0);
-  const isValidSplit = Math.abs(percentSum - 100) < 0.01;
+  // Every share from 0 to 100 %: −10 and 110 also add up to 100 but would pay out more than was sold (Codex review,
+  // 2026-11-14).
+  const percentsInRange = sharePercents.every((p) => Number.isFinite(p) && p >= 0 && p <= 100);
+  const isValidSplit = percentsInRange && Math.abs(percentSum - 100) < 0.01;
 
   const shares = useMemo(
     () =>
@@ -102,17 +105,20 @@ export function BossSplitCalculator() {
 
   // Leader keeps finalMeso; everyone else is handed beforeMeso (their share plus the fee they pay again).
   // Other server: beforeMeso is what the leader sells on the meso market, handedMeso what is handed over there.
+  // Every card in whole meso, adding up to the net exactly (shown, copied and drawn as such).
+  const whole = wholeMeso(isValidSplit ? netMeso : 0, shares.map((share, index) => (index === 0 ? share.finalMeso : share.beforeMeso)));
   const cards = shares.map((share, index) => {
     const cross = index > 0 && otherServer[index];
-    const amount = index === 0 ? share.finalMeso : share.beforeMeso;
+    const amount = whole[index];
     return {
       index,
       cross,
       name: names[index] || DEFAULT_NAMES[index],
       pctLabel: `${Math.round(sharePercents[index] * 10) / 10}%`,
       amount,
-      handed: share.handedMeso,
-      final: share.finalMeso,
+      // Same server: what is handed is the card's amount itself. Other server: what arrives after the market fee.
+      handed: cross ? share.handedMeso : amount,
+      final: index === 0 ? amount : share.finalMeso,
       // One line for the image; the card shows an other-server member's amounts as rows instead.
       role:
         index === 0
@@ -123,6 +129,8 @@ export function BossSplitCalculator() {
     };
   });
   const hasResult = isValidSplit && netMeso > 0;
+  // The members' amounts as shown (whole meso): the net less this is exactly the leader's amount.
+  const membersTotal = cards.slice(1).reduce((sum, card) => sum + card.amount, 0);
 
   function updateItem(id: string, grossMeso: number) {
     setItems((prev) => prev.map((item) => (item.id === id ? { ...item, grossMeso } : item)));
@@ -311,7 +319,7 @@ export function BossSplitCalculator() {
                   합계 {Math.round(percentSum * 10) / 10}%
                 </span>
                 <span className={isValidSplit ? "text-muted-foreground" : "text-destructive"}>
-                  {isValidSplit ? "100% 맞음" : "합계 100% 필요"}
+                  {isValidSplit ? "100% 맞음" : percentsInRange ? "합계 100% 필요" : "0 ~ 100% 로"}
                 </span>
               </div>
             </>
@@ -327,6 +335,8 @@ export function BossSplitCalculator() {
           </span>
         </div>
 
+        {/* Each card is seven rows of one subgrid (user, 2026-11-14: the leader's lines sat higher than the members'):
+            cards side by side share every row's height, so names, amounts, rows and buttons line up whatever wraps. */}
         <div className={cn("grid grid-cols-1 gap-3", GRID_COLS[count])}>
           {cards.map((card) => {
             const highlight = card.index > 0;
@@ -335,7 +345,7 @@ export function BossSplitCalculator() {
               <div
                 key={card.index}
                 className={cn(
-                  "flex flex-col items-center gap-1.5 rounded-lg border px-4 pt-5 pb-4 text-center",
+                  "row-span-7 grid grid-rows-subgrid justify-items-center gap-y-1.5 rounded-lg border px-4 pt-5 pb-4 text-center",
                   count === 5 && "sm:col-span-2",
                   count === 5 && FIVE_CARD[card.index],
                   highlight ? "border-primary bg-primary-soft" : "border-border bg-background"
@@ -355,7 +365,7 @@ export function BossSplitCalculator() {
                   />
                   <span className="shrink-0 rounded-full bg-muted px-2 py-px text-xs font-bold">{card.pctLabel}</span>
                 </span>
-                {highlight && (
+                {highlight ? (
                   <>
                     {/* Same or other server as a choice of two (user, 2026-11-14: the "타 서버" pill read as a
                         label, not as something to press). */}
@@ -375,12 +385,18 @@ export function BossSplitCalculator() {
                         </button>
                       ))}
                     </div>
-                    {card.cross && <span className="text-xs text-muted-foreground">메소마켓으로 보내요 · 수수료 {MARKET_PCT}%</span>}
+                    <span className="text-xs text-muted-foreground">{card.cross ? `메소마켓으로 보내요 · 수수료 ${MARKET_PCT}%` : "같은 서버에서 바로 건네요"}</span>
+                  </>
+                ) : (
+                  <>
+                    {/* The leader's two rows of the same height: a label where the members have their switch. */}
+                    <span className="self-center rounded-full border border-border px-2.5 py-0.5 text-xs font-semibold text-muted-foreground">내가 갖는 몫</span>
+                    <span className="text-xs text-muted-foreground">실수령에서 파티원 몫을 뺀 나머지</span>
                   </>
                 )}
                 <span
                   className={cn(
-                    "max-w-full font-num text-[26px] leading-tight font-bold break-all tabular-nums sm:text-[30px]",
+                    "max-w-full self-center font-num text-[26px] leading-tight font-bold break-all tabular-nums sm:text-[30px]",
                     highlight ? "text-primary-text" : "text-foreground"
                   )}
                 >
@@ -390,23 +406,20 @@ export function BossSplitCalculator() {
                   {card.cross && "메소마켓에 팔 금액 · "}
                   {formatKoreanMeso(card.amount, { spaced: true })}
                 </span>
-                {card.cross ? (
-                  // What arrives on the other server, and the share after the usual fee there: one row each.
-                  <div className="flex w-full max-w-72 flex-col gap-1 border-t border-primary/30 pt-2 text-[13px]">
-                    <span className="flex justify-between gap-3">
-                      <span className="text-muted-foreground">다른 서버에 도착</span>
-                      <b className="font-num">{formatNumber(card.handed)}</b>
-                    </span>
-                    <span className="flex justify-between gap-3">
-                      <span className="text-muted-foreground">받는 몫 (수수료 {feePercent}% 뒤)</span>
-                      <b className="font-num">{formatNumber(card.final)}</b>
-                    </span>
-                  </div>
-                ) : (
-                  <span className="text-xs text-muted-foreground">{card.role}</span>
-                )}
-                {/* At the foot of the card: cards in a row line up their buttons, whatever is above them. */}
-                <div className="mt-auto pt-1.5">
+                {/* Two rows on every card. Members: what reaches them and the share after the usual fee; the leader:
+                    the net it starts from and the members' amounts taken out of it. */}
+                <div className={cn("flex w-full max-w-72 flex-col gap-1 border-t pt-2 text-[13px]", highlight ? "border-primary/30" : "border-border")}>
+                  <span className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">{!highlight ? `실수령 (수수료 ${feePercent}% 뒤)` : card.cross ? "다른 서버에 도착" : "건넬 금액 (수수료 포함)"}</span>
+                    <b className="font-num">{formatNumber(!highlight ? (isValidSplit ? netMeso : 0) : card.handed)}</b>
+                  </span>
+                  <span className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">{highlight ? `받는 몫 (수수료 ${feePercent}% 뒤)` : "파티원 몫 합계"}</span>
+                    <b className="font-num">{formatNumber(highlight ? card.final : membersTotal)}</b>
+                  </span>
+                </div>
+                {/* The last row of the subgrid: the buttons of a row of cards line up. */}
+                <div className="self-end pt-1.5">
                   <button
                     type="button"
                     onClick={() => copyAmount(card.index, card.amount)}
@@ -424,7 +437,7 @@ export function BossSplitCalculator() {
 
         {!hasResult && (
           <p className="text-center text-sm text-muted-foreground">
-            {isValidSplit ? "판매가를 넣으면 금액 표시" : "비율 합계 100%로 맞추면 금액 표시"}
+            {isValidSplit ? "판매가를 넣으면 금액 표시" : percentsInRange ? "비율 합계 100%로 맞추면 금액 표시" : "비율은 0 ~ 100%로 넣으면 금액 표시"}
           </p>
         )}
 

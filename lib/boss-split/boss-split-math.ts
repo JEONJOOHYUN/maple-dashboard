@@ -48,3 +48,25 @@ export function computeBossSplit(
     };
   });
 }
+
+/**
+ * Whole meso for every card, the leader first: the net in whole meso, shared out by the largest remainder over the
+ * exact amounts (the leader's final share, each member's amount taken out of the net). The cards add up to the
+ * net exactly, none goes below zero, and each is within a meso of its exact amount. Rounding every member on its
+ * own could take a meso more than the net and leave a leader on 0 % at −1 (Codex review, 2026-11-14).
+ * A negative (or not a number) amount is no split at all: every card is 0 rather than a clamped share that would pay
+ * out more than the net.
+ */
+export function wholeMeso(netMeso: number, exact: number[]): number[] {
+  if (netMeso <= 0 || exact.some((v) => !(v >= 0))) return exact.map(() => 0);
+  const out = exact.map((v) => Math.floor(v));
+  let left = Math.round(netMeso) - out.reduce((sum, v) => sum + v, 0);
+  // Largest fractional part first; on a tie the earlier card (the leader first).
+  const order = exact.map((v, i) => [v - Math.floor(v), i] as const).sort((a, b) => b[0] - a[0] || a[1] - b[1]);
+  for (const [, i] of order) {
+    if (left <= 0) break;
+    out[i]++;
+    left--;
+  }
+  return out;
+}
