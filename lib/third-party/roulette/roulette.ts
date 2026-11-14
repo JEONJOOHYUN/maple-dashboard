@@ -33,6 +33,12 @@ const RANK_EMA_SEC = 0.4;
 const RANK_MARGIN = 0.25;
 /** How long (real ms) a finished race stays on screen, wheels still turning, before the frame loop rests. */
 const REST_AFTER_MS = 2000;
+/**
+ * Waiting for a first race, the board stops after this long with no pointer, touch, key or wheel on the page, and
+ * moves again at the next one: left open, it redrew the turning wheels 60 times a second for nobody (2026-11-14,
+ * about a tenth of a CPU core).
+ */
+const IDLE_REST_MS = 15000;
 
 export type PinballMember = { name: string; count: number; color: string; /** Picture URL for this person's marbles. */ skin?: string };
 
@@ -82,6 +88,10 @@ export class Roulette extends EventTarget {
   private _resting = false;
   /** Real ms the finished race has had nothing left to show. */
   private _quiet = 0;
+  /** When the page last had a pointer, touch, key or wheel (or the board was woken). */
+  private _lastInput = Date.now();
+  /** The board is scrolled out of view. */
+  private _offscreen = false;
   protected _theme: ColorTheme = Themes.dark;
   private _cleanup: (() => void)[] = [];
 
@@ -158,8 +168,21 @@ export class Roulette extends EventTarget {
 
     this._render();
     if (this._restIfOver(realMs)) return;
+    if (this._restIfIdle()) return;
     this._raf = window.requestAnimationFrame(this._update);
   };
+
+  /**
+   * Waiting for a first race (marbles lined up, nothing started): rest while the board is out of view, or when nobody
+   * has touched the page for IDLE_REST_MS. A race once started keeps its own rule (_restIfOver), so nothing that is
+   * moving towards a result ever stops. The page's 'rest' event is not sent: it means "the race is over".
+   */
+  private _restIfIdle(): boolean {
+    if (this._raced || this._isRunning) return false;
+    if (!this._offscreen && Date.now() - this._lastInput < IDLE_REST_MS) return false;
+    this._resting = true;
+    return true;
+  }
 
   /**
    * Once a race is over — every marble in, the confetti gone — nothing on the board changes except the wheels of the
@@ -183,6 +206,7 @@ export class Roulette extends EventTarget {
    */
   private _wake = () => {
     this._quiet = 0;
+    this._lastInput = Date.now();
     if (!this._resting || this._destroyed) return;
     this._resting = false;
     // No catching up on the time spent resting.
@@ -392,6 +416,22 @@ export class Roulette extends EventTarget {
     const resized = new ResizeObserver(() => this._wake());
     resized.observe(canvas);
     this._cleanup.push(() => resized.disconnect());
+    // Before a race: anyone using the page brings the waiting board back to life, and scrolling it out of view
+    // stops it (_restIfIdle). After a race starts these leave the loop alone.
+    const nudge = () => {
+      this._lastInput = Date.now();
+      if (!this._raced) this._wake();
+    };
+    for (const type of ['pointermove', 'pointerdown', 'keydown', 'wheel'] as const) {
+      window.addEventListener(type, nudge, { passive: true });
+      this._cleanup.push(() => window.removeEventListener(type, nudge));
+    }
+    const seen = new IntersectionObserver(([entry]) => {
+      this._offscreen = !entry.isIntersecting;
+      if (!this._offscreen && !this._raced) this._wake();
+    });
+    seen.observe(canvas);
+    this._cleanup.push(() => seen.disconnect());
     on('pointerleave', () => this.releasePointer());
     on('pointercancel', () => this.releasePointer());
     on('contextmenu', (e) => e.preventDefault());
