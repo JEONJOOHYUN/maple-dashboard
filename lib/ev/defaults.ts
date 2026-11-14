@@ -90,9 +90,14 @@ export const MESO_MARKET_MP = 2100;
 
 /**
  * Potential "main stat" goal: how much other lines are worth ("세부 스펙 효율"). Example character 청운적운 (Lv.296 아크메이지(썬,콜)), 2026-11-09.
+ * `cool1` = main stat % one second of cooldown is worth (additional hats): the average of three characters measured on
+ * 2026-11-14 (user's pick) — the final damage of the additional potential's second (taken off where the hat has one,
+ * added where it has none) ÷ the final damage of 1 % main stat: 8.23 · 8.41 · 8.65. A fourth (5.13) was left out by
+ * the user. Seconds are not worth the same: on one character taking off its second of two was 3.67 (a skill cooldown
+ * boundary), the next one 8.04.
  * Every value differs per character, so the page lets people type their own.
  */
-export const STAT_CONV_DEFAULT = { level: 296, v9: 6.31, cd3: 11.9, atk1: 2.29, all1: 11.6 };
+export const STAT_CONV_DEFAULT = { level: 296, v9: 6.31, cd3: 11.9, atk1: 2.29, all1: 11.6, cool1: 8.43 };
 
 /** MVP gift route: won received per 10,000 cash gifted as maple points (user, 2026-11-09). No credit for gifts. */
 export const GIFT_WON_PER_10K = 7000;

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { averageTries } from "./luck.ts";
-import { NO_CONV, OPTIONS, SOUL_EXTRA, addWeaponChance, customChance, slotOptions, comboChance, practicalTargets, bestValues, convFromSpec, fixFirstLine, gradeUp, lineTables, resetMeso, soulChance, statTargets, sumChance, weaponChance, type WeaponGoal, WEAPON_TIERS, weaponTierOf } from "./potential.ts";
+import { NO_CONV, OPTIONS, SOUL_EXTRA, addWeaponChance, customChance, slotOptions, comboChance, practicalTargets, bestValues, convFromSpec, convFromText, convPct, fixFirstLine, gradeUp, lineTables, resetMeso, soulChance, statTargets, sumChance, weaponChance, type WeaponGoal, WEAPON_TIERS, weaponTierOf } from "./potential.ts";
 
 const near = (actual: number, expected: number, tolerance: number, label: string) =>
   assert.ok(Math.abs(actual - expected) <= tolerance, `${label}: ${actual} is not within ${tolerance} of ${expected}`);
@@ -42,6 +42,21 @@ test("이탈 chips go together with the line counts: 반이탈 + 보공 2줄 (us
   const boss = weaponChance(rows, { ...v3, min: boss2 });
   const both = weaponChance(rows, { ...v3, min: boss2, tier: "half" });
   assert.ok(both > 0 && both < half && both < boss, `${both} should be below 반이탈 ${half} and 보공 2줄 ${boss}`);
+});
+
+test("conversion fields: attack and all stat typed as main stat %, older flat numbers read the same (user, 2026-11-14)", () => {
+  const d = { level: 296, v9: 6.31, cd3: 11.9, atk1: 2.29, all1: 11.6, cool1: 6.47 };
+  const flat = convFromSpec(d);
+  // Nothing typed (or the old flat fields only): the same conversion as before, the % shown worked out from them.
+  assert.deepEqual(convFromText({}, d), flat);
+  assert.deepEqual(convFromText({ atk1: "2.29", all1: "11.6" }, d), flat);
+  const shown = convPct({}, d);
+  near(shown.allPct, flat.all, 1e-12, "all stat 1 % in main stat %");
+  near(shown.atkPct, flat.atkf, 1e-12, "attack 1 in main stat %");
+  // A % typed wins over the flat number, and is not moved by the level.
+  const typed = convFromText({ atkPct: "0.3", allPct: "1.2", level: "250" }, d);
+  assert.deepEqual([typed.atkf, typed.all], [0.3, 1.2]);
+  assert.equal(convFromText({ cool1: "8" }, d).cool, 8);
 });
 
 test("the tier of an option a weapon actually has", () => {

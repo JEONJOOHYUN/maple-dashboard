@@ -13,7 +13,10 @@ import { type MainStat,
   NEXT_GRADE,
   SLOTS,
   bestValues,
-  convFromSpec,
+  convFor,
+  convFromText,
+  convPct,
+  type ConvText,
   customChance,
   slotOptions,
   fixFirstLine,
@@ -54,8 +57,10 @@ const GRADE_COLOR: Record<Grade, string> = {
 const TIERS = WEAPON_TIERS;
 type Extra = "stat" | "cool" | "crit" | "drop";
 // cd8 = what was typed in the main-potential "크뎀 8%" box; cd3 (the unit of the conversion fields) stays the source of truth.
-type ConvText = Record<keyof typeof STAT_CONV_DEFAULT, string> & { cd8?: string };
-const CONV_TEXT_DEFAULT = Object.fromEntries(Object.entries(STAT_CONV_DEFAULT).map(([k, v]) => [k, String(v)])) as ConvText;
+// atkPct · allPct = attack 1 and all stat 1 % typed as main stat % (2026-11-14); left out, they come from atk1 · all1.
+const CONV_TEXT_DEFAULT: ConvText = Object.fromEntries(Object.entries(STAT_CONV_DEFAULT).map(([k, v]) => [k, String(v)]));
+/** Up to four decimals, no trailing zeros: how a % worked out from a flat number is shown in its field. */
+const short = (n: number) => String(Math.round(n * 10000) / 10000);
 const ADD_GOALS: { id: AddWeaponGoal; label: (need: number, a: string) => string }[] = [
   { id: "a21", label: (n, a) => `${a} ${n}%` },
   { id: "a21x", label: (n, a) => `${a} ${n}% + @` },
@@ -96,7 +101,10 @@ export function PotentialTab() {
   const [convOpen, setConvOpen] = useState(false);
   // Crit damage box in the line size people see: main potential 8 %, additional 3 % (user, 2026-11-10).
   const cdUnit = kind === "main" ? 8 : 3;
-  const convChanged = (Object.keys(CONV_TEXT_DEFAULT) as (keyof typeof STAT_CONV_DEFAULT)[]).some((k) => (convText[k] ?? "") !== CONV_TEXT_DEFAULT[k]);
+  const convChanged =
+    (Object.keys(CONV_TEXT_DEFAULT) as (keyof typeof STAT_CONV_DEFAULT)[]).some((k) => (convText[k] ?? "") !== CONV_TEXT_DEFAULT[k]) ||
+    convText.atkPct !== undefined ||
+    convText.allPct !== undefined;
   const [customMin, setCustomMin] = useState("");
   const [prices, setPrices] = useState<Record<string, string>>({});
 
@@ -108,10 +116,11 @@ export function PotentialTab() {
   const cubes = CUBES.filter((c) => c.kind === potKind);
   // Start with the in-game resets only (the ones everyone has); cash cubes are opt-in for comparing.
   const picked = (chosen ?? cubes.filter((c) => c.name.includes("재설정")).map((c) => c.id)).filter((id) => cubes.some((c) => c.id === id));
-  const conv = useMemo(() => {
-    const n = (k: keyof typeof STAT_CONV_DEFAULT) => parseNum(convText[k] ?? "", STAT_CONV_DEFAULT[k]);
-    return convFromSpec({ level: n("level"), v9: n("v9"), cd3: n("cd3"), atk1: n("atk1"), all1: n("all1") });
-  }, [convText]);
+  // The same reading as the 강화 기록 page (convFromText); the % shown in the attack · all stat fields too.
+  const conv = useMemo(() => convFromText(convText, STAT_CONV_DEFAULT), [convText]);
+  const pctShown = useMemo(() => convPct(convText, STAT_CONV_DEFAULT), [convText]);
+  // Cooldown counts as main stat on additional potential only (a main potential hat has its own cooldown goal).
+  const statConv = useMemo(() => convFor(conv, kind === "add"), [conv, kind]);
 
   const extraOptions: { id: Extra; label: string }[] = [
     // Gloves: the main-stat target converts crit damage lines too (efficiency), so say so (user, 2026-11-10).
@@ -146,14 +155,14 @@ export function PotentialTab() {
   const sumTargets: { label: string; sub: string; goal: SumGoal }[] = useMemo(() => {
     if (!refRows) return [];
     if (target === "stat") {
-      const chips = practicalTargets(refRows, { conv, attack, main: mainStat }, kind === "add" ? 2 : 3).map((n) => ({ label: `${n}%`, sub: "이상", goal: { type: "stat", min: n, conv, attack, main: mainStat } as SumGoal }));
+      const chips = practicalTargets(refRows, { conv: statConv, attack, main: mainStat }, kind === "add" ? 2 : 3).map((n) => ({ label: `${n}%`, sub: "이상", goal: { type: "stat", min: n, conv: statConv, attack, main: mainStat } as SumGoal }));
       const own = parseNum(customMin, 0);
-      return own > 0 ? [...chips, { label: `${own}%`, sub: "직접", goal: { type: "stat", min: own, conv, attack, main: mainStat } as SumGoal }] : chips;
+      return own > 0 ? [...chips, { label: `${own}%`, sub: "직접", goal: { type: "stat", min: own, conv: statConv, attack, main: mainStat } as SumGoal }] : chips;
     }
     if (target === "cool") return [2, 3, 4, 5, 6].map((n) => ({ label: `−${n}초`, sub: "이상", goal: { type: "cool", min: n } as SumGoal }));
     if (target === "crit") return [1, 2, 3].map((n) => ({ label: `${n}줄`, sub: best.cd ? `+${best.cd * n}%` : "", goal: { type: "crit", lines: n } as SumGoal }));
     return [1, 2, 3].map((n) => ({ label: `${n}줄`, sub: "이상", goal: { type: "drop", lines: n } as SumGoal }));
-  }, [refRows, target, best.cd, conv, attack, customMin, mainStat, kind]);
+  }, [refRows, target, best.cd, statConv, attack, customMin, mainStat, kind]);
   const tIdx = Math.min(targetIdx, Math.max(0, sumTargets.length - 1));
   const comboSpecial = target === "crit" ? "cd" : target === "cool" ? "cool" : null;
   // Hats: cooldown is asked by its total seconds (−2초 and −1초 = 3초), the way the 강화 기록 page reads an option
@@ -712,8 +721,11 @@ export function PotentialTab() {
                       ["level", "캐릭터 레벨", "", ""],
                       ["v9", "렙당+2 = 주스탯", "%", `렙당+1 = ${conv.lvstr.toFixed(2)}%`],
                       ["cd3", `크뎀 ${cdUnit}% = 주스탯`, "%", `크뎀 1% = ${conv.cd.toFixed(2)}%`],
-                      ["atk1", "공격력(마력) 1 = 주스탯", "", ""],
-                      ["all1", "올스탯 1% = 주스탯", "", ""],
+                      // Every field in main stat % (user, 2026-11-14).
+                      ["atkPct", "공격력(마력) 1 = 주스탯", "%", ""],
+                      ["allPct", "올스탯 1% = 주스탯", "%", ""],
+                      // Additional hats only: cooldown is read as main stat there (user, 2026-11-14).
+                      ...(kind === "add" && slot.extra === "cool" ? ([["cool1", "쿨감 1초 = 주스탯", "%", ""]] as const) : []),
                     ] as const
                   ).map(([k, label, unit, hint]) => (
                     <span key={k} className="flex items-center justify-between gap-2">
@@ -723,7 +735,13 @@ export function PotentialTab() {
                       </span>
                       <NumberField
                         label={label}
-                        value={k === "cd3" && cdUnit === 8 ? (convText.cd8 ?? String(Math.round(conv.cd * 8 * 100) / 100)) : (convText[k] ?? "")}
+                        value={
+                          k === "cd3" && cdUnit === 8
+                            ? (convText.cd8 ?? String(Math.round(conv.cd * 8 * 100) / 100))
+                            : k === "atkPct" || k === "allPct"
+                              ? (convText[k] ?? short(pctShown[k]))
+                              : (convText[k] ?? "")
+                        }
                         onChange={(t) =>
                           setConvText(
                             k !== "cd3"

@@ -314,9 +314,14 @@ export function weaponChance(rows: Row[][], goal: WeaponGoal, fixFirst?: "a" | "
  * How much one unit of each line is worth in main stat %. Players know these as
  * "세부 스펙 효율"; they differ per character, so the page lets people change them.
  */
-export type StatConv = { all: number; lvstr: number; atkf: number; cd: number; flat: number };
+/**
+ * `cool` = what one second of cooldown is worth, for additional potential only (user, 2026-11-14: "에디 1초도 주스탯
+ * %로"): a main potential hat is read by its cooldown seconds ("쿨감 2초 + STR 9%"), so callers judging main
+ * potential leave it at 0.
+ */
+export type StatConv = { all: number; lvstr: number; atkf: number; cd: number; flat: number; cool: number };
 /** Main stat % = 1 by definition. */
-export const NO_CONV: StatConv = { all: 1, lvstr: 0, atkf: 0, cd: 0, flat: 0 };
+export const NO_CONV: StatConv = { all: 1, lvstr: 0, atkf: 0, cd: 0, flat: 0, cool: 0 };
 
 /**
  * "세부 스펙 효율" values → StatConv. The numbers: one "+2 per 9 levels" line = main stat v9 %,
@@ -324,17 +329,57 @@ export const NO_CONV: StatConv = { all: 1, lvstr: 0, atkf: 0, cd: 0, flat: 0 };
  * Flat main stat turns into % through the 9-level line: (2 × ⌊level / 9⌋) flat = v9 %. `flat` = what one point of
  * a flat main stat line ("STR +14") is worth that way (user, 2026-11-13: it was the one line left out).
  */
-export function convFromSpec(s: { level: number; v9: number; cd3: number; atk1: number; all1: number }): StatConv {
-  const flat9 = 2 * Math.floor(s.level / 9);
-  const flatPerPct = s.v9 > 0 && flat9 > 0 ? flat9 / s.v9 : 0;
+export function convFromSpec(s: { level: number; v9: number; cd3: number; atk1: number; all1: number; atkPct?: number; allPct?: number; cool1?: number }): StatConv {
+  const flatPerPct = flatPerPctOf(s.level, s.v9);
   return {
-    all: flatPerPct > 0 ? s.all1 / flatPerPct : 1,
+    // Main stat % typed as such (atkPct · allPct) wins over the flat main stat numbers (atk1 · all1).
+    all: s.allPct ?? (flatPerPct > 0 ? s.all1 / flatPerPct : 1),
     lvstr: s.v9 / 2,
-    atkf: flatPerPct > 0 ? s.atk1 / flatPerPct : 0,
+    atkf: s.atkPct ?? (flatPerPct > 0 ? s.atk1 / flatPerPct : 0),
     cd: s.cd3 / 3,
     flat: flatPerPct > 0 ? 1 / flatPerPct : 0,
+    // Typed as main stat % already: no flat number to turn into one.
+    cool: s.cool1 ?? 0,
   };
 }
+
+/** Flat main stat that is worth 1 % main stat, from the "+2 per 9 levels" line: (2 × ⌊level / 9⌋) flat = v9 %. */
+const flatPerPctOf = (level: number, v9: number) => {
+  const flat9 = 2 * Math.floor(level / 9);
+  return v9 > 0 && flat9 > 0 ? flat9 / v9 : 0;
+};
+
+/** What the potential tab keeps in `ev:statConv`: the fields as typed. */
+export type ConvText = Partial<Record<"level" | "v9" | "cd3" | "cd8" | "atk1" | "all1" | "atkPct" | "allPct" | "cool1", string>>;
+export type ConvDefaults = { level: number; v9: number; cd3: number; atk1: number; all1: number; cool1: number };
+
+const typed = (text: string | undefined) => {
+  const v = parseFloat((text ?? "").replace(/,/g, ""));
+  return Number.isFinite(v) ? v : undefined;
+};
+
+/**
+ * Attack 1 and all stat 1 % in main stat %, as the fields show them (user, 2026-11-14: every field in main stat %).
+ * They were typed as flat main stat before (atk1 · all1, the defaults still are): a page that has only those reads
+ * them as % through the level and the 9-level line, so nobody's numbers change.
+ */
+export function convPct(text: ConvText, d: ConvDefaults): { atkPct: number; allPct: number } {
+  const n = (k: keyof ConvDefaults) => typed(text[k]) ?? d[k];
+  const per = flatPerPctOf(n("level"), n("v9"));
+  return {
+    atkPct: typed(text.atkPct) ?? (per > 0 ? n("atk1") / per : 0),
+    allPct: typed(text.allPct) ?? (per > 0 ? n("all1") / per : 1),
+  };
+}
+
+/** The conversion from the potential tab's fields: the calculator and the 강화 기록 page read it the same way. */
+export function convFromText(text: ConvText, d: ConvDefaults): StatConv {
+  const n = (k: keyof ConvDefaults) => typed(text[k]) ?? d[k];
+  return convFromSpec({ level: n("level"), v9: n("v9"), cd3: n("cd3"), atk1: n("atk1"), all1: n("all1"), ...convPct(text, d), cool1: n("cool1") });
+}
+
+/** The conversion for one kind of potential: cooldown counts as main stat on additional potential only (see StatConv). */
+export const convFor = (conv: StatConv, additional: boolean): StatConv => (additional || conv.cool === 0 ? conv : { ...conv, cool: 0 });
 
 /**
  * Which line is the main stat: "str" = any single main stat (STR stands in), "all" = Xenon (all stat %),
@@ -424,6 +469,8 @@ function statValue(r: Row, conv: StatConv, attack: "atk" | "matk"): number {
       return attack === "atk" ? r[1] * conv.atkf : 0;
     case "matkf":
       return attack === "matk" ? r[1] * conv.atkf : 0;
+    case "cool":
+      return r[1] * conv.cool;
     default:
       return 0;
   }

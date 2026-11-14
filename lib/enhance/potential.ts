@@ -6,7 +6,7 @@
 //   item_upgrade_result "성공" = the roll raised the grade.
 // - unlike star force, the rows carry item level and equipment part.
 import { CREDIT_SHOP } from "../ev/defaults.ts";
-import { CUBES, NEXT_GRADE, NO_CONV, SLOTS, SOUL_EXTRA, WEAPON_TIERS, addWeaponNeed, addWeaponSumChance, customChance, fixFirstLine, gradeUp, lineTables, resetMeso, sumChance, weaponChance, weaponTierOf, type CubeId, type CustomCond, type Grade, type StatConv } from "../ev/potential.ts";
+import { CUBES, NEXT_GRADE, NO_CONV, SLOTS, SOUL_EXTRA, WEAPON_TIERS, addWeaponNeed, addWeaponSumChance, convFor, customChance, fixFirstLine, gradeUp, lineTables, resetMeso, sumChance, weaponChance, weaponTierOf, type CubeId, type CustomCond, type Grade, type StatConv } from "../ev/potential.ts";
 
 export type RawOption = { value?: string; grade?: string };
 export type RawPotential = {
@@ -428,18 +428,19 @@ const inStat = (cat: string, stat: string, conv: StatConv) =>
   (cat === `lv${stat}` && conv.lvstr > 0) ||
   (cat === `f${stat}` && conv.flat > 0) ||
   (cat === "cd" && conv.cd > 0) ||
+  (cat === "cool" && conv.cool > 0) ||
   ((cat === "atkf" || cat === "matkf") && conv.atkf > 0);
 
 /**
  * Main stat % the option is worth ("INT 15.8 %급"): its stat % plus all stat %, the "per 9 levels" line, the flat
- * stat line ("INT +14"), crit damage and flat attack turned into stat % with the calculator's conversion (the
- * user's numbers).
+ * stat line ("INT +14"), crit damage, flat attack and (additional hats) cooldown seconds turned into stat % with the
+ * calculator's conversion (the user's numbers).
  */
 export function statWorth(goal: Goal, conv: StatConv): number {
   const sum = (cat: string) => goal.sums[cat] ?? 0;
   // An option with no main stat line of its own (all stat % only) is still worth main stat through the conversion.
   const own = goal.stat ? sum(goal.stat) + sum(`lv${goal.stat}`) * conv.lvstr + sum(`f${goal.stat}`) * conv.flat : 0;
-  return own + sum("all") * conv.all + sum("cd") * conv.cd + sum(goal.magic ? "matkf" : "atkf") * conv.atkf;
+  return own + sum("all") * conv.all + sum("cd") * conv.cd + sum(goal.magic ? "matkf" : "atkf") * conv.atkf + sum("cool") * conv.cool;
 }
 
 type Row = NonNullable<ReturnType<typeof lineTables>>[number][number];
@@ -601,7 +602,10 @@ export function goalChance(
   // An option with all stat % and no main stat line is worth main stat too (user, 2026-11-12 · 13): 크뎀 3 % +
   // 올스탯 6 % on additional gloves is one number, not "크뎀 3 %" alone, and 올스탯 27 % on shoes is "주스탯 27 %".
   // Only a Xenon's main potential keeps it as its own goal ("올스탯 27 %"): that one is asked below, as a condition.
-  const byStat = (kind === "armor" || kind === "acc") && !xenon && (goal.stat !== "" || (goal.sums.all ?? 0) > 0);
+  // Cooldown on an additional hat is main stat through the conversion as well (user, 2026-11-14: "쿨감 1초 + 주스탯
+  // 7%" was read as "쿨감 1초" alone, its hardest single line).
+  const coolWorth = row.add && conv.cool > 0 && (goal.sums.cool ?? 0) > 0;
+  const byStat = (kind === "armor" || kind === "acc") && !xenon && (goal.stat !== "" || (goal.sums.all ?? 0) > 0 || coolWorth);
   if (byStat) {
     // Main potential: the number is the plain one. The chance is still the calculator's — "27 % or more" with its
     // conversion — so the same number gives the same average on both pages.
@@ -611,7 +615,7 @@ export function goalChance(
     const shown = Math.floor(worth * 10 + 1e-6) / 10;
     // "급" only when something other than the stat's own % lines went into the number.
     const pure = goal.stat !== "" && Math.abs(worth - (goal.sums[goal.stat] ?? 0)) < 1e-9;
-    offer(sumChance(std, { type: "stat", min: shown - 1e-9, conv, attack }), `${goal.stat ? LABEL[goal.stat] : "주스탯"} ${shown}%${pure || !row.add ? "" : "급"}`);
+    offer(sumChance(std, { type: "stat", min: shown - 1e-9, conv: convFor(conv, row.add), attack }), `${goal.stat ? LABEL[goal.stat] : "주스탯"} ${shown}%${pure || !row.add ? "" : "급"}`);
   }
   // Accessories, main potential: drop rate and meso lines are counted together ("드메 2줄"), as on the calculator.
   const dropLines = !row.add && info?.extra === "drop" ? count("drop") + count("meso") : 0;

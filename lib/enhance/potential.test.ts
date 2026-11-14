@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { NO_CONV, SOUL_EXTRA, addWeaponChance, addWeaponSumChance, convFromSpec, customChance, fixFirstLine, lineTables, resetMeso, sumChance, weaponChance } from "../ev/potential.ts";
+import { NO_CONV, SOUL_EXTRA, addWeaponChance, addWeaponSumChance, convFor, convFromSpec, customChance, fixFirstLine, lineTables, resetMeso, sumChance, weaponChance } from "../ev/potential.ts";
 import { STAT_CONV_DEFAULT } from "../ev/defaults.ts";
 import { buildPotStats, potEntries } from "./pot-stats.ts";
 import { cappedCategory, cubeFee, cubeOf, feeByInsight, gearJob, goalChance, goalOf, gradeBefore, kindOf, potKey, optionToken, parsePotential, pricedCube, rollMeso, rollsToUp, slotOf, statRule, statRules, statWorth, trackPieces, upChance, upRolls, type PotRow, type RawPotential } from "./potential.ts";
@@ -259,6 +259,21 @@ test("gloves with crit damage and hats with cooldown: the special option plus th
     byHand += stat(s) * (p("cool", 2, a) * p("cool", 1, b) + p("cool", 1, a) * p("cool", 2, b) + p("cool", 2, a) * p("cool", 2, b));
   }
   near(three.p, byHand, 1e-12, "쿨감 3초 + INT 12 %, by hand");
+});
+
+test("additional hats: cooldown is main stat through the conversion, as on the calculator (user, 2026-11-14)", () => {
+  const hat = row({ item_equipment_part: "모자", item_level: 250, ...ADD });
+  const conv = { ...NO_CONV, cool: 8 };
+  // "쿨감 1초 + STR 7%" with one second worth 8 % = "STR 15%급": the calculator's main stat goal, same conversion.
+  const got = goalChance(hat, "legendary", goalOf([COOL1, "STR +7%", "방어력 +7%"], true)!, conv)!;
+  const rows = lineTables("white", "legendary", "hat", 250)!;
+  assert.deepEqual([got.by, got.p], ["STR 15%급", sumChance(rows, { type: "stat", min: 15 - 1e-9, conv: convFor(conv, true) })]);
+  // No value for a second (0): read as before, by its hardest single line.
+  assert.equal(goalChance(hat, "legendary", goalOf([COOL1, "STR +7%", "방어력 +7%"], true)!, NO_CONV)!.by, "쿨감 1초");
+  // Main potential hats keep their own cooldown goal whatever the conversion, and convFor leaves cooldown out there.
+  const main = row({ item_equipment_part: "모자", item_level: 250 });
+  assert.equal(goalChance(main, "legendary", goalOf([COOL2, "STR +12%", "방어력 +7%"], false)!, conv)!.by, "쿨감 2초 + STR 12%");
+  assert.equal(convFor(conv, false).cool, 0);
 });
 
 test("accessories: drop rate and meso lines count together, next to the stat", () => {
