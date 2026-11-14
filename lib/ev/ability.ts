@@ -3,8 +3,7 @@
 // (2026-11-08): fame reset on a legendary ability 8,000 / 11,000 / 16,000 fame for 0 / 1 / 2 locks,
 // advanced reset 20,000 / 30,000 / 40,000 fame + 200만 / 600만 / 1,500만 meso. Sunday halves fame.
 //
-// Assumes the ability is already legendary. Values (e.g. boss 10 % vs 20 %) are not considered, only
-// which options sit on which grade.
+// Assumes the ability is already legendary.
 import data from "./data/ability.json" with { type: "json" };
 
 type Grade = "epic" | "unique" | "legendary";
@@ -39,23 +38,44 @@ export const ABILITY_OPTIONS = {
   },
   atk: { name: "공격력 증가", short: "공마", label: "공격력 (마력)" },
   hp: { name: "최대 HP % 증가", short: "최대 HP", label: "최대 HP %" },
+  drop: { name: "아이템 드롭률 % 증가", short: "드롭", label: "아이템 드롭률" },
+  meso: { name: "메소 획득량 % 증가", short: "메소", label: "메소 획득량" },
 } as const;
 export type AbilityKey = keyof typeof ABILITY_OPTIONS;
 
-export const ABILITY_PRESETS: {
+export type AbilityPreset = {
   id: string;
   label: string;
-  keys: [AbilityKey, AbilityKey, AbilityKey];
-}[] = [
+  keys: AbilityKey[];
+  /**
+   * L1+U2: the options (indexes in keys) that may stand on the legendary first line — one of them must. Left out: the
+   * legendary-only option if there is one, else the first.
+   */
+  lead?: number[];
+  /** Only built as legendary line 1 + unique line 2 (드메: two lines and done). */
+  l1u2Only?: boolean;
+  /** A hunting build: what a second preset holds next to a boss build. */
+  hunting?: boolean;
+};
+
+export const ABILITY_PRESETS: AbilityPreset[] = [
   { id: "pbs", label: "패보상", keys: ["pas", "boss", "stat"] },
   { id: "bsa", label: "보상공", keys: ["boss", "stat", "atk"] },
   { id: "pbc", label: "패보크", keys: ["pas", "boss", "crit"] },
   { id: "cbs", label: "재보상", keys: ["cool", "boss", "stat"] },
   { id: "pbcool", label: "패보재", keys: ["pas", "boss", "cool"] },
   { id: "cbh", label: "재보체", keys: ["cool", "boss", "hp"] },
+  // Legendary 드메 (user, 2026-11-14): drop or meso on the legendary first line, the other one on a lower line.
+  { id: "dm", label: "드메", keys: ["drop", "meso"], lead: [0, 1], l1u2Only: true, hunting: true },
 ];
 
-/** l3 = all three lines legendary, l1u2 = legendary first line + two unique (or better) lines. */
+/** L1+U2: the options of a preset that may be the legendary first line. */
+export function presetLead(preset: AbilityPreset): number[] {
+  if (preset.lead) return preset.lead;
+  return [Math.max(0, preset.keys.findIndex((k) => legendaryOnly(k)))];
+}
+
+/** l3 = all three lines legendary, l1u2 = legendary first line + unique (or better) lines. */
 export type AbilityMode = "l3" | "l1u2";
 export type Method = "fame" | "advanced";
 
@@ -84,7 +104,18 @@ export function legendaryOnly(key: AbilityKey): boolean {
   return OPTIONS[INDEX.get(ABILITY_OPTIONS[key].name)!].p.unique === 0;
 }
 
-/** Locked lines: line index → target index (0~2), at most two. Encoded as "l:t,l:t". */
+/**
+ * One finished ability: these options on lines that count, values at the goal.
+ * l3: every option on a legendary line. l1u2: one `lead` option on the legendary first line (any option when `lead` is
+ * left out), the others on lines 2 · 3 at unique or better.
+ */
+export type AbilityGoal = {
+  keys: AbilityKey[];
+  mode: AbilityMode;
+  lead?: number[];
+};
+
+/** Locked lines: line index → target index, at most two. Encoded as "l:t,l:t". */
 type State = string;
 const encode = (m: Map<number, number>): State =>
   [...m.entries()]
@@ -100,23 +131,13 @@ const decode = (s: State) =>
 
 type Outcome = { p: number; good: Map<number, number> };
 
-/** Every result of one reset from `locked`, reduced to "which lines hold a wanted option at a good grade". */
+/** Every result of one reset from `locked`, reduced to "which lines hold a wanted option on a line that counts". */
 function outcomes(
   locked: Map<number, number>,
   targets: number[],
-  mode: AbilityMode,
   method: Method,
-  lead?: number,
+  counts: (line: number, g: Grade, t: number) => boolean,
 ): Outcome[] {
-  // L1+U2 with a chosen legendary option (lead): only it counts on line 1, and only the others on lines 2 · 3.
-  const goodGrade = (line: number, g: Grade, t: number) =>
-    mode === "l3"
-      ? line === 0 || g === "legendary"
-      : lead === undefined
-        ? line === 0 || g !== "epic"
-        : line === 0
-          ? t === lead
-          : g !== "epic" && t !== lead;
   const merged = new Map<string, Outcome>();
   const add = (p: number, good: Map<number, number>) => {
     const key = encode(good);
@@ -150,7 +171,7 @@ function outcomes(
         if (po <= 0) return;
         wanted += po;
         const next = new Map(good);
-        if (goodGrade(line, g, t)) next.set(line, t);
+        if (counts(line, g, t)) next.set(line, t);
         roll(k + 1, [...excluded, opt], next, p * pg * po);
       });
       const rest = 1 - wanted;
@@ -175,40 +196,12 @@ function outcomes(
   return list;
 }
 
-export type AbilityPlan = {
-  /** Expected totals from a fresh legendary ability (circ = abyss circulators). */
+/** Expected fame, meso, circulators (abyss circulators) and resets. */
+export type PlanCost = {
   fame: number;
   meso: number;
-  resets: number;
   circ: number;
-  /** Reset to use from scratch (nothing locked). */
-  start: Method;
-  /** One wanted option shows up first on line 1 (always legendary) — value not yet the goal — and what is left. */
-  afterFirst: {
-    key: AbilityKey;
-    action: PlanAction;
-    fame: number;
-    meso: number;
-    circ: number;
-  }[];
-  /** Same, but on line 2 or 3 (the rare legendary lines; in L1+U2 a unique line). */
-  afterFirstLower: {
-    key: AbilityKey;
-    action: PlanAction;
-    fame: number;
-    meso: number;
-    circ: number;
-    resets: number;
-  }[];
-  /** What to do when two wanted options show up together (lines 2 · 3, values not yet the goal), and what is left. */
-  afterTwo: {
-    keys: [AbilityKey, AbilityKey];
-    action: PlanAction;
-    fame: number;
-    meso: number;
-    circ: number;
-    resets: number;
-  }[];
+  resets: number;
 };
 
 /** keep = reroll without new locks, lock = lock those lines, circ = circulators until those lines hit the goal, then lock. */
@@ -216,6 +209,31 @@ export type PlanAction = {
   kind: "keep" | "lock" | "circ";
   method: Method;
   circCount: number;
+};
+
+/** One way to go on after a result, and what is left after it (every kind of move is listed, cheapest first). */
+export type PlanChoice = PlanCost & { action: PlanAction };
+
+/** What to do when this shows up, the cheapest move first, and what the other moves would leave. */
+export type PlanStep = PlanCost & {
+  action: PlanAction;
+  /** Every kind of move (keep · lock · circulate), cheapest first; the first one is `action`. */
+  choices: PlanChoice[];
+  /** Which goal the move works towards (index in the goals; one goal: always 0). */
+  goal: number;
+};
+
+export type AbilityPlan = PlanCost & {
+  /** Reset to use from scratch (nothing locked). */
+  start: Method;
+  /** One wanted option shows up first on line 1 (in L1+U2 only a lead option can; the others on line 2). */
+  afterFirst: (PlanStep & { key: AbilityKey })[];
+  /** Same, but on line 2 or 3. */
+  afterFirstLower: (PlanStep & { key: AbilityKey })[];
+  /** A second option after following the plan for the first one (three-line goals). */
+  afterTwo: (PlanStep & { keys: [AbilityKey, AbilityKey] })[];
+  /** Two presets: the first ability until one goal is met, and the chance each goal is the one met (by goal). */
+  first?: PlanCost & { chance: number[] };
 };
 
 type Line = { t: number; full: boolean };
@@ -237,75 +255,87 @@ const decF = (s: FState) =>
 const typeState = (m: Map<number, Line>): State =>
   encode(new Map([...m].map(([l, v]) => [l, v.t])));
 
+export type PlanOpts = {
+  sunday: boolean;
+  famePricePerUnit: number;
+  /** Wanted value per option and grade, and the circulator price. Without it values are ignored. */
+  values?: {
+    goal: (key: AbilityKey, grade: "legendary" | "unique") => number;
+    circPrice: number;
+  };
+};
+
 /**
- * Cheapest way to the three wanted options, values included.
+ * Cheapest way to the wanted options, values included.
  * State = locked lines (option + whether its value already meets the goal). After each reset the free lines show
  * options with random values; then: keep going, lock lines (their values stay), or use abyss circulators — they
  * reroll the values of every line and keep options and grades — until the chosen lines meet the goal, then lock them.
- * Finished when all three lines hold the wanted options with values at the goal.
+ * Finished when one goal holds all its options on lines that count, values at the goal.
+ *
+ * Several goals (`tails` given): one ability made into whichever goal comes, and `tails[g]` is what is still to pay
+ * after goal g (another preset made into the other goal). Locks stay within one goal.
  * Solved exactly by value iteration (locks only grow, flags only go to "met").
  */
-export function abilityPlan(
-  keys: [AbilityKey, AbilityKey, AbilityKey],
-  mode: AbilityMode,
-  opts: {
-    sunday: boolean;
-    famePricePerUnit: number;
-    /** Wanted value per option and grade, and the circulator price. Without it values are ignored. */
-    values?: {
-      goal: (key: AbilityKey, grade: "legendary" | "unique") => number;
-      circPrice: number;
-    };
-  },
-  /** L1+U2 only: index in keys of the option that must be the legendary line. */
-  lead?: number,
-): AbilityPlan {
+function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: PlanCost[]): AbilityPlan {
+  const keys: AbilityKey[] = [];
+  const goalOf: number[] = [];
+  const local: number[] = [];
+  goals.forEach((g, gi) =>
+    g.keys.forEach((k, i) => {
+      keys.push(k);
+      goalOf.push(gi);
+      local.push(i);
+    }),
+  );
   const targets = keys.map((k) => INDEX.get(ABILITY_OPTIONS[k].name)!);
+  const goalAt = (t: number) => goals[goalOf[t]];
+  const leadOK = (t: number) => goalAt(t).lead?.includes(local[t]) ?? true;
+  /** L1+U2: the one option that has to be the legendary line (it never counts on lines 2 · 3). */
+  const soleLead = (t: number) => {
+    const g = goalAt(t);
+    return g.mode === "l1u2" && g.lead?.length === 1 && g.lead[0] === local[t];
+  };
+  const counts = (line: number, g: Grade, t: number) =>
+    goalAt(t).mode === "l3"
+      ? line === 0 || g === "legendary"
+      : line === 0
+        ? leadOK(t)
+        : g !== "epic" && !soleLead(t);
+
   const fameMul = opts.sunday ? 0.5 : 1;
   const famePrice = Math.max(opts.famePricePerUnit, 1e-3);
   const circPrice = opts.values ? Math.max(opts.values.circPrice, 1) : 0;
   // Three legendary lines only come from the advanced reset, and a build with legendary lines 2 · 3 is rolled with it
   // to the end (user, 2026-11-11). The fame reset is for L1+U2.
-  const methods: Method[] = mode === "l3" ? ["advanced"] : ["fame"];
-  const gradeOf = (line: number) =>
-    (mode === "l3" || line === 0 ? "legendary" : "unique") as
+  const methodsOf = (g: AbilityGoal): Method[] => (g.mode === "l3" ? ["advanced"] : ["fame"]);
+  const gradeOf = (line: number, t: number) =>
+    (goalAt(t).mode === "l3" || line === 0 ? "legendary" : "unique") as
       "legendary" | "unique";
   const pFull = (line: number, t: number) =>
     opts.values
-      ? valueChance(
-          keys[t],
-          gradeOf(line),
-          opts.values.goal(keys[t], gradeOf(line)),
-        )
+      ? valueChance(keys[t], gradeOf(line, t), opts.values.goal(keys[t], gradeOf(line, t)))
       : 1;
+  const money = (c: PlanCost) => c.fame * famePrice + c.meso + c.circ * circPrice;
+  const tailMoney = (g: number | null) => (g === null || !tails ? 0 : money(tails[g]));
 
   // Reset outcomes per locked option layout (values do not change which options show up).
   const table = new Map<string, Outcome[]>();
   const outcomesFor = (ts: State, m: Method) => {
     const key = `${ts}|${m}`;
-    if (!table.has(key))
-      table.set(
-        key,
-        outcomes(
-          decode(ts),
-          targets,
-          mode,
-          m,
-          mode === "l1u2" ? lead : undefined,
-        ),
-      );
+    if (!table.has(key)) table.set(key, outcomes(decode(ts), targets, m, counts));
     return table.get(key)!;
   };
 
-  // Every state: up to two locked lines, distinct options, each met / not met.
+  // Every state: up to two locked lines of one goal, distinct options, each met / not met.
+  const n = targets.length;
   const states: FState[] = [""];
   for (let a = 0; a < 3; a++)
-    for (let ta = 0; ta < 3; ta++)
+    for (let ta = 0; ta < n; ta++)
       for (const fa of [false, true]) {
         states.push(encF(new Map([[a, { t: ta, full: fa }]])));
         for (let b = a + 1; b < 3; b++)
-          for (let tb = 0; tb < 3; tb++)
-            if (tb !== ta)
+          for (let tb = 0; tb < n; tb++)
+            if (tb !== ta && goalOf[tb] === goalOf[ta])
               for (const fb of [false, true])
                 states.push(
                   encF(
@@ -322,6 +352,12 @@ export function abilityPlan(
   const order = [...states].sort(
     (x, y) => decF(y).size - decF(x).size || fullCount(y) - fullCount(x),
   );
+  /** Resets worth trying from a state: those of the goal its locks belong to, every goal's when nothing is locked. */
+  const methodsAt = (s: FState): Method[] => {
+    const locked = [...decF(s).values()];
+    const gs = locked.length ? [goalAt(locked[0].t)] : goals;
+    return [...new Set(gs.flatMap(methodsOf))];
+  };
 
   const price = (m: Method, locks: number) =>
     FAME[m][locks] * fameMul * famePrice + MESO[m][locks];
@@ -350,52 +386,72 @@ export function abilityPlan(
     return out;
   };
 
-  type Choice = { next: FState | null; circ: number; kind: PlanAction["kind"] };
-  /** Best move after seeing `lines` (null next = finished). Ties keep the current state. */
-  const decide = (lines: Map<number, Line>, s: FState): Choice => {
-    const vals = [...lines.values()];
-    if (lines.size === 3 && vals.every((v) => v.full))
-      return { next: null, circ: 0, kind: "keep" };
+  /** Goal g is on the item: all its options on lines that count (line 1 among them for L1+U2). */
+  const meets = (lines: Map<number, Line>, g: number) => {
+    const mine = [...lines].filter(([, v]) => goalOf[v.t] === g);
+    return (
+      mine.length === goals[g].keys.length &&
+      (goals[g].mode === "l3" || mine.some(([l]) => l === 0))
+    );
+  };
+
+  /** next null = finished (goal = the goal finished). */
+  type Choice = { next: FState | null; circ: number; kind: PlanAction["kind"]; goal: number | null };
+  const valueOf = (c: Choice) =>
+    c.circ * circPrice + (c.next === null ? tailMoney(c.goal) : (V.get(c.next) ?? Infinity));
+  /** Every move after seeing `lines` from `s`; the first one is "keep going as is". */
+  const candidates = (lines: Map<number, Line>, s: FState): Choice[] => {
+    const out: Choice[] = [{ next: s, circ: 0, kind: "keep", goal: null }];
+    goals.forEach((_, g) => {
+      if (!meets(lines, g)) return;
+      const mine = [...lines].filter(([, v]) => goalOf[v.t] === g);
+      if (mine.every(([, v]) => v.full)) out.push({ next: null, circ: 0, kind: "keep", goal: g });
+      else if (circPrice > 0) {
+        // All its options on the item: circulate every line until all of them meet the goal.
+        const p = mine.reduce((x, [l, v]) => x * pFull(l, v.t), 1);
+        if (p > 0) out.push({ next: null, circ: 1 / p, kind: "circ", goal: g });
+      }
+    });
     const locked = decF(s);
-    let best: Choice = { next: s, circ: 0, kind: "keep" };
-    let bestV = V.get(s) ?? Infinity;
-    const consider = (c: Choice) => {
-      const v =
-        c.circ * circPrice +
-        (c.next === null ? 0 : (V.get(c.next) ?? Infinity));
-      if (v < bestV - 1e-9) [best, bestV] = [c, v];
-    };
-    // All three options on the item: circulate every line until all meet the goal.
-    if (lines.size === 3 && circPrice > 0) {
-      const p = [...lines].reduce((x, [l, v]) => x * pFull(l, v.t), 1);
-      if (p > 0) consider({ next: null, circ: 1 / p, kind: "circ" });
-    }
-    // Lock sets that keep the current locks and add wanted lines (at most two locks).
-    const extra = [...lines.keys()].filter((l) => !locked.has(l));
+    const lockedGoal = locked.size ? goalOf[[...locked.values()][0].t] : null;
+    // Lock sets that keep the current locks and add wanted lines of one goal (at most two locks).
+    const extra = [...lines.keys()].filter(
+      (l) => !locked.has(l) && (lockedGoal === null || goalOf[lines.get(l)!.t] === lockedGoal),
+    );
     const sets: number[][] = [[]];
     for (const l of extra)
       for (const set of [...sets])
-        if (set.length + locked.size < 2) sets.push([...set, l]);
+        if (set.length + locked.size < 2 && set.every((x) => goalOf[lines.get(x)!.t] === goalOf[lines.get(l)!.t]))
+          sets.push([...set, l]);
     for (const set of sets) {
       const X = new Map(locked);
       for (const l of set) X.set(l, lines.get(l)!);
-      if (set.length) consider({ next: encF(X), circ: 0, kind: "lock" });
+      if (set.length) out.push({ next: encF(X), circ: 0, kind: "lock", goal: null });
       if (circPrice > 0 && [...X.values()].some((v) => !v.full)) {
         // Circulators reroll every line, so all lines of X must meet the goal at once.
         const p = [...X].reduce((x, [l, v]) => x * pFull(l, v.t), 1);
-        const met = new Map(
-          [...X].map(([l, v]) => [l, { t: v.t, full: true }]),
-        );
-        if (p > 0) consider({ next: encF(met), circ: 1 / p, kind: "circ" });
+        const met = new Map([...X].map(([l, v]) => [l, { t: v.t, full: true }]));
+        if (p > 0) out.push({ next: encF(met), circ: 1 / p, kind: "circ", goal: null });
       }
+    }
+    return out;
+  };
+  /** Best move after seeing `lines` (null next = finished). Ties keep the current state. */
+  const decide = (lines: Map<number, Line>, s: FState): Choice => {
+    const all = candidates(lines, s);
+    let best = all[0];
+    let bestV = valueOf(best);
+    for (const c of all.slice(1)) {
+      const v = valueOf(c);
+      if (v < bestV - 1e-9) [best, bestV] = [c, v];
     }
     return best;
   };
 
   for (const s of order) {
     let best = Infinity;
-    let bestM: Method = methods[0];
-    for (const m of methods) {
+    let bestM: Method = methodsAt(s)[0];
+    for (const m of methodsAt(s)) {
       const res = expand(s, m);
       let v = Infinity;
       for (let i = 0; i < 200; i++) {
@@ -405,10 +461,7 @@ export function abilityPlan(
         for (const r of res) {
           const c = decide(r.lines, s);
           if (c.next === s) stay += r.p;
-          else
-            sum +=
-              r.p *
-              (c.circ * circPrice + (c.next === null ? 0 : V.get(c.next)!));
+          else sum += r.p * (c.circ * circPrice + (c.next === null ? tailMoney(c.goal) : V.get(c.next)!));
         }
         const next = stay < 1 - 1e-15 ? sum / (1 - stay) : Infinity;
         if (next === v || Math.abs(next - v) <= 1e-12 * next) break;
@@ -420,10 +473,11 @@ export function abilityPlan(
     policy.set(s, bestM);
   }
 
-  // Expected fame / meso / resets / circulators under that plan.
+  // Expected fame / meso / resets / circulators under that plan; `tail(g)` = what finishing goal g adds.
   const evalPart = (
     part: (m: Method, locks: number) => number,
     perCirc: number,
+    tail: (g: number) => number,
   ) => {
     const W = new Map<FState, number>();
     for (const s of order) {
@@ -437,7 +491,11 @@ export function abilityPlan(
           rest +=
             r.p *
             (c.circ * perCirc +
-              (c.next === null ? 0 : (W.get(c.next) ?? Infinity)));
+              (c.next === null
+                ? c.goal !== null
+                  ? tail(c.goal)
+                  : 0
+                : (W.get(c.next) ?? Infinity)));
       }
       W.set(
         s,
@@ -448,29 +506,47 @@ export function abilityPlan(
     }
     return W;
   };
-  const fameW = evalPart((m, l) => FAME[m][l] * fameMul, 0);
-  const mesoW = evalPart((m, l) => MESO[m][l], 0);
-  const resetW = evalPart(() => 1, 0);
-  const circW = evalPart(() => 0, 1);
+  const tailOf = (k: keyof PlanCost) => (g: number) => (tails ? tails[g][k] : 0);
+  const fameW = evalPart((m, l) => FAME[m][l] * fameMul, 0, tailOf("fame"));
+  const mesoW = evalPart((m, l) => MESO[m][l], 0, tailOf("meso"));
+  const resetW = evalPart(() => 1, 0, tailOf("resets"));
+  const circW = evalPart(() => 0, 1, tailOf("circ"));
 
-  /** What happens after `lines` are seen from state `from`, and what is left after that move. */
-  const after = (lines: Map<number, Line>, from: FState = "") => {
-    const c = decide(lines, from);
-    const at = c.next ?? "";
-    const action: PlanAction = {
-      kind: c.kind,
-      method: policy.get(c.next ?? "") ?? "fame",
-      circCount: c.circ,
-    };
-    const left = (W: Map<FState, number>) => (c.next === null ? 0 : W.get(at)!);
+  /** What a move leaves to pay (circulators of the move included). */
+  const leftAfter = (c: Choice): PlanCost => {
+    const at = c.next;
+    const tail = c.goal !== null && tails ? tails[c.goal] : null;
+    const left = (W: Map<FState, number>, k: keyof PlanCost) =>
+      at === null ? (tail ? tail[k] : 0) : W.get(at)!;
     return {
-      action,
-      next: c.next,
-      fame: left(fameW),
-      meso: left(mesoW),
-      circ: c.circ + left(circW),
-      resets: left(resetW),
+      fame: left(fameW, "fame"),
+      meso: left(mesoW, "meso"),
+      circ: c.circ + left(circW, "circ"),
+      resets: left(resetW, "resets"),
     };
+  };
+  const actionOf = (c: Choice): PlanAction => ({
+    kind: c.kind,
+    method: policy.get(c.next ?? "") ?? "fame",
+    circCount: c.circ,
+  });
+
+  /** What happens after `lines` are seen from state `from`, what is left, and what the other moves would leave. */
+  const after = (lines: Map<number, Line>, goal: number, from: FState = "") => {
+    const c = decide(lines, from);
+    // The cheapest move of each kind; finishing is not an alternative (it never shows up here).
+    const byKind = new Map<PlanAction["kind"], Choice>();
+    for (const x of candidates(lines, from)) {
+      if (x.next === null && x.kind === "keep") continue;
+      const cur = byKind.get(x.kind);
+      if (!cur || valueOf(x) < valueOf(cur) - 1e-9) byKind.set(x.kind, x);
+    }
+    byKind.set(c.kind, c);
+    const choices = [...byKind.values()]
+      .filter((x) => Number.isFinite(valueOf(x)))
+      .sort((a, b) => (a === c ? -1 : b === c ? 1 : valueOf(a) - valueOf(b)))
+      .map((x) => ({ action: actionOf(x), ...leftAfter(x) }));
+    return { next: c.next, goal, action: actionOf(c), ...leftAfter(c), choices };
   };
   /** A wanted option that just showed up: its value meets the goal only by luck (always, when there is one value). */
   const fresh = (line: number, t: number): Line => ({
@@ -482,52 +558,60 @@ export function abilityPlan(
     void _next;
     return rest;
   };
-  // One option first on line 1 (always legendary). L1+U2: only the lead option can sit there, the others show up on line 2.
-  const lineFor = (t: number) =>
-    mode === "l1u2" && lead !== undefined && t !== lead ? 1 : 0;
+  // One option first on line 1 (always legendary). L1+U2: only a lead option can sit there, the others show up on line 2.
+  const lineFor = (t: number) => (goalAt(t).mode === "l1u2" && !leadOK(t) ? 1 : 0);
   const afterFirst = keys.map((key, t) => ({
     key,
-    ...strip(after(new Map([[lineFor(t), fresh(lineFor(t), t)]]))),
+    ...strip(after(new Map([[lineFor(t), fresh(lineFor(t), t)]]), goalOf[t])),
   }));
-  // One option first on line 2 (lines 2 and 3 behave the same). In L1+U2 the lead option cannot sit there.
+  // One option first on line 2 (lines 2 and 3 behave the same). The one option that has to be line 1 cannot sit there.
   const lowerFirst = keys.map((key, t) =>
-    mode === "l1u2" && t === lead
-      ? null
-      : { key, t, ...after(new Map([[1, fresh(1, t)]])) },
+    soleLead(t) ? null : { key, t, ...after(new Map([[1, fresh(1, t)]]), goalOf[t]) },
   );
   const afterFirstLower = lowerFirst
     .filter((x) => x !== null)
-    .map((x) => ({
-      key: x.key,
-      action: x.action,
-      fame: x.fame,
-      meso: x.meso,
-      circ: x.circ,
-      resets: x.resets,
-    }));
+    .map((x) => {
+      const { t: _t, next: _next, ...rest } = x;
+      void _t;
+      void _next;
+      return rest;
+    });
   // The second option after following the plan for the first one: a showed up first (and was handled as above),
-  // now b shows up on the other lower line (in L1+U2 the lead one goes on line 1).
+  // now b shows up on the other lower line (in L1+U2 the lead one goes on line 1). Three-line goals only: with two
+  // lines the second option finishes the goal.
   // Every discovery order (Codex review: the first one is already handled, so "a then b" ≠ "b then a").
-  // The first one shows up on line 2 (step 3); the second on line 3, or on line 1 when it is the L1+U2 lead.
   const afterTwo: AbilityPlan["afterTwo"] = [];
-  for (let first = 0; first < 3; first++) {
+  for (let first = 0; first < n; first++) {
     const done = lowerFirst[first];
-    if (!done) continue; // the L1+U2 lead never shows up first on a lower line
+    if (!done || goalAt(first).keys.length < 3) continue;
     // Not kept (no lock): the next reset rerolls it, so there is no "second option" step after it (Codex review).
     if (!done.next) continue;
-    for (let second = 0; second < 3; second++) {
-      if (second === first) continue;
-      const secondLine = mode === "l1u2" && second === lead ? 0 : 2;
+    for (let second = 0; second < n; second++) {
+      if (second === first || goalOf[second] !== goalOf[first]) continue;
+      const secondLine = goalAt(second).mode === "l1u2" && soleLead(second) ? 0 : 2;
       const from: FState = done.next ?? "";
       const lines = from ? decF(from) : new Map<number, Line>();
       if (!lines.has(1)) lines.set(1, fresh(1, first));
       lines.set(secondLine, fresh(secondLine, second));
       afterTwo.push({
         keys: [keys[first], keys[second]],
-        ...strip(after(lines, from)),
+        ...strip(after(lines, goalOf[first], from)),
       });
     }
   }
+
+  // Several goals: the first ability alone (until one goal is met, the other preset left out), and how likely each
+  // goal is the one it ends as (user, 2026-11-14: "either counts, so it is cheaper").
+  const none = () => 0;
+  const first = tails
+    ? {
+        fame: evalPart((m, l) => FAME[m][l] * fameMul, 0, none).get("")!,
+        meso: evalPart((m, l) => MESO[m][l], 0, none).get("")!,
+        resets: evalPart(() => 1, 0, none).get("")!,
+        circ: evalPart(() => 0, 1, none).get("")!,
+        chance: goals.map((_, g) => evalPart(() => 0, 0, (x) => (x === g ? 1 : 0)).get("")!),
+      }
+    : undefined;
 
   return {
     fame: fameW.get("")!,
@@ -538,13 +622,45 @@ export function abilityPlan(
     afterFirst,
     afterFirstLower,
     afterTwo,
+    first,
   };
 }
 
+/**
+ * Cheapest way to one ability with these options. `lead` (L1+U2): the option(s) that may be the legendary first line;
+ * left out, any of them.
+ */
+export function abilityPlan(
+  keys: AbilityKey[],
+  mode: AbilityMode,
+  opts: PlanOpts,
+  lead?: number | number[],
+): AbilityPlan {
+  return solve([{ keys, mode, lead: lead === undefined ? undefined : Array.isArray(lead) ? lead : [lead] }], opts);
+}
+
+/**
+ * Two presets, two builds (user, 2026-11-14: "드메도 뽑으면서 패보상"): roll one ability and make it whichever build comes
+ * first, then the other preset into the other build. `both` = that plan (its rows say which build a move goes for),
+ * `a` and `b` = each build alone; the two presets done one after the other cost a + b.
+ */
+export function abilityPairPlan(
+  a: AbilityGoal,
+  b: AbilityGoal,
+  opts: PlanOpts,
+): { both: AbilityPlan; a: AbilityPlan; b: AbilityPlan } {
+  const one = solve([a], opts);
+  const two = solve([b], opts);
+  const cost = (p: AbilityPlan): PlanCost => ({ fame: p.fame, meso: p.meso, circ: p.circ, resets: p.resets });
+  // Finishing a leaves b for the other preset, and the other way round.
+  const both = solve([a, b], opts, [cost(two), cost(one)]);
+  return { both, a: one, b: two };
+}
+
 // ---------------------------------------------------------------------------
-// Values (수치). Official value table (/Guide/OtherProbability/ability/reputevalue, 2026-11-09):
-// every option has six rows chosen with 20 · 20 · 20 · 15 · 15 · 10 %, each row one value per grade.
-// Max HP %, cooldown skip and defence / MP % share the boss damage rows.
+// Values (수치). Official value table (/Guide/OtherProbability/ability/reputevalue, 2026-11-09; drop and meso
+// 2026-11-14, the page's values as of 2026-09-17): every option has six rows chosen with 20 · 20 · 20 · 15 · 15 · 10 %,
+// each row one value per grade. Max HP %, cooldown skip and defence / MP % share the boss damage rows.
 const VALUE_ROW_P = [0.2, 0.2, 0.2, 0.15, 0.15, 0.1];
 export const ABILITY_VALUES: Record<
   AbilityKey,
@@ -580,6 +696,16 @@ export const ABILITY_VALUES: Record<
     unit: "%",
     legendary: [15, 16, 17, 18, 19, 20],
     unique: [5, 6, 7, 8, 9, 10],
+  },
+  drop: {
+    unit: "%",
+    legendary: [18, 18, 19, 19, 20, 20],
+    unique: [13, 13, 14, 14, 15, 15],
+  },
+  meso: {
+    unit: "%",
+    legendary: [18, 18, 19, 19, 20, 20],
+    unique: [13, 13, 14, 14, 15, 15],
   },
 };
 

@@ -16,14 +16,19 @@ import {
   ABILITY_OPTIONS,
   ABILITY_PRESETS,
   ABILITY_VALUES,
+  abilityPairPlan,
   abilityPlan,
-  legendaryOnly,
+  presetLead,
   valueChoices,
+  type AbilityGoal,
   type AbilityKey,
   type AbilityMode,
   type AbilityPlan,
+  type AbilityPreset,
   type Method,
   type PlanAction,
+  type PlanChoice,
+  type PlanOpts,
 } from "@/lib/ev/ability";
 import { CREDIT_SHOP } from "@/lib/ev/defaults";
 import { cn } from "@/lib/utils";
@@ -55,11 +60,12 @@ export function AbilityTab() {
   );
 
   const preset = ABILITY_PRESETS.find((p) => p.id === presetId)!;
-  // L1+U2: the legendary line is the legendary-only option if there is one, else the first of the preset.
-  const lead = Math.max(
-    0,
-    preset.keys.findIndex((k) => legendaryOnly(k)),
-  );
+  // A second preset made into 드메 at the same time (user, 2026-11-14), for the boss builds.
+  const [withHunt, setWithHunt] = useState(false);
+  const hunt = ABILITY_PRESETS.find((p) => p.hunting)!;
+  const pairOn = withHunt && !preset.hunting;
+  // L1+U2: the legendary line is the legendary-only option if there is one, else the first of the preset (드메: either).
+  const lead = presetLead(preset)[0];
   const famePerUnit = (parseNum(fame5kText, 0) * 1e4) / 5000;
   const unitOf = (k: AbilityKey) => ABILITY_VALUES[k].unit;
   const have = parseNum(haveText, 0);
@@ -75,43 +81,28 @@ export function AbilityTab() {
   const goalOf = (k: AbilityKey, g: "legendary" | "unique") =>
     goals[`${k}:${g}`] ?? Math.max(...valueChoices(k, g));
   const circPrice = parseNum(circText, 0) * 1e8;
-  // Options, values and circulators planned together (when to lock, when to circulate).
-  const plan = useMemo(
-    () =>
-      abilityPlan(
-        presetKeys(presetId),
-        mode,
-        {
-          sunday,
-          famePricePerUnit: famePerUnit,
-          values: {
-            goal: (k, g) =>
-              goals[`${k}:${g}`] ?? Math.max(...valueChoices(k, g)),
-            circPrice,
-          },
-        },
-        lead,
-      ),
-    [presetId, mode, sunday, famePerUnit, lead, goals, circPrice],
+  const opts: PlanOpts = useMemo(
+    () => ({
+      sunday,
+      famePricePerUnit: famePerUnit,
+      values: {
+        goal: (k, g) => goals[`${k}:${g}`] ?? Math.max(...valueChoices(k, g)),
+        circPrice,
+      },
+    }),
+    [sunday, famePerUnit, goals, circPrice],
   );
-  const other = useMemo(
-    () =>
-      abilityPlan(
-        presetKeys(presetId),
-        mode === "l3" ? "l1u2" : "l3",
-        {
-          sunday,
-          famePricePerUnit: famePerUnit,
-          values: {
-            goal: (k, g) =>
-              goals[`${k}:${g}`] ?? Math.max(...valueChoices(k, g)),
-            circPrice,
-          },
-        },
-        lead,
-      ),
-    [presetId, mode, sunday, famePerUnit, lead, goals, circPrice],
-  );
+  // Options, values and circulators planned together (when to lock, when to circulate). With 드메 as well: one ability
+  // made into whichever build comes first, the other preset into the other one.
+  const planFor = (m: AbilityMode) =>
+    pairOn
+      ? abilityPairPlan(goalOf2(preset, m), goalOf2(hunt, m), opts)
+      : { both: abilityPlan(preset.keys, m, opts, m === "l1u2" ? presetLead(preset) : undefined), a: null, b: null };
+  const planned = useMemo(() => planFor(mode), [preset, hunt, pairOn, mode, opts]); // eslint-disable-line react-hooks/exhaustive-deps
+  const plan = planned.both;
+  const other = useMemo(() => planFor(mode === "l3" ? "l1u2" : "l3").both, [preset, hunt, pairOn, mode, opts]); // eslint-disable-line react-hooks/exhaustive-deps
+  /** Which rows are the 드메 preset's in a two-preset plan (goal 1). */
+  const huntGoal = pairOn ? 1 : preset.hunting ? 0 : -1;
   const seen2 = seen2Sel?.plan === plan ? seen2Sel.key : null;
   const pickSeen = (k: AbilityKey | null) => {
     setSeen(k);
@@ -168,6 +159,78 @@ export function AbilityTab() {
   const circMeso = view.circ * circPrice;
   const lowerSame = lowerRows.length > 0 && sameAction(lowerRows);
   const twoSame = twoRows.length > 0 && sameAction(twoRows);
+  const sumCost = (a: Cost, b: Cost): Cost => ({ fame: a.fame + b.fame, meso: a.meso + b.meso, circ: a.circ + b.circ });
+  /** "146.2억" (money when there is a fame price, else fame). */
+  const diffText = (more: Cost, less: Cost) => {
+    const d = costNum(more) - costNum(less);
+    return total(more) !== null ? eok(d) : fameText(d);
+  };
+  /** What the other moves of a row would leave, and how much more than the cheapest one ("다르게 하면"). */
+  const altText = (row: { choices: PlanChoice[] }) => {
+    const [best, ...rest] = row.choices;
+    if (!best || rest.length === 0) return undefined;
+    // Without a fame price there is no one number for fame, meso and circulators together: each move shows what it
+    // leaves, with no "+ more" or "about the same" (fame alone would call a move with ten more circulators equal;
+    // Codex review, 2026-11-14).
+    const priced = total(best) !== null;
+    const near = (a: number, b: number) => Math.abs(a - b) <= Math.max(a, b) * 0.001;
+    // Two other moves that leave about the same (lock vs circulate-then-lock) are one piece of news: keep the first.
+    const same = (a: PlanChoice, b: PlanChoice) =>
+      priced ? near(costNum(a), costNum(b)) : near(a.fame, b.fame) && near(a.meso, b.meso) && near(a.circ, b.circ);
+    const shown = rest.filter((c, i) => !rest.slice(0, i).some((p) => same(p, c)));
+    return shown
+      .map((c) => {
+        const what =
+          c.action.kind === "keep"
+            ? "그대로 계속"
+            : c.action.kind === "lock"
+              ? "잠그면"
+              : `서큘레이터 ${circN(c.action.circCount)} → 잠그면`;
+        if (!priced) return `${what} ${costText(c)}${c.circ > 0.05 ? ` + 서큘레이터 ${circN(c.circ)}` : ""}`;
+        const close = costNum(c) - costNum(best) <= costNum(best) * 0.001;
+        return `${what} ${costText(c).replace(/^약 /, "")} (${close ? "거의 같음" : `+${diffText(c, best)}`})`;
+      })
+      .join(" · ");
+  };
+  /** The wanted value of these options on this grade (드메: drop and meso move together). */
+  const valueSelect = (ks: AbilityKey[], g: "legendary" | "unique", label: string) => {
+    const choices = valueChoices(ks[0], g);
+    if (choices.length <= 1)
+      return (
+        <b className="px-2 font-num text-xs">
+          +{choices[0] ?? "-"}
+          {unitOf(ks[0])}
+        </b>
+      );
+    return (
+      <select
+        aria-label={`${label} 목표 수치`}
+        value={goalOf(ks[0], g)}
+        onChange={(e) =>
+          setGoals({ ...goals, ...Object.fromEntries(ks.map((k) => [`${k}:${g}`, Number(e.target.value)])) })
+        }
+        className="h-7 rounded-md border border-input bg-card px-1.5 font-num text-xs"
+      >
+        {choices.map((v) => (
+          <option key={v} value={v}>
+            +{v}
+            {unitOf(ks[0])} 이상
+          </option>
+        ))}
+      </select>
+    );
+  };
+  /** 드메: drop or meso on the legendary line 1, the other on line 2 (legendary too in "레전드리 2줄"). */
+  const huntLines = (m: AbilityMode) => (
+    <>
+      <GoalLine legend label="드롭률 · 메소 중 하나" value={valueSelect(["drop", "meso"], "legendary", "첫째 줄")} />
+      <GoalLine
+        legend={m === "l3"}
+        label="나머지 하나 (둘째 · 셋째 줄)"
+        value={valueSelect(["drop", "meso"], m === "l3" ? "legendary" : "unique", "나머지 줄")}
+      />
+    </>
+  );
 
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
@@ -186,6 +249,17 @@ export function AbilityTab() {
             </Chip>
           ))}
         </div>
+        {!preset.hunting && (
+          <Switch
+            on={withHunt}
+            onChange={(on) => {
+              setWithHunt(on);
+              pickSeen(null);
+            }}
+            label="드메 프리셋도 같이 맞추기"
+            note="프리셋 2개 · 먼저 맞는 쪽부터"
+          />
+        )}
         <Label
           aside={
             <Segment
@@ -193,65 +267,34 @@ export function AbilityTab() {
               value={mode}
               onChange={chooseMode}
               options={[
-                { id: "l3", label: "레전드리 3줄" },
-                { id: "l1u2", label: "레 1 + 유 2" },
+                { id: "l3", label: modeLabel(preset, "l3", true) },
+                { id: "l1u2", label: modeLabel(preset, "l1u2", true) },
               ]}
               className="w-56"
             />
           }
         >
-          목표 세 줄
+          목표 {preset.keys.length === 2 ? "두" : "세"} 줄
         </Label>
         <div className="flex flex-col gap-1.5">
-          {order.map((k, i) => {
-            const legend = mode === "l3" || i === 0;
-            return (
-              <div
-                key={k}
-                className="grid grid-cols-[28px_minmax(0,1fr)] items-center gap-2"
-              >
-                <span
-                  title={legend ? "레전드리" : "유니크 이상"}
-                  className={cn(
-                    "flex size-7 items-center justify-center rounded-md font-num text-xs font-bold",
-                    legend
-                      ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300"
-                      : "bg-amber-500/15 text-amber-600 dark:text-amber-300",
-                  )}
-                >
-                  {legend ? "L" : "U"}
-                </span>
-                <span className="flex h-9 min-w-0 items-center justify-between gap-2 rounded-lg border border-border bg-background pr-1 pl-3 text-[13px]">
-                  <span className="truncate">{ABILITY_OPTIONS[k].label}</span>
-                  {valueChoices(k, gradeOf(i)).length > 1 ? (
-                    <select
-                      aria-label={`${ABILITY_OPTIONS[k].label} 목표 수치`}
-                      value={goalOf(k, gradeOf(i))}
-                      onChange={(e) =>
-                        setGoals({
-                          ...goals,
-                          [`${k}:${gradeOf(i)}`]: Number(e.target.value),
-                        })
-                      }
-                      className="h-7 rounded-md border border-input bg-card px-1.5 font-num text-xs"
-                    >
-                      {valueChoices(k, gradeOf(i)).map((v) => (
-                        <option key={v} value={v}>
-                          +{v}
-                          {unitOf(k)} 이상
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <b className="px-2 font-num text-xs">
-                      +{valueChoices(k, gradeOf(i))[0] ?? "-"}
-                      {unitOf(k)}
-                    </b>
-                  )}
-                </span>
-              </div>
-            );
-          })}
+          {preset.hunting
+            ? huntLines(mode)
+            : order.map((k, i) => (
+                <GoalLine
+                  key={k}
+                  legend={mode === "l3" || i === 0}
+                  label={ABILITY_OPTIONS[k].label}
+                  value={valueSelect([k], gradeOf(i), ABILITY_OPTIONS[k].label)}
+                />
+              ))}
+          {pairOn && (
+            <>
+              <span className="mt-1 text-[11px] font-semibold text-muted-foreground">
+                드메 프리셋 · {modeLabel(hunt, mode)}
+              </span>
+              {huntLines(mode)}
+            </>
+          )}
         </div>
         <div className="grid gap-2 sm:grid-cols-3">
           <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
@@ -296,8 +339,8 @@ export function AbilityTab() {
       <section className="flex min-w-0 flex-col gap-3">
         <div className="flex flex-col gap-1.5 rounded-lg bg-primary px-5 py-4 text-primary-foreground">
           <span className="text-[13px] font-semibold">
-            {preset.label} ·{" "}
-            {mode === "l3" ? "레전드리 3줄" : "레전드리 1 + 유니크 2"}{" "}
+            {preset.label}
+            {pairOn ? ` + ${hunt.label} · 프리셋 2개` : ""} · {modeLabel(preset, mode)}{" "}
             {pickedTwo
               ? `· ${ABILITY_OPTIONS[pickedTwo.keys[0]].short} 다음 ${withSubject(ABILITY_OPTIONS[pickedTwo.keys[1]].short)} 뜬 뒤 남은 비용`
               : pickedRow
@@ -320,6 +363,20 @@ export function AbilityTab() {
             {view.meso > 0 ? ` + 재설정 ${eok(view.meso)}` : ""}
             {circMeso > 0 ? ` + 서큘레이터 ${eok(circMeso)}` : ""}
           </span>
+          {pairOn && !pickedRow && planned.a && planned.b && (
+            <span className="text-xs font-semibold opacity-85">
+              따로 하면 {costText(sumCost(planned.a, planned.b)).replace(/^약 /, "")} ({preset.label}{" "}
+              {costText(planned.a).replace(/^약 /, "")} + {hunt.label} {costText(planned.b).replace(/^약 /, "")}) ·{" "}
+              {diffText(sumCost(planned.a, planned.b), plan)} 절약
+            </span>
+          )}
+          {/* Either build counts on the first preset, so it alone costs less than the boss build alone (user, 2026-11-14). */}
+          {pairOn && !pickedRow && plan.first && (
+            <span className="text-xs font-semibold opacity-85">
+              첫 프리셋은 먼저 맞는 쪽까지 {costText(plan.first).replace(/^약 /, "")} · {preset.label} 먼저{" "}
+              {Math.round(plan.first.chance[0] * 100)}% · {hunt.label} 먼저 {Math.round(plan.first.chance[1] * 100)}%
+            </span>
+          )}
           {pickedRow && total(plan) !== null && (
             <span className="text-xs font-semibold opacity-85">
               처음부터 평균 {eok(total(plan)!)} ·{" "}
@@ -332,7 +389,8 @@ export function AbilityTab() {
         {!pickedRow && (
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-card px-4 py-2.5 text-[13px]">
             <span className="text-muted-foreground">
-              {mode === "l3" ? "레전드리 1 + 유니크 2" : "레전드리 3줄"}로 하면
+              {modeLabel(preset, mode === "l3" ? "l1u2" : "l3")}
+              {pairOn ? " (드메도)" : ""}로 하면
             </span>
             <b className="font-num">{costText(other)}</b>
           </div>
@@ -381,16 +439,17 @@ export function AbilityTab() {
                 : undefined
             }
           >
-            {/* Rerolling from scratch leaves the whole cost, so the rows would only repeat the total. */}
-            {!(firstSame && plan.afterFirst[0].action.kind === "keep") &&
-              plan.afterFirst.map((b) => (
-                <StepRow
-                  key={b.key}
-                  label={ABILITY_OPTIONS[b.key].short}
-                  action={firstSame ? undefined : actionText(b.action, false)}
-                  cost={costText(b)}
-                />
-              ))}
+            {/* Every row, even when it is "keep going": what locking it instead would leave is the point (user, 2026-11-14). */}
+            {plan.afterFirst.map((b) => (
+              <StepRow
+                key={b.key}
+                label={ABILITY_OPTIONS[b.key].short}
+                tag={b.goal === huntGoal && pairOn ? hunt.label : undefined}
+                action={firstSame ? undefined : actionText(b.action, false)}
+                cost={costText(b)}
+                alts={altText(b)}
+              />
+            ))}
           </Step>
           <Step
             n={3}
@@ -408,6 +467,7 @@ export function AbilityTab() {
               <StepRow
                 key={b.key}
                 label={ABILITY_OPTIONS[b.key].short}
+                tag={b.goal === huntGoal && pairOn ? hunt.label : undefined}
                 action={lowerSame ? undefined : actionText(b.action, false)}
                 extra={
                   b.action.kind === "circ"
@@ -415,16 +475,21 @@ export function AbilityTab() {
                     : undefined
                 }
                 cost={costText(b)}
+                alts={altText(b)}
                 selected={picked === b.key}
               />
             ))}
           </Step>
+          {!preset.hunting && (
           <Step
             n={4}
             title={`${picked && twoRows.length ? `${ABILITY_OPTIONS[picked].short} 다음 ` : ""}하나 더 뜨면${twoSame ? ` → ${actionText(twoRows[0].action, true)}` : ""}`}
             note={
               picked && twoRows.length === 0
-                ? `${withTopic(ABILITY_OPTIONS[picked].short)} 잠그지 않음 · 다음 결과로 2 · 3단계부터 다시`
+                ? // Kept (locked or circulated, then locked): the other 드메 option finishes it. Not kept: it is rerolled.
+                  pickedRow?.goal === huntGoal && pickedRow.action.kind !== "keep"
+                  ? `${hunt.label}는 두 줄 · 나머지 하나가 뜨면 끝`
+                  : `${withTopic(ABILITY_OPTIONS[picked].short)} 잠그지 않음 · 다음 결과로 2 · 3단계부터 다시`
                 : undefined
             }
             aside={
@@ -456,12 +521,14 @@ export function AbilityTab() {
                       : undefined
                   }
                   cost={costText(b)}
+                  alts={altText(b)}
                   selected={pickedTwo === b}
                 />
               ))}
           </Step>
+          )}
           <Step
-            n={5}
+            n={preset.hunting ? 4 : 5}
             title="다 떴는데 수치가 모자라면 → 서큘레이터"
             note="서큘레이터는 잠근 줄 수치도 다시 굴림"
           />
@@ -483,8 +550,20 @@ const withTopic = (word: string) => {
   return word + (c >= 0 && c < 11172 && c % 28 !== 0 ? "은" : "는");
 };
 
-const presetKeys = (id: string) =>
-  ABILITY_PRESETS.find((p) => p.id === id)!.keys;
+/** A preset as a goal: L1+U2 needs its legendary line (드메: drop or meso). */
+const goalOf2 = (p: AbilityPreset, mode: AbilityMode): AbilityGoal => ({
+  keys: p.keys,
+  mode,
+  lead: mode === "l1u2" ? presetLead(p) : undefined,
+});
+
+/** "레전드리 3줄" · "레 1 + 유 2", or 2 lines for 드메. */
+const modeLabel = (p: AbilityPreset, mode: AbilityMode, short = false) =>
+  mode === "l3"
+    ? `레전드리 ${p.keys.length}줄`
+    : short
+      ? `레 1 + 유 ${p.keys.length - 1}`
+      : `레전드리 1 + 유니크 ${p.keys.length - 1}`;
 
 const METHOD_NAME: Record<Method, string> = {
   fame: "명성치 재설정",
@@ -544,9 +623,10 @@ function SeenChips({
     <span
       role="group"
       aria-label={label}
-      className="flex items-center gap-1 pl-7 sm:pl-0"
+      // Five chips with 드메 as well: they wrap rather than squeeze ("패시\n브" on a phone).
+      className="flex flex-wrap items-center gap-1 pl-7 sm:pl-0"
     >
-      <span className="mr-0.5 text-[11px] text-muted-foreground">뜬 옵션</span>
+      <span className="mr-0.5 shrink-0 text-[11px] text-muted-foreground">뜬 옵션</span>
       {keys.map((k) => (
         <button
           key={k}
@@ -554,7 +634,7 @@ function SeenChips({
           aria-pressed={value === k}
           onClick={() => onChange(value === k ? null : k)}
           className={cn(
-            "h-7 rounded-full border px-2.5 text-xs transition-colors",
+            "h-7 shrink-0 rounded-full border px-2.5 text-xs whitespace-nowrap transition-colors",
             value === k
               ? "border-primary bg-primary font-bold text-primary-foreground"
               : "border-border hover:border-primary/60",
@@ -569,15 +649,21 @@ function SeenChips({
 
 function StepRow({
   label,
+  tag,
   action,
   extra,
   cost,
+  alts,
   selected,
 }: {
   label: string;
+  /** Which preset the row goes for, when there are two ("드메"). */
+  tag?: string;
   action?: string;
   extra?: string;
   cost: string;
+  /** The other moves and what they would leave ("다르게 하면"). */
+  alts?: string;
   selected?: boolean;
 }) {
   return (
@@ -590,15 +676,46 @@ function StepRow({
       <span className="flex min-w-0 flex-col">
         <span className="text-[13px]">
           <b>{label}</b>
+          {tag && (
+            <span className="ml-1.5 rounded border border-emerald-500/40 bg-emerald-500/10 px-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">
+              {tag}
+            </span>
+          )}
           {action ? ` → ${action}` : ""}
         </span>
         {extra && (
           <span className="text-[11px] text-muted-foreground">{extra}</span>
         )}
+        {alts && (
+          <span className="text-[11px] text-muted-foreground">다르게 하면 · {alts}</span>
+        )}
       </span>
       <span className="flex flex-col items-end">
         <b className="font-num text-[13px] whitespace-nowrap">{cost}</b>
         <span className="text-[10px] text-muted-foreground">남은 평균</span>
+      </span>
+    </div>
+  );
+}
+
+/** One wanted line: grade badge (L legendary, U unique or better), option, wanted value. */
+function GoalLine({ legend, label, value }: { legend: boolean; label: string; value: ReactNode }) {
+  return (
+    <div className="grid grid-cols-[28px_minmax(0,1fr)] items-center gap-2">
+      <span
+        title={legend ? "레전드리" : "유니크 이상"}
+        className={cn(
+          "flex size-7 items-center justify-center rounded-md font-num text-xs font-bold",
+          legend
+            ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-300"
+            : "bg-amber-500/15 text-amber-600 dark:text-amber-300",
+        )}
+      >
+        {legend ? "L" : "U"}
+      </span>
+      <span className="flex h-9 min-w-0 items-center justify-between gap-2 rounded-lg border border-border bg-background pr-1 pl-3 text-[13px]">
+        <span className="truncate">{label}</span>
+        {value}
       </span>
     </div>
   );

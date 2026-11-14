@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import data from "./data/ability.json" with { type: "json" };
-import { ABILITY_OPTIONS, abilityPlan, legendaryOnly, type AbilityKey, circulatorCount, valueChance, valueChoices } from "./ability.ts";
+import { ABILITY_OPTIONS, abilityPairPlan, abilityPlan, legendaryOnly, type AbilityKey, circulatorCount, valueChance, valueChoices } from "./ability.ts";
 
 type Grade = "epic" | "unique" | "legendary";
 const rows = (data as unknown as { rows: [string, number, number, number][] }).rows;
@@ -161,4 +161,64 @@ test("an option that is not kept has no follow-up step (Codex review: 패보크 
   const boss = p.afterFirstLower.find((a) => a.key === "boss")!;
   assert.equal(boss.action.kind, "keep");
   assert.ok(p.afterTwo.every((a) => a.keys[0] !== "boss"));
+});
+
+const maxGoal = (k: AbilityKey, g: "legendary" | "unique") => Math.max(...valueChoices(k, g));
+const valued = { sunday: false, famePricePerUnit: 400, values: { goal: maxGoal, circPrice: 2.6e8 } };
+const money = (c: { fame: number; meso: number; circ: number }) => c.fame * 400 + c.meso + c.circ * 2.6e8;
+
+test("drop and meso: official values, legendary 18 ~ 20 and unique 13 ~ 15", () => {
+  assert.deepEqual(valueChoices("drop", "legendary"), [18, 19, 20]);
+  assert.deepEqual(valueChoices("meso", "unique"), [13, 14, 15]);
+  assert.ok(Math.abs(valueChance("drop", "legendary", 20) - 0.25) < 1e-12);
+  assert.ok(Math.abs(valueChance("meso", "unique", 14) - 0.6) < 1e-12);
+});
+
+test("드메 is two lines: drop or meso on line 1, the other below; no third-option step", () => {
+  const l1 = abilityPlan(["drop", "meso"], "l1u2", valued, [0, 1]);
+  const l3 = abilityPlan(["drop", "meso"], "l3", valued);
+  assert.ok(Number.isFinite(l1.fame) && l1.fame > 0);
+  // Both lines legendary needs the 2 % legendary lower line of the advanced reset: far more.
+  assert.ok(money(l3) > money(l1) * 3, `${money(l3)} vs ${money(l1)}`);
+  assert.equal(l1.afterTwo.length, 0);
+  assert.deepEqual(l1.afterFirstLower.map((r) => r.key).sort(), ["drop", "meso"]);
+  // Either option may be the legendary line 1.
+  assert.deepEqual(l1.afterFirst.map((r) => r.key), ["drop", "meso"]);
+});
+
+test("every row lists each kind of move once, the chosen one first and never dearer than the others", () => {
+  const p = abilityPlan(["pas", "boss", "stat"], "l3", valued);
+  for (const row of [...p.afterFirst, ...p.afterFirstLower, ...p.afterTwo]) {
+    assert.equal(row.choices[0].action.kind, row.action.kind);
+    assert.ok(Math.abs(money(row.choices[0]) - money(row)) < 1);
+    for (const c of row.choices.slice(1)) assert.ok(money(c) >= money(row) - 1, `${c.action.kind} ${money(c)} < ${money(row)}`);
+    assert.equal(new Set(row.choices.map((c) => c.action.kind)).size, row.choices.length);
+  }
+  // The user's case: boss first on a lower line. Locking it beats rolling on.
+  const boss = p.afterFirstLower.find((r) => r.key === "boss")!;
+  const keep = boss.choices.find((c) => c.action.kind === "keep")!;
+  assert.ok(money(keep) > money(boss));
+});
+
+test("two presets (패보상 + 드메): together costs less than one after the other, the first preset less than the boss build alone", () => {
+  for (const mode of ["l3", "l1u2"] as const) {
+    const pair = abilityPairPlan(
+      { keys: ["pas", "boss", "stat"], mode, lead: mode === "l1u2" ? [0] : undefined },
+      { keys: ["drop", "meso"], mode, lead: mode === "l1u2" ? [0, 1] : undefined },
+      valued,
+    );
+    const separate = money(pair.a) + money(pair.b);
+    assert.ok(money(pair.both) < separate, `${mode}: ${money(pair.both)} vs ${separate}`);
+    // Never below the dearer build alone: that one has to be made on some preset anyway.
+    assert.ok(money(pair.both) > Math.max(money(pair.a), money(pair.b)));
+    const first = pair.both.first!;
+    assert.ok(Math.abs(first.chance[0] + first.chance[1] - 1) < 1e-9);
+    assert.ok(money(first) < money(pair.a));
+    // What is left after the first preset is the other build alone, weighted by which one came first.
+    const second = first.chance[0] * money(pair.b) + first.chance[1] * money(pair.a);
+    assert.ok(Math.abs(money(first) + second - money(pair.both)) < money(pair.both) * 1e-6);
+    // Rows say which build a move works towards.
+    assert.ok(pair.both.afterFirstLower.some((r) => r.key === "drop" && r.goal === 1));
+    assert.ok(pair.both.afterFirstLower.some((r) => r.key === "boss" && r.goal === 0));
+  }
 });
