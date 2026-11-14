@@ -152,6 +152,12 @@ export function AbilityTab() {
         x.action.method === list[0].action.method,
     );
   const firstSame = sameAction(plan.afterFirst);
+  // Line 1 first is "go on" for every option: steps 1 and 2 are one step (user, 2026-11-15). The advanced reset's
+  // auto reset has "첫 번째 옵션 제외" for exactly that (official guide); the fame reset just goes on.
+  const firstKeep = firstSame && plan.afterFirst[0]?.action.kind === "keep";
+  /** Step number as shown (one less after the merged first step). */
+  const sn = (n: number) => (firstKeep && n > 1 ? n - 1 : n);
+  const again = `다음 결과로 ${firstKeep ? sn(3) : "2 · 3"}단계부터 다시`;
   // Cheapest first; step 4 follows what the user picked in step 3.
   const costNum = (p: Cost) => total(p) ?? p.fame;
   const lowerRows = [...plan.afterFirstLower].sort(
@@ -464,20 +470,24 @@ export function AbilityTab() {
         </div>
         <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4">
           <b className="text-sm">가장 싼 순서</b>
-          <Step n={1} title={`잠금 없이 ${METHOD_NAME[plan.start]}`} />
           <Step
-            n={2}
-            title={`첫째 줄에 먼저 뜨면${firstSame ? ` → ${actionText(plan.afterFirst[0].action, false)}` : ""}`}
-            note={
-              firstSame && plan.afterFirst[0].action.kind === "keep"
-                ? "첫째 줄은 마지막에 채우는 게 쌈"
-                : undefined
+            n={1}
+            title={
+              !firstKeep
+                ? `잠금 없이 ${METHOD_NAME[plan.start]}`
+                : plan.start === "advanced"
+                  ? "첫 번째 옵션 제외 켜고 잠금 없이 고급 재설정"
+                  : `잠금 없이 ${METHOD_NAME[plan.start]} · 첫째 줄에 뜬 건 넘김`
             }
-          >
-            {/* Every option "go on" (locking line 1 never pays, user 2026-11-14): the title says it, no rows that
-                only repeat the total. */}
-            {!(firstSame && plan.afterFirst[0].action.kind === "keep") &&
-              plan.afterFirst.map((b, i) => (
+            note={firstKeep ? "첫째 줄은 마지막에 채우는 게 쌈" : undefined}
+          />
+          {/* Some option on line 1 is not "go on": its own step with a row per option. */}
+          {!firstKeep && (
+            <Step
+              n={2}
+              title={`첫째 줄에 먼저 뜨면${firstSame ? ` → ${actionText(plan.afterFirst[0].action, false)}` : ""}`}
+            >
+              {plan.afterFirst.map((b, i) => (
                 <StepRow
                   key={b.key}
                   label={ABILITY_OPTIONS[b.key].short}
@@ -488,9 +498,10 @@ export function AbilityTab() {
                   unit={i === 0}
                 />
               ))}
-          </Step>
+            </Step>
+          )}
           <Step
-            n={3}
+            n={sn(3)}
             title={`둘째 · 셋째 줄에 먼저 뜨면${lowerSame ? ` → ${actionText(lowerRows[0].action, false)}` : ""}`}
             aside={
               <SeenChips
@@ -521,19 +532,19 @@ export function AbilityTab() {
           </Step>
           {!preset.hunting && (
           <Step
-            n={4}
+            n={sn(4)}
             title={`${picked && twoRows.length ? `${ABILITY_OPTIONS[picked].short}${pickedRow?.nextAtGoal ? ` ${goalText(picked, pickedRow.line)}` : ""} 다음 ` : ""}하나 더 뜨면${picked && twoSame ? ` → ${actionText(twoRows[0].action, true)}` : ""}`}
             note={
               // Every pair at once made the column long (user, 2026-11-14): only what can follow the option picked in step 3.
               !picked
-                ? "3단계에서 뜬 옵션을 고르면 이어서 보여 줌"
+                ? `${sn(3)}단계에서 뜬 옵션을 고르면 이어서 보여 줌`
                 : pickedRow?.finish
                   ? // A two-line goal (드메): the other option finishes it, in the last step.
                     `${pickedRow.nextAtGoal ? `${goalText(picked, pickedRow.line)} 미만이면 잠그지 않음 · ` : ""}${hunt.label}는 두 줄 · 마지막 단계로`
                   : twoRows.length === 0
-                    ? `${withTopic(ABILITY_OPTIONS[picked].short)} 잠그지 않음 · 다음 결과로 2 · 3단계부터 다시`
+                    ? `${withTopic(ABILITY_OPTIONS[picked].short)} 잠그지 않음 · ${again}`
                     : pickedRow?.nextAtGoal
-                      ? `${goalText(picked, pickedRow.line)} 미만이면 잠그지 않음 · 다음 결과로 2 · 3단계부터 다시`
+                      ? `${goalText(picked, pickedRow.line)} 미만이면 잠그지 않음 · ${again}`
                       : undefined
             }
             aside={
@@ -574,13 +585,13 @@ export function AbilityTab() {
           </Step>
           )}
           <Step
-            n={preset.hunting ? 4 : 5}
+            n={sn(preset.hunting ? 4 : 5)}
             title="마지막 하나가 뜨면"
             note={
               finishRows.length > 0
                 ? undefined
                 : pickedTwo
-                  ? `${withTopic(ABILITY_OPTIONS[pickedTwo.keys[1]].short)} 잠그지 않음 · 다음 결과로 4단계부터 다시`
+                  ? `${withTopic(ABILITY_OPTIONS[pickedTwo.keys[1]].short)} 잠그지 않음 · 다음 결과로 ${sn(4)}단계부터 다시`
                   : picked
                     ? "위 단계대로 잠그면 이어서 보여 줌"
                     : undefined
