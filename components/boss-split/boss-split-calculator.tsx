@@ -37,7 +37,7 @@ const PERCENT_COLS: Record<number, string> = {
 };
 const NOTE = "파티원 금액 = 받는 사람이 다시 낼 수수료 포함";
 const MARKET_PCT = MESO_MARKET_FEE_RATE * 100;
-const CROSS_NOTE = `타 서버 = 메소마켓에서 메이플포인트로 바꿔 건넴 · 수수료 ${MARKET_PCT}% 추가`;
+const CROSS_NOTE = `다른 서버 = 메소마켓에서 메이플포인트로 바꿔 건넴 · 수수료 ${MARKET_PCT}% 추가`;
 
 type Item = { id: string; grossMeso: number };
 type ImageState = "idle" | "working" | "copied" | "saved" | "error";
@@ -111,11 +111,14 @@ export function BossSplitCalculator() {
       name: names[index] || DEFAULT_NAMES[index],
       pctLabel: `${Math.round(sharePercents[index] * 10) / 10}%`,
       amount,
+      handed: share.handedMeso,
+      final: share.finalMeso,
+      // One line for the image; the card shows an other-server member's amounts as rows instead.
       role:
         index === 0
           ? "실수령 기준 잔여 · 내가 갖는 몫"
           : cross
-            ? `메소마켓에 팔 금액 (수수료 ${MARKET_PCT}% 포함) · 타 서버에서 전달 ${formatNumber(share.handedMeso)} · 받는 몫 ${formatNumber(share.finalMeso)}`
+            ? `메소마켓에 팔 금액 (수수료 ${MARKET_PCT}% 포함) · 다른 서버에 도착 ${formatNumber(share.handedMeso)} · 받는 몫 ${formatNumber(share.finalMeso)}`
             : `전달 금액 (수수료 포함) · 받는 몫 ${formatNumber(share.finalMeso)}`,
     };
   });
@@ -353,17 +356,27 @@ export function BossSplitCalculator() {
                   <span className="shrink-0 rounded-full bg-muted px-2 py-px text-xs font-bold">{card.pctLabel}</span>
                 </span>
                 {highlight && (
-                  <button
-                    type="button"
-                    aria-pressed={card.cross}
-                    onClick={() => setOtherServer((prev) => prev.map((v, j) => (j === card.index ? !v : v)))}
-                    className={cn(
-                      "inline-flex h-8 items-center rounded-full border px-3 text-xs font-semibold outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-                      card.cross ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-muted-foreground hover:border-primary/60"
-                    )}
-                  >
-                    타 서버{card.cross ? ` · 메소마켓 ${MARKET_PCT}%` : ""}
-                  </button>
+                  <>
+                    {/* Same or other server as a choice of two (user, 2026-11-14: the "타 서버" pill read as a
+                        label, not as something to press). */}
+                    <div role="group" aria-label={`${card.name} 서버`} className="grid w-full max-w-60 grid-cols-2 gap-0.5 rounded-lg bg-muted p-[3px]">
+                      {[false, true].map((other) => (
+                        <button
+                          key={String(other)}
+                          type="button"
+                          aria-pressed={card.cross === other}
+                          onClick={() => setOtherServer((prev) => prev.map((v, j) => (j === card.index ? other : v)))}
+                          className={cn(
+                            "h-8 rounded-md text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                            card.cross === other ? "bg-primary font-bold text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                          )}
+                        >
+                          {other ? "다른 서버" : "같은 서버"}
+                        </button>
+                      ))}
+                    </div>
+                    {card.cross && <span className="text-xs text-muted-foreground">메소마켓으로 보내요 · 수수료 {MARKET_PCT}%</span>}
+                  </>
                 )}
                 <span
                   className={cn(
@@ -374,18 +387,36 @@ export function BossSplitCalculator() {
                   {formatNumber(card.amount)}
                 </span>
                 <span className="text-[13px] text-muted-foreground">
+                  {card.cross && "메소마켓에 팔 금액 · "}
                   {formatKoreanMeso(card.amount, { spaced: true })}
                 </span>
-                <span className="text-xs text-muted-foreground">{card.role}</span>
-                <button
-                  type="button"
-                  onClick={() => copyAmount(card.index, card.amount)}
-                  disabled={!hasResult}
-                  className="mt-1.5 inline-flex h-[38px] items-center gap-1.5 rounded-lg border border-input bg-muted px-3.5 text-[13px] font-semibold transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  <Copy className="size-3.5" aria-hidden="true" />
-                  {copied ? `복사됨 · ${Math.round(card.amount)}` : "금액 복사"}
-                </button>
+                {card.cross ? (
+                  // What arrives on the other server, and the share after the usual fee there: one row each.
+                  <div className="flex w-full max-w-72 flex-col gap-1 border-t border-primary/30 pt-2 text-[13px]">
+                    <span className="flex justify-between gap-3">
+                      <span className="text-muted-foreground">다른 서버에 도착</span>
+                      <b className="font-num">{formatNumber(card.handed)}</b>
+                    </span>
+                    <span className="flex justify-between gap-3">
+                      <span className="text-muted-foreground">받는 몫 (수수료 {feePercent}% 뒤)</span>
+                      <b className="font-num">{formatNumber(card.final)}</b>
+                    </span>
+                  </div>
+                ) : (
+                  <span className="text-xs text-muted-foreground">{card.role}</span>
+                )}
+                {/* At the foot of the card: cards in a row line up their buttons, whatever is above them. */}
+                <div className="mt-auto pt-1.5">
+                  <button
+                    type="button"
+                    onClick={() => copyAmount(card.index, card.amount)}
+                    disabled={!hasResult}
+                    className="inline-flex h-[38px] items-center gap-1.5 rounded-lg border border-input bg-muted px-3.5 text-[13px] font-semibold transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <Copy className="size-3.5" aria-hidden="true" />
+                    {copied ? `복사됨 · ${Math.round(card.amount)}` : "금액 복사"}
+                  </button>
+                </div>
               </div>
             );
           })}
