@@ -8,7 +8,7 @@ import { Card, Delta, Empty, Gauge, ItemIcon, PickedTotal, RANK_TOP, RankDialog,
 import { Pager, usePage } from "@/components/pager";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { useItemDict, type Rolled } from "@/components/enhance/use-item-dict";
-import { useInsights, useWorldOf, useXenons } from "@/components/enhance/use-worlds";
+import { useInsights, useJobs, useWorldOf } from "@/components/enhance/use-worlds";
 import { eventRounds, inRound, type EventRound } from "@/lib/enhance/events";
 import { itemIcon, type ItemInfo } from "@/lib/enhance/items";
 import { DAY, dayStart, kstFull, kstShort, kstStamp } from "@/lib/enhance/kst";
@@ -578,10 +578,11 @@ export function PotentialBoard({ apiKey, account, onForget, switcher }: { apiKey
   const tallies = useMemo(() => groupTallies(inPeriod.map((e) => ({ world: worldOf(e.row.who, e.row.t), spent: e.cost }))), [inPeriod, worldOf]);
   const groups = useKnownGroups(account, tallies);
   const entries = useMemo(() => inPeriod.filter((e) => !groupsOff.includes(worldGroup(worldOf(e.row.who, e.row.t)))), [inPeriod, worldOf, groupsOff]);
-  // All stat % is main stat for every job but Xenon: which characters are one comes with the account's list.
-  const xenons = useXenons(apiKey, account);
-  const stats = useMemo(() => buildPotStats(entries, conv, xenons), [entries, conv, xenons]);
-  const buildPieces = useCallback((list: PotEntry[]) => buildPotStats(list, conv, xenons).pieces, [conv, xenons]);
+  // All stat % is main stat for every job but Xenon (and nothing to a demon avenger's emblem): which characters are
+  // one comes with the account's list.
+  const { xenons, avengers } = useJobs(apiKey, account);
+  const stats = useMemo(() => buildPotStats(entries, conv, xenons, avengers), [entries, conv, xenons, avengers]);
+  const buildPieces = useCallback((list: PotEntry[]) => buildPotStats(list, conv, xenons, avengers).pieces, [conv, xenons, avengers]);
   const openEntries = useMemo(() => (openRound ? entries.filter((e) => inRound(openRound, e.row.t, e.row.mt)) : entries), [openRound, entries]);
   const openPieces = useMemo(() => (openRound ? buildPieces(openEntries) : stats.pieces), [openRound, openEntries, buildPieces, stats.pieces]);
 

@@ -6,7 +6,7 @@
 //   item_upgrade_result "성공" = the roll raised the grade.
 // - unlike star force, the rows carry item level and equipment part.
 import { CREDIT_SHOP } from "../ev/defaults.ts";
-import { CUBES, NEXT_GRADE, NO_CONV, SLOTS, SOUL_EXTRA, WEAPON_TIERS, addWeaponNeed, addWeaponSumChance, convFor, customChance, fixFirstLine, gradeUp, lineTables, resetMeso, sumChance, weaponChance, weaponTierOf, type CubeId, type CustomCond, type Grade, type StatConv } from "../ev/potential.ts";
+import { CUBES, NEXT_GRADE, NO_CONV, SLOTS, SOUL_EXTRA, WEAPON_TIERS, addWeaponNeed, addWeaponSumChance, convFor, customChance, emblemUseful, fixFirstLine, gradeUp, lineTables, linesFirstChance, resetMeso, sumChance, weaponChance, weaponTierOf, type CubeId, type CustomCond, type Grade, type StatConv } from "../ev/potential.ts";
 
 export type RawOption = { value?: string; grade?: string };
 export type RawPotential = {
@@ -258,8 +258,19 @@ const WANTED_ADD = ["boss", "ied", "atk", "matk", "atkf", "matkf", "dmg", "cd", 
  * `sums` = every ranked line total by category, `lines` = the option line by line: ["", 0] for a line that is not
  * ranked, [its category, 0] for an unranked one that cannot repeat (cappedCategory).
  * `xenon` = read as a Xenon's (StatRule): the "all" condition then holds STR · DEX · LUK % at a third each.
+ * `hp` = read as a demon avenger's emblem (StatRule), `mains` = the stats that count on the item (StatRule.stats).
  */
-export type Goal = { conds: CustomCond[]; label: string; stat: string; magic: boolean; sums: Record<string, number>; lines: [string, number][]; xenon?: boolean };
+export type Goal = {
+  conds: CustomCond[];
+  label: string;
+  stat: string;
+  magic: boolean;
+  sums: Record<string, number>;
+  lines: [string, number][];
+  xenon?: boolean;
+  hp?: boolean;
+  mains?: readonly string[];
+};
 
 // ── Whose gear it is: the stats that count on it ──
 
@@ -279,6 +290,18 @@ const JOB_WORDS: [RegExp, GearJob][] = [
   [/시프|어새신/, "thief"],
   [/파이렛|원더러/, "pirate"],
 ];
+/**
+ * Emblems say the job in plain words (미트라의 분노 : 전사 · 마법사 · 궁수 · 도적 · 해적); 골드 데몬 엠블렘 is the two demon
+ * jobs', both warriors (public.item_dict, 2026-11-15). Read on emblems only: other gear may use these words otherwise
+ * (초보 마법사의 완드).
+ */
+const EMBLEM_WORDS: [RegExp, GearJob][] = [
+  [/전사|데몬/, "warrior"],
+  [/마법사/, "mage"],
+  [/궁수/, "archer"],
+  [/도적/, "thief"],
+  [/해적/, "pirate"],
+];
 /** Main stats of each job's gear. Pirates are STR or DEX, by the character. */
 const JOB_STATS: Record<GearJob, readonly string[]> = { warrior: ["str"], mage: ["int"], archer: ["dex"], thief: ["luk"], pirate: ["str", "dex"] };
 /** A Xenon's damage goes with STR + DEX + LUK. */
@@ -289,9 +312,12 @@ const XENON_STATS: readonly string[] = ["str", "dex", "luk"];
  * Accessories are anyone's whatever they are called (레드 워리어 마이스터 심볼 is a face accessory).
  */
 export function gearJob(item: string, part: string): GearJob | null {
-  if (SLOTS.find((x) => x.id === slotOf(part))?.kind === "acc") return null;
-  return JOB_WORDS.find(([re]) => re.test(item))?.[1] ?? null;
+  const kind = SLOTS.find((x) => x.id === slotOf(part))?.kind;
+  if (kind === "acc") return null;
+  return (kind === "emblem" ? [...EMBLEM_WORDS, ...JOB_WORDS] : JOB_WORDS).find(([re]) => re.test(item))?.[1] ?? null;
 }
+
+const isWeaponLike = (part: string) => ["weapon", "sub", "emblem"].includes(SLOTS.find((x) => x.id === slotOf(part))?.kind ?? "");
 
 /**
  * How the stat lines of an option are read.
@@ -299,8 +325,10 @@ export function gearJob(item: string, part: string): GearJob | null {
  * not that item's main stat (user, 2026-11-13: 메이지글러브 with 크뎀 2줄 + LUK 10 % ranked as a lucky item).
  * `xenon` = a Xenon's own gear (main potential only, see goalOf): all stat % is the goal, and STR · DEX · LUK % lines count toward it
  * at a third each (all stat 1 % raises all three; user, 2026-11-13) — "LUK 9 % + 올스탯 9 % + 9 %" is "올스탯 21 %".
+ * `hp` = a demon avenger's weapon, secondary or emblem (main potential): max HP % is its main stat, and neither a stat
+ * line nor all stat % is one (user, 2026-11-15: "데몬어벤져는 hp(올스텟 제외)").
  */
-export type StatRule = { stats?: readonly string[]; xenon?: boolean; allOnly?: boolean };
+export type StatRule = { stats?: readonly string[]; xenon?: boolean; allOnly?: boolean; hp?: boolean };
 
 /**
  * The ways an item can be read: by the job of the gear, and the Xenon way next to it where a Xenon can wear it.
@@ -310,9 +338,12 @@ export type StatRule = { stats?: readonly string[]; xenon?: boolean; allOnly?: b
  * Gear with no job in its name is read the Xenon way only when a Xenon rolled it (`xenon`). The reading that makes
  * the option the rarer one is the one it was kept for.
  */
-export function statRules(row: Pick<PotRow, "item" | "part" | "soul">, xenon: boolean): StatRule[] {
+export function statRules(row: Pick<PotRow, "item" | "part" | "soul"> & { add?: boolean }, xenon: boolean, avenger = false): StatRule[] {
   if (row.soul) return [{}];
   const job = gearJob(row.item, row.part);
+  // A demon avenger's own weapon, secondary or emblem: a warrior's (미트라의 분노 : 전사, 골드 데몬 엠블렘) or one whose name
+  // does not say (데스페라도 has no job word).
+  if (avenger && !row.add && isWeaponLike(row.part) && (!job || job === "warrior")) return [{ stats: [], hp: true }];
   const plain: StatRule = job ? { stats: JOB_STATS[job] } : {};
   const wearable = job === "thief" || job === "pirate";
   if (xenon && (wearable || !job)) return [plain, { stats: XENON_STATS, xenon: true }];
@@ -345,6 +376,8 @@ const LABEL: Record<string, string> = {
   drop: "드롭", meso: "메획", cool: "쿨감", lvstr: "9렙당 STR", lvdex: "9렙당 DEX", lvint: "9렙당 INT", lvluk: "9렙당 LUK",
   fstr: "STR +", fdex: "DEX +", fint: "INT +", fluk: "LUK +",
 };
+/** Short names of a weapon's useful lines, for labels that list their totals ("공 · 보공 2줄 · 보공 80 %"). */
+const SHORT: Record<string, string> = { atk: "공", matk: "마", boss: "보공", ied: "방무" };
 const UNIT: Record<string, string> = { cool: "초", atkf: "", matkf: "", lvstr: "", lvdex: "", lvint: "", lvluk: "", fstr: "", fdex: "", fint: "", fluk: "" };
 
 /**
@@ -368,7 +401,8 @@ export function goalOf(option: string[], add: boolean, rule: StatRule = {}): Goa
   // it is not read this way, and additional potential never is — there the reading only widened the stats that
   // count, and a "per 9 levels STR" line on a thief's shoes passed for main stat (Codex review, 2026-11-13).
   if (rule.allOnly && (add || XENON_STATS.some((c) => sum(c) > 0))) return null;
-  const best = (cats: readonly string[]) => cats.map((c) => [c, sum(c)] as const).sort((x, y) => y[1] - x[1])[0];
+  // No stats at all count on a demon avenger's emblem (StatRule.hp): then there is no stat line to find.
+  const best = (cats: readonly string[]) => cats.map((c) => [c, sum(c)] as const).sort((x, y) => y[1] - x[1])[0] ?? (["", 0] as const);
 
   // The stat this item is for: the largest stat % total, or (additional potential) the "per 9 levels" stat — among
   // the stats of the item's job when its name says one. A line of another job's stat is then no main stat line.
@@ -389,7 +423,7 @@ export function goalOf(option: string[], add: boolean, rule: StatRule = {}): Goa
   const stat = xenon ? "" : statSum > 0 ? topStat : lvSum > 0 ? topLv.slice(2) : byFlat ? topFlat.slice(1) : "";
   // Attack or magic attack: an INT item is a mage's; with no stat line the item's job says (mage gear is magic,
   // other class gear is not), and without one whichever the option has more of.
-  const magic = stat ? stat === "int" : rule.stats ? rule.stats.every((c) => c === "int") : sum("matk") + sum("matkf") > sum("atk") + sum("atkf");
+  const magic = stat ? stat === "int" : rule.stats?.length ? rule.stats.every((c) => c === "int") : sum("matk") + sum("matkf") > sum("atk") + sum("atkf");
   const skip = new Set<string>(magic ? ["atk", "atkf"] : ["matk", "matkf"]);
   for (const c of MAIN_STATS) if (c !== stat) skip.add(`lv${c}`);
 
@@ -397,7 +431,8 @@ export function goalOf(option: string[], add: boolean, rule: StatRule = {}): Goa
   const conds: CustomCond[] = [];
   if (xenon && xenonAll(sums) > 0) conds.push({ cat: "all", min: xenonAll(sums) });
   else if (statSum > 0) conds.push({ cat: stat, min: statSum + sum("all") });
-  else if (sum("all") > 0) conds.push({ cat: "all", min: sum("all") });
+  // All stat % does nothing for a demon avenger (StatRule.hp).
+  else if (sum("all") > 0 && !rule.hp) conds.push({ cat: "all", min: sum("all") });
   // HP % is what an item with no stat line at all is for (demon avenger gear): a warrior's piece, or one whose name
   // does not say. On a mage's robe whose LUK line was just left out, HP 10 % is no goal either.
   else if (!stat && hpGoal) conds.push({ cat: "hp", min: sum("hp") });
@@ -405,7 +440,7 @@ export function goalOf(option: string[], add: boolean, rule: StatRule = {}): Goa
   else if (byFlat) conds.push({ cat: topFlat, min: flatSum });
   for (const cat of add ? WANTED_ADD : WANTED_MAIN) if (sum(cat) > 0 && !skip.has(cat)) conds.push({ cat, min: sum(cat) });
   if (conds.length === 0) return null;
-  return { conds, label: conds.map(condLabel).join(" · "), stat, magic, sums, lines, ...(xenon ? { xenon } : {}) };
+  return { conds, label: conds.map(condLabel).join(" · "), stat, magic, sums, lines, ...(xenon ? { xenon } : {}), ...(rule.hp ? { hp: true } : {}), ...(rule.stats ? { mains: rule.stats } : {}) };
 }
 
 // ── Equipment part → the calculator's slot ──
@@ -561,19 +596,84 @@ export function goalChance(
         return hit(addWeaponSumChance(std, attack, total, plus), `${LABEL[attack]} ${total}%${plus ? " + @" : ""}`);
       }
     } else {
-      const ied = count("ied");
-      const useful = count(attack) + count("boss") + ied;
-      if (useful > 0) {
-        // How good the lines are counts too: 보공 45 · 45 + 공 10 (two lines at the top value) is far rarer than
-        // "any three useful lines" (user, 2026-11-12). The option's tier is read with the calculator's own rules,
-        // so picking the same chip there gives the same average.
-        const tier = weaponTierOf(table, attack, ied > 0, goal.lines);
-        const p = weaponChance(table, { attack, ied: ied > 0, min: { a: 0, b: 0, i: 0, v: useful }, tier }, first);
-        // Without an ignore defence line the count is of attack % and boss damage only (emblems have no boss line).
-        const name = ied > 0 ? "유효" : kind === "emblem" ? LABEL[attack] : `${magic ? "마" : "공"} · 보공`;
-        const grade = tier === "v3" ? "" : ` · ${WEAPON_TIERS.find((t) => t.id === tier)!.label}`;
-        return hit(p, `${name} ${useful}줄${grade}`);
-      }
+      const emblem = kind === "emblem";
+      const main = goal.hp ? "hp" : xenon ? "all" : "str";
+      // The main stat's category in the tables: the option's own, else the job's (any stands in when it is unknown).
+      const stat = goal.stat || goal.mains?.[0] || "str";
+      // Damage and the main stat (all stat with it; max HP % alone for a demon avenger, all stat % alone for a Xenon).
+      // On a weapon they are the "@" that makes fewer than three useful lines a little better (user, 2026-11-15 — a
+      // demon avenger's HP too: unique weapons have HP 6 % lines).
+      const helpers = emblemUseful(main, stat);
+      // Ignore defence: always on an emblem; on a weapon only when the option has a line of it, as before.
+      const ied = emblem || count("ied") > 0;
+      // The tables with a prime cube's kept line 1 (as weaponChance does with `first`). Not `rows`: a Xenon's lines are
+      // not turned into all stat on these goals.
+      const plain = first ? fixFirstLine(table, first.cat, first.value) : table;
+      const short = magic ? "마" : "공";
+      /** One reading, with `more` (an emblem's damage and main stat) counted as useful lines too. */
+      const read = (more: readonly string[]): { p: number; by: string } | null => {
+        const usefulCats = new Set([attack, "boss", ...(ied ? ["ied"] : []), ...more]);
+        if (emblem) {
+          // Attack % from the calculator's 21 % (the top two values) up is read by its total, as on additional
+          // potential (user, 2026-11-15: 공 12 + 12 + DEX 9 on a warrior's emblem is "공격력 24 %" — not the 꽉이탈 2줄 of
+          // three useful lines, and rarer than 12 + 9). "+ @" when every other line is a useful one.
+          const need = addWeaponNeed(table, attack);
+          const total = pct(attack);
+          if (need > 0 && total >= need) {
+            const extra = [...usefulCats].filter((c) => c !== attack);
+            const rest = goal.lines.filter(([c]) => c !== attack);
+            const plus = rest.length > 0 && rest.every(([c]) => extra.includes(c));
+            return hit(addWeaponSumChance(plain, attack, total, plus, extra), `${LABEL[attack]} ${total}%${plus ? " + @" : ""}`);
+          }
+        }
+        // An emblem's main stat and all stat % are one option ("STR 21 %": STR % plus all stat %, as on armour).
+        const option = (cat: string) => (emblem && main === "str" && cat === "all" ? stat : cat);
+        const usefulLines = goal.lines.filter(([c]) => usefulCats.has(c));
+        const useful = usefulLines.length;
+        const options = new Set(usefulLines.map(([c]) => option(c)));
+        // A weapon without an ignore defence line counts attack % and boss damage only; an emblem read without damage
+        // and the main stat, attack % and ignore defence only.
+        const name = emblem ? (more.length ? "유효" : `${short} · 방무`) : ied ? "유효" : `${short} · 보공`;
+        if (!emblem && useful > 0 && useful < 3) {
+          // Weapons, fewer than three useful lines: lines first (user, 2026-11-15 — "보공만 80퍼면 사실 3줄보다
+          // 안좋은건데": read by its total alone, 보공 40 + 40 + STR 9 came out rarer than any three lines). Any option
+          // with more useful lines counts as better; with as many, the totals are compared (2026-11-15: "같은 옵션 합으로"
+          // — 40 + 40 is not 30 + 30), and "+ @" when every other line is damage or the main stat. The tiers below are
+          // for three lines.
+          const kinds = [attack, "boss", "ied"].filter((k) => usefulLines.some(([c]) => c === k));
+          const need = Object.fromEntries(kinds.map((k) => [k, pct(k)]));
+          const rest = goal.lines.filter(([c]) => !usefulCats.has(c));
+          const plus = rest.length > 0 && rest.every(([c]) => helpers.includes(c));
+          const totals = kinds.map((k) => `${SHORT[k]} ${need[k]}%`).join(" · ");
+          return hit(linesFirstChance(plain, [...usefulCats], useful, need, plus ? helpers : undefined), `${name} ${useful}줄 · ${totals}${plus ? " + @" : ""}`);
+        }
+        if (emblem && useful > 0 && useful < 3 && options.size === 1) {
+          // Emblems, fewer than three useful lines of one option: by that option's total (방무 80 %, "STR 21 %"). Not
+          // lines first: an emblem's useful lines include weak ones, and 공 24 % is better than 공 12 + 데미지 9 + STR 9.
+          const [cat] = options;
+          const total = pct(cat) + (cat === stat && option("all") === stat ? pct("all") : 0);
+          // All stat % with no main stat line of its own is "주스탯", as on armour.
+          const label = cat !== stat || goal.stat ? LABEL[cat] : "주스탯";
+          return hit(customChance(plain, [[{ cat, min: total }]]), `${label} ${total}%`);
+        }
+        if (useful > 0) {
+          // How good the lines are counts too: 보공 45 · 45 + 공 10 (two lines at the top value) is far rarer than
+          // "any three useful lines" (user, 2026-11-12). The option's tier is read with the calculator's own rules,
+          // so picking the same chip there gives the same average.
+          const tier = weaponTierOf(table, attack, ied, goal.lines, more);
+          const p = weaponChance(table, { attack, ied, min: { a: 0, b: 0, i: 0, v: useful }, tier, more }, first);
+          const grade = tier === "v3" ? "" : ` · ${WEAPON_TIERS.find((t) => t.id === tier)!.label}`;
+          return hit(p, `${name} ${useful}줄${grade}`);
+        }
+        return null;
+      };
+      // Emblems: attack % and ignore defence count, and damage and the main stat are read as useful lines too or not —
+      // the calculator's "데미지 · 주스탯도 유효 줄로 치기" off or on (user, 2026-11-15: "공격력 방무가 제일 중요하니까").
+      // Both readings are made and the rarer counts, so a line of them never makes an option read as less than it was
+      // without one (Codex review, 2026-11-15: counted only when the option had such a line, 공 12 + 방무 30 + STR 9 read
+      // 8.58 % against 6.77 % for 공 12 + 방무 30 + 크확 9, and the better roll lost to the old option).
+      const best = (emblem ? [[], helpers] : [[]]).map(read).reduce<{ p: number; by: string } | null>((a, b) => (b && (!a || b.p < a.p) ? b : a), null);
+      if (best) return best;
     }
   }
 

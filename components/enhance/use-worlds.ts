@@ -55,25 +55,29 @@ export function useWorldOf(apiKey: string, account: string, tries: Try[], fetche
 }
 
 const NO_NAMES: ReadonlySet<string> = new Set();
+type Jobs = { xenons: ReadonlySet<string>; avengers: ReadonlySet<string> };
+const NO_JOBS: Jobs = { xenons: NO_NAMES, avengers: NO_NAMES };
 
 /**
- * The account's Xenon characters. For them an all stat % line is a goal of its own; for every other job it counts as
- * main stat. Asked with the same one call as the worlds; until it is known (or when it fails) nobody is a Xenon.
+ * The account's Xenon and demon avenger characters. For a Xenon an all stat % line is a goal of its own (for every
+ * other job it counts as main stat); a demon avenger's weapon and emblem count max HP % instead of main stat and all stat.
+ * Asked with the same one call as the worlds; until it is known (or when it fails) nobody is either.
  */
-export function useXenons(apiKey: string, account: string): ReadonlySet<string> {
-  const [names, setNames] = useState(NO_NAMES);
+export function useJobs(apiKey: string, account: string): Jobs {
+  const [jobs, setJobs] = useState(NO_JOBS);
   useEffect(() => {
     let alive = true;
     characterClasses(apiKey, account)
       .then((classes) => {
-        if (alive) setNames(new Set(Object.keys(classes).filter((who) => classes[who] === "제논")));
+        const of = (job: string) => new Set(Object.keys(classes).filter((who) => classes[who] === job));
+        if (alive) setJobs({ xenons: of("제논"), avengers: of("데몬어벤져") });
       })
       .catch(() => {});
     return () => {
       alive = false;
     };
   }, [apiKey, account]);
-  return names;
+  return jobs;
 }
 
 const NO_INSIGHTS: Record<string, number> = {};

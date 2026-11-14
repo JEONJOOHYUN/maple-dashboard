@@ -18,6 +18,7 @@ import { type MainStat,
   convPct,
   type ConvText,
   customChance,
+  emblemUseful,
   slotOptions,
   fixFirstLine,
   gradeUp,
@@ -55,6 +56,8 @@ const GRADE_COLOR: Record<Grade, string> = {
   legendary: "border-emerald-400 text-emerald-600 dark:text-emerald-300",
 };
 const TIERS = WEAPON_TIERS;
+/** The main stat line an emblem counts, by the main stat setting (emblemUseful). */
+const EMBLEM_STAT: Record<MainStat, string> = { str: "주스탯 · 올스탯", all: "올스탯", hp: "HP" };
 type Extra = "stat" | "cool" | "crit" | "drop";
 // cd8 = what was typed in the main-potential "크뎀 8%" box; cd3 (the unit of the conversion fields) stays the source of truth.
 // atkPct · allPct = attack 1 and all stat 1 % typed as main stat % (2026-11-14); left out, they come from atk1 · all1.
@@ -83,6 +86,8 @@ export function PotentialTab() {
   // Xenon counts all stat %, Demon Avenger max HP % (own values and chances in the official table).
   const [mainStat, setMainStat] = useStored<MainStat>("ev:mainStat", "str");
   const [ied, setIed] = useState(true);
+  // Emblems: damage · main stat lines counted as useful too (off = attack % and ignore defence only).
+  const [emblemMore, setEmblemMore] = useState(false);
   const [min, setMin] = useState({ a: 0, b: 0, i: 0, v: 3 });
   const [tier, setTier] = useState<WeaponGoal["tier"]>("v3");
   const [addGoal, setAddGoal] = useState<AddWeaponGoal>("a21");
@@ -196,7 +201,12 @@ export function PotentialTab() {
     setCombo(next);
   };
 
-  const weaponGoal: WeaponGoal = { attack, ied, min, tier: kind === "main" ? tier : "v3" };
+  // Emblems: attack % and ignore defence are what counts; damage and the main stat (all stat with it; HP for a demon
+  // avenger, all stat for a Xenon) only when switched on, as ignore defence is on weapons (user, 2026-11-15). The
+  // 강화 기록 page counts them when the option has such a line.
+  const emblem = slot.kind === "emblem";
+  const more = emblem && emblemMore ? emblemUseful(mainStat) : undefined;
+  const weaponGoal: WeaponGoal = { attack, ied, min, tier: kind === "main" ? tier : "v3", more };
   const optGrade = grade === "rare" || grade === "epic" ? null : grade;
   // Table the weapon chips show their chance with (the meso reset's, as its result card).
   const blackRows = optGrade ? lineTables("black", optGrade, slotId, level) : null;
@@ -332,7 +342,11 @@ export function PotentialTab() {
       ["a", attackName, range(attack)],
       ["b", "보스 데미지", range("boss")],
       ["i", "방어율 무시", range("ied")],
-      ["v", "합쳐서 유효 줄", ied ? "위 옵션 아무거나" : "방무 빼고"],
+      [
+        "v",
+        "합쳐서 유효 줄",
+        emblem ? ["공", ied && "방무", emblemMore && "데미지", emblemMore && EMBLEM_STAT[mainStat]].filter(Boolean).join(" · ") : ied ? "위 옵션 아무거나" : "방무 빼고",
+      ],
     ] as const
   ).filter(([k]) => !(k === "b" && !best.boss));
 
@@ -480,7 +494,7 @@ export function PotentialTab() {
                   // so it is picked only at three useful lines and picking it asks for three.
                   const chipMin = t.id === "v3" ? { ...min, v: 3 } : min;
                   const on = tier === t.id && (t.id !== "v3" || min.v === 3);
-                  const p = blackRows ? weaponChance(blackRows, { attack, ied, min: chipMin, tier: t.id }) : 0;
+                  const p = blackRows ? weaponChance(blackRows, { attack, ied, min: chipMin, tier: t.id, more }) : 0;
                   return (
                     <button
                       key={t.id}
@@ -583,6 +597,20 @@ export function PotentialTab() {
             ))}
             {kind === "main" && (
               <Switch on={ied} onChange={setIed} label="방무도 유효 줄로 치기" />
+            )}
+            {kind === "main" && emblem && <Switch on={emblemMore} onChange={setEmblemMore} label="데미지 · 주스탯도 유효 줄로 치기" />}
+            {/* Which line is the emblem's main stat: the same setting the armour targets use. */}
+            {kind === "main" && emblem && emblemMore && (
+              <Segment
+                label="주스탯 종류"
+                value={mainStat}
+                onChange={setMainStat}
+                options={[
+                  { id: "str", label: "일반" },
+                  { id: "all", label: "제논 · 올스탯" },
+                  { id: "hp", label: "데벤 · HP" },
+                ]}
+              />
             )}
           </div>
         )}

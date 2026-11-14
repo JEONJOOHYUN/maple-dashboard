@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { NO_CONV, SOUL_EXTRA, addWeaponChance, addWeaponSumChance, convFor, convFromSpec, customChance, fixFirstLine, lineTables, resetMeso, sumChance, weaponChance } from "../ev/potential.ts";
+import { NO_CONV, SOUL_EXTRA, addWeaponChance, addWeaponSumChance, convFor, convFromSpec, customChance, emblemUseful, fixFirstLine, lineTables, linesFirstChance, resetMeso, sumChance, weaponChance } from "../ev/potential.ts";
 import { STAT_CONV_DEFAULT } from "../ev/defaults.ts";
 import { buildPotStats, potEntries } from "./pot-stats.ts";
 import { cappedCategory, cubeFee, cubeOf, feeByInsight, gearJob, goalChance, goalOf, gradeBefore, kindOf, potKey, optionToken, parsePotential, pricedCube, rollMeso, rollsToUp, slotOf, statRule, statRules, statWorth, trackPieces, upChance, upRolls, type PotRow, type RawPotential } from "./potential.ts";
@@ -161,15 +161,103 @@ test("weapons, secondaries and emblems: useful lines, as on the calculator", () 
   assert.equal(weapon.by, "공 · 보공 3줄");
   // 기댓값 계산기: 무기 Lv.200 레전드리, 방무 빼고 유효 3줄 = 평균 239회.
   near(1 / weapon.p, 239.04, 0.01, "공 · 보공 3줄");
+  // Emblems read attack % from 21 % up by its total (user, 2026-11-15; more in the emblem test below): 마력 12 + 9, and
+  // the INT line is a useful one, "+ @".
   const emblem = goalChance(row({ item_equipment_part: "엠블렘", item_level: 200 }), "legendary", goalOf(["마력 +12%", "INT +9%", "마력 +9%"], false)!, NO_CONV)!;
-  assert.equal(emblem.by, "마력 2줄");
-  assert.equal(emblem.p, weaponChance(lineTables("black", "legendary", "emblem", 200)!, { ...v(2, false), attack: "matk" }));
-  // The attack % lines decide 공격력 or 마력 on a weapon, not a stray stat line (마력 2줄 + STR is still 마력 2줄).
-  const stray = goalChance(row({ item_equipment_part: "무기", item_level: 200 }), "legendary", goalOf(["마력 +12%", "마력 +9%", "STR +9%"], false)!, NO_CONV)!;
-  assert.equal(stray.by, "마 · 보공 2줄");
-  assert.equal(stray.p, weaponChance(lineTables("black", "legendary", "weapon", 200)!, { ...v(2, false), attack: "matk" }));
+  assert.deepEqual([emblem.by, emblem.p], ["마력 21% + @", addWeaponSumChance(lineTables("black", "legendary", "emblem", 200)!, "matk", 21, true, ["ied", "dmg", "int", "all"])]);
+  // Fewer than three useful lines on a weapon: lines first (user, 2026-11-15). Any three useful lines count as better;
+  // among two the totals do ("같은 옵션 합으로"), with "+ @" when the other line is damage or the main stat. 보공 40 + 40 +
+  // STR 9 was "공 · 보공 2줄 · 꽉이탈 2줄" (422 rolls; the tiers are for three lines), then "보공 80 %" alone (673 rolls —
+  // rarer than three useful lines, 239, which the user called wrong: "보공만 80퍼면 사실 3줄보다 안좋은건데").
+  const weaponRows = lineTables("black", "legendary", "weapon", 200)!;
+  const at = (...after: string[]) => goalChance(row({ item_equipment_part: "무기", item_level: 200 }), "legendary", goalOf(after, false)!, NO_CONV)!;
+  const three = weaponChance(weaponRows, v(3, false));
+  const boss80 = at("보스 몬스터 데미지 +40%", "보스 몬스터 데미지 +40%", "STR +9%");
+  assert.deepEqual([boss80.by, boss80.p], ["공 · 보공 2줄 · 보공 80% + @", linesFirstChance(weaponRows, ["atk", "boss"], 2, { boss: 80 }, ["dmg", "str", "all"])]);
+  near(1 / boss80.p, 230, 0.5, "보공 80% + @");
+  const junk = at("보스 몬스터 데미지 +40%", "보스 몬스터 데미지 +40%", "크리티컬 확률 +9%");
+  assert.equal(junk.by, "공 · 보공 2줄 · 보공 80%");
+  near(1 / junk.p, 212, 0.5, "보공 80%");
+  // In order: three lines, then two by their totals.
+  assert.ok(three < boss80.p && boss80.p < junk.p && junk.p < at("보스 몬스터 데미지 +30%", "보스 몬스터 데미지 +30%", "크리티컬 확률 +9%").p);
+  // Two different options: both totals at least as high.
+  const mixed = at("보스 몬스터 데미지 +40%", "공격력 +12%", "크리티컬 확률 +9%");
+  assert.deepEqual([mixed.by, mixed.p], ["공 · 보공 2줄 · 공 12% · 보공 40%", linesFirstChance(weaponRows, ["atk", "boss"], 2, { atk: 12, boss: 40 })]);
+  // The attack % lines decide 공격력 or 마력 on a weapon, not a stray stat line (that one is the "+ @").
+  assert.equal(at("마력 +12%", "마력 +9%", "STR +9%").by, "마 · 보공 2줄 · 마 21% + @");
+  // A demon avenger's weapon: all stat % is no "+ @" (max HP % is, on the unique weapons that have it).
+  const desperado = row({ item_equipment_part: "무기", item_level: 200, target_item: "아케인셰이드 데스페라도", after_potential_option: opt("보스 몬스터 데미지 +40%", "보스 몬스터 데미지 +40%", "올스탯 +9%") });
+  const as = (avenger: boolean) => goalChance(desperado, "legendary", goalOf(desperado.after, false, statRules(desperado, false, avenger)[0])!, NO_CONV)!.by;
+  assert.deepEqual([as(false), as(true)], ["공 · 보공 2줄 · 보공 80% + @", "공 · 보공 2줄 · 보공 80%"]);
   // A weapon option with no useful line falls back to its hardest single total.
   assert.equal(goalChance(row({ item_equipment_part: "방패", item_level: 200 }), "legendary", goalOf(["데미지 +12%", "DEX +9%", "올스탯 +6%"], false)!, NO_CONV)!.by, "데미지 12%");
+});
+
+test("emblems: attack % by its total, damage and the main stat useful, 꽉이탈 only on three useful lines (user, 2026-11-15)", () => {
+  const rows = lineTables("black", "legendary", "emblem", 200)!;
+  const read = (after: string[], avenger = false, item = "미트라의 분노 : 전사") => {
+    const r = row({ item_equipment_part: "엠블렘", item_level: 200, target_item: item, after_potential_option: opt(...after) });
+    return goalChance(r, "legendary", goalOf(after, false, statRules(r, false, avenger)[0])!, NO_CONV)!;
+  };
+  // The user's emblem: DEX is no warrior's main stat, so 공 12 + 12 + DEX 9 has two useful lines. It read
+  // "공격력 2줄 · 꽉이탈 2줄" (1,228 rolls); by its attack % it is the calculator's "직접" 공격력 % 24 이상.
+  const user = read(["공격력 +12%", "공격력 +12%", "DEX +9%"]);
+  assert.equal(user.by, "공격력 24%");
+  near(user.p, customChance(rows, [[{ cat: "atk", min: 24 }]]), 1e-15, "공격력 24%");
+  near(1 / user.p, 917.8, 0.5, "about 918 rolls");
+  // 12 + 9 is not 12 + 12; a warrior's STR line is a useful one ("+ @", rarer).
+  assert.ok(read(["공격력 +12%", "공격력 +9%", "DEX +9%"]).p > user.p);
+  const str = read(["공격력 +12%", "공격력 +12%", "STR +9%"]);
+  assert.equal(str.by, "공격력 24% + @");
+  assert.ok(str.p < user.p);
+  // Below 21 % the useful lines are counted (ignore defence always on an emblem), with a tier only when all three are.
+  const all = read(["공격력 +12%", "STR +12%", "데미지 +12%"]);
+  assert.equal(all.by, "유효 3줄 · 꽉이탈 3줄");
+  assert.equal(all.p, weaponChance(rows, { attack: "atk", ied: true, min: { a: 0, b: 0, i: 0, v: 3 }, tier: "all", more: emblemUseful("str") }));
+  // Two readings (damage and the main stat counted or not), the rarer counts: 공 + 데미지 as "any two useful lines" is
+  // commoner than 공격력 12 % alone.
+  assert.equal(read(["공격력 +12%", "DEX +12%", "데미지 +12%"]).by, "공격력 12%");
+  // Damage and the main stat count only when the option has such a line (user, 2026-11-15: "공격력 방무가 제일 중요하니까"
+  // — the calculator's "데미지 · 주스탯도 유효 줄로 치기"): without one, attack % and ignore defence alone.
+  const core = read(["공격력 +12%", "몬스터 방어율 무시 +40%", "DEX +9%"]);
+  assert.deepEqual([core.by, core.p], ["공 · 방무 2줄", weaponChance(rows, { attack: "atk", ied: true, min: { a: 0, b: 0, i: 0, v: 2 }, tier: "v3" })]);
+  const withStat = read(["공격력 +12%", "몬스터 방어율 무시 +40%", "STR +9%"]);
+  assert.equal(withStat.by, "유효 3줄 · 꽉이탈 2줄");
+  assert.ok(withStat.p < core.p);
+  // Both readings are made and the rarer counts: a damage or main stat line never makes an option read as less than it
+  // was without one (Codex review, 2026-11-15 — 공 12 + 방무 30 + STR 9 read 8.58 % against 6.77 % for + 크확 9).
+  const crit = ["공격력 +12%", "몬스터 방어율 무시 +30%", "크리티컬 확률 +9%"];
+  const str9 = ["공격력 +12%", "몬스터 방어율 무시 +30%", "STR +9%"];
+  assert.ok(read(str9).p <= read(crit).p);
+  // Through the board: the roll that put STR 9 in place of 크확 9 is the option kept, not the old one.
+  const swap = [row({ item_equipment_part: "엠블렘", item_level: 200, target_item: "미트라의 분노 : 전사", before_potential_option: opt(...crit), after_potential_option: opt(...str9) })];
+  const swapped = buildPotStats(potEntries(swap, trackPieces(swap)), NO_CONV).pieces[0];
+  assert.deepEqual(swapped.option, str9);
+  assert.ok(swapped.expected! > 0);
+  // Fewer than three useful lines of one option: its total, as on weapons. The main stat counts all stat with it.
+  const ied = read(["몬스터 방어율 무시 +40%", "몬스터 방어율 무시 +40%", "DEX +9%"]);
+  assert.deepEqual([ied.by, ied.p], ["방무 80%", customChance(rows, [[{ cat: "ied", min: 80 }]])]);
+  const stat = read(["STR +12%", "올스탯 +9%", "DEX +9%"]);
+  assert.deepEqual([stat.by, stat.p], ["STR 21%", customChance(rows, [[{ cat: "str", min: 21 }]])]);
+  assert.equal(read(["올스탯 +9%", "올스탯 +6%", "DEX +9%"]).by, "주스탯 15%");
+  assert.equal(read(["공격력 +12%", "DEX +9%", "LUK +9%"]).by, "공격력 12%");
+  // A demon avenger's emblem: all stat % is no useful line (and HP % is the main stat, but no legendary emblem has it).
+  assert.equal(read(["공격력 +12%", "공격력 +12%", "올스탯 +9%"]).by, "공격력 24% + @");
+  assert.equal(read(["공격력 +12%", "공격력 +12%", "올스탯 +9%"], true).by, "공격력 24%");
+  const allStat = ["몬스터 방어율 무시 +40%", "올스탯 +9%", "데미지 +12%"];
+  assert.deepEqual([read(allStat).by, read(allStat, true).by], ["유효 3줄 · 꽉이탈 3줄", "방무 40%"]);
+  // The job on an emblem is in plain words; 골드 데몬 엠블렘 is a warrior's (and a demon avenger's).
+  assert.deepEqual(
+    ["미트라의 분노 : 마법사", "미트라의 분노 : 해적", "골드 데몬 엠블렘", "골드 메이플리프 엠블렘"].map((item) => gearJob(item, "엠블렘")),
+    ["mage", "pirate", "warrior", null]
+  );
+  // Those words say nothing on other gear.
+  assert.equal(gearJob("초보 마법사의 완드", "무기"), null);
+  assert.equal(read(["마력 +12%", "INT +9%", "마력 +12%"], false, "미트라의 분노 : 마법사").by, "마력 24% + @");
+  // Through the board: the account's demon avengers come in as their own set.
+  const rolls = [row({ item_equipment_part: "엠블렘", item_level: 200, target_item: "미트라의 분노 : 전사", after_potential_option: opt("공격력 +12%", "공격력 +12%", "올스탯 +9%") })];
+  const by = (avengers: Set<string>) => buildPotStats(potEntries(rolls, trackPieces(rolls)), NO_CONV, new Set(), avengers).pieces[0].goalBy;
+  assert.deepEqual([by(new Set()), by(new Set(["테스트"]))], ["공격력 24% + @", "공격력 24%"]);
 });
 
 test("weapons, additional potential: the attack % it adds up to, with @ (user, 2026-11-13)", () => {

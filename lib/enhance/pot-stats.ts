@@ -133,8 +133,10 @@ function finalOption(list: PotEntry[], conv: StatConv, rules: StatRule[]): { opt
  * `entries` oldest first. `conv` = how much other lines are worth in main stat % (the calculator's setting).
  * `xenons` = the characters whose job is Xenon: their gear is read their way too (all stat %, with STR · DEX · LUK %
  * at a third each) next to the way of the job in its name, and the rarer reading counts (statRules).
+ * `avengers` = the demon avengers: their weapons, secondaries and emblems count max HP % as the main stat, and all
+ * stat % not at all.
  */
-export function buildPotStats(entries: PotEntry[], conv: StatConv, xenons: ReadonlySet<string> = new Set()): PotStats {
+export function buildPotStats(entries: PotEntry[], conv: StatConv, xenons: ReadonlySet<string> = new Set(), avengers: ReadonlySet<string> = new Set()): PotStats {
   const groups = new Map<string, PotEntry[]>();
   const days = new Map<string, { date: string; rolls: number; spent: number }>();
   const characters = new Set<string>();
@@ -173,7 +175,7 @@ export function buildPotStats(entries: PotEntry[], conv: StatConv, xenons: Reado
       phase.meso += e.cost;
       if (e.row.up) phase.up = true;
     }
-    const final = finalOption(list, conv, statRules(head, xenons.has(head.who)));
+    const final = finalOption(list, conv, statRules(head, xenons.has(head.who), avengers.has(head.who)));
     const tailPhase = phases[phases.length - 1];
     let expected: number | null = null;
     for (const phase of phases) {

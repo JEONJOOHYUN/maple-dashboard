@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { averageTries } from "./luck.ts";
-import { NO_CONV, OPTIONS, SOUL_EXTRA, addWeaponChance, customChance, slotOptions, comboChance, practicalTargets, bestValues, convFromSpec, convFromText, convPct, fixFirstLine, gradeUp, lineTables, resetMeso, soulChance, statTargets, sumChance, weaponChance, type WeaponGoal, WEAPON_TIERS, weaponTierOf } from "./potential.ts";
+import { NO_CONV, OPTIONS, SOUL_EXTRA, addWeaponChance, customChance, emblemUseful, linesFirstChance, slotOptions, comboChance, practicalTargets, bestValues, convFromSpec, convFromText, convPct, fixFirstLine, gradeUp, lineTables, resetMeso, soulChance, statTargets, sumChance, weaponChance, type WeaponGoal, WEAPON_TIERS, weaponTierOf } from "./potential.ts";
 
 const near = (actual: number, expected: number, tolerance: number, label: string) =>
   assert.ok(Math.abs(actual - expected) <= tolerance, `${label}: ${actual} is not within ${tolerance} of ${expected}`);
@@ -72,10 +72,59 @@ test("the tier of an option a weapon actually has", () => {
   // A top value on a line that is not useful does not count; ignore defence counts only when it is asked for.
   assert.equal(weaponTierOf(rows, "atk", false, [["boss", 45], ["ied", 45], ["atk", 10]]), "v3");
   assert.equal(weaponTierOf(rows, "atk", true, [["boss", 45], ["ied", 45], ["atk", 10]]), "two");
-  assert.equal(tier(["str", 13], ["boss", 45], ["atk", 10]), "one");
+  // The tiers are for three useful lines (user, 2026-11-15): a line that is not useful leaves the option without one,
+  // however good the other two are.
+  assert.equal(tier(["str", 13], ["boss", 45], ["atk", 10]), "v3");
+  assert.equal(tier(["boss", 45], ["boss", 45], ["str", 13]), "v3");
   assert.equal(weaponTierOf(rows, "atk", false, [["boss", 45], ["boss", 45]]), "v3");
   // The option meets its own tier's rule, so its chance is never above a plain "three useful lines".
   for (const t of ["half", "one", "two", "all"] as const) assert.ok(weaponChance(rows, { ...v3, ied: false, tier: t }) < weaponChance(rows, { ...v3, ied: false }));
+});
+
+test("emblems: damage and the main stat are useful lines too (user, 2026-11-15)", () => {
+  const rows = lineTables("black", "legendary", "emblem", 200)!;
+  const goal = (main: "str" | "all" | "hp"): WeaponGoal => ({ ...v3, more: emblemUseful(main) });
+  // Three useful lines = every line useful: the product of each line's share of 공 · 방무 · 데미지 · STR · 올스탯.
+  const cats = new Set(["atk", "ied", "dmg", "str", "all"]);
+  const share = rows.map((line) => line.filter((r) => cats.has(r[0])).reduce((sum, r) => sum + r[2], 0));
+  near(weaponChance(rows, goal("str")), share[0] * share[1] * share[2], 1e-12, "three useful lines");
+  // A demon avenger's emblem counts max HP % (no legendary emblem line has it) and not all stat; a Xenon's all stat only.
+  assert.ok(weaponChance(rows, goal("hp")) < weaponChance(rows, goal("all")));
+  assert.ok(weaponChance(rows, goal("all")) < weaponChance(rows, goal("str")));
+  // Without them only attack % and ignore defence count, as before.
+  assert.ok(weaponChance(rows, v3) < weaponChance(rows, goal("str")));
+  // Tiers read those lines too: 공 12 · STR 12 (line 2, the item's grade) · 데미지 12 (line 3) are all at the top value.
+  const tier = (...lines: [string, number][]) => weaponTierOf(rows, "atk", true, lines, emblemUseful("str"));
+  assert.equal(tier(["atk", 12], ["str", 12], ["dmg", 12]), "all");
+  assert.equal(tier(["atk", 12], ["atk", 12], ["str", 9]), "two");
+  // DEX on a warrior's emblem is no useful line: two useful lines have no tier.
+  assert.equal(tier(["atk", 12], ["atk", 12], ["dex", 9]), "v3");
+  for (const t of ["half", "one", "two", "all"] as const) assert.ok(weaponChance(rows, { ...goal("str"), tier: t }) < weaponChance(rows, goal("str")));
+});
+
+test("lines first: more useful lines always count as better (user, 2026-11-15)", () => {
+  const rows = lineTables("black", "legendary", "weapon", 200)!;
+  const three = weaponChance(rows, { ...v3, ied: false });
+  // 보공 40 + 40 and a line that is not useful: every three-line option, and two lines with 보공 80 % or more.
+  const p = linesFirstChance(rows, ["atk", "boss"], 2, { boss: 80 });
+  const useful = (c: string) => c === "atk" || c === "boss";
+  let brute = 0;
+  for (const a of rows[0])
+    for (const b of rows[1])
+      for (const c of rows[2]) {
+        const xs = [a, b, c];
+        const n = xs.filter((r) => useful(r[0])).length;
+        const boss = xs.reduce((sum, r) => sum + (r[0] === "boss" ? r[1] : 0), 0);
+        if (n === 3 || (n === 2 && boss >= 80)) brute += a[2] * b[2] * c[2];
+      }
+  // The official lines add up to a hair under 100 % (0.999996): the rest is "anything else" there, not here.
+  near(p, brute, 1e-8, "counted line by line");
+  // Never rarer than three useful lines; "+ @" and a higher total are rarer, a lower total is not.
+  assert.ok(p > three);
+  assert.ok(linesFirstChance(rows, ["atk", "boss"], 2, { boss: 80 }, ["dmg", "str", "all"]) < p);
+  assert.ok(linesFirstChance(rows, ["atk", "boss"], 2, { boss: 60 }) > p);
+  // One useful line: every option with two or three is better.
+  assert.ok(linesFirstChance(rows, ["atk", "boss"], 1, { boss: 40 }) > weaponChance(rows, { ...v3, ied: false, min: { a: 0, b: 0, i: 0, v: 2 } }));
 });
 
 test("armor main stat targets follow the item level", () => {

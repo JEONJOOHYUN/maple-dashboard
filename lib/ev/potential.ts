@@ -261,7 +261,18 @@ export type WeaponGoal = {
   /** Minimum lines of attack % / boss / ignore defense, and useful lines in total. */
   min: { a: number; b: number; i: number; v: number };
   tier: WeaponTier;
+  /** More categories that are useful lines too: an emblem's damage and main stat (emblemUseful). */
+  more?: readonly string[];
 };
+
+/**
+ * What else is a useful line on an emblem (user, 2026-11-15: "엠블렘은 공격력 방무 데미지 주스탯(올스탯)"): damage %
+ * and the main stat — `stat` % with all stat %, but max HP % alone for a demon avenger ("hp", all stat does not
+ * count) and all stat % alone for a Xenon ("all"). `stat` = the table's category of the stat ("str" stands in for any).
+ */
+export function emblemUseful(main: MainStat, stat = "str"): string[] {
+  return ["dmg", ...(main === "hp" ? ["hp"] : main === "all" ? ["all"] : [stat, "all"])];
+}
 
 /** Top value per option = the highest value line 1 can have (40 · 45 % boss / ignore defense, 12 · 13 % attack). */
 function topValues(rows: Row[][]): Record<string, number> {
@@ -274,13 +285,16 @@ function topValues(rows: Row[][]): Record<string, number> {
  * The tier an option a weapon actually has reaches (the hardest one whose rule it meets), so that its chance can
  * be asked with weaponChance(). `lines` = [category, value] of lines 1 · 2 · 3 in order, categories as in the tables.
  */
-export function weaponTierOf(rows: Row[][], attack: "atk" | "matk", ied: boolean, lines: [string, number][]): WeaponTier {
+export function weaponTierOf(rows: Row[][], attack: "atk" | "matk", ied: boolean, lines: [string, number][], more: readonly string[] = []): WeaponTier {
   if (lines.length !== 3 || rows.length < 3) return "v3";
   const best = topValues(rows);
   const seen = lines.map(([cat, value], i): TierLine => {
-    const useful = cat === attack || cat === "boss" || (cat === "ied" && ied);
+    const useful = cat === attack || cat === "boss" || (cat === "ied" && ied) || more.includes(cat);
     return { useful, top: useful && value >= (best[cat] ?? Infinity), own: rows[i].some((r) => r[0] === cat && r[1] === value && r[3] === 1) };
   });
+  // The tiers are names for three useful lines (user, 2026-11-15: 공 12 + 12 + DEX 9 on a warrior's emblem is no
+  // 꽉이탈 2줄 — "3줄 유효인것도 아닌데"). An option with a line that is not useful has none.
+  if (!seen.every((l) => l.useful)) return "v3";
   return TIERS_HARD_FIRST.find((tier) => tierMet(tier, seen)) ?? "v3";
 }
 
@@ -294,13 +308,15 @@ export function weaponChance(rows: Row[][], goal: WeaponGoal, fixFirst?: "a" | "
     const cat = fixFirst === "a" ? goal.attack : fixFirst === "b" ? "boss" : "ied";
     rows = fixFirstLine(rows, cat, best[cat] ?? 0);
   } else if (fixFirst) rows = fixFirstLine(rows, fixFirst.cat, fixFirst.value);
-  const cats = new Set([goal.attack, "boss", "ied"]);
-  const lines = rows.map((line) =>
-    tokens(line, (r) => (cats.has(r[0]) ? { cat: r[0] === goal.attack ? "a" : r[0] === "boss" ? "b" : "i", value: r[1], own: r[3] === 1 } : null))
-  );
+  const more = new Set((goal.more ?? []).filter((c) => c !== goal.attack && c !== "boss" && c !== "ied"));
+  const cats = new Set([goal.attack, "boss", "ied", ...more]);
+  // The `more` categories keep their own name ("m:dmg"): each has its own top value (damage 12 %, all stat 9 % …).
+  const name = (cat: string) => (cat === goal.attack ? "a" : cat === "boss" ? "b" : cat === "ied" ? "i" : `m:${cat}`);
+  const lines = rows.map((line) => tokens(line, (r) => (cats.has(r[0]) ? { cat: name(r[0]), value: r[1], own: r[3] === 1 } : null)));
   const topOf = { a: best[goal.attack] ?? 0, b: best.boss ?? 0, i: best.ied ?? 0 } as Record<string, number>;
-  const useful = (t: Token) => t.cat === "a" || t.cat === "b" || (t.cat === "i" && goal.ied);
-  const isTop = (t: Token) => useful(t) && t.value >= topOf[t.cat];
+  const useful = (t: Token) => t.cat === "a" || t.cat === "b" || (t.cat === "i" && goal.ied) || t.cat.startsWith("m:");
+  // A category line 1 never has (max HP % on a legendary emblem) has no top value: none of its lines is at it.
+  const isTop = (t: Token) => useful(t) && t.value >= (t.cat.startsWith("m:") ? (best[t.cat.slice(2)] ?? Infinity) : topOf[t.cat]);
   return enumerate(lines, (x, y, z) => {
     const xs = [x, y, z];
     const n = (c: string) => xs.filter((t) => t.cat === c).length;
@@ -565,6 +581,25 @@ export function addWeaponChance(rows: Row[][], attack: "atk" | "matk", goal: Add
     const sum = atk.reduce((s, t) => s + t.value, 0);
     if (sum < need) return false;
     return goal === "a21" || xs.every((t) => t.cat === "a" || t.cat === "e");
+  });
+}
+
+/**
+ * Lines first (user, 2026-11-15: "보공만 80퍼면 사실 3줄보다 안좋은건데" — read by its total alone, 보공 40 + 40 + STR 9
+ * came out rarer than any three useful lines): the chance of an option at least as good as one with `n` useful lines
+ * and these totals. More useful lines are always better; with as many, every total (`need`, by category) must be at
+ * least as high, and with `extra` every other line must be one of those ("+ @"). `useful` = the categories that count.
+ */
+export function linesFirstChance(rows: Row[][], useful: readonly string[], n: number, need: Record<string, number>, extra?: readonly string[]): number {
+  const u = new Set(useful);
+  const e = new Set(extra ?? []);
+  const lines = rows.map((line) => tokens(line, (r) => (u.has(r[0]) ? { cat: r[0], value: r[1], own: false } : e.has(r[0]) ? { cat: "e", value: 0, own: false } : null)));
+  return enumerate(lines, (a, b, c) => {
+    const xs = [a, b, c];
+    const count = xs.filter((t) => u.has(t.cat)).length;
+    if (count !== n) return count > n;
+    if (Object.entries(need).some(([cat, min]) => xs.reduce((sum, t) => sum + (t.cat === cat ? t.value : 0), 0) < min)) return false;
+    return !extra || xs.every((t) => u.has(t.cat) || t.cat === "e");
   });
 }
 
