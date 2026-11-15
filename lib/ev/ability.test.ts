@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import data from "./data/ability.json" with { type: "json" };
-import { ABILITY_OPTIONS, abilityPairPlan, abilityPlan, legendaryOnly, type AbilityKey, circulatorCount, valueChance, valueChoices } from "./ability.ts";
+import miracleData from "./data/ability-miracle.json" with { type: "json" };
+import { ABILITY_OPTIONS, ABILITY_PRESETS, abilityPairPlan, abilityPlan, legendaryOnly, presetLead, type AbilityKey, type AbilityMode, circulatorCount, valueChance, valueChoices } from "./ability.ts";
 
 type Grade = "epic" | "unique" | "legendary";
 const rows = (data as unknown as { rows: [string, number, number, number][] }).rows;
@@ -311,4 +312,62 @@ test("two presets (패보상 + 드메): together costs less than one after the o
     assert.ok(pair.both.afterFirstLower.some((r) => r.key === "drop" && r.goal === 1));
     assert.ok(pair.both.afterFirstLower.some((r) => r.key === "boss" && r.goal === 0));
   }
+});
+
+// 일반 재설정 (fame reset, L1+U2) rerolls values with black · chaos circulators: event items, no price
+// (user, 2026-11-15; official guide: grade and options kept, values only, not when lines 2 · 3 are legendary).
+const free = { sunday: false, famePricePerUnit: 400, values: { goal: maxGoal, circPrice: 0 } };
+
+test("일반 재설정: free black · chaos circulators fix the values, so the fame is that of the options alone", () => {
+  const keys: AbilityKey[] = ["pas", "boss", "stat"];
+  const p = abilityPlan(keys, "l1u2", free, 0);
+  const options = abilityPlan(keys, "l1u2", { sunday: false, famePricePerUnit: 400 }, 0);
+  assert.ok(Math.abs(p.fame - options.fame) < 1, `${p.fame} vs ${options.fame}`);
+  // 846.0만 fame · 731.8 resets: the lowest values (no circulator needed) give the same.
+  assert.ok(Math.abs(p.fame - 8_460_350) < 10, `${p.fame}`);
+  assert.ok(Math.abs(p.resets - 731.84) < 0.01, `${p.resets}`);
+  // Top values: P = 1 × 10 % × 25 % → (1 − P) ÷ P = 39, none spent before the last option shows up.
+  assert.ok(Math.abs(p.circ - 39) < 1e-6, `${p.circ}`);
+  assert.equal(p.afterFirstLower.find((r) => r.key === "boss")!.action.kind, "lock");
+  // 상추뎀 first is not locked: waiting for 보공 with it locked costs more fame.
+  assert.equal(p.afterFirstLower.find((r) => r.key === "stat")!.action.kind, "keep");
+  // A blank fame price does not change the plan (free circulators cost a hair of a reset when choosing).
+  const blank = abilityPlan(keys, "l1u2", { ...free, famePricePerUnit: 0 }, 0);
+  assert.ok(Math.abs(blank.fame - p.fame) < 1 && Math.abs(blank.circ - p.circ) < 1e-6);
+  // 재보체: three lines at 10 % each → 999.
+  assert.ok(Math.abs(abilityPlan(["cool", "boss", "hp"], "l1u2", free, 0).circ - 999) < 1e-6);
+});
+
+test("미라클 서큘레이터: own option chances, no locks, top values; at 1.5억 it is never worth it", () => {
+  // Official miracle page: same 41 options, line 1 (legendary) chances as the fame reset, other grades its own.
+  const mrows = (miracleData as unknown as { rows: [string, number, number, number][] }).rows;
+  assert.equal(mrows.length, rows.length);
+  for (const r of mrows) assert.equal(r[3], rows.find((x) => x[0] === r[0])![3], r[0]);
+  assert.equal(mrows[idx("boss")][2], 0.022624);
+  // Cheap enough to be used (100만): miracles while nothing is locked, then fame resets. Options only.
+  const cheap = abilityPlan(["pas", "boss", "stat"], "l1u2", { sunday: false, famePricePerUnit: 400, miraclePrice: 1e6 }, 0);
+  assert.equal(cheap.start, "miracle");
+  assert.ok(Math.abs(cheap.miracle - 144.289) < 0.001, `${cheap.miracle}`);
+  assert.ok(Math.abs(cheap.fame + cheap.miracle * 2500 - 6_046_720) < 10, `${cheap.fame}`);
+  // Top values: with the lowest values wanted it is the options-only plan; with the top ones and no circulators
+  // its lines are already at the goal (1,766.9만 vs 4,508.6만 fame worth).
+  const lowest = (k: AbilityKey, g: "legendary" | "unique") => Math.min(...valueChoices(k, g));
+  const noCirc = (goal: typeof maxGoal) => ({ sunday: false, famePricePerUnit: 400, values: { goal, circPrice: 1e18 }, miraclePrice: 1e6 });
+  const atLowest = abilityPlan(["pas", "boss", "stat"], "l1u2", noCirc(lowest), 0);
+  assert.ok(Math.abs(atLowest.fame - cheap.fame) < 1 && Math.abs(atLowest.miracle - cheap.miracle) < 1e-9);
+  const atTop = abilityPlan(["pas", "boss", "stat"], "l1u2", noCirc(maxGoal), 0);
+  assert.ok(Math.abs(atTop.fame + atTop.miracle * 2500 - 17_668_815) < 10, `${atTop.fame}`);
+  // Rows after a miracle start from its top value (Codex review): 보공 found by a miracle leaves 30 black · chaos, not 40
+  // (the last option is at the goal by luck 25 % of the time: 0.75 × 40).
+  const viaMiracle = abilityPlan(["pas", "boss", "stat"], "l1u2", { ...free, miraclePrice: 1e6 }, 0);
+  assert.equal(viaMiracle.start, "miracle");
+  const bossRow = viaMiracle.afterFirstLower.find((r) => r.key === "boss")!;
+  assert.ok(Math.abs(bossRow.circ - 30) < 1e-6, `${bossRow.circ}`);
+  // At 1.5억 no preset uses one, with either reset (일반: free black · chaos, 고급: abyss 2.6억).
+  for (const preset of ABILITY_PRESETS)
+    for (const mode of ["l3", "l1u2"] as AbilityMode[]) {
+      const opts = { ...(mode === "l3" ? valued : free), miraclePrice: 1.5e8 };
+      const q = abilityPlan(preset.keys, mode, opts, mode === "l1u2" ? presetLead(preset) : undefined);
+      assert.ok(q.miracle < 1e-9, `${preset.label} ${mode}: ${q.miracle}`);
+    }
 });

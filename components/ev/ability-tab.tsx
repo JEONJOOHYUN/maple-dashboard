@@ -55,10 +55,13 @@ export function AbilityTab() {
     plan: AbilityPlan;
     key: AbilityKey;
   } | null>(null);
-  // Abyss circulator price (억), same default as the MVP credit shop.
+  // Abyss circulator price (억), same default as the MVP credit shop. Only the advanced reset uses it: the fame-reset
+  // build rerolls values with the black · chaos circulators, event items with no price (user, 2026-11-15).
   const [circText, setCircText] = useState(
     String(CREDIT_SHOP.find((x) => x.id === "circulator")?.auctionEok ?? ""),
   );
+  // Miracle circulator price (억): no longer sold, traded at about 1.5억 (user, 2026-11-15).
+  const [miracleText, setMiracleText] = useState("1.5");
 
   const preset = ABILITY_PRESETS.find((p) => p.id === presetId)!;
   // A second preset made into 드메 at the same time (user, 2026-11-14), for the boss builds.
@@ -81,7 +84,9 @@ export function AbilityTab() {
       "legendary" | "unique";
   const goalOf = (k: AbilityKey, g: "legendary" | "unique") =>
     goals[`${k}:${g}`] ?? Math.max(...valueChoices(k, g));
-  const circPrice = parseNum(circText, 0) * 1e8;
+  // The value circulator of this build: abyss (priced) for the advanced reset, black · chaos (free) for the fame reset.
+  const circPrice = mode === "l3" ? parseNum(circText, 0) * 1e8 : 0;
+  const miraclePrice = parseNum(miracleText, 0) * 1e8;
   const opts: PlanOpts = useMemo(
     () => ({
       sunday,
@@ -90,8 +95,9 @@ export function AbilityTab() {
         goal: (k, g) => goals[`${k}:${g}`] ?? Math.max(...valueChoices(k, g)),
         circPrice,
       },
+      miraclePrice,
     }),
-    [sunday, famePerUnit, goals, circPrice],
+    [sunday, famePerUnit, goals, circPrice, miraclePrice],
   );
   // Options, values and circulators planned together (when to lock, when to circulate). With 드메 as well: one ability
   // made into whichever build comes first, the other preset into the other one.
@@ -118,13 +124,15 @@ export function AbilityTab() {
   };
   const pickSeen2 = (k: AbilityKey | null) =>
     setSeen2Sel(k ? { plan, key: k } : null);
-  type Cost = { fame: number; meso: number; circ: number };
+  type Cost = { fame: number; meso: number; circ: number; miracle: number };
   const total = (p: Cost) =>
-    famePerUnit > 0 ? p.fame * famePerUnit + p.meso + p.circ * circPrice : null;
+    famePerUnit > 0 ? p.fame * famePerUnit + p.meso + p.circ * circPrice + p.miracle * miraclePrice : null;
   const costText = (p: Cost) =>
     total(p) !== null
       ? `약 ${eok(total(p)!)}`
       : `${fameText(p.fame)}${p.meso > 0 ? ` + ${eok(p.meso)}` : ""}`;
+  // Which circulator rerolls the values in this build (일반: free event black · chaos, 고급: abyss).
+  const circName = mode === "l1u2" ? "블랙 · 카오스" : "서큘레이터";
   const circN = (n: number) =>
     `${(Math.round(n * 10) / 10).toLocaleString("ko-KR")}개`;
   /** Short "→" chain. two = the second option (both found lines are handled together). */
@@ -223,7 +231,12 @@ export function AbilityTab() {
       }
     return [...out.values()].sort((a, b) => costNum(a.f) - costNum(b.f));
   })();
-  const sumCost = (a: Cost, b: Cost): Cost => ({ fame: a.fame + b.fame, meso: a.meso + b.meso, circ: a.circ + b.circ });
+  const sumCost = (a: Cost, b: Cost): Cost => ({
+    fame: a.fame + b.fame,
+    meso: a.meso + b.meso,
+    circ: a.circ + b.circ,
+    miracle: a.miracle + b.miracle,
+  });
   /** "146.2억" (money when there is a fame price, else fame). */
   const diffText = (more: Cost, less: Cost) => {
     const d = costNum(more) - costNum(less);
@@ -319,12 +332,13 @@ export function AbilityTab() {
         <Label
           aside={
             <Segment
-              label="노리는 등급"
+              label="재설정 종류"
               value={mode}
               onChange={chooseMode}
+              // The reset decides the grades: legendary lines 2 · 3 only come from the advanced reset (user, 2026-11-15).
               options={[
-                { id: "l3", label: modeLabel(preset, "l3", true) },
-                { id: "l1u2", label: modeLabel(preset, "l1u2", true) },
+                { id: "l3", label: METHOD_NAME.advanced },
+                { id: "l1u2", label: METHOD_NAME.fame },
               ]}
               className="w-56"
             />
@@ -352,7 +366,7 @@ export function AbilityTab() {
             </>
           )}
         </div>
-        <div className="grid gap-2 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-2">
           <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
             가진 명성치
             <NumberField
@@ -373,12 +387,25 @@ export function AbilityTab() {
               inputClassName="w-full"
             />
           </label>
+          {/* The fame-reset build rerolls values with free black · chaos circulators: no price to ask. */}
+          {mode === "l3" && (
+            <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
+              심연의 서큘레이터 (억)
+              <NumberField
+                label="심연의 서큘레이터 1개 가격 (억 메소)"
+                value={circText}
+                onChange={setCircText}
+                decimal
+                inputClassName="w-full"
+              />
+            </label>
+          )}
           <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
-            심연의 서큘레이터 1개 (억)
+            미라클 서큘레이터 (억)
             <NumberField
-              label="심연의 서큘레이터 1개 가격 (억 메소)"
-              value={circText}
-              onChange={setCircText}
+              label="미라클 서큘레이터 1개 가격 (억 메소)"
+              value={miracleText}
+              onChange={setMiracleText}
               decimal
               inputClassName="w-full"
             />
@@ -453,18 +480,25 @@ export function AbilityTab() {
           <Box
             k="재설정 메소"
             v={view.meso > 0 ? eok(view.meso) : "없음"}
-            sub={view.meso > 0 ? "고급 재설정" : "명성치 재설정만"}
+            sub={view.meso > 0 ? METHOD_NAME.advanced : `${METHOD_NAME.fame}만`}
           />
-          <Box k="재설정 횟수" v={count(view.resets)} sub="평균" />
+          <Box
+            k="재설정 횟수"
+            v={count(view.resets)}
+            // Miracle circulators only show up when they are cheap enough to be worth it.
+            sub={view.miracle >= 0.05 ? `+ 미라클 ${circN(view.miracle)}` : "평균"}
+          />
           <Box
             k="서큘레이터"
             v={circN(view.circ)}
             sub={
               view.circ === 0
                 ? "필요 없음"
-                : circMeso > 0
-                  ? `약 ${eok(circMeso)}`
-                  : "수치 맞추기"
+                : mode === "l1u2"
+                  ? "블랙 · 카오스"
+                  : circMeso > 0
+                    ? `약 ${eok(circMeso)}`
+                    : "수치 맞추기"
             }
           />
         </div>
@@ -473,13 +507,19 @@ export function AbilityTab() {
           <Step
             n={1}
             title={
-              !firstKeep
-                ? `잠금 없이 ${METHOD_NAME[plan.start]}`
-                : plan.start === "advanced"
-                  ? "첫 번째 옵션 제외 켜고 잠금 없이 고급 재설정"
-                  : `잠금 없이 ${METHOD_NAME[plan.start]} · 첫째 줄에 뜬 건 넘김`
+              firstKeep && plan.start === "advanced"
+                ? "첫 번째 옵션 제외 켜고 잠금 없이 고급 재설정"
+                : `잠금 없이 ${METHOD_NAME[plan.start]}${firstKeep ? " · 첫째 줄에 뜬 건 넘김" : ""}`
             }
-            note={firstKeep ? "첫째 줄은 마지막에 채우는 게 쌈" : undefined}
+            note={
+              [
+                firstKeep && "첫째 줄은 마지막에 채우는 게 쌈",
+                // The miracle circulator takes no locks: once a line is locked the build goes on with its own reset.
+                plan.start === "miracle" && `잠근 뒤로는 ${METHOD_NAME[mode === "l3" ? "advanced" : "fame"]}`,
+              ]
+                .filter(Boolean)
+                .join(" · ") || undefined
+            }
           />
           {/* Some option on line 1 is not "go on": its own step with a row per option. */}
           {!firstKeep && (
@@ -520,7 +560,7 @@ export function AbilityTab() {
                 action={lowerSame ? undefined : rowAction(b, b.key, false)}
                 extra={
                   b.action.kind === "circ"
-                    ? `서큘레이터 ${circN(b.action.circCount)}`
+                    ? `${circName} ${circN(b.action.circCount)}`
                     : undefined
                 }
                 cost={costText(b)}
@@ -573,7 +613,7 @@ export function AbilityTab() {
                   action={twoSame ? undefined : rowAction(b, b.keys[1], true)}
                   extra={
                     b.action.kind === "circ"
-                      ? `서큘레이터 ${circN(b.action.circCount)}`
+                      ? `${circName} ${circN(b.action.circCount)}`
                       : undefined
                   }
                   cost={costText(b)}
@@ -603,7 +643,7 @@ export function AbilityTab() {
                 label={r.label}
                 tag={r.goal === huntGoal && pairOn ? hunt.label : undefined}
                 action={r.action}
-                extra={r.f.move === "circ" ? `서큘레이터 ${circN(r.f.circCount)}` : undefined}
+                extra={r.f.move === "circ" ? `${circName} ${circN(r.f.circCount)}` : undefined}
                 cost={costNum(r.f) < 1 ? "0" : costText(r.f)}
                 unit={i === 0}
               />
@@ -634,17 +674,14 @@ const goalOf2 = (p: AbilityPreset, mode: AbilityMode): AbilityGoal => ({
   lead: mode === "l1u2" ? presetLead(p) : undefined,
 });
 
-/** "레전드리 3줄" · "레 1 + 유 2", or 2 lines for 드메. */
-const modeLabel = (p: AbilityPreset, mode: AbilityMode, short = false) =>
-  mode === "l3"
-    ? `레전드리 ${p.keys.length}줄`
-    : short
-      ? `레 1 + 유 ${p.keys.length - 1}`
-      : `레전드리 1 + 유니크 ${p.keys.length - 1}`;
+/** "레전드리 3줄" · "레전드리 1 + 유니크 2", or 2 lines for 드메. */
+const modeLabel = (p: AbilityPreset, mode: AbilityMode) =>
+  mode === "l3" ? `레전드리 ${p.keys.length}줄` : `레전드리 1 + 유니크 ${p.keys.length - 1}`;
 
 const METHOD_NAME: Record<Method, string> = {
-  fame: "명성치 재설정",
+  fame: "일반 재설정",
   advanced: "고급 재설정",
+  miracle: "미라클 서큘레이터",
 };
 
 function Step({

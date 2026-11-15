@@ -1,17 +1,27 @@
 // Ability (어빌리티) expected cost with the cheapest locking plan.
-// Option chances: Nexon probability guide (data/ability.json). Reset prices as in game
-// (2026-11-08): fame reset on a legendary ability 8,000 / 11,000 / 16,000 fame for 0 / 1 / 2 locks,
-// advanced reset 20,000 / 30,000 / 40,000 fame + 200만 / 600만 / 1,500만 meso. Sunday halves fame.
+// Option chances: Nexon probability guide (data/ability.json; the miracle circulator has its own page,
+// data/ability-miracle.json). Reset prices as in game (2026-11-08): fame reset on a legendary ability
+// 8,000 / 11,000 / 16,000 fame for 0 / 1 / 2 locks, advanced reset 20,000 / 30,000 / 40,000 fame + 200만 / 600만 /
+// 1,500만 meso. Sunday halves fame.
 //
 // Assumes the ability is already legendary.
 import data from "./data/ability.json" with { type: "json" };
+import miracleData from "./data/ability-miracle.json" with { type: "json" };
 
 type Grade = "epic" | "unique" | "legendary";
-const DB = data as unknown as { rows: [string, number, number, number][] };
-const OPTIONS = DB.rows.map(([name, epic, unique, legendary]) => ({
-  name,
-  p: { epic, unique, legendary } as Record<Grade, number>,
-}));
+type Rows = { rows: [string, number, number, number][] };
+const DB = data as unknown as Rows;
+const MIRACLE = new Map(
+  (miracleData as unknown as Rows).rows.map(([name, epic, unique, legendary]) => [
+    name,
+    { epic, unique, legendary } as Record<Grade, number>,
+  ]),
+);
+const OPTIONS = DB.rows.map(([name, epic, unique, legendary]) => {
+  const pm = MIRACLE.get(name);
+  if (!pm) throw new Error(`miracle circulator table has no "${name}"`);
+  return { name, p: { epic, unique, legendary } as Record<Grade, number>, pm };
+});
 const INDEX = new Map(OPTIONS.map((o, i) => [o.name, i]));
 
 export const ABILITY_OPTIONS = {
@@ -77,27 +87,36 @@ export function presetLead(preset: AbilityPreset): number[] {
 
 /** l3 = all three lines legendary, l1u2 = legendary first line + unique (or better) lines. */
 export type AbilityMode = "l3" | "l1u2";
-export type Method = "fame" | "advanced";
+/**
+ * fame = 일반 (명성치) 재설정, advanced = 고급 재설정, miracle = 미라클 서큘레이터: rerolls all three lines with no locks,
+ * its own option chances, grade chances as the fame reset, and every line at the top value of its grade (official
+ * miracle circulator page, 2026-11-15). Priced per item (`PlanOpts.miraclePrice`), no fame.
+ */
+export type Method = "fame" | "advanced" | "miracle";
 
 const FAME = {
   fame: [8000, 11000, 16000],
   advanced: [20000, 30000, 40000],
+  miracle: [0, 0, 0],
 } as const;
 const MESO = {
   fame: [0, 0, 0],
   advanced: [2_000_000, 6_000_000, 15_000_000],
+  miracle: [0, 0, 0],
 } as const;
+const FAME_GRADES: [Grade, number][] = [
+  ["unique", 0.15],
+  ["epic", 0.85],
+];
 /** Grade chances of lines 2 and 3 (line 1 is always legendary on a legendary ability). */
 const LATER_GRADES: Record<Method, [Grade, number][]> = {
-  fame: [
-    ["unique", 0.15],
-    ["epic", 0.85],
-  ],
+  fame: FAME_GRADES,
   advanced: [
     ["legendary", 0.02],
     ["unique", 0.15],
     ["epic", 0.83],
   ],
+  miracle: FAME_GRADES,
 };
 
 export function legendaryOnly(key: AbilityKey): boolean {
@@ -147,6 +166,7 @@ function outcomes(
   };
   const excludedStart = [...locked.values()].map((t) => targets[t]);
   const free = [0, 1, 2].filter((l) => !locked.has(l));
+  const chance = (i: number, g: Grade) => (method === "miracle" ? OPTIONS[i].pm[g] : OPTIONS[i].p[g]);
 
   // Roll the free lines in order. Each option is picked with chance / (1 − excluded chances) in that grade.
   const roll = (
@@ -162,12 +182,12 @@ function outcomes(
       line === 0 ? [["legendary", 1]] : LATER_GRADES[method];
     const last = k === free.length - 1;
     for (const [g, pg] of grades) {
-      const denom = 1 - excluded.reduce((s, i) => s + OPTIONS[i].p[g], 0);
+      const denom = 1 - excluded.reduce((s, i) => s + chance(i, g), 0);
       if (denom <= 0) continue;
       let wanted = 0;
       targets.forEach((opt, t) => {
         if (excluded.includes(opt)) return;
-        const po = OPTIONS[opt].p[g] / denom;
+        const po = chance(opt, g) / denom;
         if (po <= 0) return;
         wanted += po;
         const next = new Map(good);
@@ -180,9 +200,9 @@ function outcomes(
         // The last line only needs "not wanted"; which other option it is changes nothing.
         roll(k + 1, excluded, good, p * pg * rest);
       } else {
-        OPTIONS.forEach((o, i) => {
+        OPTIONS.forEach((_, i) => {
           if (excluded.includes(i) || targets.includes(i)) return;
-          const po = o.p[g] / denom;
+          const po = chance(i, g) / denom;
           if (po > 0) roll(k + 1, [...excluded, i], good, p * pg * po);
         });
       }
@@ -196,12 +216,16 @@ function outcomes(
   return list;
 }
 
-/** Expected fame, meso, circulators (abyss circulators) and resets. */
+/**
+ * Expected fame, meso, value circulators (abyss · black · chaos: `values.circPrice` each), resets (fame and advanced)
+ * and miracle circulators.
+ */
 export type PlanCost = {
   fame: number;
   meso: number;
   circ: number;
   resets: number;
+  miracle: number;
 };
 
 /** keep = reroll without new locks, lock = lock those lines, circ = circulators until those lines hit the goal, then lock. */
@@ -221,7 +245,10 @@ export type PlanStep = PlanCost & {
   choices: PlanChoice[];
   /** Which goal the move works towards (index in the goals; one goal: always 0). */
   goal: number;
-  /** The line it showed up on (0 = the first line). The row assumes its value is below the goal. */
+  /**
+   * The line it showed up on (0 = the first line). The row assumes its value is below the goal (at the top value when
+   * the reset that shows it is the miracle circulator).
+   */
   line: number;
   /** The move when it already shows the wanted value, when that differs from going on (keep below it, lock at it). */
   atGoal?: PlanAction;
@@ -280,11 +307,16 @@ const typeState = (m: Map<number, Line>): State =>
 export type PlanOpts = {
   sunday: boolean;
   famePricePerUnit: number;
-  /** Wanted value per option and grade, and the circulator price. Without it values are ignored. */
+  /**
+   * Wanted value per option and grade, and the price of a circulator that rerolls the values (0 = free: the black ·
+   * chaos circulators of the fame-reset build are event items). Without it values are ignored.
+   */
   values?: {
     goal: (key: AbilityKey, grade: "legendary" | "unique") => number;
     circPrice: number;
   };
+  /** Miracle circulator price (meso). Left out or 0: not used. */
+  miraclePrice?: number;
 };
 
 /**
@@ -331,7 +363,10 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: PlanCost[]): Abilit
 
   const fameMul = opts.sunday ? 0.5 : 1;
   const famePrice = Math.max(opts.famePricePerUnit, 1e-3);
-  const circPrice = opts.values ? Math.max(opts.values.circPrice, 1) : 0;
+  // A free circulator (the event black · chaos ones) still costs a millionth of the cheapest reset when choosing: used
+  // whenever it saves fame, never for nothing, and the plan stays the same whatever the fame price.
+  const circPrice = opts.values ? Math.max(opts.values.circPrice, FAME.fame[0] * fameMul * famePrice * 1e-6) : 0;
+  const miraclePrice = Math.max(opts.miraclePrice ?? 0, 0);
   // Three legendary lines only come from the advanced reset, and a build with legendary lines 2 · 3 is rolled with it
   // to the end (user, 2026-11-11). The fame reset is for L1+U2.
   const methodsOf = (g: AbilityGoal): Method[] => (g.mode === "l3" ? ["advanced"] : ["fame"]);
@@ -342,7 +377,7 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: PlanCost[]): Abilit
     opts.values
       ? valueChance(keys[t], gradeOf(line, t), opts.values.goal(keys[t], gradeOf(line, t)))
       : 1;
-  const money = (c: PlanCost) => c.fame * famePrice + c.meso + c.circ * circPrice;
+  const money = (c: PlanCost) => c.fame * famePrice + c.meso + c.circ * circPrice + c.miracle * miraclePrice;
   const tailMoney = (g: number | null) => (g === null || !tails ? 0 : money(tails[g]));
 
   // Reset outcomes per locked option layout (values do not change which options show up).
@@ -379,15 +414,19 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: PlanCost[]): Abilit
   const order = [...states].sort(
     (x, y) => decF(y).size - decF(x).size || fullCount(y) - fullCount(x),
   );
-  /** Resets worth trying from a state: those of the goal its locks belong to, every goal's when nothing is locked. */
+  /**
+   * Resets worth trying from a state: those of the goal its locks belong to, every goal's when nothing is locked. The
+   * miracle circulator takes no locks, so only with nothing locked (with locks it would throw them away).
+   */
   const methodsAt = (s: FState): Method[] => {
     const locked = [...decF(s).values()];
     const gs = locked.length ? [goalAt(locked[0].t)] : goals;
-    return [...new Set(gs.flatMap(methodsOf))];
+    const ms = [...new Set(gs.flatMap(methodsOf))];
+    return !locked.length && miraclePrice > 0 ? [...ms, "miracle"] : ms;
   };
 
   const price = (m: Method, locks: number) =>
-    FAME[m][locks] * fameMul * famePrice + MESO[m][locks];
+    m === "miracle" ? miraclePrice : FAME[m][locks] * fameMul * famePrice + MESO[m][locks];
   const V = new Map<FState, number>();
   const policy = new Map<FState, Method>();
 
@@ -402,7 +441,8 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: PlanCost[]): Abilit
         let p = o.p;
         const lines = new Map(locked);
         fresh.forEach(([l, t], i) => {
-          const q = pFull(l, t);
+          // The miracle circulator gives the top value of the grade: always at the goal.
+          const q = m === "miracle" ? 1 : pFull(l, t);
           const full = (mask & (1 << i)) !== 0;
           p *= full ? q : 1 - q;
           lines.set(l, { t, full });
@@ -536,10 +576,12 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: PlanCost[]): Abilit
     return W;
   };
   const tailOf = (k: keyof PlanCost) => (g: number) => (tails ? tails[g][k] : 0);
+  const isReset = (m: Method) => (m === "miracle" ? 0 : 1);
   const fameW = evalPart((m, l) => FAME[m][l] * fameMul, 0, tailOf("fame"));
   const mesoW = evalPart((m, l) => MESO[m][l], 0, tailOf("meso"));
-  const resetW = evalPart(() => 1, 0, tailOf("resets"));
+  const resetW = evalPart(isReset, 0, tailOf("resets"));
   const circW = evalPart(() => 0, 1, tailOf("circ"));
+  const miracleW = evalPart((m) => 1 - isReset(m), 0, tailOf("miracle"));
 
   /** What a move leaves to pay (circulators of the move included). */
   const leftAfter = (c: Choice): PlanCost => {
@@ -552,6 +594,7 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: PlanCost[]): Abilit
       meso: left(mesoW, "meso"),
       circ: c.circ + left(circW, "circ"),
       resets: left(resetW, "resets"),
+      miracle: left(miracleW, "miracle"),
     };
   };
   const actionOf = (c: Choice): PlanAction => ({
@@ -577,10 +620,13 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: PlanCost[]): Abilit
       .map((x) => ({ action: actionOf(x), ...leftAfter(x) }));
     return { next: c.next, goal, action: actionOf(c), ...leftAfter(c), choices };
   };
-  /** A wanted option that just showed up: its value meets the goal only by luck (always, when there is one value). */
-  const fresh = (line: number, t: number): Line => ({
+  /**
+   * A wanted option that just showed up from state `from`: its value meets the goal only by luck (always, when there is
+   * one value, or when the reset there is the miracle circulator, which gives the top value — Codex review).
+   */
+  const fresh = (line: number, t: number, from: FState): Line => ({
     t,
-    full: !opts.values || pFull(line, t) >= 1,
+    full: !opts.values || policy.get(from) === "miracle" || pFull(line, t) >= 1,
   });
   const strip = <T extends { next: FState | null }>(x: T) => {
     const { next: _next, ...rest } = x;
@@ -606,7 +652,7 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: PlanCost[]): Abilit
     const byMove = new Map<string, PlanFinish>();
     for (const line of [0, 1, 2]) {
       if (L.has(line) || !canCount(line, c)) continue;
-      const lines = new Map(L).set(line, fresh(line, c));
+      const lines = new Map(L).set(line, fresh(line, c, s));
       if (!meets(lines, g)) continue;
       const d = decide(lines, s);
       const move: PlanFinish["move"] = d.kind === "circ" ? "circ" : d.next === null ? "done" : "keep";
@@ -634,7 +680,7 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: PlanCost[]): Abilit
    */
   const row = (from: FState, line: number, t: number) => {
     const base = decF(from);
-    const below = new Map(base).set(line, fresh(line, t));
+    const below = new Map(base).set(line, fresh(line, t, from));
     const r = after(below, goalOf[t], from);
     let next = r.next;
     let atGoal: PlanAction | undefined;
@@ -695,8 +741,9 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: PlanCost[]): Abilit
     ? {
         fame: evalPart((m, l) => FAME[m][l] * fameMul, 0, none).get("")!,
         meso: evalPart((m, l) => MESO[m][l], 0, none).get("")!,
-        resets: evalPart(() => 1, 0, none).get("")!,
+        resets: evalPart(isReset, 0, none).get("")!,
         circ: evalPart(() => 0, 1, none).get("")!,
+        miracle: evalPart((m) => 1 - isReset(m), 0, none).get("")!,
         chance: goals.map((_, g) => evalPart(() => 0, 0, (x) => (x === g ? 1 : 0)).get("")!),
       }
     : undefined;
@@ -706,6 +753,7 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: PlanCost[]): Abilit
     meso: mesoW.get("")!,
     resets: resetW.get("")!,
     circ: circW.get("")!,
+    miracle: miracleW.get("")!,
     start: policy.get("")!,
     afterFirst,
     afterFirstLower,
@@ -739,7 +787,13 @@ export function abilityPairPlan(
 ): { both: AbilityPlan; a: AbilityPlan; b: AbilityPlan } {
   const one = solve([a], opts);
   const two = solve([b], opts);
-  const cost = (p: AbilityPlan): PlanCost => ({ fame: p.fame, meso: p.meso, circ: p.circ, resets: p.resets });
+  const cost = (p: AbilityPlan): PlanCost => ({
+    fame: p.fame,
+    meso: p.meso,
+    circ: p.circ,
+    resets: p.resets,
+    miracle: p.miracle,
+  });
   // Finishing a leaves b for the other preset, and the other way round.
   const both = solve([a, b], opts, [cost(two), cost(one)]);
   return { both, a: one, b: two };
