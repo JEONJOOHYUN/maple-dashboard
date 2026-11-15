@@ -85,6 +85,42 @@ export function presetLead(preset: AbilityPreset): number[] {
   return [Math.max(0, preset.keys.findIndex((k) => legendaryOnly(k)))];
 }
 
+/**
+ * Letters of the per-class builds (lib/spec/data/classes.json) → options. 벞 (buff duration) is counted as 공/마: the
+ * user's build table treats them as the same line ("공 = 마 = 버프 지속"), and there is no buff-duration value table here.
+ */
+export const BUILD_LETTERS: Record<string, { key: AbilityKey; label: string }> = {
+  패: { key: "pas", label: "패시브" },
+  보: { key: "boss", label: "보공" },
+  상: { key: "stat", label: "상추뎀" },
+  공: { key: "atk", label: "공마" },
+  벞: { key: "atk", label: "버프 지속" },
+  재: { key: "cool", label: "재사용" },
+  크: { key: "crit", label: "크확" },
+  피: { key: "hp", label: "최대 HP" },
+};
+
+/**
+ * A class build as the preset to calculate. l3 = its three options; l1u2 = its first letter on the legendary line, the
+ * other two on lines 2 · 3. A built-in preset with the same options (and, for l1u2, the same legendary line) is
+ * returned instead, so its chip shows as picked. Null when the letters are not three different options.
+ */
+export function buildPreset(letters: string, mode: AbilityMode): AbilityPreset | null {
+  const keys = [...letters].map((c) => BUILD_LETTERS[c]?.key);
+  if (keys.length !== 3 || keys.some((k) => !k) || new Set(keys).size !== 3) return null;
+  const ks = keys as AbilityKey[];
+  // A legendary-only option (패시브) can only stand on the legendary line.
+  if (mode === "l1u2" && ks.slice(1).some(legendaryOnly)) return null;
+  const same = ABILITY_PRESETS.find(
+    (p) =>
+      !p.hunting &&
+      p.keys.length === 3 &&
+      ks.every((k) => p.keys.includes(k)) &&
+      (mode === "l3" || p.keys[presetLead(p)[0]] === ks[0]),
+  );
+  return same ?? { id: `build:${letters}`, label: letters, keys: ks, lead: [0] };
+}
+
 /** l3 = all three lines legendary, l1u2 = legendary first line + unique (or better) lines. */
 export type AbilityMode = "l3" | "l1u2";
 /**

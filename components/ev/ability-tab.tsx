@@ -12,12 +12,14 @@ import {
   eok,
   parseNum,
 } from "@/components/ev/ui";
+import { ClassAbilityTable } from "@/components/ev/class-ability-table";
 import {
   ABILITY_OPTIONS,
   ABILITY_PRESETS,
   ABILITY_VALUES,
   abilityPairPlan,
   abilityPlan,
+  buildPreset,
   presetLead,
   valueChoices,
   type AbilityGoal,
@@ -31,6 +33,7 @@ import {
   type PlanOpts,
   type PlanStep,
 } from "@/lib/ev/ability";
+import type { ClassAbility } from "@/lib/ev/ability-classes";
 import { CREDIT_SHOP } from "@/lib/ev/defaults";
 import { cn } from "@/lib/utils";
 import { koreanUnits } from "@/lib/format";
@@ -38,9 +41,11 @@ import { koreanUnits } from "@/lib/format";
 // Fame to the nearest 만 ("6,385만", "1억 1,054만").
 const fameText = (f: number) => (f >= 1e4 ? koreanUnits(Math.round(f / 1e4) * 1e4) : koreanUnits(f));
 
-export function AbilityTab() {
+export function AbilityTab({ classes }: { classes: ClassAbility[] }) {
   const [presetId, setPresetId] = useState("pbs");
   const [mode, setMode] = useState<AbilityMode>("l3");
+  // A class picked in 직업별 추천: its build for the reset picked (고급 / 일반 differ) replaces the chip preset.
+  const [cls, setCls] = useState<string | null>(null);
   const [sunday, setSunday] = useState(false);
   const [haveText, setHaveText] = useState("");
   const [fame5kText, setFame5kText] = useState("200");
@@ -63,7 +68,12 @@ export function AbilityTab() {
   // Miracle circulator price (억): no longer sold, traded at about 1.5억 (user, 2026-11-15).
   const [miracleText, setMiracleText] = useState("1.5");
 
-  const preset = ABILITY_PRESETS.find((p) => p.id === presetId)!;
+  const chosen = useMemo(() => classes.find((c) => c.name === cls) ?? null, [classes, cls]);
+  const built = useMemo(
+    () => (chosen ? buildPreset(mode === "l3" ? chosen.full : chosen.practical, mode) : null),
+    [chosen, mode],
+  );
+  const preset = built ?? ABILITY_PRESETS.find((p) => p.id === presetId)!;
   // A second preset made into 드메 at the same time (user, 2026-11-14), for the boss builds.
   const [withHunt, setWithHunt] = useState(false);
   const hunt = ABILITY_PRESETS.find((p) => p.hunting)!;
@@ -116,6 +126,11 @@ export function AbilityTab() {
   };
   const choosePreset = (id: string) => {
     setPresetId(id);
+    setCls(null);
+    pickSeen(null);
+  };
+  const chooseClass = (name: string) => {
+    setCls(name);
     pickSeen(null);
   };
   const chooseMode = (m: AbilityMode) => {
@@ -302,130 +317,135 @@ export function AbilityTab() {
 
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-      {/* Its own height, not stretched to the long result column (user, 2026-11-14: the two sides looked unbalanced). */}
-      <Panel className="lg:self-start">
-        <Label>자주 노리는 조합</Label>
-        <div className="flex flex-wrap gap-1.5">
-          {ABILITY_PRESETS.map((p) => (
-            <Chip
-              key={p.id}
-              on={p.id === presetId}
-              onClick={() => choosePreset(p.id)}
-              title={p.keys.map((k) => ABILITY_OPTIONS[k].label).join(" · ")}
-              className="rounded-full"
-            >
-              {p.label}
-            </Chip>
-          ))}
-        </div>
-        {!preset.hunting && (
-          <Switch
-            on={withHunt}
-            onChange={(on) => {
-              setWithHunt(on);
-              pickSeen(null);
-            }}
-            label="드메 프리셋도 같이 맞추기"
-            note="프리셋 2개 · 먼저 맞는 쪽부터"
-          />
-        )}
-        <Label
-          aside={
-            <Segment
-              label="재설정 종류"
-              value={mode}
-              onChange={chooseMode}
-              // The reset decides the grades: legendary lines 2 · 3 only come from the advanced reset (user, 2026-11-15).
-              options={[
-                { id: "l3", label: METHOD_NAME.advanced },
-                { id: "l1u2", label: METHOD_NAME.fame },
-              ]}
-              className="w-56"
+      {/* Its own height, not stretched to the long result column (user, 2026-11-14: the two sides looked unbalanced);
+          the class table fills the space under it (user, 2026-11-15). */}
+      <div className="flex min-w-0 flex-col gap-4 lg:self-start">
+        <Panel>
+          <Label>자주 노리는 조합</Label>
+          <div className="flex flex-wrap gap-1.5">
+            {ABILITY_PRESETS.map((p) => (
+              <Chip
+                key={p.id}
+                on={p.id === preset.id}
+                onClick={() => choosePreset(p.id)}
+                title={p.keys.map((k) => ABILITY_OPTIONS[k].label).join(" · ")}
+                className="rounded-full"
+              >
+                {p.label}
+              </Chip>
+            ))}
+          </div>
+          {!preset.hunting && (
+            <Switch
+              on={withHunt}
+              onChange={(on) => {
+                setWithHunt(on);
+                pickSeen(null);
+              }}
+              label="드메 프리셋도 같이 맞추기"
+              note="프리셋 2개 · 먼저 맞는 쪽부터"
             />
-          }
-        >
-          목표 {preset.keys.length === 2 ? "두" : "세"} 줄
-        </Label>
-        <div className="flex flex-col gap-1.5">
-          {preset.hunting
-            ? huntLines(mode)
-            : order.map((k, i) => (
-                <GoalLine
-                  key={k}
-                  legend={mode === "l3" || i === 0}
-                  label={ABILITY_OPTIONS[k].label}
-                  value={valueSelect([k], gradeOf(i), ABILITY_OPTIONS[k].label)}
+          )}
+          <Label
+            aside={
+              <Segment
+                label="재설정 종류"
+                value={mode}
+                onChange={chooseMode}
+                // The reset decides the grades: legendary lines 2 · 3 only come from the advanced reset (user, 2026-11-15).
+                options={[
+                  { id: "l3", label: METHOD_NAME.advanced },
+                  { id: "l1u2", label: METHOD_NAME.fame },
+                ]}
+                className="w-56"
+              />
+            }
+          >
+            목표 {preset.keys.length === 2 ? "두" : "세"} 줄
+          </Label>
+          <div className="flex flex-col gap-1.5">
+            {preset.hunting
+              ? huntLines(mode)
+              : order.map((k, i) => (
+                  <GoalLine
+                    key={k}
+                    legend={mode === "l3" || i === 0}
+                    label={ABILITY_OPTIONS[k].label}
+                    value={valueSelect([k], gradeOf(i), ABILITY_OPTIONS[k].label)}
+                  />
+                ))}
+            {pairOn && (
+              <>
+                <span className="mt-1 text-[11px] font-semibold text-muted-foreground">
+                  드메 프리셋 · {modeLabel(hunt, mode)}
+                </span>
+                {huntLines(mode)}
+              </>
+            )}
+          </div>
+          <div className="grid gap-2 sm:grid-cols-3">
+            <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
+              가진 명성치
+              <NumberField
+                label="가진 명성치"
+                value={haveText}
+                onChange={setHaveText}
+                inputClassName="w-full"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
+              명성치 5,000당
+              <NumberField
+                label="명성치 5,000당 가격 (만 메소)"
+                value={fame5kText}
+                onChange={setFame5kText}
+                decimal
+                suffix="만"
+                inputClassName="w-full"
+              />
+            </label>
+            {/* One price per reset (user, 2026-11-15): 고급 = abyss circulators for the values, 일반 = miracle circulators
+                (black · chaos are free event items, and a miracle never helps three legendary lines). */}
+            {mode === "l3" ? (
+              <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
+                심연의 서큘레이터 1개
+                <NumberField
+                  label="심연의 서큘레이터 1개 가격 (억 메소)"
+                  value={circText}
+                  onChange={setCircText}
+                  decimal
+                  suffix="억"
+                  inputClassName="w-full"
                 />
-              ))}
-          {pairOn && (
-            <>
-              <span className="mt-1 text-[11px] font-semibold text-muted-foreground">
-                드메 프리셋 · {modeLabel(hunt, mode)}
-              </span>
-              {huntLines(mode)}
-            </>
-          )}
-        </div>
-        <div className="grid gap-2 sm:grid-cols-3">
-          <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
-            가진 명성치
-            <NumberField
-              label="가진 명성치"
-              value={haveText}
-              onChange={setHaveText}
-              inputClassName="w-full"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
-            명성치 5,000당
-            <NumberField
-              label="명성치 5,000당 가격 (만 메소)"
-              value={fame5kText}
-              onChange={setFame5kText}
-              decimal
-              suffix="만"
-              inputClassName="w-full"
-            />
-          </label>
-          {/* One price per reset (user, 2026-11-15): 고급 = abyss circulators for the values, 일반 = miracle circulators
-              (black · chaos are free event items, and a miracle never helps three legendary lines). */}
-          {mode === "l3" ? (
-            <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
-              심연의 서큘레이터 1개
-              <NumberField
-                label="심연의 서큘레이터 1개 가격 (억 메소)"
-                value={circText}
-                onChange={setCircText}
-                decimal
-                suffix="억"
-                inputClassName="w-full"
-              />
-            </label>
-          ) : (
-            <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
-              미라클 서큘레이터 1개
-              <NumberField
-                label="미라클 서큘레이터 1개 가격 (억 메소)"
-                value={miracleText}
-                onChange={setMiracleText}
-                decimal
-                suffix="억"
-                inputClassName="w-full"
-              />
-            </label>
-          )}
-        </div>
-        <Switch
-          on={sunday}
-          onChange={setSunday}
-          label="썬데이 명성치 50% 할인"
-          note="명성치 절반"
-        />
-      </Panel>
+              </label>
+            ) : (
+              <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
+                미라클 서큘레이터 1개
+                <NumberField
+                  label="미라클 서큘레이터 1개 가격 (억 메소)"
+                  value={miracleText}
+                  onChange={setMiracleText}
+                  decimal
+                  suffix="억"
+                  inputClassName="w-full"
+                />
+              </label>
+            )}
+          </div>
+          <Switch
+            on={sunday}
+            onChange={setSunday}
+            label="썬데이 명성치 50% 할인"
+            note="명성치 절반"
+          />
+        </Panel>
+        <ClassAbilityTable classes={classes} picked={cls} mode={mode} onPick={chooseClass} />
+      </div>
 
       <section className="flex min-w-0 flex-col gap-3">
         <div className="flex flex-col gap-1.5 rounded-lg bg-primary px-5 py-4 text-primary-foreground">
           <span className="text-[13px] font-semibold">
+            {chosen ? `${chosen.name} ` : ""}
             {preset.label}
             {pairOn ? ` + ${hunt.label} · 프리셋 2개` : ""} · {modeLabel(preset, mode)}{" "}
             {pickedTwo && pickedRow

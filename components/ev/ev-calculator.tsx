@@ -7,6 +7,7 @@ import { FlameTab } from "@/components/ev/flame-tab";
 import { PotentialTab } from "@/components/ev/potential-tab";
 import { SoulTab } from "@/components/ev/soul-tab";
 import { StarforceTab } from "@/components/ev/starforce-tab";
+import type { ClassAbility } from "@/lib/ev/ability-classes";
 import { cn } from "@/lib/utils";
 
 const TABS = [
@@ -18,7 +19,7 @@ const TABS = [
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
 
-export function EvCalculator() {
+export function EvCalculator({ abilityClasses }: { abilityClasses: ClassAbility[] }) {
   const [tab, setTab] = useState<TabId>("starforce");
 
   return (
@@ -49,7 +50,7 @@ export function EvCalculator() {
         {tab === "potential" && <PotentialTab />}
         {tab === "flame" && <FlameTab />}
         {tab === "soul" && <SoulTab />}
-        {tab === "ability" && <AbilityTab />}
+        {tab === "ability" && <AbilityTab classes={abilityClasses} />}
       </div>
     </div>
   );

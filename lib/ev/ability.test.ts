@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import data from "./data/ability.json" with { type: "json" };
 import miracleData from "./data/ability-miracle.json" with { type: "json" };
-import { ABILITY_OPTIONS, ABILITY_PRESETS, abilityPairPlan, abilityPlan, legendaryOnly, presetLead, type AbilityKey, type AbilityMode, circulatorCount, valueChance, valueChoices } from "./ability.ts";
+import { ABILITY_OPTIONS, ABILITY_PRESETS, abilityPairPlan, abilityPlan, buildPreset, legendaryOnly, presetLead, type AbilityKey, type AbilityMode, circulatorCount, valueChance, valueChoices } from "./ability.ts";
+import { classAbilities } from "./ability-classes.ts";
 
 type Grade = "epic" | "unique" | "legendary";
 const rows = (data as unknown as { rows: [string, number, number, number][] }).rows;
@@ -371,5 +372,40 @@ test("미라클 서큘레이터: own option chances, no locks, top values; at 1.
       const opts = { ...(mode === "l3" ? valued : free), miraclePrice: 1.5e8 };
       const q = abilityPlan(preset.keys, mode, opts, mode === "l1u2" ? presetLead(preset) : undefined);
       assert.ok(q.miracle < 1e-9, `${preset.label} ${mode}: ${q.miracle}`);
+    }
+});
+
+test("class builds: a matching chip preset when there is one, else the build itself", () => {
+  const id = (letters: string, mode: AbilityMode) => buildPreset(letters, mode)?.id;
+  assert.equal(id("패보상", "l3"), "pbs");
+  assert.equal(id("패재보", "l3"), "pbcool"); // order does not matter on three legendary lines
+  assert.equal(id("재보피", "l3"), "cbh");
+  assert.equal(id("보상공", "l1u2"), "bsa");
+  assert.equal(id("보상벞", "l1u2"), "bsa"); // buff duration is counted as 공/마
+  assert.equal(id("재상보", "l1u2"), "cbs"); // cooldown on the legendary line, as the chip
+  assert.equal(id("패상보", "l1u2"), "pbs");
+  // the same three options with another legendary line is another build
+  const b = buildPreset("보상재", "l1u2")!;
+  assert.deepEqual([b.id, b.keys, presetLead(b)], ["build:보상재", ["boss", "stat", "cool"], [0]]);
+  assert.deepEqual(buildPreset("재보크", "l3")!.keys, ["cool", "boss", "crit"]);
+  assert.equal(buildPreset("보상", "l3"), null);
+  assert.equal(buildPreset("공벞보", "l3"), null); // 공 and 벞 are one option
+  assert.equal(buildPreset("보패상", "l1u2"), null); // 패시브 only comes legendary
+});
+
+test("every class build of the data file can be calculated on both resets", () => {
+  const classes = classAbilities();
+  assert.equal(classes.length, 48);
+  const opts = { sunday: false, famePricePerUnit: 0 };
+  const done = new Set<string>();
+  for (const c of classes)
+    for (const [mode, letters] of [["l3", c.full], ["l1u2", c.practical]] as const) {
+      const p = buildPreset(letters, mode);
+      assert.ok(p, `${c.name} ${mode} ${letters}`);
+      const key = `${mode} ${p.keys.join(",")} ${presetLead(p)[0]}`;
+      if (done.has(key)) continue;
+      done.add(key);
+      const plan = abilityPlan(p.keys, mode, opts, mode === "l1u2" ? presetLead(p) : undefined);
+      assert.ok(plan.fame > 0 && Number.isFinite(plan.fame), `${c.name} ${mode} ${letters}: ${plan.fame}`);
     }
 });
