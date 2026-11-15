@@ -265,11 +265,29 @@ export type PlanCost = {
   miracle: number;
 };
 
+/** Which circulators a go uses: black only, chaos only, or chaos first and then black. */
+export type CircKind = "black" | "chaos" | "both";
+type Go = CircKind;
+
 /** keep = reroll without new locks, lock = lock those lines, circ = circulators until those lines hit the goal, then lock. */
 export type PlanAction = {
   kind: "keep" | "lock" | "circ";
   method: Method;
+  /** Circulators the move uses on average. */
   circCount: number;
+  /**
+   * With a limit (`values.circMax`): the circulators there are for the move, and the chance the lines meet the goal
+   * before they run out.
+   */
+  circLeft?: number;
+  circChance?: number;
+  /** With circulators held: which kind the go uses (`both` = chaos first, then black). */
+  circKind?: CircKind;
+  /**
+   * With a limit: the options left locked when every one misses (empty: none), when that is known — always with black
+   * (the values stay); with chaos the last result decides, and then the lines at the goal are the ones locked.
+   */
+  circMissKeep?: AbilityKey[];
 };
 
 /** One way to go on after a result, and what is left after it (every kind of move is listed, cheapest first). */
@@ -307,6 +325,11 @@ export type PlanFinish = PlanCost & {
   /** keep = reset on until it shows up at the wanted value, circ = circulators on every line of the goal, done = it is always at the value. */
   move: "keep" | "circ" | "done";
   circCount: number;
+  /** With a limit: as in `PlanAction`. */
+  circKind?: CircKind;
+  circLeft?: number;
+  circChance?: number;
+  circMissKeep?: AbilityKey[];
 };
 
 export type AbilityPlan = PlanCost & {
@@ -320,6 +343,8 @@ export type AbilityPlan = PlanCost & {
   afterTwo: (PlanStep & { keys: [AbilityKey, AbilityKey] })[];
   /** Two presets: the first ability until one goal is met, and the chance each goal is the one met (by goal). */
   first?: PlanCost & { chance: number[] };
+  /** With a limit, when asked for (two presets): the cost from scratch with 0, 1, … `circMax` circulators. */
+  byBudget?: PlanCost[];
 };
 
 type Line = { t: number; full: boolean };
@@ -351,10 +376,18 @@ export type PlanOpts = {
   values?: {
     goal: (key: AbilityKey, grade: "legendary" | "unique") => number;
     circPrice: number;
+    /**
+     * The black · chaos circulators held (event items, a few at a time — user, 2026-11-15: "400개를 돌리는 건 안 돼",
+     * usually 블랙 40 · 카오스 20; the page takes up to 50 of each). Left out: as many as it takes. See `solve`.
+     */
+    held?: { black: number; chaos: number };
   };
   /** Miracle circulator price (meso). Left out or 0: not used. */
   miraclePrice?: number;
 };
+
+/** What is still to pay after goal g is met, in layer r (the circulators left; no limit: r is Infinity). */
+type Tails = (g: number, r: number) => PlanCost;
 
 /**
  * Cheapest way to the wanted options, values included.
@@ -363,16 +396,21 @@ export type PlanOpts = {
  * reroll the values of every line and keep options and grades — until the chosen lines meet the goal, then lock them.
  * Finished when one goal holds all its options on lines that count, values at the goal.
  *
- * Several goals (`tails` given): one ability made into whichever goal comes, and `tails[g]` is what is still to pay
- * after goal g (another preset made into the other goal). Locks stay within one goal.
+ * Several goals (`tails` given): one ability made into whichever goal comes, and `tails(g, r)` is what is still to pay
+ * after goal g (another preset made into the other goal, with r circulators left). Locks stay within one goal.
  * Solved exactly by value iteration (locks only grow, flags only go to "met").
  *
  * Circulating early and circulating later often cost about the same on average, but a later circulation rerolls the
  * lines circulated before, and those circulators are lost. So a circulation that rerolls a line already locked at the
  * goal counts one circulator more when choosing (user, 2026-11-15: a guide that circulates and then circulates again
  * for next to nothing is wrong to follow). The costs shown stay the real ones.
+ *
+ * Circulators held (`values.held`, black and chaos, user 2026-11-15): the state also holds how many of each are left
+ * (layer (b, c)). A go runs until every circulated line meets the goal at once or none of its kind are left — black
+ * only, chaos only, or chaos first and then black (see the section in the code). With two presets, what is left when
+ * the first ability's goal is met goes to the other preset (`tails(g, layer)`). Without them nothing here changes.
  */
-function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: PlanCost[]): AbilityPlan {
+function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: Tails, wantBudget = false, wantFirst = true): AbilityPlan {
   const keys: AbilityKey[] = [];
   const goalOf: number[] = [];
   const local: number[] = [];
@@ -404,6 +442,10 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: PlanCost[]): Abilit
   // whenever it saves fame, never for nothing, and the plan stays the same whatever the fame price.
   const circPrice = opts.values ? Math.max(opts.values.circPrice, FAME.fame[0] * fameMul * famePrice * 1e-6) : 0;
   const miraclePrice = Math.max(opts.miraclePrice ?? 0, 0);
+  // Circulators held, by kind (null = as many as it takes).
+  const heldIn = opts.values?.held;
+  const whole = (x: number) => (Number.isFinite(x) ? Math.max(0, Math.floor(x)) : 0);
+  const held = opts.values && heldIn ? { black: whole(heldIn.black), chaos: whole(heldIn.chaos) } : null;
   // Three legendary lines only come from the advanced reset, and a build with legendary lines 2 · 3 is rolled with it
   // to the end (user, 2026-11-11). The fame reset is for L1+U2.
   const methodsOf = (g: AbilityGoal): Method[] => (g.mode === "l3" ? ["advanced"] : ["fame"]);
@@ -415,7 +457,7 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: PlanCost[]): Abilit
       ? valueChance(keys[t], gradeOf(line, t), opts.values.goal(keys[t], gradeOf(line, t)))
       : 1;
   const money = (c: PlanCost) => c.fame * famePrice + c.meso + c.circ * circPrice + c.miracle * miraclePrice;
-  const tailMoney = (g: number | null) => (g === null || !tails ? 0 : money(tails[g]));
+  const tailMoney = (g: number | null, r = Infinity) => (g === null || !tails ? 0 : money(tails(g, r)));
 
   // Reset outcomes per locked option layout (values do not change which options show up).
   const table = new Map<string, Outcome[]>();
@@ -502,10 +544,27 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: PlanCost[]): Abilit
     );
   };
 
-  /** next null = finished (goal = the goal finished). pen = the reroll surcharge (for choosing only, not a cost). */
-  type Choice = { next: FState | null; circ: number; kind: PlanAction["kind"]; goal: number | null; pen: number };
+  /**
+   * next null = finished (goal = the goal finished). pen = the reroll surcharge (for choosing only, not a cost).
+   * Circulating: p = the chance one circulator brings every circulated line to the goal, kept = the circulated lines
+   * already at the goal (with a limit they stay when the circulators run out).
+   */
+  type Choice = {
+    next: FState | null;
+    circ: number;
+    kind: PlanAction["kind"];
+    goal: number | null;
+    pen: number;
+    p?: number;
+    lines?: CircLine[];
+    /** With circulators held: which kind this go uses. */
+    go?: Go;
+  };
   const valueOf = (c: Choice) =>
     c.circ * circPrice + c.pen + (c.next === null ? tailMoney(c.goal) : (V.get(c.next) ?? Infinity));
+  /** A circulated line: where, which option, at the goal now, and the chance one circulator lands it at the goal. */
+  type CircLine = { l: number; t: number; full: boolean; q: number };
+  const circLines = (ls: [number, Line][]): CircLine[] => ls.map(([l, v]) => ({ l, t: v.t, full: v.full, q: pFull(l, v.t) }));
   /** Every move after seeing `lines` from `s`; the first one is "keep going as is". */
   const candidates = (lines: Map<number, Line>, s: FState): Choice[] => {
     const out: Choice[] = [{ next: s, circ: 0, kind: "keep", goal: null, pen: 0 }];
@@ -519,7 +578,7 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: PlanCost[]): Abilit
       else if (circPrice > 0) {
         // All its options on the item: circulate every line until all of them meet the goal.
         const p = mine.reduce((x, [l, v]) => x * pFull(l, v.t), 1);
-        if (p > 0) out.push({ next: null, circ: 1 / p, kind: "circ", goal: g, pen });
+        if (p > 0) out.push({ next: null, circ: 1 / p, kind: "circ", goal: g, pen, p, lines: circLines(mine) });
       }
     });
     const lockedGoal = locked.size ? goalOf[[...locked.values()][0].t] : null;
@@ -540,47 +599,473 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: PlanCost[]): Abilit
         // Circulators reroll every line, so all lines of X must meet the goal at once.
         const p = [...X].reduce((x, [l, v]) => x * pFull(l, v.t), 1);
         const met = new Map([...X].map(([l, v]) => [l, { t: v.t, full: true }]));
-        if (p > 0) out.push({ next: encF(met), circ: 1 / p, kind: "circ", goal: null, pen });
+        if (p > 0) out.push({ next: encF(met), circ: 1 / p, kind: "circ", goal: null, pen, p, lines: circLines([...X]) });
       }
     }
     return out;
   };
+
+  // ---------------------------------------------------------------------------------------------------------------
+  // Circulators held (`values.held`, black and chaos — user 2026-11-15: usually 블랙 40 · 카오스 20): the state also
+  // holds how many of each are left, layer (b, c). A go of circulators runs until the circulated lines meet the goal at
+  // once or none of its kind are left: black only (a result is applied only when all of them meet the goal, so a miss
+  // keeps the values), chaos only (every result is applied, so a miss leaves the last one), or chaos first, then black.
+  // A hit leaves fewer of that kind (those lines locked), a miss none (the lines at the goal kept — black: the ones worth
+  // it, chaos: all of them, as the steps say). Every move leads to fewer circulators or to a state solved before, so the
+  // layers are solved row by row (black left), each row from 0 chaos up. The states and results are listed once.
+  type Lyr = "u" | number; // "u" = no limit, else the layer b · (C + 1) + c
+  type Metric = {
+    id: string;
+    part: (m: Method, locks: number) => number;
+    perCirc: number;
+    tail: (g: number, r: number) => number;
+  };
+  /** One reset of one state: per result its chance and its moves other than going on (flat lists). */
+  type Trans = {
+    m: Method;
+    price: number;
+    p: Float64Array;
+    /** Moves of result o: from[o] … from[o + 1] − 1. */
+    from: Int32Array;
+    /** Per move: 0 lock (next = state), 1 finish (next = goal), 2 a go of circulators (next = index in `bursts`). */
+    kind: Int8Array;
+    next: Int32Array;
+  };
+  const S = order.length;
+  const at = new Map(order.map((s, i) => [s, i] as const));
+  const lockCount = order.map((s) => decF(s).size);
+  const root = at.get("")!;
+  const NB = held ? held.black : 0;
+  const NC = held ? held.chaos : 0;
+  const W1 = NC + 1;
+  const lay = (b: number, c: number) => b * W1 + c;
+  const NL = held ? (NB + 1) * W1 : 0;
+  /** The plan starts here: no limit, or with every circulator held. */
+  const top: Lyr = held ? lay(NB, NC) : "u";
+  const bOf = (L: number) => Math.floor(L / W1);
+  const cOf = (L: number) => L % W1;
+  /** The kinds of go there can be (a kind with none held never shows up). */
+  const GOS: Go[] = [
+    ...(NB > 0 ? (["black"] as const) : []),
+    ...(NC > 0 ? (["chaos"] as const) : []),
+    ...(NB > 0 && NC > 0 ? (["both"] as const) : []),
+  ];
+  /** Circulators a go can use in layer (b, c). */
+  const usable = (go: Go, b: number, c: number) => (go === "black" ? b : go === "chaos" ? c : b > 0 && c > 0 ? b + c : 0);
+  const used = (p: number, n: number) => (1 - (1 - p) ** n) / p;
+  /** Where a hit leads: a state, or −1 − g when it finishes goal g. */
+  const hitTo = (c: Choice) => (c.next === null ? -1 - c.goal! : at.get(c.next)!);
+  /** Black misses: the circulated lines at the goal before the go (the values stay). */
+  const keptOf = (c: Choice): [number, number][] => c.lines!.filter((x) => x.full).map((x) => [x.l, x.t]);
+  /** Chaos misses: the last result — each line at the goal by its own chance, not all of them at once. */
+  type Fail = { w: number; kept: [number, number][] };
+  const rollsOf = (c: Choice): Fail[] => {
+    const ls = c.lines!;
+    const all = ls.reduce((a, x) => a * x.q, 1);
+    const out: Fail[] = [];
+    for (let mask = 0; mask < (1 << ls.length) - 1; mask++) {
+      const w = ls.reduce((a, x, i) => a * (mask & (1 << i) ? x.q : 1 - x.q), 1) / (1 - all);
+      if (w > 0) out.push({ w, kept: ls.filter((_, i) => mask & (1 << i)).map((x) => [x.l, x.t]) });
+    }
+    return out;
+  };
+  const stateOf = (kept: [number, number][]) => at.get(encF(new Map(kept.map(([l, t]) => [l, { t, full: true }]))));
+  /** After a chaos miss all the lines at the goal stay locked (the guide's rule — Codex review). */
+  const missAll = (kept: [number, number][]) => (kept.length <= 2 ? (stateOf(kept) ?? root) : root);
+  const Vall = new Float64Array(NL * S);
+  /** After a black miss, layer (0, c): lock the lines at the goal worth it (more lines on a tie). */
+  const missMemo = new Map<string, number>();
+  const missBest = (kept: [number, number][], c: number): number => {
+    const key = `${kept.map(([l, t]) => `${l}:${t}`).join(",")}|${c}`;
+    let j = missMemo.get(key);
+    if (j === undefined) {
+      const sets: [number, number][][] = [[]];
+      for (const x of kept) for (const s of [...sets]) sets.push([...s, x]);
+      sets.sort((a, b) => b.length - a.length);
+      let best = Infinity;
+      j = root;
+      for (const s of sets) {
+        const i = s.length <= 2 ? stateOf(s) : undefined;
+        if (i !== undefined && Vall[lay(0, c) * S + i] < best - 1e-9) [best, j] = [Vall[lay(0, c) * S + i], i];
+      }
+      missMemo.set(key, j);
+    }
+    return j;
+  };
+  // Every go (kind, chance per circulator, where a hit leads, what a miss leaves); `hits` = the (chance, where) pairs,
+  // whose sums over the layers below are carried along.
+  const hits: { p: number; j: number }[] = [];
+  const hitIndex = new Map<string, number>();
+  type Burst = { go: Go; hit: number; p: number; pen: number; kept: [number, number][]; rolls: { w: number; to: number }[] };
+  const bursts: Burst[] = [];
+  const burstIndex = new Map<string, number>();
+  const burstOf = (c: Choice, go: Go): number => {
+    const hk = `${c.p}|${hitTo(c)}`;
+    let h = hitIndex.get(hk);
+    if (h === undefined) hitIndex.set(hk, (h = hits.push({ p: c.p!, j: hitTo(c) }) - 1));
+    const bk = `${go}|${h}|${c.pen}|${c.lines!.map((x) => `${x.l}:${x.t}:${x.full ? 1 : 0}`).join(",")}`;
+    let b = burstIndex.get(bk);
+    if (b === undefined) {
+      const rolls = go === "black" ? [] : rollsOf(c).map((f) => ({ w: f.w, to: missAll(f.kept) }));
+      burstIndex.set(bk, (b = bursts.push({ go, hit: h, p: c.p!, pen: c.pen, kept: keptOf(c), rolls }) - 1));
+    }
+    return b;
+  };
+  const trans: Trans[][] = !held
+    ? []
+    : order.map((s) =>
+        methodsAt(s).map((m) => {
+          const res = expand(s, m);
+          const from = new Int32Array(res.length + 1);
+          const kind: number[] = [];
+          const next: number[] = [];
+          res.forEach((r, o) => {
+            from[o] = kind.length;
+            // The first candidate is always "go on as is" (it stays): left out, it is what a result falls back to.
+            for (const c of candidates(r.lines, s).slice(1)) {
+              if (c.kind !== "circ") {
+                kind.push(c.next === null ? 1 : 0);
+                next.push(c.next === null ? c.goal! : at.get(c.next)!);
+              } else
+                for (const go of GOS) {
+                  kind.push(2);
+                  next.push(burstOf(c, go));
+                }
+            }
+          });
+          from[res.length] = kind.length;
+          return {
+            m,
+            price: price(m, decF(s).size),
+            p: Float64Array.from(res, (r) => r.p),
+            from,
+            kind: Int8Array.from(kind),
+            next: Int32Array.from(next),
+          };
+        }),
+      );
+  const isReset = (m: Method) => (m === "miracle" ? 0 : 1);
+  const tailPart = (key: keyof PlanCost) => (g: number, r: number) => (tails ? tails(g, r)[key] : 0);
+  const COSTS: Record<keyof PlanCost, Metric> = {
+    fame: { id: "fame", part: (m, l) => FAME[m][l] * fameMul, perCirc: 0, tail: tailPart("fame") },
+    meso: { id: "meso", part: (m, l) => MESO[m][l], perCirc: 0, tail: tailPart("meso") },
+    circ: { id: "circ", part: () => 0, perCirc: 1, tail: tailPart("circ") },
+    resets: { id: "resets", part: isReset, perCirc: 0, tail: tailPart("resets") },
+    miracle: { id: "miracle", part: (m) => 1 - isReset(m), perCirc: 0, tail: tailPart("miracle") },
+  };
+  const COST_KEYS = Object.keys(COSTS) as (keyof PlanCost)[];
+  const none = () => 0;
+  // Two presets: also the first ability alone (the other preset left out), and the chance each goal is the one met
+  // (not when only the total is wanted: one preset after the other).
+  const metrics: Metric[] = [
+    ...COST_KEYS.map((k) => COSTS[k]),
+    ...(tails && wantFirst
+      ? [
+          ...COST_KEYS.map((k) => ({ ...COSTS[k], id: `${k}:alone`, tail: none })),
+          ...goals.map((_, g) => ({ id: `chance:${g}`, part: () => 0, perCirc: 0, tail: (x: number) => (x === g ? 1 : 0) })),
+        ]
+      : []),
+  ];
+  const M = metrics.length;
+  /** The reset used in every layer (values are kept for every layer: any count can be asked for). */
+  const polAll = new Int8Array(NL * S);
+  // Costs are kept where the steps at the top read them: rows 0 and B, columns 0 and C; and every layer's root.
+  const rowsOf = () => metrics.map(() => new Float64Array(W1 * S));
+  const colsOf = () => metrics.map(() => new Float64Array((NB + 1) * S));
+  let Wrow0 = rowsOf();
+  let Wtop = rowsOf();
+  const Wcol0 = colsOf();
+  const WcolC = colsOf();
+  const rootAll = metrics.map(() => new Float64Array(NL));
+  /** One cost in layer (b, c) for state i, from what the steps at the top read. */
+  const Wat = (mi: number, b: number, c: number, i: number) =>
+    b === 0 ? Wrow0[mi][c * S + i] : b === NB ? Wtop[mi][c * S + i] : c === 0 ? Wcol0[mi][b * S + i] : WcolC[mi][b * S + i];
+
+  /** Σ over the circulator k that hits (k = 1 … n): (1 − p)^(k − 1) · p · f(k) — for the steps, worked out directly. */
+  const hitSum = (p: number, n: number, f: (k: number) => number) => {
+    let s = 0;
+    let w = p;
+    for (let k = 1; k <= n; k++) {
+      s += w * f(k);
+      w *= 1 - p;
+    }
+    return s;
+  };
+  /**
+   * A go of circulators seen from layer L (as the layers above add it up): `left(b, c, j)` = what is left in layer
+   * (b, c) at state j (j < 0: after goal −1 − j), `perCirc` = what one circulator counts.
+   */
+  const goSum = (c: Choice, L: number, left: (b: number, cc: number, j: number) => number, perCirc: number) => {
+    const go = c.go!;
+    const b = bOf(L);
+    const cc = cOf(L);
+    const n = usable(go, b, cc);
+    if (n === 0) return Infinity;
+    const p = c.p!;
+    const q = 1 - p;
+    const j = hitTo(c);
+    let v =
+      go === "black"
+        ? hitSum(p, b, (k) => left(b - k, cc, j))
+        : hitSum(p, cc, (k) => left(b, cc - k, j)) + (go === "both" ? q ** cc * hitSum(p, b, (k) => left(b - k, 0, j)) : 0);
+    v +=
+      q ** n *
+      (go === "black"
+        ? left(0, cc, missBest(keptOf(c), cc))
+        : rollsOf(c).reduce((s, f) => s + f.w * left(go === "chaos" ? b : 0, 0, missAll(f.kept)), 0));
+    return v + used(p, n) * perCirc;
+  };
+  const vLeft = (b: number, cc: number, j: number) =>
+    j >= 0 ? Vall[lay(b, cc) * S + j] : tailMoney(-1 - j, lay(b, cc));
+  /** What a move is worth when seen from `s` in layer ly. */
+  const valueAt = (c: Choice, s: FState, ly: Lyr): number => {
+    if (ly === "u") return valueOf(c);
+    if (c.next === s) return Vall[ly * S + at.get(s)!];
+    if (c.kind === "circ") return goSum(c, ly, vLeft, circPrice) + c.pen;
+    if (c.next === null) return tailMoney(c.goal, ly);
+    return Vall[ly * S + at.get(c.next)!];
+  };
+  /** With circulators held, a go is offered once per kind there is (none of a kind left: not offered). */
+  const typed = (all: Choice[], ly: Lyr): Choice[] =>
+    ly === "u"
+      ? all
+      : all.flatMap((c) =>
+          c.kind === "circ" ? GOS.filter((go) => usable(go, bOf(ly), cOf(ly)) > 0).map((go) => ({ ...c, go })) : [c],
+        );
   /** Best move after seeing `lines` (null next = finished). Ties keep the current state. */
-  const decide = (lines: Map<number, Line>, s: FState): Choice => {
-    const all = candidates(lines, s);
+  function decide(lines: Map<number, Line>, s: FState, ly: Lyr = "u"): Choice {
+    const all = typed(candidates(lines, s), ly);
     let best = all[0];
-    let bestV = valueOf(best);
+    let bestV = valueAt(best, s, ly);
     for (const c of all.slice(1)) {
-      const v = valueOf(c);
+      const v = valueAt(c, s, ly);
       if (v < bestV - 1e-9) [best, bestV] = [c, v];
     }
     return best;
-  };
-
-  for (const s of order) {
-    let best = Infinity;
-    let bestM: Method = methodsAt(s)[0];
-    for (const m of methodsAt(s)) {
-      const res = expand(s, m);
-      let v = Infinity;
-      for (let i = 0; i < 200; i++) {
-        V.set(s, v);
-        let sum = price(m, decF(s).size);
-        let stay = 0;
-        for (const r of res) {
-          const c = decide(r.lines, s);
-          if (c.next === s) stay += r.p;
-          else sum += r.p * (c.circ * circPrice + c.pen + (c.next === null ? tailMoney(c.goal) : V.get(c.next)!));
-        }
-        const next = stay < 1 - 1e-15 ? sum / (1 - stay) : Infinity;
-        if (next === v || Math.abs(next - v) <= 1e-12 * next) break;
-        v = next;
-      }
-      if (v < best) [best, bestM] = [v, m];
-    }
-    V.set(s, best);
-    policy.set(s, bestM);
   }
+  /** The reset used from `s` in layer ly. */
+  const methodAt = (s: FState, ly: Lyr): Method | undefined => {
+    if (ly === "u") return policy.get(s);
+    const i = at.get(s)!;
+    return trans[i][polAll[ly * S + i]].m;
+  };
+  /**
+   * The layer the rows after a move are shown in: the same counts. They are the ones held now — after a go the user
+   * types what is left, so the next steps follow it (Codex review: an average left over, taken off again after the user
+   * typed the real count, gave the wrong next step).
+   */
+  const nextLayer = (_c: Choice, ly: Lyr): Lyr => ly;
+  /** The options locked in a state. */
+  const keysOf = (i: number) => [...decF(order[i]).values()].map((v) => keys[v.t]);
+
+  if (held) {
+    const H = hits.length;
+    const X = bursts.length;
+    // Sums over the circulator that hits, carried along: black along b (one per chaos count), chaos along c.
+    const hvB = new Float64Array(W1 * H);
+    const hvC = new Float64Array(H);
+    const hwB = metrics.map(() => new Float64Array(W1 * H));
+    const hwC = metrics.map(() => new Float64Array(H));
+    // Per go, in the layer being solved: its worth, (1 − p)^n, circulators used on average, what a miss leaves.
+    const gv = new Float64Array(X);
+    const gq = new Float64Array(X);
+    const gu = new Float64Array(X);
+    /** Black misses: the state locked for each chaos count (layer (0, c)), set once row 0 is solved. */
+    const bMiss = new Int32Array(X * W1);
+    // (1 − p)^b and (1 − p)^c per hit in the layer being solved.
+    const qB = new Float64Array(H).fill(1);
+    const qC = new Float64Array(H);
+    // The costs of a go in the layer, worked out once (every result that takes it shares them): stamp = layer + 1.
+    const gcStamp = new Int32Array(X);
+    const gcW = new Float64Array(X * M);
+    let Wprev = rowsOf();
+    let Wcur = rowsOf();
+    const most = Math.max(1, ...trans.flat().map((t) => t.p.length));
+    const best = new Float64Array(most);
+    const rest = new Float64Array(M);
+    // Every move's worth in the layer, worked out once for both passes (the best per result, then the move taken).
+    const cache = trans.map((ts) => ts.map((t) => new Float64Array(t.kind.length)));
+    const tailV = new Float64Array(goals.length);
+    const tailW = new Float64Array(M * goals.length);
+    /** Smallest V with V = c + Σ p · min(V, a): a result is taken when its best move is worth less than going on. */
+    const settle = (c: number, p: Float64Array, a: Float64Array) => {
+      let V = Infinity;
+      for (;;) {
+        let P = 0;
+        let A = 0;
+        for (let o = 0; o < p.length; o++)
+          if (a[o] < V) {
+            P += p[o];
+            A += p[o] * a[o];
+          }
+        const next = P > 0 ? (c + A) / P : Infinity;
+        if (!(next < V)) return V;
+        V = next;
+      }
+    };
+    for (let b = 0; b <= NB; b++) {
+      if (b === 1)
+        bursts.forEach((x, i) => {
+          if (x.go === "black") for (let c = 0; c <= NC; c++) bMiss[i * W1 + c] = missBest(x.kept, c);
+        });
+      if (b > 0)
+        for (let h = 0; h < H; h++) {
+          const { p, j } = hits[h];
+          qB[h] *= 1 - p;
+          for (let c = 0; c <= NC; c++) {
+            const L = lay(b - 1, c);
+            const at = c * H + h;
+            hvB[at] = p * (j >= 0 ? Vall[L * S + j] : tailMoney(-1 - j, L)) + (1 - p) * hvB[at];
+            for (let mi = 0; mi < M; mi++)
+              hwB[mi][at] = p * (j >= 0 ? Wprev[mi][c * S + j] : metrics[mi].tail(-1 - j, L)) + (1 - p) * hwB[mi][at];
+          }
+        }
+      for (let c = 0; c <= NC; c++) {
+        const L = lay(b, c);
+        if (c === 0) {
+          hvC.fill(0);
+          for (const w of hwC) w.fill(0);
+          qC.fill(1);
+        } else
+          for (let h = 0; h < H; h++) {
+            const { p, j } = hits[h];
+            qC[h] *= 1 - p;
+            hvC[h] = p * (j >= 0 ? Vall[(L - 1) * S + j] : tailMoney(-1 - j, L - 1)) + (1 - p) * hvC[h];
+            for (let mi = 0; mi < M; mi++)
+              hwC[mi][h] = p * (j >= 0 ? Wcur[mi][(c - 1) * S + j] : metrics[mi].tail(-1 - j, L - 1)) + (1 - p) * hwC[mi][h];
+          }
+        for (let g = 0; g < goals.length; g++) {
+          tailV[g] = tailMoney(g, L);
+          for (let mi = 0; mi < M; mi++) tailW[mi * goals.length + g] = metrics[mi].tail(g, L);
+        }
+        // Each go here: the hit sums, then what a miss leaves (black: as before, layer (0, c); chaos: the last result,
+        // layer (b, 0); chaos then black: layer (0, 0)), the circulators and the surcharge.
+        bursts.forEach((x, i) => {
+          const n = usable(x.go, b, c);
+          if (n === 0) {
+            gv[i] = Infinity;
+            return;
+          }
+          const qn = x.go === "black" ? qB[x.hit] : x.go === "chaos" ? qC[x.hit] : qB[x.hit] * qC[x.hit];
+          gq[i] = qn;
+          gu[i] = (1 - qn) / x.p;
+          let v: number;
+          let miss = 0;
+          if (x.go === "black") {
+            v = hvB[c * H + x.hit];
+            miss = Vall[lay(0, c) * S + bMiss[i * W1 + c]];
+          } else {
+            const base = x.go === "chaos" ? lay(b, 0) * S : 0;
+            for (const r of x.rolls) miss += r.w * Vall[base + r.to];
+            v = hvC[x.hit] + (x.go === "both" ? qC[x.hit] * hvB[x.hit] : 0);
+          }
+          gv[i] = v + qn * miss + gu[i] * circPrice + x.pen;
+        });
+        /** Every cost of go i here (into gcW), once per layer. */
+        const goCosts = (i: number) => {
+          if (gcStamp[i] === L + 1) return;
+          gcStamp[i] = L + 1;
+          const x = bursts[i];
+          for (let mi = 0; mi < M; mi++) {
+            let v: number;
+            let miss = 0;
+            if (x.go === "black") {
+              v = hwB[mi][c * H + x.hit];
+              miss = Wrow0[mi][c * S + bMiss[i * W1 + c]];
+            } else {
+              const row = x.go === "chaos" ? Wcur[mi] : Wrow0[mi];
+              for (const r of x.rolls) miss += r.w * row[r.to];
+              v = hwC[mi][x.hit] + (x.go === "both" ? qC[x.hit] * hwB[mi][x.hit] : 0);
+            }
+            gcW[i * M + mi] = v + gq[i] * miss + gu[i] * metrics[mi].perCirc;
+          }
+        };
+        for (let i = 0; i < S; i++) {
+          let v = Infinity;
+          let pol = 0;
+          trans[i].forEach((t, mi) => {
+            const a = best.subarray(0, t.p.length);
+            const cv = cache[i][mi];
+            for (let o = 0; o < t.p.length; o++) {
+              let m = Infinity;
+              for (let x = t.from[o]; x < t.from[o + 1]; x++) {
+                const k = t.kind[x];
+                const y = k === 0 ? Vall[L * S + t.next[x]] : k === 1 ? tailV[t.next[x]] : gv[t.next[x]];
+                cv[x] = y;
+                if (y < m) m = y;
+              }
+              a[o] = m;
+            }
+            const w = settle(t.price, t.p, a);
+            if (w < v) [v, pol] = [w, mi];
+          });
+          Vall[L * S + i] = v;
+          polAll[L * S + i] = pol;
+          // The move per result, chosen as `decide` does (the first one cheaper than going on and the ones before it),
+          // and every cost under it.
+          const t = trans[i][pol];
+          const cv = cache[i][pol];
+          let stay = 0;
+          rest.fill(0);
+          for (let o = 0; o < t.p.length; o++) {
+            let pick = -1;
+            let pv = v;
+            for (let x = t.from[o]; x < t.from[o + 1]; x++)
+              if (cv[x] < pv - 1e-9) [pv, pick] = [cv[x], x];
+            if (pick < 0) {
+              stay += t.p[o];
+              continue;
+            }
+            const k = t.kind[pick];
+            const nx = t.next[pick];
+            const po = t.p[o];
+            if (k === 0) for (let mi = 0; mi < M; mi++) rest[mi] += po * Wcur[mi][c * S + nx];
+            else if (k === 1) for (let mi = 0; mi < M; mi++) rest[mi] += po * tailW[mi * goals.length + nx];
+            else {
+              goCosts(nx);
+              for (let mi = 0; mi < M; mi++) rest[mi] += po * gcW[nx * M + mi];
+            }
+          }
+          for (let mi = 0; mi < M; mi++) {
+            const w = stay < 1 - 1e-15 ? (metrics[mi].part(t.m, lockCount[i]) + rest[mi]) / (1 - stay) : Infinity;
+            Wcur[mi][c * S + i] = w;
+            if (i === root) rootAll[mi][L] = w;
+          }
+        }
+        for (let mi = 0; mi < M; mi++) {
+          if (c === 0) Wcol0[mi].set(Wcur[mi].subarray(0, S), b * S);
+          if (c === NC) WcolC[mi].set(Wcur[mi].subarray(NC * S, W1 * S), b * S);
+        }
+      }
+      if (b === 0) Wrow0 = Wcur.map((w) => w.slice());
+      if (b === NB) Wtop = Wcur;
+      [Wprev, Wcur] = [Wcur, Wprev];
+    }
+  } else
+    for (const s of order) {
+      let best = Infinity;
+      let bestM: Method = methodsAt(s)[0];
+      for (const m of methodsAt(s)) {
+        const res = expand(s, m);
+        let v = Infinity;
+        for (let i = 0; i < 200; i++) {
+          V.set(s, v);
+          let sum = price(m, decF(s).size);
+          let stay = 0;
+          for (const r of res) {
+            const c = decide(r.lines, s);
+            if (c.next === s) stay += r.p;
+            else sum += r.p * (c.circ * circPrice + c.pen + (c.next === null ? tailMoney(c.goal) : V.get(c.next)!));
+          }
+          const next = stay < 1 - 1e-15 ? sum / (1 - stay) : Infinity;
+          if (next === v || Math.abs(next - v) <= 1e-12 * next) break;
+          v = next;
+        }
+        if (v < best) [best, bestM] = [v, m];
+      }
+      V.set(s, best);
+      policy.set(s, bestM);
+    }
 
   // Expected fame / meso / resets / circulators under that plan; `tail(g)` = what finishing goal g adds.
   const evalPart = (
@@ -615,20 +1100,30 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: PlanCost[]): Abilit
     }
     return W;
   };
-  const tailOf = (k: keyof PlanCost) => (g: number) => (tails ? tails[g][k] : 0);
-  const isReset = (m: Method) => (m === "miracle" ? 0 : 1);
-  const fameW = evalPart((m, l) => FAME[m][l] * fameMul, 0, tailOf("fame"));
-  const mesoW = evalPart((m, l) => MESO[m][l], 0, tailOf("meso"));
-  const resetW = evalPart(isReset, 0, tailOf("resets"));
-  const circW = evalPart(() => 0, 1, tailOf("circ"));
-  const miracleW = evalPart((m) => 1 - isReset(m), 0, tailOf("miracle"));
+  const tailOf = (k: keyof PlanCost) => (g: number) => (tails ? tails(g, Infinity)[k] : 0);
+  const unlimited = !held;
+  const fameW = unlimited ? evalPart((m, l) => FAME[m][l] * fameMul, 0, tailOf("fame")) : new Map<FState, number>();
+  const mesoW = unlimited ? evalPart((m, l) => MESO[m][l], 0, tailOf("meso")) : new Map<FState, number>();
+  const resetW = unlimited ? evalPart(isReset, 0, tailOf("resets")) : new Map<FState, number>();
+  const circW = unlimited ? evalPart(() => 0, 1, tailOf("circ")) : new Map<FState, number>();
+  const miracleW = unlimited ? evalPart((m) => 1 - isReset(m), 0, tailOf("miracle")) : new Map<FState, number>();
 
   /** What a move leaves to pay (circulators of the move included). */
-  const leftAfter = (c: Choice): PlanCost => {
-    const at = c.next;
-    const tail = c.goal !== null && tails ? tails[c.goal] : null;
+  const leftAfter = (c: Choice, ly: Lyr = "u"): PlanCost => {
+    if (ly !== "u") {
+      // The steps are shown at the top layer (the counts held), where the costs are kept.
+      const of = (mi: number) => {
+        const k = metrics[mi];
+        const left = (b: number, cc: number, j: number) => (j >= 0 ? Wat(mi, b, cc, j) : k.tail(-1 - j, lay(b, cc)));
+        if (c.kind === "circ") return goSum(c, ly, left, k.perCirc);
+        return c.next === null ? k.tail(c.goal!, ly) : left(bOf(ly), cOf(ly), at.get(c.next)!);
+      };
+      return Object.fromEntries(COST_KEYS.map((key, mi) => [key, of(mi)])) as PlanCost;
+    }
+    const to = c.next;
+    const tail = c.goal !== null && tails ? tails(c.goal, Infinity) : null;
     const left = (W: Map<FState, number>, k: keyof PlanCost) =>
-      at === null ? (tail ? tail[k] : 0) : W.get(at)!;
+      to === null ? (tail ? tail[k] : 0) : W.get(to)!;
     return {
       fame: left(fameW, "fame"),
       meso: left(mesoW, "meso"),
@@ -637,40 +1132,53 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: PlanCost[]): Abilit
       miracle: left(miracleW, "miracle"),
     };
   };
-  const actionOf = (c: Choice): PlanAction => ({
-    kind: c.kind,
-    method: policy.get(c.next ?? "") ?? "fame",
-    circCount: c.circ,
-  });
+  const actionOf = (c: Choice, ly: Lyr = "u"): PlanAction => {
+    if (ly === "u") return { kind: c.kind, method: policy.get(c.next ?? "") ?? "fame", circCount: c.circ };
+    const action: PlanAction = { kind: c.kind, method: methodAt(c.next ?? "", nextLayer(c, ly)) ?? "fame", circCount: 0 };
+    if (c.kind === "circ") {
+      const n = usable(c.go!, bOf(ly), cOf(ly));
+      action.circKind = c.go;
+      action.circCount = used(c.p!, n);
+      action.circLeft = n;
+      action.circChance = 1 - (1 - c.p!) ** n;
+      // What is locked after the last miss, when that is known (black: the values stay; chaos: only when the miss can
+      // leave just one picture) — Codex review: the guide shows that way too.
+      const rolls = c.go === "black" ? [] : rollsOf(c);
+      if (c.go === "black") action.circMissKeep = keysOf(missBest(keptOf(c), cOf(ly)));
+      else if (rolls.length === 1) action.circMissKeep = keysOf(missAll(rolls[0].kept));
+    }
+    return action;
+  };
 
   /** What happens after `lines` are seen from state `from`, what is left, and what the other moves would leave. */
-  const after = (lines: Map<number, Line>, goal: number, from: FState = "") => {
-    const c = decide(lines, from);
+  const after = (lines: Map<number, Line>, goal: number, from: FState = "", ly: Lyr = "u") => {
+    const c = decide(lines, from, ly);
     // The cheapest move of each kind; finishing is not an alternative (it never shows up here).
     const byKind = new Map<PlanAction["kind"], Choice>();
-    for (const x of candidates(lines, from)) {
+    for (const x of typed(candidates(lines, from), ly)) {
       if (x.next === null && x.kind === "keep") continue;
       const cur = byKind.get(x.kind);
-      if (!cur || valueOf(x) < valueOf(cur) - 1e-9) byKind.set(x.kind, x);
+      if (!cur || valueAt(x, from, ly) < valueAt(cur, from, ly) - 1e-9) byKind.set(x.kind, x);
     }
     byKind.set(c.kind, c);
     const choices = [...byKind.values()]
-      .filter((x) => Number.isFinite(valueOf(x)))
-      .sort((a, b) => (a === c ? -1 : b === c ? 1 : valueOf(a) - valueOf(b)))
-      .map((x) => ({ action: actionOf(x), ...leftAfter(x) }));
-    return { next: c.next, goal, action: actionOf(c), ...leftAfter(c), choices };
+      .filter((x) => Number.isFinite(valueAt(x, from, ly)))
+      .sort((a, b) => (a === c ? -1 : b === c ? 1 : valueAt(a, from, ly) - valueAt(b, from, ly)))
+      .map((x) => ({ action: actionOf(x, ly), ...leftAfter(x, ly) }));
+    return { next: c.next, nextLy: nextLayer(c, ly), goal, action: actionOf(c, ly), ...leftAfter(c, ly), choices };
   };
   /**
    * A wanted option that just showed up from state `from`: its value meets the goal only by luck (always, when there is
    * one value, or when the reset there is the miracle circulator, which gives the top value — Codex review).
    */
-  const fresh = (line: number, t: number, from: FState): Line => ({
+  const fresh = (line: number, t: number, from: FState, ly: Lyr = "u"): Line => ({
     t,
-    full: !opts.values || policy.get(from) === "miracle" || pFull(line, t) >= 1,
+    full: !opts.values || methodAt(from, ly) === "miracle" || pFull(line, t) >= 1,
   });
-  const strip = <T extends { next: FState | null }>(x: T) => {
-    const { next: _next, ...rest } = x;
+  const strip = <T extends { next: FState | null; nextLy: Lyr }>(x: T) => {
+    const { next: _next, nextLy: _nextLy, ...rest } = x;
     void _next;
+    void _nextLy;
     return rest;
   };
   /** Option t may count on this line (L1+U2: line 1 only for a lead option, lines 2 · 3 not for the sole lead). */
@@ -681,7 +1189,7 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: PlanCost[]): Abilit
    * From `s`, only one option of its goal is missing: the move when it shows up (below the wanted value, unless it is
    * always at it) on each line where it finishes the goal. One entry per kind of move.
    */
-  const finishFrom = (s: FState): PlanFinish[] | undefined => {
+  const finishFrom = (s: FState, ly: Lyr = "u"): PlanFinish[] | undefined => {
     const L = decF(s);
     if (!L.size) return undefined;
     const g = goalOf[[...L.values()][0].t];
@@ -692,22 +1200,26 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: PlanCost[]): Abilit
     const byMove = new Map<string, PlanFinish>();
     for (const line of [0, 1, 2]) {
       if (L.has(line) || !canCount(line, c)) continue;
-      const lines = new Map(L).set(line, fresh(line, c, s));
+      const lines = new Map(L).set(line, fresh(line, c, s, ly));
       if (!meets(lines, g)) continue;
-      const d = decide(lines, s);
+      const d = decide(lines, s, ly);
       const move: PlanFinish["move"] = d.kind === "circ" ? "circ" : d.next === null ? "done" : "keep";
+      const a = actionOf(d, ly);
       // Same move, same circulators (Codex review: what is left is counted after the move, like every other row).
-      const id = `${move}:${Math.round(d.circ * 1e6)}`;
+      const id = `${move}:${Math.round(a.circCount * 1e6)}`;
       const cur = byMove.get(id);
       if (cur) cur.lines.push(line);
       else
         byMove.set(id, {
-          ...leftAfter(d),
+          ...leftAfter(d, ly),
           locked: [...L.values()].map((v) => keys[v.t]),
           last: keys[c],
           lines: [line],
           move,
-          circCount: d.circ,
+          circCount: a.circCount,
+          ...(a.circLeft !== undefined
+            ? { circKind: a.circKind, circLeft: a.circLeft, circChance: a.circChance, circMissKeep: a.circMissKeep }
+            : {}),
         });
     }
     return byMove.size ? [...byMove.values()] : undefined;
@@ -718,40 +1230,43 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: PlanCost[]): Abilit
    * when it shows the wanted value, if that is a different idea (keep below it, lock at it): then the steps after it
    * follow that case. `finish` = how the goal ends when only its last option is left after the move.
    */
-  const row = (from: FState, line: number, t: number) => {
+  const row = (from: FState, line: number, t: number, ly: Lyr = "u") => {
     const base = decF(from);
-    const below = new Map(base).set(line, fresh(line, t, from));
-    const r = after(below, goalOf[t], from);
+    const below = new Map(base).set(line, fresh(line, t, from, ly));
+    const r = after(below, goalOf[t], from, ly);
     let next = r.next;
+    let nextLy = r.nextLy;
     let atGoal: PlanAction | undefined;
     let atGoalLeft: PlanCost | undefined;
     let nextAtGoal: boolean | undefined;
     if (!below.get(line)!.full) {
-      const c = decide(new Map(base).set(line, { t, full: true }), from);
+      const c = decide(new Map(base).set(line, { t, full: true }), from, ly);
       if (r.action.kind === "keep" && c.kind !== "keep") {
-        atGoal = actionOf(c);
-        atGoalLeft = leftAfter(c);
+        atGoal = actionOf(c, ly);
+        atGoalLeft = leftAfter(c, ly);
         if (r.next === from) {
           next = c.next;
+          nextLy = nextLayer(c, ly);
           nextAtGoal = true;
         }
       }
     }
-    const finish = next !== null && next !== from ? finishFrom(next) : undefined;
-    return { ...r, next, line, atGoal, atGoalLeft, nextAtGoal, finish };
+    const finish = next !== null && next !== from ? finishFrom(next, nextLy) : undefined;
+    return { ...r, next, nextLy, line, atGoal, atGoalLeft, nextAtGoal, finish };
   };
 
   // One option first on line 1 (always legendary). In L1+U2 only a lead option counts there; the others are left out
   // (on line 1 they are just rerolled).
-  const afterFirst = keys.flatMap((key, t) => (canCount(0, t) ? [{ key, ...strip(row("", 0, t)) }] : []));
+  const afterFirst = keys.flatMap((key, t) => (canCount(0, t) ? [{ key, ...strip(row("", 0, t, top)) }] : []));
   // One option first on line 2 (lines 2 and 3 behave the same). The one option that has to be line 1 cannot sit there.
-  const lowerFirst = keys.map((key, t) => (soleLead(t) ? null : { key, t, ...row("", 1, t) }));
+  const lowerFirst = keys.map((key, t) => (soleLead(t) ? null : { key, t, ...row("", 1, t, top) }));
   const afterFirstLower = lowerFirst
     .filter((x) => x !== null)
     .map((x) => {
-      const { t: _t, next: _next, ...rest } = x;
+      const { t: _t, next: _next, nextLy: _nextLy, ...rest } = x;
       void _t;
       void _next;
+      void _nextLy;
       return rest;
     });
   // The second option after following the plan for the first one: a showed up first (and was handled as above),
@@ -769,36 +1284,55 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: PlanCost[]): Abilit
       const secondLine = goalAt(second).mode === "l1u2" && soleLead(second) ? 0 : 2;
       afterTwo.push({
         keys: [keys[first], keys[second]],
-        ...strip(row(done.next, secondLine, second)),
+        ...strip(row(done.next, secondLine, second, done.nextLy)),
       });
     }
   }
 
   // Several goals: the first ability alone (until one goal is met, the other preset left out), and how likely each
   // goal is the one it ends as (user, 2026-11-14: "either counts, so it is cheaper").
-  const none = () => 0;
-  const first = tails
-    ? {
-        fame: evalPart((m, l) => FAME[m][l] * fameMul, 0, none).get("")!,
-        meso: evalPart((m, l) => MESO[m][l], 0, none).get("")!,
-        resets: evalPart(isReset, 0, none).get("")!,
-        circ: evalPart(() => 0, 1, none).get("")!,
-        miracle: evalPart((m) => 1 - isReset(m), 0, none).get("")!,
-        chance: goals.map((_, g) => evalPart(() => 0, 0, (x) => (x === g ? 1 : 0)).get("")!),
-      }
-    : undefined;
+  const atTop = (mi: number) => rootAll[mi][top as number];
+  const first = !tails || !wantFirst
+    ? undefined
+    : unlimited
+      ? {
+          fame: evalPart((m, l) => FAME[m][l] * fameMul, 0, none).get("")!,
+          meso: evalPart((m, l) => MESO[m][l], 0, none).get("")!,
+          resets: evalPart(isReset, 0, none).get("")!,
+          circ: evalPart(() => 0, 1, none).get("")!,
+          miracle: evalPart((m) => 1 - isReset(m), 0, none).get("")!,
+          chance: goals.map((_, g) => evalPart(() => 0, 0, (x) => (x === g ? 1 : 0)).get("")!),
+        }
+      : {
+          ...(Object.fromEntries(COST_KEYS.map((key, i) => [key, atTop(COST_KEYS.length + i)])) as PlanCost),
+          chance: goals.map((_, g) => atTop(2 * COST_KEYS.length + g)),
+        };
 
+  // The cost from scratch with every count of circulators held, by layer (one preset of two: what is left for it).
+  const byBudget =
+    held && wantBudget
+      ? Array.from(
+          { length: NL },
+          (_, L) => Object.fromEntries(COST_KEYS.map((key, mi) => [key, rootAll[mi][L]])) as PlanCost,
+        )
+      : undefined;
+
+  const rootCost = (key: keyof PlanCost) =>
+    unlimited
+      ? { fame: fameW, meso: mesoW, circ: circW, resets: resetW, miracle: miracleW }[key].get("")!
+      : atTop(COST_KEYS.indexOf(key));
   return {
-    fame: fameW.get("")!,
-    meso: mesoW.get("")!,
-    resets: resetW.get("")!,
-    circ: circW.get("")!,
-    miracle: miracleW.get("")!,
-    start: policy.get("")!,
+    fame: rootCost("fame"),
+    meso: rootCost("meso"),
+    resets: rootCost("resets"),
+    circ: rootCost("circ"),
+    miracle: rootCost("miracle"),
+    start: methodAt("", top)!,
     afterFirst,
     afterFirstLower,
     afterTwo,
     first,
+    ...(byBudget ? { byBudget } : {}),
   };
 }
 
@@ -818,15 +1352,16 @@ export function abilityPlan(
 /**
  * Two presets, two builds (user, 2026-11-14: "드메도 뽑으면서 패보상"): roll one ability and make it whichever build comes
  * first, then the other preset into the other build. `both` = that plan (its rows say which build a move goes for),
- * `a` and `b` = each build alone; the two presets done one after the other cost a + b.
+ * `a` and `b` = each build alone, `separate` = a, then b (with the circulators a left, when there is a limit).
  */
 export function abilityPairPlan(
   a: AbilityGoal,
   b: AbilityGoal,
   opts: PlanOpts,
-): { both: AbilityPlan; a: AbilityPlan; b: AbilityPlan } {
-  const one = solve([a], opts);
-  const two = solve([b], opts);
+): { both: AbilityPlan; a: AbilityPlan; b: AbilityPlan; separate: PlanCost } {
+  const limited = opts.values?.held !== undefined;
+  const one = solve([a], opts, undefined, limited);
+  const two = solve([b], opts, undefined, limited);
   const cost = (p: AbilityPlan): PlanCost => ({
     fame: p.fame,
     meso: p.meso,
@@ -834,9 +1369,22 @@ export function abilityPairPlan(
     resets: p.resets,
     miracle: p.miracle,
   });
+  // The other preset's cost with r circulators left (no limit: always the same).
+  const rest = (p: AbilityPlan) => {
+    const flat = cost(p);
+    const by = p.byBudget;
+    return (r: number) => (by ? by[Math.min(r, by.length - 1)] : flat);
+  };
+  const restA = rest(one);
+  const restB = rest(two);
   // Finishing a leaves b for the other preset, and the other way round.
-  const both = solve([a, b], opts, [cost(two), cost(one)]);
-  return { both, a: one, b: two };
+  const both = solve([a, b], opts, (g, r) => (g === 0 ? restB(r) : restA(r)));
+  const separate = limited
+    ? cost(solve([a], opts, (_, r) => restB(r), false, false))
+    : (Object.fromEntries(
+        (Object.keys(cost(one)) as (keyof PlanCost)[]).map((k) => [k, one[k] + two[k]]),
+      ) as PlanCost);
+  return { both, a: one, b: two, separate };
 }
 
 // ---------------------------------------------------------------------------

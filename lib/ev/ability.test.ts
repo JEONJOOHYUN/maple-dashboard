@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import data from "./data/ability.json" with { type: "json" };
 import miracleData from "./data/ability-miracle.json" with { type: "json" };
-import { ABILITY_OPTIONS, ABILITY_PRESETS, abilityPairPlan, abilityPlan, buildPreset, legendaryOnly, presetLead, type AbilityKey, type AbilityMode, circulatorCount, valueChance, valueChoices } from "./ability.ts";
+import { ABILITY_OPTIONS, ABILITY_PRESETS, abilityPairPlan, abilityPlan, buildPreset, legendaryOnly, presetLead, type AbilityKey, type AbilityMode, type PlanOpts, circulatorCount, valueChance, valueChoices } from "./ability.ts";
 import { classAbilities } from "./ability-classes.ts";
 
 type Grade = "epic" | "unique" | "legendary";
@@ -337,6 +337,123 @@ test("일반 재설정: free black · chaos circulators fix the values, so the f
   assert.ok(Math.abs(blank.fame - p.fame) < 1 && Math.abs(blank.circ - p.circ) < 1e-6);
   // 재보체: three lines at 10 % each → 999.
   assert.ok(Math.abs(abilityPlan(["cool", "boss", "hp"], "l1u2", free, 0).circ - 999) < 1e-6);
+});
+
+// Black · chaos circulators held (event items, a few at a time — user, 2026-11-15: "400개를 돌리는 건 안 돼", usually
+// 블랙 40 · 카오스 20, the page takes up to 50 of each).
+const held = (black: number, chaos: number) => ({
+  sunday: false,
+  famePricePerUnit: 400,
+  values: { goal: maxGoal, circPrice: 0, held: { black, chaos } },
+});
+
+test("circulators held: none = no circulators, very many = no limit, more never costs more, black worth more than chaos", () => {
+  for (const preset of ABILITY_PRESETS) {
+    const plan = (o: PlanOpts) => abilityPlan(preset.keys, "l1u2", o, presetLead(preset));
+    const none = plan(held(0, 0));
+    const without = plan({ sunday: false, famePricePerUnit: 400, values: { goal: maxGoal, circPrice: 1e18 } });
+    assert.ok(Math.abs(none.fame - without.fame) < 1e-6 * without.fame, `${preset.label}: ${none.fame} vs ${without.fame}`);
+    assert.equal(none.circ, 0);
+    let last = none.fame;
+    for (const n of [5, 30]) {
+      const black = plan(held(n, 0));
+      const chaos = plan(held(0, n));
+      assert.ok(black.fame <= last * (1 + 1e-9), `${preset.label} ${n}: ${black.fame} > ${last}`);
+      assert.ok(black.circ <= n + 1e-9 && chaos.circ <= n + 1e-9, `${preset.label} ${n}: ${black.circ} · ${chaos.circ}`);
+      // Black keeps the values when a result is not applied, chaos applies every one.
+      assert.ok(black.fame <= chaos.fame * (1 + 1e-9), `${preset.label} ${n}: black ${black.fame} > chaos ${chaos.fame}`);
+      last = black.fame;
+    }
+    // Both kinds: 30 black ≤ 10 black + 20 chaos ≤ 30 chaos, and more of either never costs more.
+    const mix = plan(held(10, 20));
+    const fame = (b: number, c: number) => plan(held(b, c)).fame;
+    assert.ok(fame(30, 0) <= mix.fame * (1 + 1e-9) && mix.fame <= fame(0, 30) * (1 + 1e-9), `${preset.label} mix ${mix.fame}`);
+    assert.ok(mix.fame <= fame(10, 0) * (1 + 1e-9) && mix.fame <= fame(0, 20) * (1 + 1e-9), `${preset.label} mix more`);
+    assert.ok(mix.circ <= 30 + 1e-9, `${preset.label} mix ${mix.circ}`);
+  }
+  // Very many: the plan without a limit (패보상 39 · 드메 15 on average).
+  for (const id of ["pbs", "dm"]) {
+    const preset = ABILITY_PRESETS.find((p) => p.id === id)!;
+    const lots = abilityPlan(preset.keys, "l1u2", held(3000, 0), presetLead(preset));
+    const free = abilityPlan(preset.keys, "l1u2", { sunday: false, famePricePerUnit: 400, values: { goal: maxGoal, circPrice: 0 } }, presetLead(preset));
+    assert.ok(Math.abs(lots.fame - free.fame) < 1e-6 * free.fame && Math.abs(lots.circ - free.circ) < 1e-4, `${id}: ${lots.fame} · ${lots.circ}`);
+  }
+});
+
+test("30 black circulators for 패보상: 보공 is circulated alone first, then 보공 + 상추뎀; each go says what a miss leaves", () => {
+  const p = abilityPlan(["pas", "boss", "stat"], "l1u2", held(30, 0), 0);
+  // 1,654.3만 fame · 1,576 resets · 20.75 circulators (a 50,000-run simulation of the guide gives the same, 2026-11-15).
+  assert.ok(Math.abs(p.fame - 16_542_640) < 10, `${p.fame}`);
+  assert.ok(Math.abs(p.resets - 1576.14) < 0.01 && Math.abs(p.circ - 20.7525) < 1e-4, `${p.resets} · ${p.circ}`);
+  // 보공 below 10 % on line 2 or 3: circulate it (10 % a try) — 9.6 used on average, 96 % within 30.
+  const boss = p.afterFirstLower.find((r) => r.key === "boss")!;
+  assert.equal(boss.action.kind, "circ");
+  assert.equal(boss.action.circKind, "black");
+  assert.ok(Math.abs(boss.action.circCount - (1 - 0.9 ** 30) / 0.1) < 1e-9, `${boss.action.circCount}`);
+  assert.equal(boss.action.circLeft, 30);
+  assert.ok(Math.abs(boss.action.circChance! - (1 - 0.9 ** 30)) < 1e-12);
+  // All 30 missing (black: the values stay): 보공 is still below 10 %, nothing locked.
+  assert.deepEqual(boss.action.circMissKeep, []);
+  // Then 상추뎀: both lines again (10 % × 25 %). The next steps use the counts typed in (the ones held then — Codex
+  // review: not an average left over), here still 30; a miss leaves 보공 10 % locked.
+  const two = p.afterTwo.find((r) => r.keys.join() === "boss,stat")!;
+  assert.equal(two.action.kind, "circ");
+  assert.equal(two.action.circLeft, 30);
+  assert.ok(Math.abs(two.action.circChance! - (1 - 0.975 ** 30)) < 1e-12);
+  assert.deepEqual(two.action.circMissKeep, ["boss"]);
+  // Chaos applies every result, so a second go would throw 보공 10 % away: 상추뎀 is locked only at 8 %.
+  const chaos = abilityPlan(["pas", "boss", "stat"], "l1u2", held(0, 30), 0);
+  assert.ok(Math.abs(chaos.fame - 21_182_085) < 10, `${chaos.fame}`);
+  const chaosTwo = chaos.afterTwo.find((r) => r.keys.join() === "boss,stat")!;
+  assert.equal(chaosTwo.action.kind, "keep");
+  assert.equal(chaosTwo.atGoal?.kind, "lock");
+  // Without a limit nothing changes: 39 circulators (the test above).
+  assert.equal(abilityPlan(["pas", "boss", "stat"], "l1u2", free, 0).afterFirstLower.find((r) => r.key === "boss")!.action.circLeft, undefined);
+});
+
+test("블랙 40 · 카오스 20 (the default) for 패보상: chaos first while nothing at the goal is at stake, black to keep 보공", () => {
+  const p = abilityPlan(["pas", "boss", "stat"], "l1u2", held(40, 20), 0);
+  // 1,300.9만 fame · 1,221 resets · 27.70 circulators.
+  assert.ok(Math.abs(p.fame - 13_009_139) < 10 && Math.abs(p.resets - 1220.53) < 0.01 && Math.abs(p.circ - 27.7048) < 1e-4, `${p.fame}`);
+  // 보공 below 10 %: chaos first, then black (60 tries, 99.8 %); nothing to lose, nothing locked when all miss.
+  const boss = p.afterFirstLower.find((r) => r.key === "boss")!;
+  assert.equal(boss.action.circKind, "both");
+  assert.equal(boss.action.circLeft, 60);
+  assert.ok(Math.abs(boss.action.circChance! - (1 - 0.9 ** 60)) < 1e-12);
+  assert.deepEqual(boss.action.circMissKeep, []);
+  // 보공 10 % locked, then 상추뎀: black only (40 tries, 64 %), so a miss keeps 보공 10 %.
+  const two = p.afterTwo.find((r) => r.keys.join() === "boss,stat")!;
+  assert.equal(two.action.circKind, "black");
+  assert.equal(two.action.circLeft, 40);
+  assert.ok(Math.abs(two.action.circChance! - (1 - 0.975 ** 40)) < 1e-12);
+  assert.deepEqual(two.action.circMissKeep, ["boss"]);
+  // 블랙 10 · 카오스 20: the same moves with fewer (1,879.5만 fame).
+  const fewer = abilityPlan(["pas", "boss", "stat"], "l1u2", held(10, 20), 0);
+  assert.ok(Math.abs(fewer.fame - 18_795_389) < 10 && Math.abs(fewer.resets - 1780.93) < 0.01, `${fewer.fame}`);
+  assert.equal(fewer.afterFirstLower.find((r) => r.key === "boss")!.action.circKind, "both");
+  assert.equal(fewer.afterTwo.find((r) => r.keys.join() === "boss,stat")!.action.circKind, "black");
+});
+
+test("circulators held, two presets: what the first ability leaves goes to the second; together costs less", () => {
+  const hunt = ABILITY_PRESETS.find((p) => p.hunting)!;
+  const goal = (keys: AbilityKey[], lead: number[]) => ({ keys, mode: "l1u2" as const, lead });
+  const r = abilityPairPlan(goal(["pas", "boss", "stat"], [0]), goal(hunt.keys, presetLead(hunt)), held(30, 0));
+  // Each preset alone with every count held (layers 0 … 30; the last one is the plan itself).
+  assert.equal(r.a.byBudget!.length, 31);
+  assert.ok(Math.abs(r.a.byBudget![30].fame - r.a.fame) < 1e-6 && Math.abs(r.b.byBudget![0].fame - 5_123_110) < 10, `${r.b.byBudget![0].fame}`);
+  // 패보상 then 드메 with what is left: more than the two alone with 30 each (that would be 60 circulators).
+  assert.ok(r.separate.fame > r.a.fame + r.b.fame, `${r.separate.fame}`);
+  assert.ok(r.separate.circ <= 30 + 1e-9 && r.both.circ <= 30 + 1e-9);
+  // One ability made into whichever build comes first: 1,945.0만 vs 2,012.6만 one after the other.
+  assert.ok(Math.abs(r.both.fame - 19_450_378) < 10 && Math.abs(r.separate.fame - 20_125_725) < 10, `${r.both.fame} · ${r.separate.fame}`);
+  // Both kinds (블랙 10 · 카오스 20): 2,137.3만 together vs 2,172.1만 one after the other, never more than held.
+  const mix = abilityPairPlan(goal(["pas", "boss", "stat"], [0]), goal(hunt.keys, presetLead(hunt)), held(10, 20));
+  assert.equal(mix.a.byBudget!.length, 11 * 21);
+  assert.ok(Math.abs(mix.both.fame - 21_372_507) < 10 && Math.abs(mix.separate.fame - 21_720_664) < 10, `${mix.both.fame} · ${mix.separate.fame}`);
+  assert.ok(mix.both.circ <= 30 + 1e-9 && mix.separate.circ <= 30 + 1e-9);
+  // No limit: one after the other is just the two added up.
+  const free2 = abilityPairPlan(goal(["pas", "boss", "stat"], [0]), goal(hunt.keys, presetLead(hunt)), free);
+  assert.ok(Math.abs(free2.separate.fame - free2.a.fame - free2.b.fame) < 1e-6);
 });
 
 test("미라클 서큘레이터: own option chances, no locks, top values; at 1.5억 it is never worth it", () => {

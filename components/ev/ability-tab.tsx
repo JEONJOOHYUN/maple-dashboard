@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Chip,
   Label,
@@ -27,6 +27,7 @@ import {
   type AbilityMode,
   type AbilityPlan,
   type AbilityPreset,
+  type CircKind,
   type Method,
   type PlanAction,
   type PlanFinish,
@@ -67,6 +68,12 @@ export function AbilityTab({ classes }: { classes: ClassAbility[] }) {
   );
   // Miracle circulator price (억): no longer sold, traded at about 1.5억 (user, 2026-11-15).
   const [miracleText, setMiracleText] = useState("1.5");
+  // Black · chaos circulators held now: event items, only a few (user, 2026-11-15: "400개를 돌리는 건 안 돼"; usually
+  // 블랙 40 = coin shop 10 + boss coin shop 30, 카오스 20). Blank = none. Up to 50 each: a larger count turns into 50, so
+  // the field shows the count the plan uses (user, 2026-11-15). Black keeps the values when a result is not applied,
+  // chaos applies every result.
+  const [blackText, setBlackText] = useState("40");
+  const [chaosText, setChaosText] = useState("20");
 
   const chosen = useMemo(() => classes.find((c) => c.name === cls) ?? null, [classes, cls]);
   const built = useMemo(
@@ -97,6 +104,9 @@ export function AbilityTab({ classes }: { classes: ClassAbility[] }) {
   // The value circulator of this build: abyss (priced) for the advanced reset, black · chaos (free) for the fame reset.
   const circPrice = mode === "l3" ? parseNum(circText, 0) * 1e8 : 0;
   const miraclePrice = parseNum(miracleText, 0) * 1e8;
+  // 일반 재설정 only: the event circulators held (the abyss ones of 고급 are bought, as many as it takes).
+  const blackHeld = Math.floor(parseNum(blackText, 0));
+  const chaosHeld = Math.floor(parseNum(chaosText, 0));
   const opts: PlanOpts = useMemo(
     () => ({
       sunday,
@@ -104,21 +114,48 @@ export function AbilityTab({ classes }: { classes: ClassAbility[] }) {
       values: {
         goal: (k, g) => goals[`${k}:${g}`] ?? Math.max(...valueChoices(k, g)),
         circPrice,
+        ...(mode === "l1u2" ? { held: { black: blackHeld, chaos: chaosHeld } } : {}),
       },
       miraclePrice,
     }),
-    [sunday, famePerUnit, goals, circPrice, miraclePrice],
+    [sunday, famePerUnit, goals, circPrice, miraclePrice, mode, blackHeld, chaosHeld],
   );
-  // Options, values and circulators planned together (when to lock, when to circulate). With 드메 as well: one ability
-  // made into whichever build comes first, the other preset into the other one.
-  const planFor = (m: AbilityMode) =>
-    pairOn
-      ? abilityPairPlan(goalOf2(preset, m), goalOf2(hunt, m), opts)
-      : { both: abilityPlan(preset.keys, m, opts, m === "l1u2" ? presetLead(preset) : undefined), a: null, b: null };
-  const planned = useMemo(() => planFor(mode), [preset, hunt, pairOn, mode, opts]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The plan is worked out after a change is on screen (user, 2026-11-15: a wait should show, and nothing heavy such as
+  // a worker): the page paints first, then the plan comes in the next task. Until it does, the last plan stays — the
+  // result column dims and says "계산 중" when that takes a moment (50 · 50 circulators with 드메: about a second).
+  // Everything the result column reads is kept with its plan (Codex review: while a new plan comes, the column showed
+  // the last plan under the new names, prices and wanted values).
+  const inputs = useMemo(
+    () => ({ preset, hunt, pairOn, mode, opts, chosen, goals, famePerUnit, circPrice, miraclePrice, blackHeld, chaosHeld }),
+    [preset, hunt, pairOn, mode, opts, chosen, goals, famePerUnit, circPrice, miraclePrice, blackHeld, chaosHeld],
+  );
+  // A change that takes a moment (the circulators held; 드메 as well about 7 times the work): the mark is painted before
+  // the work starts, so it shows while the page waits. Others only show it if they last (a delayed fade, quick ones never).
+  const slow = mode === "l1u2" && (blackHeld + 1) * (chaosHeld + 1) * (pairOn ? 7 : 1) >= 1500;
+  const [result, setResult] = useState(() => ({ inputs, planned: planOf(inputs), slow: false }));
+  useEffect(() => {
+    if (result.inputs === inputs) return;
+    let live = true;
+    let timer = 0;
+    const frame = requestAnimationFrame(() => {
+      timer = window.setTimeout(() => {
+        if (live) setResult({ inputs, planned: planOf(inputs), slow });
+      }, 0);
+    });
+    return () => {
+      live = false;
+      cancelAnimationFrame(frame);
+      clearTimeout(timer);
+    };
+  }, [inputs, result.inputs, slow]);
+  const planned = result.planned;
+  /** What the result column was worked out from: it shows its plan with these until the next one comes. */
+  const shown = result.inputs;
+  const pending = result.inputs !== inputs;
+  const waiting = pending ? (slow ? "now" : "later") : null;
   const plan = planned.both;
   /** Which rows are the 드메 preset's in a two-preset plan (goal 1). */
-  const huntGoal = pairOn ? 1 : preset.hunting ? 0 : -1;
+  const huntGoal = shown.pairOn ? 1 : shown.preset.hunting ? 0 : -1;
   const seen2 = seen2Sel?.plan === plan ? seen2Sel.key : null;
   const pickSeen = (k: AbilityKey | null) => {
     setSeen(k);
@@ -141,15 +178,37 @@ export function AbilityTab({ classes }: { classes: ClassAbility[] }) {
     setSeen2Sel(k ? { plan, key: k } : null);
   type Cost = { fame: number; meso: number; circ: number; miracle: number };
   const total = (p: Cost) =>
-    famePerUnit > 0 ? p.fame * famePerUnit + p.meso + p.circ * circPrice + p.miracle * miraclePrice : null;
+    shown.famePerUnit > 0
+      ? p.fame * shown.famePerUnit + p.meso + p.circ * shown.circPrice + p.miracle * shown.miraclePrice
+      : null;
   const costText = (p: Cost) =>
     total(p) !== null
       ? `약 ${eok(total(p)!)}`
       : `${fameText(p.fame)}${p.meso > 0 ? ` + ${eok(p.meso)}` : ""}`;
-  // Which circulator rerolls the values in this build (일반: free event black · chaos, 고급: abyss).
-  const circName = mode === "l1u2" ? "블랙 · 카오스" : "서큘레이터";
+  // Which circulator rerolls the values in this build (일반: the event black · chaos ones held, 고급: abyss).
+  const CIRC_KIND: Record<CircKind, string> = { black: "블랙", chaos: "카오스", both: "카오스 → 블랙" };
   const circN = (n: number) =>
     `${(Math.round(n * 10) / 10).toLocaleString("ko-KR")}개`;
+  /**
+   * Under a go of circulators: how many it takes; with a limit, the chance the ones held are enough and what to lock
+   * when they run out (Codex review: the guide has to say what to do then too).
+   */
+  const circExtra = (a: {
+    circCount: number;
+    circKind?: CircKind;
+    circLeft?: number;
+    circChance?: number;
+    circMissKeep?: AbilityKey[];
+  }) => {
+    if (a.circLeft === undefined) return `${shown.mode === "l1u2" ? "블랙 · 카오스" : "서큘레이터"} ${circN(a.circCount)}`;
+    const circName = CIRC_KIND[a.circKind ?? "black"];
+    const miss = !a.circMissKeep
+      ? "목표 수치인 줄만 잠그고 계속"
+      : a.circMissKeep.length
+        ? `${a.circMissKeep.map((k) => ABILITY_OPTIONS[k].short).join(" · ")}만 잠그고 계속`
+        : "잠그지 않고 계속";
+    return `${circName} 평균 ${circN(a.circCount)} · ${a.circLeft.toLocaleString("ko-KR")}개 안에 ${chanceText(a.circChance ?? 0)} · 다 쓰면 ${miss}`;
+  };
   /** Short "→" chain. two = the second option (both found lines are handled together). */
   const actionText = (a: PlanAction, two: boolean) =>
     a.kind === "keep"
@@ -158,9 +217,12 @@ export function AbilityTab({ classes }: { classes: ClassAbility[] }) {
         ? "잠금"
         : `서큘레이터로 ${two ? "두 줄 " : ""}목표 수치 → 잠금`;
   const gradeAt = (line: number) =>
-    (mode === "l3" || line === 0 ? "legendary" : "unique") as "legendary" | "unique";
-  /** "20%": the wanted value of this option on that line. */
-  const goalText = (k: AbilityKey, line: number) => `${goalOf(k, gradeAt(line))}${unitOf(k)}`;
+    (shown.mode === "l3" || line === 0 ? "legendary" : "unique") as "legendary" | "unique";
+  /** "20%": the wanted value of this option on that line (as the plan shown was worked out). */
+  const goalText = (k: AbilityKey, line: number) => {
+    const g = gradeAt(line);
+    return `${shown.goals[`${k}:${g}`] ?? Math.max(...valueChoices(k, g))}${unitOf(k)}`;
+  };
   /** The row's move, and the other one when showing the wanted value changes it ("그대로 계속 · 20% 이상이면 잠금"). */
   const rowAction = (r: PlanStep, k: AbilityKey, two: boolean) =>
     r.atGoal
@@ -200,7 +262,7 @@ export function AbilityTab({ classes }: { classes: ClassAbility[] }) {
   /** "보공" or, when what follows assumes the wanted value, "보공 20%". */
   const seenName = (r: PlanStep, k: AbilityKey) =>
     r.nextAtGoal ? `${ABILITY_OPTIONS[k].short} ${goalText(k, r.line)}` : ABILITY_OPTIONS[k].short;
-  const circMeso = view.circ * circPrice;
+  const circMeso = view.circ * shown.circPrice;
   const lowerSame = lowerRows.length > 0 && sameAction(lowerRows);
   const twoSame = twoRows.length > 0 && sameAction(twoRows);
   // The last step comes from the plan too (user, 2026-11-15: a fixed "모자라면 → 서큘레이터" told people to reroll lines
@@ -246,12 +308,6 @@ export function AbilityTab({ classes }: { classes: ClassAbility[] }) {
       }
     return [...out.values()].sort((a, b) => costNum(a.f) - costNum(b.f));
   })();
-  const sumCost = (a: Cost, b: Cost): Cost => ({
-    fame: a.fame + b.fame,
-    meso: a.meso + b.meso,
-    circ: a.circ + b.circ,
-    miracle: a.miracle + b.miracle,
-  });
   /** "146.2억" (money when there is a fame price, else fame). */
   const diffText = (more: Cost, less: Cost) => {
     const d = costNum(more) - costNum(less);
@@ -432,6 +488,39 @@ export function AbilityTab({ classes }: { classes: ClassAbility[] }) {
               </label>
             )}
           </div>
+          {/* The event circulators held now (일반 only: they cannot touch legendary lines 2 · 3), up to 50 of each (the
+              plan works out every count below them). The steps use these counts as they are, so after a go the counts
+              left are typed in (Codex review). */}
+          {mode === "l1u2" && (
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="flex flex-col text-[11px] text-muted-foreground">
+                지금 가진 이벤트 서큘레이터
+                <span className="text-[10px]">쓰고 나면 남은 개수로 고쳐 넣기</span>
+              </span>
+              <span className="flex items-center gap-3 text-[11px] text-muted-foreground">
+                <label className="flex items-center gap-1.5">
+                  블랙
+                  <NumberField
+                    label="가진 블랙 서큘레이터 개수"
+                    value={blackText}
+                    onChange={(t) => setBlackText(heldText(t))}
+                    suffix="개"
+                    inputClassName="w-14"
+                  />
+                </label>
+                <label className="flex items-center gap-1.5">
+                  카오스
+                  <NumberField
+                    label="가진 카오스 서큘레이터 개수"
+                    value={chaosText}
+                    onChange={(t) => setChaosText(heldText(t))}
+                    suffix="개"
+                    inputClassName="w-14"
+                  />
+                </label>
+              </span>
+            </div>
+          )}
           <Switch
             on={sunday}
             onChange={setSunday}
@@ -442,242 +531,278 @@ export function AbilityTab({ classes }: { classes: ClassAbility[] }) {
         <ClassAbilityTable classes={classes} picked={cls} mode={mode} onPick={chooseClass} />
       </div>
 
-      <section className="flex min-w-0 flex-col gap-3">
-        <div className="flex flex-col gap-1.5 rounded-lg bg-primary px-5 py-4 text-primary-foreground">
-          <span className="text-[13px] font-semibold">
-            {chosen ? `${chosen.name} ` : ""}
-            {preset.label}
-            {pairOn ? ` + ${hunt.label} · 프리셋 2개` : ""} · {modeLabel(preset, mode)}{" "}
-            {pickedTwo && pickedRow
-              ? `· ${seenName(pickedRow, pickedRow.key)} 다음 ${withSubject(seenName(pickedTwo, pickedTwo.keys[1]))} 뜬 뒤 남은 비용`
-              : pickedRow
-                ? `· ${withSubject(seenName(pickedRow, pickedRow.key))} 둘째 · 셋째 줄에 뜬 뒤 남은 비용`
-                : "띄우는 데 드는 것"}
-          </span>
-          {total(view) !== null ? (
-            <span className="font-num text-[34px] leading-none font-bold sm:text-[40px]">
-              {eok(total(view)!)}
-              <span className="ml-1 text-base">메소</span>
-            </span>
-          ) : (
-            <span className="font-num text-[34px] leading-none font-bold sm:text-[40px]">
-              {fameText(view.fame)}
-              <span className="ml-1 text-base">명성치</span>
-            </span>
+      <span role="status" className="sr-only">
+        {waiting === "now" ? "계산 중" : result.slow ? "계산 끝" : ""}
+      </span>
+      <section aria-busy={pending} className="relative min-w-0">
+        <span
+          aria-hidden
+          className={cn(
+            "pointer-events-none absolute top-2.5 right-2.5 z-10 flex items-center gap-1.5 rounded-full bg-foreground px-3 py-1.5 text-xs font-semibold text-background shadow-md opacity-0",
+            waiting === "now" && "opacity-100",
+            waiting === "later" && "opacity-100 transition-opacity delay-150 duration-150",
           )}
-          {pairOn && !pickedRow && planned.a && planned.b && (
-            <span className="text-xs font-semibold opacity-85">
-              따로 하면 {costText(sumCost(planned.a, planned.b)).replace(/^약 /, "")} ·{" "}
-              {diffText(sumCost(planned.a, planned.b), plan)} 절약
-            </span>
+        >
+          <span className="size-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+          계산 중
+        </span>
+        <div
+          className={cn(
+            "flex min-w-0 flex-col gap-3",
+            waiting === "now" && "opacity-50",
+            waiting === "later" && "opacity-50 transition-opacity delay-150 duration-150",
           )}
-          {/* Either build counts on the first preset, so it alone costs less than the boss build alone (user, 2026-11-14). */}
-          {pairOn && !pickedRow && plan.first && (
-            <span className="text-xs font-semibold opacity-85">
-              첫 프리셋(먼저 맞는 쪽까지) {costText(plan.first).replace(/^약 /, "")} · {hunt.label}가 먼저{" "}
-              {Math.round(plan.first.chance[1] * 100)}%
+        >
+          <div className="flex flex-col gap-1.5 rounded-lg bg-primary px-5 py-4 text-primary-foreground">
+            <span className="text-[13px] font-semibold">
+              {shown.chosen ? `${shown.chosen.name} ` : ""}
+              {shown.preset.label}
+              {shown.pairOn ? ` + ${shown.hunt.label} · 프리셋 2개` : ""} · {modeLabel(shown.preset, shown.mode)}{" "}
+              {pickedTwo && pickedRow
+                ? `· ${seenName(pickedRow, pickedRow.key)} 다음 ${withSubject(seenName(pickedTwo, pickedTwo.keys[1]))} 뜬 뒤 남은 비용`
+                : pickedRow
+                  ? `· ${withSubject(seenName(pickedRow, pickedRow.key))} 둘째 · 셋째 줄에 뜬 뒤 남은 비용`
+                  : "띄우는 데 드는 것"}
             </span>
-          )}
-          {pickedRow && total(plan) !== null && (
-            <span className="text-xs font-semibold opacity-85">
-              처음부터 평균 {eok(total(plan)!)} ·{" "}
-              {total(view)! <= total(plan)!
-                ? `${eok(total(plan)! - total(view)!)} 절약`
-                : `${eok(total(view)! - total(plan)!)} 추가`}
-            </span>
-          )}
-        </div>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <Box
-            k="명성치"
-            v={fameText(view.fame)}
-            sub={
-              have > 0
-                ? have >= view.fame
-                  ? "가진 걸로 충분"
-                  : `${fameText(view.fame - have)} 모자람`
-                : famePerUnit > 0
-                  ? `약 ${eok(view.fame * famePerUnit)}`
-                  : "평균"
-            }
-          />
-          <Box
-            k="재설정 메소"
-            v={view.meso > 0 ? eok(view.meso) : "없음"}
-            sub={view.meso > 0 ? METHOD_NAME.advanced : `${METHOD_NAME.fame}만`}
-          />
-          <Box
-            k="재설정 횟수"
-            v={count(view.resets)}
-            // Miracle circulators only show up when they are cheap enough to be worth it.
-            sub={view.miracle >= 0.05 ? `+ 미라클 ${circN(view.miracle)}` : "평균"}
-          />
-          <Box
-            k="서큘레이터"
-            v={circN(view.circ)}
-            sub={
-              view.circ === 0
-                ? "필요 없음"
-                : mode === "l1u2"
-                  ? "블랙 · 카오스"
-                  : circMeso > 0
-                    ? `약 ${eok(circMeso)}`
-                    : "수치 맞추기"
-            }
-          />
-        </div>
-        <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4">
-          <b className="text-sm">가장 싼 순서</b>
-          <Step
-            n={1}
-            title={
-              firstKeep && plan.start === "advanced"
-                ? "첫 번째 옵션 제외 켜고 잠금 없이 고급 재설정"
-                : `잠금 없이 ${METHOD_NAME[plan.start]}${firstKeep ? " · 첫째 줄에 뜬 건 넘김" : ""}`
-            }
-            note={
-              [
-                firstKeep && "첫째 줄은 마지막에 채우는 게 쌈",
-                // The miracle circulator takes no locks: once a line is locked the build goes on with its own reset.
-                plan.start === "miracle" && `잠근 뒤로는 ${METHOD_NAME.fame}`,
-              ]
-                .filter(Boolean)
-                .join(" · ") || undefined
-            }
-          />
-          {/* Some option on line 1 is not "go on": its own step with a row per option. */}
-          {!firstKeep && (
+            {total(view) !== null ? (
+              <span className="font-num text-[34px] leading-none font-bold sm:text-[40px]">
+                {eok(total(view)!)}
+                <span className="ml-1 text-base">메소</span>
+              </span>
+            ) : (
+              <span className="font-num text-[34px] leading-none font-bold sm:text-[40px]">
+                {fameText(view.fame)}
+                <span className="ml-1 text-base">명성치</span>
+              </span>
+            )}
+            {shown.pairOn && !pickedRow && planned.separate && (
+              <span className="text-xs font-semibold opacity-85">
+                따로 하면 {costText(planned.separate).replace(/^약 /, "")} · {diffText(planned.separate, plan)} 절약
+              </span>
+            )}
+            {/* Either build counts on the first preset, so it alone costs less than the boss build alone (user, 2026-11-14). */}
+            {shown.pairOn && !pickedRow && plan.first && (
+              <span className="text-xs font-semibold opacity-85">
+                첫 프리셋(먼저 맞는 쪽까지) {costText(plan.first).replace(/^약 /, "")} · {shown.hunt.label}가 먼저{" "}
+                {Math.round(plan.first.chance[1] * 100)}%
+              </span>
+            )}
+            {pickedRow && total(plan) !== null && (
+              <span className="text-xs font-semibold opacity-85">
+                처음부터 평균 {eok(total(plan)!)} ·{" "}
+                {total(view)! <= total(plan)!
+                  ? `${eok(total(plan)! - total(view)!)} 절약`
+                  : `${eok(total(view)! - total(plan)!)} 추가`}
+              </span>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <Box
+              k="명성치"
+              v={fameText(view.fame)}
+              sub={
+                have > 0
+                  ? have >= view.fame
+                    ? "가진 걸로 충분"
+                    : `${fameText(view.fame - have)} 모자람`
+                  : shown.famePerUnit > 0
+                    ? `약 ${eok(view.fame * shown.famePerUnit)}`
+                    : "평균"
+              }
+            />
+            <Box
+              k="재설정 메소"
+              v={view.meso > 0 ? eok(view.meso) : "없음"}
+              sub={view.meso > 0 ? METHOD_NAME.advanced : `${METHOD_NAME.fame}만`}
+            />
+            <Box
+              k="재설정 횟수"
+              v={count(view.resets)}
+              // Miracle circulators only show up when they are cheap enough to be worth it.
+              sub={view.miracle >= 0.05 ? `+ 미라클 ${circN(view.miracle)}` : "평균"}
+            />
+            <Box
+              k="서큘레이터"
+              v={circN(view.circ)}
+              sub={
+                shown.mode === "l1u2"
+                  ? shown.blackHeld + shown.chaosHeld > 0
+                    ? `가진 ${shown.blackHeld + shown.chaosHeld}개 중`
+                    : "가진 것 없음"
+                  : view.circ === 0
+                    ? "필요 없음"
+                    : circMeso > 0
+                      ? `약 ${eok(circMeso)}`
+                      : "수치 맞추기"
+              }
+            />
+          </div>
+          <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4">
+            <b className="text-sm">가장 싼 순서</b>
             <Step
-              n={2}
-              title={`첫째 줄에 먼저 뜨면${firstSame ? ` → ${actionText(plan.afterFirst[0].action, false)}` : ""}`}
+              n={1}
+              title={
+                firstKeep && plan.start === "advanced"
+                  ? "첫 번째 옵션 제외 켜고 잠금 없이 고급 재설정"
+                  : `잠금 없이 ${METHOD_NAME[plan.start]}${firstKeep ? " · 첫째 줄에 뜬 건 넘김" : ""}`
+              }
+              note={
+                [
+                  firstKeep && "첫째 줄은 마지막에 채우는 게 쌈",
+                  // The miracle circulator takes no locks: once a line is locked the build goes on with its own reset.
+                  plan.start === "miracle" && `잠근 뒤로는 ${METHOD_NAME.fame}`,
+                ]
+                  .filter(Boolean)
+                  .join(" · ") || undefined
+              }
+            />
+            {/* Some option on line 1 is not "go on": its own step with a row per option. */}
+            {!firstKeep && (
+              <Step
+                n={2}
+                title={`첫째 줄에 먼저 뜨면${firstSame ? ` → ${actionText(plan.afterFirst[0].action, false)}` : ""}`}
+              >
+                {plan.afterFirst.map((b, i) => (
+                  <StepRow
+                    key={b.key}
+                    label={ABILITY_OPTIONS[b.key].short}
+                    tag={b.goal === huntGoal && shown.pairOn ? shown.hunt.label : undefined}
+                    action={firstSame ? undefined : rowAction(b, b.key, false)}
+                    cost={costText(b)}
+                    alts={firstSame ? undefined : altShort(b, b.key)}
+                    unit={i === 0}
+                  />
+                ))}
+              </Step>
+            )}
+            <Step
+              n={sn(3)}
+              title={`둘째 · 셋째 줄에 먼저 뜨면${lowerSame ? ` → ${actionText(lowerRows[0].action, false)}` : ""}`}
+              aside={
+                <SeenChips
+                  label="실제로 뜬 옵션"
+                  keys={lowerRows.map((b) => b.key)}
+                  value={picked}
+                  onChange={pickSeen}
+                />
+              }
             >
-              {plan.afterFirst.map((b, i) => (
+              {lowerRows.map((b, i) => (
                 <StepRow
                   key={b.key}
                   label={ABILITY_OPTIONS[b.key].short}
-                  tag={b.goal === huntGoal && pairOn ? hunt.label : undefined}
-                  action={firstSame ? undefined : rowAction(b, b.key, false)}
+                  tag={b.goal === huntGoal && shown.pairOn ? shown.hunt.label : undefined}
+                  action={lowerSame ? undefined : rowAction(b, b.key, false)}
+                  extra={b.action.kind === "circ" ? circExtra(b.action) : undefined}
                   cost={costText(b)}
-                  alts={firstSame ? undefined : altShort(b, b.key)}
+                  alts={lowerSame ? undefined : altShort(b, b.key)}
+                  unit={i === 0}
+                  selected={picked === b.key}
+                />
+              ))}
+            </Step>
+            {!shown.preset.hunting && (
+            <Step
+              n={sn(4)}
+              title={`${picked && twoRows.length ? `${ABILITY_OPTIONS[picked].short}${pickedRow?.nextAtGoal ? ` ${goalText(picked, pickedRow.line)}` : ""} 다음 ` : ""}하나 더 뜨면${picked && twoSame ? ` → ${actionText(twoRows[0].action, true)}` : ""}`}
+              note={
+                // Every pair at once made the column long (user, 2026-11-14): only what can follow the option picked in step 3.
+                !picked
+                  ? `${sn(3)}단계에서 뜬 옵션을 고르면 이어서 보여 줌`
+                  : pickedRow?.finish
+                    ? // A two-line goal (드메): the other option finishes it, in the last step.
+                      `${pickedRow.nextAtGoal ? `${goalText(picked, pickedRow.line)} 미만이면 잠그지 않음 · ` : ""}${shown.hunt.label}는 두 줄 · 마지막 단계로`
+                    : twoRows.length === 0
+                      ? `${withTopic(ABILITY_OPTIONS[picked].short)} 잠그지 않음 · ${again}`
+                      : pickedRow?.nextAtGoal
+                        ? `${goalText(picked, pickedRow.line)} 미만이면 잠그지 않음 · ${again}`
+                        : undefined
+              }
+              aside={
+                picked && twoRows.length > 0 ? (
+                  <SeenChips
+                    label="두 번째로 뜬 옵션"
+                    keys={twoRows.map((b) => b.keys[1])}
+                    value={pickedTwo ? pickedTwo.keys[1] : null}
+                    onChange={pickSeen2}
+                  />
+                ) : undefined
+              }
+            >
+              {picked &&
+                twoRows.length > 0 &&
+                twoRows.map((b, i) => (
+                  <StepRow
+                    key={b.keys.join(">")}
+                    label={
+                      picked
+                        ? ABILITY_OPTIONS[b.keys[1]].short
+                        : b.keys
+                            .map((k) => ABILITY_OPTIONS[k].short)
+                            .join(" 다음 ")
+                    }
+                    action={twoSame ? undefined : rowAction(b, b.keys[1], true)}
+                    extra={b.action.kind === "circ" ? circExtra(b.action) : undefined}
+                    cost={costText(b)}
+                    alts={twoSame ? undefined : altShort(b, b.keys[1])}
+                    unit={i === 0}
+                    selected={pickedTwo === b}
+                  />
+                ))}
+            </Step>
+            )}
+            <Step
+              n={sn(shown.preset.hunting ? 4 : 5)}
+              title="마지막 하나가 뜨면"
+              note={
+                finishRows.length > 0
+                  ? undefined
+                  : pickedTwo
+                    ? `${withTopic(ABILITY_OPTIONS[pickedTwo.keys[1]].short)} 잠그지 않음 · 다음 결과로 ${sn(4)}단계부터 다시`
+                    : picked
+                      ? "위 단계대로 잠그면 이어서 보여 줌"
+                      : undefined
+              }
+            >
+              {finishRows.map((r, i) => (
+                <StepRow
+                  key={r.id}
+                  label={r.label}
+                  tag={r.goal === huntGoal && shown.pairOn ? shown.hunt.label : undefined}
+                  action={r.action}
+                  extra={r.f.move === "circ" ? circExtra(r.f) : undefined}
+                  cost={costNum(r.f) < 1 ? "0" : costText(r.f)}
                   unit={i === 0}
                 />
               ))}
             </Step>
-          )}
-          <Step
-            n={sn(3)}
-            title={`둘째 · 셋째 줄에 먼저 뜨면${lowerSame ? ` → ${actionText(lowerRows[0].action, false)}` : ""}`}
-            aside={
-              <SeenChips
-                label="실제로 뜬 옵션"
-                keys={lowerRows.map((b) => b.key)}
-                value={picked}
-                onChange={pickSeen}
-              />
-            }
-          >
-            {lowerRows.map((b, i) => (
-              <StepRow
-                key={b.key}
-                label={ABILITY_OPTIONS[b.key].short}
-                tag={b.goal === huntGoal && pairOn ? hunt.label : undefined}
-                action={lowerSame ? undefined : rowAction(b, b.key, false)}
-                extra={
-                  b.action.kind === "circ"
-                    ? `${circName} ${circN(b.action.circCount)}`
-                    : undefined
-                }
-                cost={costText(b)}
-                alts={lowerSame ? undefined : altShort(b, b.key)}
-                unit={i === 0}
-                selected={picked === b.key}
-              />
-            ))}
-          </Step>
-          {!preset.hunting && (
-          <Step
-            n={sn(4)}
-            title={`${picked && twoRows.length ? `${ABILITY_OPTIONS[picked].short}${pickedRow?.nextAtGoal ? ` ${goalText(picked, pickedRow.line)}` : ""} 다음 ` : ""}하나 더 뜨면${picked && twoSame ? ` → ${actionText(twoRows[0].action, true)}` : ""}`}
-            note={
-              // Every pair at once made the column long (user, 2026-11-14): only what can follow the option picked in step 3.
-              !picked
-                ? `${sn(3)}단계에서 뜬 옵션을 고르면 이어서 보여 줌`
-                : pickedRow?.finish
-                  ? // A two-line goal (드메): the other option finishes it, in the last step.
-                    `${pickedRow.nextAtGoal ? `${goalText(picked, pickedRow.line)} 미만이면 잠그지 않음 · ` : ""}${hunt.label}는 두 줄 · 마지막 단계로`
-                  : twoRows.length === 0
-                    ? `${withTopic(ABILITY_OPTIONS[picked].short)} 잠그지 않음 · ${again}`
-                    : pickedRow?.nextAtGoal
-                      ? `${goalText(picked, pickedRow.line)} 미만이면 잠그지 않음 · ${again}`
-                      : undefined
-            }
-            aside={
-              picked && twoRows.length > 0 ? (
-                <SeenChips
-                  label="두 번째로 뜬 옵션"
-                  keys={twoRows.map((b) => b.keys[1])}
-                  value={pickedTwo ? pickedTwo.keys[1] : null}
-                  onChange={pickSeen2}
-                />
-              ) : undefined
-            }
-          >
-            {picked &&
-              twoRows.length > 0 &&
-              twoRows.map((b, i) => (
-                <StepRow
-                  key={b.keys.join(">")}
-                  label={
-                    picked
-                      ? ABILITY_OPTIONS[b.keys[1]].short
-                      : b.keys
-                          .map((k) => ABILITY_OPTIONS[k].short)
-                          .join(" 다음 ")
-                  }
-                  action={twoSame ? undefined : rowAction(b, b.keys[1], true)}
-                  extra={
-                    b.action.kind === "circ"
-                      ? `${circName} ${circN(b.action.circCount)}`
-                      : undefined
-                  }
-                  cost={costText(b)}
-                  alts={twoSame ? undefined : altShort(b, b.keys[1])}
-                  unit={i === 0}
-                  selected={pickedTwo === b}
-                />
-              ))}
-          </Step>
-          )}
-          <Step
-            n={sn(preset.hunting ? 4 : 5)}
-            title="마지막 하나가 뜨면"
-            note={
-              finishRows.length > 0
-                ? undefined
-                : pickedTwo
-                  ? `${withTopic(ABILITY_OPTIONS[pickedTwo.keys[1]].short)} 잠그지 않음 · 다음 결과로 ${sn(4)}단계부터 다시`
-                  : picked
-                    ? "위 단계대로 잠그면 이어서 보여 줌"
-                    : undefined
-            }
-          >
-            {finishRows.map((r, i) => (
-              <StepRow
-                key={r.id}
-                label={r.label}
-                tag={r.goal === huntGoal && pairOn ? hunt.label : undefined}
-                action={r.action}
-                extra={r.f.move === "circ" ? `${circName} ${circN(r.f.circCount)}` : undefined}
-                cost={costNum(r.f) < 1 ? "0" : costText(r.f)}
-                unit={i === 0}
-              />
-            ))}
-          </Step>
+          </div>
         </div>
       </section>
     </div>
   );
 }
+
+/** What the plan is worked out from (the preset, the reset, both presets or one, prices and circulators held). */
+type PlanInputs = { preset: AbilityPreset; hunt: AbilityPreset; pairOn: boolean; mode: AbilityMode; opts: PlanOpts };
+
+/** Options, values and circulators planned together; with 드메 as well, one ability made into whichever build comes first. */
+const planOf = ({ preset, hunt, pairOn, mode, opts }: PlanInputs) =>
+  pairOn
+    ? abilityPairPlan(goalOf2(preset, mode), goalOf2(hunt, mode), opts)
+    : {
+        both: abilityPlan(preset.keys, mode, opts, mode === "l1u2" ? presetLead(preset) : undefined),
+        a: null,
+        b: null,
+        separate: null,
+      };
+
+/** A count of event circulators as typed: at most 50 (more turns into 50). */
+const HELD_MAX = 50;
+const heldText = (t: string) => (Number(t) > HELD_MAX ? String(HELD_MAX) : t.slice(0, 2));
+
+/** "96%": whole percent, 100 only when certain and 0 only when impossible. */
+const chanceText = (x: number) => `${x >= 1 ? 100 : x <= 0 ? 0 : Math.min(99, Math.max(1, Math.round(x * 100)))}%`;
 
 /** "보공이" / "패시브가": 이 after a final consonant, 가 after a vowel. */
 const withSubject = (word: string) => {
