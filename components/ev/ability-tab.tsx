@@ -32,7 +32,9 @@ import {
   type PlanAction,
   type PlanFinish,
   type PlanOpts,
+  type PlanRun,
   type PlanStep,
+  type RunUse,
 } from "@/lib/ev/ability";
 import type { ClassAbility } from "@/lib/ev/ability-classes";
 import { CREDIT_SHOP } from "@/lib/ev/defaults";
@@ -68,12 +70,13 @@ export function AbilityTab({ classes }: { classes: ClassAbility[] }) {
   );
   // Miracle circulator price (억): no longer sold, traded at about 1.5억 (user, 2026-11-15).
   const [miracleText, setMiracleText] = useState("1.5");
-  // Black · chaos circulators held now: event items, only a few (user, 2026-11-15: "400개를 돌리는 건 안 돼"; usually
-  // 블랙 40 = coin shop 10 + boss coin shop 30, 카오스 20). Blank = none. Up to 50 each: a larger count turns into 50, so
-  // the field shows the count the plan uses (user, 2026-11-15). Black keeps the values when a result is not applied,
-  // chaos applies every result.
-  const [blackText, setBlackText] = useState("40");
-  const [chaosText, setChaosText] = useState("20");
+  // Black · chaos circulators held now: event items, only a few (user, 2026-11-15: "400개를 돌리는 건 안 돼"). None to
+  // start (user, 2026-11-16: most people are not thinking of the event coins; another calculator starts at 0 too) — at
+  // most from the coin shops 블랙 40 · 카오스 20. Blank = none. Up to 50 each: a larger count turns into 50, so the
+  // field shows the count the plan uses (user, 2026-11-15). Black keeps the values when a result is not applied, chaos
+  // applies every result.
+  const [blackText, setBlackText] = useState("0");
+  const [chaosText, setChaosText] = useState("0");
 
   const chosen = useMemo(() => classes.find((c) => c.name === cls) ?? null, [classes, cls]);
   const built = useMemo(
@@ -185,13 +188,18 @@ export function AbilityTab({ classes }: { classes: ClassAbility[] }) {
     total(p) !== null
       ? `약 ${eok(total(p)!)}`
       : `${fameText(p.fame)}${p.meso > 0 ? ` + ${eok(p.meso)}` : ""}`;
-  // Which circulator rerolls the values in this build (일반: the event black · chaos ones held, 고급: abyss).
-  const CIRC_KIND: Record<CircKind, string> = { black: "블랙", chaos: "카오스", both: "카오스 → 블랙" };
+  /**
+   * Which circulator, in the move itself and by the names players use (user, 2026-11-16: "카서큘 블서큘 심서큘"), so a
+   * row reads at a glance: 일반 = the event black · chaos ones held (chaos then black: "카서큘", the line under it says
+   * when black comes in), 고급 = abyss.
+   */
+  const circName = (k?: CircKind) =>
+    k === "black" ? "블서큘" : k ? "카서큘" : shown.mode === "l3" ? "심서큘" : "서큘레이터";
   const circN = (n: number) =>
     `${(Math.round(n * 10) / 10).toLocaleString("ko-KR")}개`;
   /**
    * Under a go of circulators: how many it takes; with a limit, the chance the ones held are enough and what to lock
-   * when they run out (Codex review: the guide has to say what to do then too).
+   * when they run out (Codex review: the guide has to say what to do then too) — left out when it is all but certain.
    */
   const circExtra = (a: {
     circCount: number;
@@ -200,22 +208,23 @@ export function AbilityTab({ classes }: { classes: ClassAbility[] }) {
     circChance?: number;
     circMissKeep?: AbilityKey[];
   }) => {
-    if (a.circLeft === undefined) return `${shown.mode === "l1u2" ? "블랙 · 카오스" : "서큘레이터"} ${circN(a.circCount)}`;
-    const circName = CIRC_KIND[a.circKind ?? "black"];
+    if (a.circLeft === undefined) return `평균 ${circN(a.circCount)}`;
+    const chance = a.circChance ?? 0;
     const miss = !a.circMissKeep
       ? "목표 수치인 줄만 잠그고 계속"
       : a.circMissKeep.length
         ? `${a.circMissKeep.map((k) => ABILITY_OPTIONS[k].short).join(" · ")}만 잠그고 계속`
         : "잠그지 않고 계속";
-    return `${circName} 평균 ${circN(a.circCount)} · ${a.circLeft.toLocaleString("ko-KR")}개 안에 ${chanceText(a.circChance ?? 0)} · 다 쓰면 ${miss}`;
+    const both = a.circKind === "both";
+    return [
+      both && "카서큘 다 쓰면 블서큘",
+      `평균 ${circN(a.circCount)}`,
+      `${a.circLeft.toLocaleString("ko-KR")}개 안에 ${chanceText(chance)}`,
+      chance < 0.99 && `${both ? "블서큘까지 " : ""}다 쓰면 ${miss}`,
+    ]
+      .filter(Boolean)
+      .join(" · ");
   };
-  /** Short "→" chain. two = the second option (both found lines are handled together). */
-  const actionText = (a: PlanAction, two: boolean) =>
-    a.kind === "keep"
-      ? "그대로 계속"
-      : a.kind === "lock"
-        ? "잠금"
-        : `서큘레이터로 ${two ? "두 줄 " : ""}목표 수치 → 잠금`;
   const gradeAt = (line: number) =>
     (shown.mode === "l3" || line === 0 ? "legendary" : "unique") as "legendary" | "unique";
   /** "20%": the wanted value of this option on that line (as the plan shown was worked out). */
@@ -223,18 +232,84 @@ export function AbilityTab({ classes }: { classes: ClassAbility[] }) {
     const g = gradeAt(line);
     return `${shown.goals[`${k}:${g}`] ?? Math.max(...valueChoices(k, g))}${unitOf(k)}`;
   };
+  /**
+   * Lines locked, then the event circulators one at a time (user, 2026-11-16): the move names the kinds and the values
+   * ("잠금 → 카서큘 → 블서큘로 보공 10% · 상추뎀 8%"); under it only what differs by what is at the goal, the black rule,
+   * and how it goes.
+   */
+  /** "카서큘 → 블서큘로 보공 10% · 상추뎀 8%" (the kinds the run uses, then the values it goes for). */
+  const runGoal = (run: PlanRun) => {
+    const uses = new Set(run.by.map((x) => x.use));
+    const chaos = uses.has("chaos");
+    const black = uses.has("black") || (chaos && shown.blackHeld > 0);
+    const kinds = chaos && black ? "카서큘 → 블서큘" : chaos ? "카서큘" : "블서큘";
+    return `${kinds}로 ${run.keys.map((k, i) => `${ABILITY_OPTIONS[k].short} ${goalText(k, run.lines[i])}`).join(" · ")}`;
+  };
+  const runAction = (run: PlanRun) => `잠금 → ${runGoal(run)}`;
+  const runExtra = (run: PlanRun): string[] => {
+    const who = (have: AbilityKey[]) =>
+      have.length ? `${have.map((k) => ABILITY_OPTIONS[k].short).join(" · ")}만 맞으면` : "맞은 줄 없으면";
+    const count = (u: string) => run.by.filter((x) => x.use === u).length;
+    const main = count("chaos") >= count("black") ? "chaos" : "black";
+    const moveText = (use: RunUse, keep?: AbilityKey[]) =>
+      use === "stop"
+        ? `멈추고 ${keep?.length ? `${keep.map((k) => ABILITY_OPTIONS[k].short).join(" · ")}만 잠근 채 ` : ""}재설정`
+        : use === "black"
+          ? "블서큘"
+          : "카서큘";
+    // Only what differs from the usual (chaos, then black when it runs out), and where it changes as the counts go down.
+    const odd = run.by.flatMap((x) => {
+      const now = x.use !== main ? moveText(x.use, x.keep) : "";
+      const then = x.then
+        ? `${x.then.kind === "chaos" ? "카서큘" : "블서큘"}${x.then.at > 0 ? `이 ${x.then.at}개 남았을 때부터` : " 다 쓰면"} ${moveText(x.then.use, x.then.keep)}`
+        : "";
+      return now || then ? [`${who(x.have)} ${[now, then].filter(Boolean).join(", ")}`] : [];
+    });
+    const order = run.by.filter((x) => x.have.length === 1).map((x) => ABILITY_OPTIONS[x.have[0]].short);
+    const blackRule =
+      run.keys.length > 1 && (run.by.some((x) => x.use === "black") || shown.blackHeld > 0)
+        ? `블서큘은 나은 결과만 적용${order.length > 1 ? `(${order.join(" > ")})` : ""}`
+        : null;
+    const held = shown.blackHeld + shown.chaosHeld;
+    return [
+      [...odd, blackRule].filter(Boolean).join(" · "),
+      [
+        `평균 ${circN(run.circCount)}`,
+        `${held.toLocaleString("ko-KR")}개 안에 ${chanceText(run.chance)}`,
+        run.chance < 0.99 && "다 쓰면 목표 수치인 줄만 잠그고 계속",
+      ]
+        .filter(Boolean)
+        .join(" · "),
+    ].filter(Boolean);
+  };
+  /** Short "→" chain. two = the second option (both found lines are handled together); run = locking leads to one. */
+  const actionText = (a: PlanAction, two: boolean, run?: PlanRun) =>
+    a.kind === "keep"
+      ? "그대로 계속"
+      : a.kind === "lock"
+        ? run
+          ? runAction(run)
+          : "잠금"
+        : run
+          ? runGoal(run)
+          : `${circName(a.circKind)}로 ${two ? "두 줄 " : ""}목표 수치 → 잠금`;
   /** The row's move, and the other one when showing the wanted value changes it ("그대로 계속 · 20% 이상이면 잠금"). */
   const rowAction = (r: PlanStep, k: AbilityKey, two: boolean) =>
     r.atGoal
-      ? `${actionText(r.action, two)} · ${goalText(k, r.line)} 이상이면 ${actionText(r.atGoal, two)}`
-      : actionText(r.action, two);
+      ? `${actionText(r.action, two)} · ${goalText(k, r.line)} 이상이면 ${actionText(r.atGoal, two, r.run)}`
+      : actionText(r.action, two, r.run);
+  /** Under a row: the circulators of its move (a go, or the run after locking). */
+  const rowExtra = (r: PlanStep): string[] | undefined =>
+    r.run ? runExtra(r.run) : r.action.kind === "circ" ? [circExtra(r.action)] : undefined;
   // Same move for every row (and no "at the wanted value" variant) → say it once in the step title.
-  const sameAction = (list: { action: PlanAction; atGoal?: PlanAction }[]) =>
+  const sameAction = (list: { action: PlanAction; atGoal?: PlanAction; run?: PlanRun }[]) =>
     list.every(
       (x) =>
         !x.atGoal &&
+        !x.run &&
         x.action.kind === list[0].action.kind &&
-        x.action.method === list[0].action.method,
+        x.action.method === list[0].action.method &&
+        x.action.circKind === list[0].action.circKind,
     );
   const firstSame = sameAction(plan.afterFirst);
   // Line 1 first is "go on" for every option: steps 1 and 2 are one step (user, 2026-11-15). The advanced reset's
@@ -249,9 +324,14 @@ export function AbilityTab({ classes }: { classes: ClassAbility[] }) {
     (a, b) => costNum(a) - costNum(b),
   );
   const picked = seen && lowerRows.some((r) => r.key === seen) ? seen : null;
-  const twoRows = plan.afterTwo
+  const twoAll = plan.afterTwo
     .filter((r) => !picked || r.keys[0] === picked)
     .sort((a, b) => costNum(a) - costNum(b));
+  // Step 1 already says to pass over line 1: a line-1 option that only goes on would say it again (user, 2026-11-16:
+  // "첫줄 제외로 돌릴텐데 3단계에 패시브가 있어야해?"). One the plan locks there still shows.
+  const twoRows = firstKeep
+    ? twoAll.filter((r) => !(r.line === 0 && r.action.kind === "keep" && !r.atGoal))
+    : twoAll;
   const pickedRow = picked ? lowerRows.find((r) => r.key === picked)! : null;
   // Step 4 chips only make sense once step 3 is picked (they list what can follow it).
   const pickedTwo =
@@ -263,8 +343,9 @@ export function AbilityTab({ classes }: { classes: ClassAbility[] }) {
   const seenName = (r: PlanStep, k: AbilityKey) =>
     r.nextAtGoal ? `${ABILITY_OPTIONS[k].short} ${goalText(k, r.line)}` : ABILITY_OPTIONS[k].short;
   const circMeso = view.circ * shown.circPrice;
-  const lowerSame = lowerRows.length > 0 && sameAction(lowerRows);
-  const twoSame = twoRows.length > 0 && sameAction(twoRows);
+  // A move shared by every row goes up into the step title; one row keeps its own (a long title pushed the chips down).
+  const lowerSame = lowerRows.length > 1 && sameAction(lowerRows);
+  const twoSame = twoRows.length > 1 && sameAction(twoRows);
   // The last step comes from the plan too (user, 2026-11-15: a fixed "모자라면 → 서큘레이터" told people to reroll lines
   // they had just circulated). With the options picked above: that one way; otherwise every way the plan can end.
   const lineName = (lines: number[]) => `${lines.map((l) => ["첫째", "둘째", "셋째"][l]).join(" · ")} 줄`;
@@ -273,7 +354,9 @@ export function AbilityTab({ classes }: { classes: ClassAbility[] }) {
   const finishText = (f: PlanFinish, withLast: boolean) => {
     const last = withLast ? `${lastLabel(f)} ` : "";
     // Only below the wanted values (Codex review): all of them at the goal already is the end.
-    const circ = `수치 모자라면 서큘레이터로 ${f.locked.length + 1 === 2 ? "두" : "세"} 줄 목표 수치`;
+    const circ = f.run
+      ? `수치 모자라면 ${runGoal(f.run)}`
+      : `수치 모자라면 ${circName(f.circKind)}로 ${f.locked.length + 1 === 2 ? "두" : "세"} 줄 목표 수치`;
     return f.move === "keep"
       ? `${last}${goalText(f.last, f.lines[0])} 이상 뜰 때까지 재설정`
       : f.move === "done"
@@ -693,7 +776,7 @@ export function AbilityTab({ classes }: { classes: ClassAbility[] }) {
                   label={ABILITY_OPTIONS[b.key].short}
                   tag={b.goal === huntGoal && shown.pairOn ? shown.hunt.label : undefined}
                   action={lowerSame ? undefined : rowAction(b, b.key, false)}
-                  extra={b.action.kind === "circ" ? circExtra(b.action) : undefined}
+                  extra={rowExtra(b)}
                   cost={costText(b)}
                   alts={lowerSame ? undefined : altShort(b, b.key)}
                   unit={i === 0}
@@ -712,7 +795,7 @@ export function AbilityTab({ classes }: { classes: ClassAbility[] }) {
                   : pickedRow?.finish
                     ? // A two-line goal (드메): the other option finishes it, in the last step.
                       `${pickedRow.nextAtGoal ? `${goalText(picked, pickedRow.line)} 미만이면 잠그지 않음 · ` : ""}${shown.hunt.label}는 두 줄 · 마지막 단계로`
-                    : twoRows.length === 0
+                    : twoAll.length === 0
                       ? `${withTopic(ABILITY_OPTIONS[picked].short)} 잠그지 않음 · ${again}`
                       : pickedRow?.nextAtGoal
                         ? `${goalText(picked, pickedRow.line)} 미만이면 잠그지 않음 · ${again}`
@@ -742,7 +825,7 @@ export function AbilityTab({ classes }: { classes: ClassAbility[] }) {
                             .join(" 다음 ")
                     }
                     action={twoSame ? undefined : rowAction(b, b.keys[1], true)}
-                    extra={b.action.kind === "circ" ? circExtra(b.action) : undefined}
+                    extra={rowExtra(b)}
                     cost={costText(b)}
                     alts={twoSame ? undefined : altShort(b, b.keys[1])}
                     unit={i === 0}
@@ -770,7 +853,7 @@ export function AbilityTab({ classes }: { classes: ClassAbility[] }) {
                   label={r.label}
                   tag={r.goal === huntGoal && shown.pairOn ? shown.hunt.label : undefined}
                   action={r.action}
-                  extra={r.f.move === "circ" ? circExtra(r.f) : undefined}
+                  extra={r.f.run ? runExtra(r.f.run) : r.f.move === "circ" ? [circExtra(r.f)] : undefined}
                   cost={costNum(r.f) < 1 ? "0" : costText(r.f)}
                   unit={i === 0}
                 />
@@ -924,7 +1007,8 @@ function StepRow({
   /** Which preset the row goes for, when there are two ("드메"). */
   tag?: string;
   action?: string;
-  extra?: string;
+  /** Small lines under the move (one per entry). */
+  extra?: string[];
   cost: string;
   /** The other natural move and how much more it leaves ("안 잠그면 +X"). */
   alts?: string;
@@ -948,11 +1032,19 @@ function StepRow({
             </span>
           )}
           {action ? ` → ${action}` : ""}
-          {alts && <span className="text-[11px] text-muted-foreground"> · {alts}</span>}
+          {/* "안 잠그면 +9.7억" stays on one line when the row wraps. */}
+          {alts && (
+            <span className="text-[11px] text-muted-foreground">
+              {" "}
+              · <span className="whitespace-nowrap">{alts}</span>
+            </span>
+          )}
         </span>
-        {extra && (
-          <span className="text-[11px] text-muted-foreground">{extra}</span>
-        )}
+        {extra?.map((x) => (
+          <span key={x} className="text-[11px] text-muted-foreground">
+            {x}
+          </span>
+        ))}
       </span>
       <span className="flex flex-col items-end">
         <b className="font-num text-[13px] whitespace-nowrap">{cost}</b>

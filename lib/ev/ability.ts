@@ -313,6 +313,35 @@ export type PlanStep = PlanCost & {
   nextAtGoal?: boolean;
   /** Only the last option of the goal is missing after this move: how the goal ends (one entry per kind of move). */
   finish?: PlanFinish[];
+  /** With circulators held: the move locks lines that are then circulated one at a time (what to use, how it goes). */
+  run?: PlanRun;
+};
+
+/** One black circulator, one chaos, or stop (and keep only some lines locked, then resets). */
+export type RunUse = "black" | "chaos" | "stop";
+
+/**
+ * Circulators one at a time once the lines are locked (event black · chaos ones held), at the counts held: for each set
+ * of the locked options at the goal what to use — black (a result is taken only when it is better), chaos, or stop and
+ * keep only `keep` locked (then resets). Best set first: a black result is taken when it is a set higher in the list.
+ */
+export type PlanRun = {
+  keys: AbilityKey[];
+  /** The line of each of `keys` (0 = the first line). */
+  lines: number[];
+  /**
+   * `then`: as the counts go down with that set unchanged, the first move that differs (Codex review: the guide has to
+   * say it, the numbers below follow it) — at `at` left of the kind being used. Chaos running out into black is not one.
+   */
+  by: {
+    have: AbilityKey[];
+    use: RunUse;
+    keep?: AbilityKey[];
+    then?: { kind: "black" | "chaos"; at: number; use: RunUse; keep?: AbilityKey[] };
+  }[];
+  /** From the values when locked: circulators used on average, the chance every locked line ends at the goal. */
+  circCount: number;
+  chance: number;
 };
 
 /** The last missing option of a goal shows up: what to do when its value is below the goal, and what is left after. */
@@ -330,6 +359,8 @@ export type PlanFinish = PlanCost & {
   circLeft?: number;
   circChance?: number;
   circMissKeep?: AbilityKey[];
+  /** With circulators held: every option shows, then circulators one at a time (what to use, how it goes). */
+  run?: PlanRun;
 };
 
 export type AbilityPlan = PlanCost & {
@@ -673,6 +704,61 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: Tails, wantBudget =
   /** After a chaos miss all the lines at the goal stay locked (the guide's rule — Codex review). */
   const missAll = (kept: [number, number][]) => (kept.length <= 2 ? (stateOf(kept) ?? root) : root);
   const Vall = new Float64Array(NL * S);
+  /** The states a set of locked lines can be cut down to (unlocking is free), the set itself among them. */
+  const cutsOf = (m: Map<number, Line>): number[] => {
+    const ls = [...m.entries()];
+    const out: number[] = [];
+    for (let mask = 0; mask < 1 << ls.length; mask++) {
+      const j = at.get(encF(new Map(ls.filter((_, k) => mask & (1 << k)))));
+      if (j !== undefined) out.push(j);
+    }
+    return out;
+  };
+  /**
+   * One circulator at a time (user, 2026-11-16: deciding after each one is what makes the counts held go furthest — it
+   * matched another calculator to the 만 and beat a go of many decided at the start by up to 30 %). From a state whose
+   * locks are its goal's options but the line-1 one (or all of them): black keeps the old values or takes the new ones,
+   * chaos takes the new ones, and after either any lock may be let go. Earlier (one option locked) it never pays more
+   * than 0.02 %, so the steps say: lock, then circulate.
+   */
+  const rollable = new Uint8Array(S);
+  /** Per rollable state: each result of one circulator (its chance, the states it can be cut to), and the cuts of now. */
+  const rollsAt: { w: number; to: number[] }[][] = order.map(() => []);
+  const keepAt: number[][] = order.map(() => []);
+  if (held)
+    order.forEach((st, i) => {
+      const ls = [...decF(st).entries()];
+      if (!ls.length) return;
+      const g = goalOf[ls[0][1].t];
+      if (ls.some(([, v]) => goalOf[v.t] !== g)) return;
+      const n = goals[g].keys.length;
+      if (!((ls.length === n - 1 && ls.every(([l]) => l > 0)) || ls.length === n)) return;
+      const qs = ls.map(([l, v]) => pFull(l, v.t));
+      if (qs.every((q) => q >= 1)) return;
+      rollable[i] = 1;
+      for (let mask = 0; mask < 1 << ls.length; mask++) {
+        let w = 1;
+        const m = new Map<number, Line>();
+        ls.forEach(([l, v], k) => {
+          const on = !!(mask & (1 << k));
+          w *= qs[k] >= 1 ? (on ? 1 : 0) : on ? qs[k] : 1 - qs[k];
+          m.set(l, { t: v.t, full: on });
+        });
+        if (w > 0) rollsAt[i].push({ w, to: cutsOf(m) });
+      }
+      keepAt[i] = cutsOf(new Map(ls));
+    });
+  /** A go that only leads to a rollable state is one circulator at a time from there instead. */
+  const intoRoll = (c: Choice) => c.next !== null && rollable[at.get(c.next)!] === 1;
+  /** A state whose locks already make a goal at its values (circulated there): that goal is done, no reset more. */
+  const doneAt = new Int16Array(S).fill(-1);
+  if (held)
+    order.forEach((st, i) => {
+      const m = decF(st);
+      goals.forEach((_, g) => {
+        if (doneAt[i] < 0 && meets(m, g) && [...m.values()].every((v) => goalOf[v.t] !== g || v.full)) doneAt[i] = g;
+      });
+    });
   /** After a black miss, layer (0, c): lock the lines at the goal worth it (more lines on a tie). */
   const missMemo = new Map<string, number>();
   const missBest = (kept: [number, number][], c: number): number => {
@@ -711,6 +797,34 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: Tails, wantBudget =
     }
     return b;
   };
+  /**
+   * Complete states (circulators held): every option of a goal shows — the line-1 one too, which cannot be locked as a
+   * third — with which lines are at the goal (mask). From there one circulator at a time as well, and after one the
+   * locks can be cut to any two of the lines (the line-1 option among them). With the line-1 option found first this
+   * matched or beat another calculator in every case tried (2026-11-16, e.g. 블랙 50 · 카오스 50 패보상 979.5만 vs 986.5만).
+   */
+  type Cmp = { g: number; ls: { l: number; t: number; q: number }[]; mask: number; key: string };
+  const cmps: Cmp[] = [];
+  const cmpIdx = new Map<string, number>();
+  const cmpLines = (c: Choice) => c.lines!.map((x) => ({ l: x.l, t: x.t, q: x.q })).sort((a, b) => a.l - b.l);
+  const cmpMask = (c: Choice, ls: Cmp["ls"]) =>
+    ls.reduce((m, x, k) => m | (x.q >= 1 || c.lines!.find((y) => y.l === x.l)!.full ? 1 << k : 0), 0);
+  const cmpKey = (g: number, ls: Cmp["ls"]) => `${g}|${ls.map((x) => `${x.l}:${x.t}`).join(",")}`;
+  const cmpOf = (g: number, ls: Cmp["ls"], mask: number): number => {
+    const key = cmpKey(g, ls);
+    let k = cmpIdx.get(`${key}|${mask}`);
+    if (k === undefined) {
+      k = cmps.push({ g, ls, mask, key }) - 1;
+      cmpIdx.set(`${key}|${mask}`, k);
+      for (let m2 = 0; m2 < 1 << ls.length; m2++) if (m2 !== mask) cmpOf(g, ls, m2);
+    }
+    return k;
+  };
+  /** The complete state a finishing go starts from (−1: none, after the pass nothing new is made). */
+  const cmpAt = (c: Choice) => {
+    const ls = cmpLines(c);
+    return cmpIdx.get(`${cmpKey(c.goal!, ls)}|${cmpMask(c, ls)}`) ?? -1;
+  };
   const trans: Trans[][] = !held
     ? []
     : order.map((s) =>
@@ -726,7 +840,12 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: Tails, wantBudget =
               if (c.kind !== "circ") {
                 kind.push(c.next === null ? 1 : 0);
                 next.push(c.next === null ? c.goal! : at.get(c.next)!);
-              } else
+              } else if (c.next === null) {
+                // Every option shows: the complete state, one circulator at a time (a go of many is never cheaper).
+                const ls = cmpLines(c);
+                kind.push(3);
+                next.push(cmpOf(c.goal!, ls, cmpMask(c, ls)));
+              } else if (!intoRoll(c))
                 for (const go of GOS) {
                   kind.push(2);
                   next.push(burstOf(c, go));
@@ -769,6 +888,19 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: Tails, wantBudget =
   const M = metrics.length;
   /** The reset used in every layer (values are kept for every layer: any count can be asked for). */
   const polAll = new Int8Array(NL * S);
+  /** Per layer and rollable state: 0 = resets, 1 = one black circulator, 2 = one chaos circulator. */
+  const rollAll = new Int8Array(NL * S);
+  /** The cheapest of the states `cs` in the layer starting at `base`, and which one. */
+  const cheapest = (base: number, cs: number[]) => {
+    let v = Infinity;
+    let k = -1;
+    for (const x of cs)
+      if (Vall[base + x] < v) {
+        v = Vall[base + x];
+        k = x;
+      }
+    return { v, k };
+  };
   // Costs are kept where the steps at the top read them: rows 0 and B, columns 0 and C; and every layer's root.
   const rowsOf = () => metrics.map(() => new Float64Array(W1 * S));
   const colsOf = () => metrics.map(() => new Float64Array((NB + 1) * S));
@@ -821,16 +953,29 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: Tails, wantBudget =
   const valueAt = (c: Choice, s: FState, ly: Lyr): number => {
     if (ly === "u") return valueOf(c);
     if (c.next === s) return Vall[ly * S + at.get(s)!];
+    if (c.kind === "circ" && c.next === null) {
+      const k = cmpAt(c);
+      return k < 0 ? Infinity : VcIn[ly * NK + k];
+    }
     if (c.kind === "circ") return goSum(c, ly, vLeft, circPrice) + c.pen;
     if (c.next === null) return tailMoney(c.goal, ly);
     return Vall[ly * S + at.get(c.next)!];
   };
-  /** With circulators held, a go is offered once per kind there is (none of a kind left: not offered). */
+  /**
+   * With circulators held, a go is offered once per kind there is (none of a kind left: not offered); one that only
+   * leads to a rollable state is one at a time from there, and one that finishes a goal is the complete state.
+   */
   const typed = (all: Choice[], ly: Lyr): Choice[] =>
     ly === "u"
       ? all
       : all.flatMap((c) =>
-          c.kind === "circ" ? GOS.filter((go) => usable(go, bOf(ly), cOf(ly)) > 0).map((go) => ({ ...c, go })) : [c],
+          c.kind !== "circ"
+            ? [c]
+            : c.next === null
+              ? [c]
+              : intoRoll(c)
+                ? []
+                : GOS.filter((go) => usable(go, bOf(ly), cOf(ly)) > 0).map((go) => ({ ...c, go })),
         );
   /** Best move after seeing `lines` (null next = finished). Ties keep the current state. */
   function decide(lines: Map<number, Line>, s: FState, ly: Lyr = "u"): Choice {
@@ -857,6 +1002,37 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: Tails, wantBudget =
   const nextLayer = (_c: Choice, ly: Lyr): Lyr => ly;
   /** The options locked in a state. */
   const keysOf = (i: number) => [...decF(order[i]).values()].map((v) => keys[v.t]);
+
+  // The complete states: each result of one circulator (its chance), the cuts to at most two lines, and per layer what
+  // one is worth on entering (VcIn: circulate or done) and on arriving after a circulator (VcAt: a cut as well).
+  const NK = cmps.length;
+  const pop = (m: number) => {
+    let n = 0;
+    for (; m; m >>= 1) n += m & 1;
+    return n;
+  };
+  const cmpVar = cmps.map((x) => Int32Array.from({ length: 1 << x.ls.length }, (_, m) => cmpIdx.get(`${x.key}|${m}`)!));
+  const cmpW = cmps.map((x) =>
+    Float64Array.from({ length: 1 << x.ls.length }, (_, m) =>
+      x.ls.reduce((w, y, k) => w * (y.q >= 1 ? ((m >> k) & 1 ? 1 : 0) : (m >> k) & 1 ? y.q : 1 - y.q), 1),
+    ),
+  );
+  const cmpCuts = cmps.map((x) => {
+    const out: number[] = [];
+    for (let m2 = 0; m2 < 1 << x.ls.length; m2++) {
+      if (pop(m2) > 2) continue;
+      const lines = x.ls.flatMap((y, k) => ((m2 >> k) & 1 ? [[y.l, { t: y.t, full: !!((x.mask >> k) & 1) }] as const] : []));
+      const j = at.get(encF(new Map(lines)));
+      if (j !== undefined) out.push(j);
+    }
+    return out;
+  });
+  const VcIn = new Float64Array(NL * NK);
+  const VcAt = new Float64Array(NL * NK);
+  /** Per layer and complete state: 1 = one black circulator, 2 = one chaos (0 = done or none left). */
+  const cmpPick = new Int8Array(NL * NK);
+  /** The costs of entering each complete state at the counts held (what the steps show). */
+  const WcTop = new Float64Array(NK * M);
 
   if (held) {
     const H = hits.length;
@@ -887,6 +1063,10 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: Tails, wantBudget =
     const cache = trans.map((ts) => ts.map((t) => new Float64Array(t.kind.length)));
     const tailV = new Float64Array(goals.length);
     const tailW = new Float64Array(M * goals.length);
+    // Complete states: costs on entering in the layer being solved, and on arriving in rows b − 1 and b (per chaos count).
+    const WcIn = new Float64Array(NK * M);
+    let WcAtPrev = new Float64Array(W1 * NK * M);
+    let WcAtCur = new Float64Array(W1 * NK * M);
     /** Smallest V with V = c + Σ p · min(V, a): a result is taken when its best move is worth less than going on. */
     const settle = (c: number, p: Float64Array, a: Float64Array) => {
       let V = Infinity;
@@ -938,6 +1118,46 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: Tails, wantBudget =
           tailV[g] = tailMoney(g, L);
           for (let mi = 0; mi < M; mi++) tailW[mi * goals.length + g] = metrics[mi].tail(g, L);
         }
+        // Entering a complete state here: done, else the cheaper of one black (keep the old values or take the new) and
+        // one chaos (take the new) — the layers below are solved. None left: not entered (the result goes on as is).
+        for (let k = 0; k < NK; k++) {
+          const x = cmps[k];
+          let v = Infinity;
+          let pick = 0;
+          if (pop(x.mask) === x.ls.length) {
+            v = tailV[x.g];
+            for (let mi = 0; mi < M; mi++) WcIn[k * M + mi] = tailW[mi * goals.length + x.g];
+          } else
+            for (const kind of [1, 2] as const) {
+              if (kind === 1 ? b === 0 : c === 0) continue;
+              const L2 = kind === 1 ? lay(b - 1, c) : lay(b, c - 1);
+              let r = circPrice;
+              const ws = cmpW[k];
+              for (let m2 = 0; m2 < ws.length; m2++)
+                if (ws[m2] > 0) {
+                  const nk = cmpVar[k][m2];
+                  r += ws[m2] * (kind === 1 ? Math.min(VcAt[L2 * NK + k], VcAt[L2 * NK + nk]) : VcAt[L2 * NK + nk]);
+                }
+              if (r < v - 1e-9) [v, pick] = [r, kind];
+            }
+          VcIn[L * NK + k] = v;
+          cmpPick[L * NK + k] = pick;
+          if (pick) {
+            const L2 = pick === 1 ? lay(b - 1, c) : lay(b, c - 1);
+            for (let mi = 0; mi < M; mi++) {
+              let w = metrics[mi].perCirc;
+              const ws = cmpW[k];
+              for (let m2 = 0; m2 < ws.length; m2++)
+                if (ws[m2] > 0) {
+                  const nk = cmpVar[k][m2];
+                  const to = pick === 2 || VcAt[L2 * NK + nk] < VcAt[L2 * NK + k] ? nk : k;
+                  w += ws[m2] * (pick === 1 ? WcAtPrev[(c * NK + to) * M + mi] : WcAtCur[((c - 1) * NK + to) * M + mi]);
+                }
+              WcIn[k * M + mi] = w;
+            }
+          }
+          if (L === top) for (let mi = 0; mi < M; mi++) WcTop[k * M + mi] = WcIn[k * M + mi];
+        }
         // Each go here: the hit sums, then what a miss leaves (black: as before, layer (0, c); chaos: the last result,
         // layer (b, 0); chaos then black: layer (0, 0)), the circulators and the surcharge.
         bursts.forEach((x, i) => {
@@ -981,6 +1201,15 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: Tails, wantBudget =
           }
         };
         for (let i = 0; i < S; i++) {
+          if (doneAt[i] >= 0) {
+            const g = doneAt[i];
+            Vall[L * S + i] = tailV[g];
+            for (let mi = 0; mi < M; mi++) {
+              Wcur[mi][c * S + i] = tailW[mi * goals.length + g];
+              if (i === root) rootAll[mi][L] = Wcur[mi][c * S + i];
+            }
+            continue;
+          }
           let v = Infinity;
           let pol = 0;
           trans[i].forEach((t, mi) => {
@@ -990,7 +1219,8 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: Tails, wantBudget =
               let m = Infinity;
               for (let x = t.from[o]; x < t.from[o + 1]; x++) {
                 const k = t.kind[x];
-                const y = k === 0 ? Vall[L * S + t.next[x]] : k === 1 ? tailV[t.next[x]] : gv[t.next[x]];
+                const y =
+                  k === 0 ? Vall[L * S + t.next[x]] : k === 1 ? tailV[t.next[x]] : k === 3 ? VcIn[L * NK + t.next[x]] : gv[t.next[x]];
                 cv[x] = y;
                 if (y < m) m = y;
               }
@@ -999,8 +1229,42 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: Tails, wantBudget =
             const w = settle(t.price, t.p, a);
             if (w < v) [v, pol] = [w, mi];
           });
+          // One circulator instead of a reset (the layers below are solved): black keeps the cheaper of the old values
+          // and the new ones, chaos takes the new ones; then the cheapest cut of the locks.
+          let roll = 0;
+          if (rollable[i]) {
+            if (b > 0) {
+              const base = lay(b - 1, c) * S;
+              const keep = cheapest(base, keepAt[i]).v;
+              let r = circPrice;
+              for (const x of rollsAt[i]) r += x.w * Math.min(keep, cheapest(base, x.to).v);
+              if (r < v - 1e-9) [v, roll] = [r, 1];
+            }
+            if (c > 0) {
+              const base = lay(b, c - 1) * S;
+              let r = circPrice;
+              for (const x of rollsAt[i]) r += x.w * cheapest(base, x.to).v;
+              if (r < v - 1e-9) [v, roll] = [r, 2];
+            }
+          }
           Vall[L * S + i] = v;
           polAll[L * S + i] = pol;
+          rollAll[L * S + i] = roll;
+          if (roll) {
+            const base = (roll === 1 ? lay(b - 1, c) : lay(b, c - 1)) * S;
+            const keep = roll === 1 ? cheapest(base, keepAt[i]) : null;
+            for (let mi = 0; mi < M; mi++) {
+              let w = metrics[mi].perCirc;
+              for (const x of rollsAt[i]) {
+                const to = cheapest(base, x.to);
+                const k = keep && keep.v <= to.v ? keep.k : to.k;
+                w += x.w * (roll === 1 ? Wprev[mi][c * S + k] : Wcur[mi][(c - 1) * S + k]);
+              }
+              Wcur[mi][c * S + i] = w;
+              if (i === root) rootAll[mi][L] = w;
+            }
+            continue;
+          }
           // The move per result, chosen as `decide` does (the first one cheaper than going on and the ones before it),
           // and every cost under it.
           const t = trans[i][pol];
@@ -1021,6 +1285,7 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: Tails, wantBudget =
             const po = t.p[o];
             if (k === 0) for (let mi = 0; mi < M; mi++) rest[mi] += po * Wcur[mi][c * S + nx];
             else if (k === 1) for (let mi = 0; mi < M; mi++) rest[mi] += po * tailW[mi * goals.length + nx];
+            else if (k === 3) for (let mi = 0; mi < M; mi++) rest[mi] += po * WcIn[nx * M + mi];
             else {
               goCosts(nx);
               for (let mi = 0; mi < M; mi++) rest[mi] += po * gcW[nx * M + mi];
@@ -1032,6 +1297,14 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: Tails, wantBudget =
             if (i === root) rootAll[mi][L] = w;
           }
         }
+        // Arriving at a complete state here (after a circulator from above): also any cut of the locks, solved now.
+        for (let k = 0; k < NK; k++) {
+          let v = VcIn[L * NK + k];
+          let cut = -1;
+          for (const j of cmpCuts[k]) if (Vall[L * S + j] < v - 1e-9) [v, cut] = [Vall[L * S + j], j];
+          VcAt[L * NK + k] = v;
+          for (let mi = 0; mi < M; mi++) WcAtCur[(c * NK + k) * M + mi] = cut < 0 ? WcIn[k * M + mi] : Wcur[mi][c * S + cut];
+        }
         for (let mi = 0; mi < M; mi++) {
           if (c === 0) Wcol0[mi].set(Wcur[mi].subarray(0, S), b * S);
           if (c === NC) WcolC[mi].set(Wcur[mi].subarray(NC * S, W1 * S), b * S);
@@ -1040,6 +1313,7 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: Tails, wantBudget =
       if (b === 0) Wrow0 = Wcur.map((w) => w.slice());
       if (b === NB) Wtop = Wcur;
       [Wprev, Wcur] = [Wcur, Wprev];
+      [WcAtPrev, WcAtCur] = [WcAtCur, WcAtPrev];
     }
   } else
     for (const s of order) {
@@ -1115,6 +1389,10 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: Tails, wantBudget =
       const of = (mi: number) => {
         const k = metrics[mi];
         const left = (b: number, cc: number, j: number) => (j >= 0 ? Wat(mi, b, cc, j) : k.tail(-1 - j, lay(b, cc)));
+        if (c.kind === "circ" && c.next === null) {
+          const x = cmpAt(c);
+          return x < 0 ? Infinity : WcTop[x * M + mi];
+        }
         if (c.kind === "circ") return goSum(c, ly, left, k.perCirc);
         return c.next === null ? k.tail(c.goal!, ly) : left(bOf(ly), cOf(ly), at.get(c.next)!);
       };
@@ -1135,6 +1413,11 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: Tails, wantBudget =
   const actionOf = (c: Choice, ly: Lyr = "u"): PlanAction => {
     if (ly === "u") return { kind: c.kind, method: policy.get(c.next ?? "") ?? "fame", circCount: c.circ };
     const action: PlanAction = { kind: c.kind, method: methodAt(c.next ?? "", nextLayer(c, ly)) ?? "fame", circCount: 0 };
+    if (c.kind === "circ" && c.next === null) {
+      // Every option shows: one circulator at a time from the complete state (the run says how).
+      action.circCount = cmpRunOf(cmpAt(c), ly)?.circCount ?? 0;
+      return action;
+    }
     if (c.kind === "circ") {
       const n = usable(c.go!, bOf(ly), cOf(ly));
       action.circKind = c.go;
@@ -1148,6 +1431,154 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: Tails, wantBudget =
       else if (rolls.length === 1) action.circMissKeep = keysOf(missAll(rolls[0].kept));
     }
     return action;
+  };
+
+  /**
+   * One set at the goal kept as the counts go down from layer L0 (chaos takes one from c, black one from b): the first
+   * move that differs from the one before — chaos running out into black aside — and how many of that kind are left then.
+   */
+  const switchOf = <A extends { use: RunUse }>(act: (L: number) => A, L0: number, kept: (a: A) => AbilityKey[]) => {
+    let b = bOf(L0);
+    let c = cOf(L0);
+    let prev = act(L0);
+    while (prev.use !== "stop") {
+      if (prev.use === "chaos") c--;
+      else b--;
+      if (b + c === 0) return undefined;
+      const d = act(lay(b, c));
+      const outOfChaos = prev.use === "chaos" && c === 0 && d.use === "black";
+      if (d.use !== prev.use && !outOfChaos)
+        return {
+          kind: prev.use,
+          at: prev.use === "chaos" ? c : b,
+          use: d.use,
+          ...(d.use === "stop" ? { keep: kept(d) } : {}),
+        };
+      prev = d;
+    }
+    return undefined;
+  };
+
+  /**
+   * The same from complete state k0 (every option shows): what to use for each set of its lines at the goal (the line-1
+   * option among them; lines always at their value are not named), how many on average and the chance all end at it.
+   */
+  function cmpRunOf(k0: number, ly: Lyr): PlanRun | undefined {
+    if (k0 < 0 || ly === "u") return undefined;
+    const L0 = ly;
+    const x = cmps[k0];
+    const all = (1 << x.ls.length) - 1;
+    const fixed = x.ls.reduce((m, y, k) => (y.q >= 1 ? m | (1 << k) : m), 0);
+    const kAt = (mask: number) => cmpVar[k0][mask | fixed];
+    const act = (mask: number, L: number) => {
+      const k = kAt(mask);
+      let v = VcIn[L * NK + k];
+      let cut = -1;
+      for (const j of cmpCuts[k]) if (Vall[L * S + j] < v - 1e-9) [v, cut] = [Vall[L * S + j], j];
+      if (cut >= 0) return { use: "stop" as const, k, cut };
+      const p = cmpPick[L * NK + k];
+      return { use: p === 2 ? ("chaos" as const) : p === 1 ? ("black" as const) : ("stop" as const), k, cut };
+    };
+    const memo = new Map<number, [number, number]>();
+    const walk = (mask: number, L: number): [number, number] => {
+      if ((mask | fixed) === all) return [1, 0];
+      const key = L * (all + 1) + mask;
+      const hit = memo.get(key);
+      if (hit) return hit;
+      const a = act(mask, L);
+      let out: [number, number] = [0, 0];
+      if (a.use !== "stop") {
+        const L2 = a.use === "black" ? lay(bOf(L) - 1, cOf(L)) : lay(bOf(L), cOf(L) - 1);
+        out = [0, 1];
+        const ws = cmpW[k0];
+        for (let m2 = 0; m2 <= all; m2++) {
+          if (!(ws[m2] > 0)) continue;
+          const take = a.use === "chaos" || VcAt[L2 * NK + cmpVar[k0][m2]] < VcAt[L2 * NK + a.k];
+          const [p, e] = walk(take ? m2 : mask, L2);
+          out = [out[0] + ws[m2] * p, out[1] + ws[m2] * e];
+        }
+      }
+      memo.set(key, out);
+      return out;
+    };
+    // Nothing to circulate from where it starts (at the goal already, or the plan stops there): no run (Codex review).
+    if ((x.mask | fixed) === all || act(x.mask, L0).use === "stop") return undefined;
+    const [chance, circCount] = walk(x.mask, L0);
+    const named = x.ls.flatMap((y, k) => (fixed & (1 << k) ? [] : [{ k, key: keys[y.t], l: y.l }]));
+    const masks = Array.from({ length: all + 1 }, (_, m) => m).filter((m) => (m & fixed) === fixed && m !== all);
+    masks.sort((m1, m2) => VcAt[L0 * NK + kAt(m1)] - VcAt[L0 * NK + kAt(m2)]);
+    const kept = (a: { cut: number }) => (a.cut >= 0 ? [...decF(order[a.cut]).values()].map((v) => keys[v.t]) : []);
+    const by = masks.map((m) => {
+      const a = act(m, L0);
+      const have = named.filter((y) => m & (1 << y.k)).map((y) => y.key);
+      const then = switchOf<ReturnType<typeof act>>((L) => act(m, L), L0, kept);
+      return { have, use: a.use, ...(a.use === "stop" ? { keep: kept(a) } : {}), ...(then ? { then } : {}) };
+    });
+    return { keys: named.map((y) => y.key), lines: named.map((y) => y.l), by, circCount, chance };
+  }
+
+  /**
+   * From rollable state s at the counts of layer ly: what to use for each set of its lines at the goal, and — following
+   * that from s, cutting the locks whenever the plan does — the circulators used and the chance all of them end at it.
+   */
+  const runOf = (s: FState | null, ly: Lyr): PlanRun | undefined => {
+    if (s === null || ly === "u") return undefined;
+    const s0 = at.get(s);
+    if (s0 === undefined || !rollable[s0]) return undefined;
+    const ls = [...decF(s).entries()].sort((a, b) => a[0] - b[0]);
+    const qs = ls.map(([l, v]) => pFull(l, v.t));
+    const all = (1 << ls.length) - 1;
+    const fixed = qs.reduce((m, q, k) => (q >= 1 ? m | (1 << k) : m), 0);
+    const stateAt = (mask: number) =>
+      at.get(encF(new Map(ls.map(([l, v], k) => [l, { t: v.t, full: !!((mask | fixed) & (1 << k)) }]))))!;
+    const maskOf = (j: number) => ls.reduce((m, [l], k) => (decF(order[j]).get(l)?.full ? m | (1 << k) : m), 0);
+    /** Arriving with `mask` at the goal in layer L: the cheapest cut of the locks, else the move the plan makes there. */
+    const act = (mask: number, L: number) => {
+      const j = stateAt(mask);
+      const cut = cheapest(L * S, cutsOf(decF(order[j])));
+      if (cut.k !== j && cut.v < Vall[L * S + j] - 1e-9) return { use: "stop" as const, j: cut.k };
+      const r = rollAll[L * S + j];
+      return { use: r === 2 ? ("chaos" as const) : r === 1 ? ("black" as const) : ("stop" as const), j };
+    };
+    const memo = new Map<number, [number, number]>();
+    const walk = (mask: number, L: number): [number, number] => {
+      if ((mask | fixed) === all) return [1, 0];
+      const key = L * (all + 1) + mask;
+      const hit = memo.get(key);
+      if (hit) return hit;
+      const a = act(mask, L);
+      let out: [number, number] = [0, 0];
+      if (a.use !== "stop") {
+        const L2 = a.use === "black" ? lay(bOf(L) - 1, cOf(L)) : lay(bOf(L), cOf(L) - 1);
+        const old = cheapest(L2 * S, keepAt[a.j]).v;
+        out = [0, 1];
+        for (let m2 = 0; m2 <= all; m2++) {
+          if ((m2 & fixed) !== fixed) continue;
+          const w = ls.reduce((p, _, k) => (fixed & (1 << k) ? p : p * ((m2 >> k) & 1 ? qs[k] : 1 - qs[k])), 1);
+          if (w === 0) continue;
+          const take = a.use === "chaos" || cheapest(L2 * S, cutsOf(decF(order[stateAt(m2)]))).v < old;
+          const [p, e] = walk(take ? m2 : mask, L2);
+          out = [out[0] + w * p, out[1] + w * e];
+        }
+      }
+      memo.set(key, out);
+      return out;
+    };
+    const L0 = ly as number;
+    // Nothing to circulate from where it starts (at the goal already, or the plan stops there): no run (Codex review).
+    const m0 = maskOf(s0);
+    if ((m0 | fixed) === all || act(m0, L0).use === "stop") return undefined;
+    const [chance, circCount] = walk(m0, L0);
+    const name = (mask: number) => ls.filter((_, k) => (mask & (1 << k)) && !(fixed & (1 << k))).map(([, v]) => keys[v.t]);
+    const masks = Array.from({ length: all + 1 }, (_, m) => m).filter((m) => (m & fixed) === fixed && m !== all);
+    masks.sort((x, y) => cheapest(L0 * S, cutsOf(decF(order[stateAt(x)]))).v - cheapest(L0 * S, cutsOf(decF(order[stateAt(y)]))).v);
+    const kept = (a: { j: number }) => [...decF(order[a.j]).values()].map((v) => keys[v.t]);
+    const by = masks.map((m) => {
+      const a = act(m, L0);
+      const then = switchOf<ReturnType<typeof act>>((L) => act(m, L), L0, kept);
+      return { have: name(m), use: a.use, ...(a.use === "stop" ? { keep: kept(a) } : {}), ...(then ? { then } : {}) };
+    });
+    return { keys: ls.map(([, v]) => keys[v.t]), lines: ls.map(([l]) => l), by, circCount, chance };
   };
 
   /** What happens after `lines` are seen from state `from`, what is left, and what the other moves would leave. */
@@ -1165,7 +1596,9 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: Tails, wantBudget =
       .filter((x) => Number.isFinite(valueAt(x, from, ly)))
       .sort((a, b) => (a === c ? -1 : b === c ? 1 : valueAt(a, from, ly) - valueAt(b, from, ly)))
       .map((x) => ({ action: actionOf(x, ly), ...leftAfter(x, ly) }));
-    return { next: c.next, nextLy: nextLayer(c, ly), goal, action: actionOf(c, ly), ...leftAfter(c, ly), choices };
+    // Every option shows and the values are circulated one at a time: how (the steps say it under the row).
+    const cmpRun = c.kind === "circ" && c.next === null ? cmpRunOf(cmpAt(c), ly) : undefined;
+    return { next: c.next, nextLy: nextLayer(c, ly), goal, action: actionOf(c, ly), ...leftAfter(c, ly), choices, cmpRun };
   };
   /**
    * A wanted option that just showed up from state `from`: its value meets the goal only by luck (always, when there is
@@ -1205,6 +1638,7 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: Tails, wantBudget =
       const d = decide(lines, s, ly);
       const move: PlanFinish["move"] = d.kind === "circ" ? "circ" : d.next === null ? "done" : "keep";
       const a = actionOf(d, ly);
+      const run = d.kind === "circ" && d.next === null ? cmpRunOf(cmpAt(d), ly) : undefined;
       // Same move, same circulators (Codex review: what is left is counted after the move, like every other row).
       const id = `${move}:${Math.round(a.circCount * 1e6)}`;
       const cur = byMove.get(id);
@@ -1220,6 +1654,7 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: Tails, wantBudget =
           ...(a.circLeft !== undefined
             ? { circKind: a.circKind, circLeft: a.circLeft, circChance: a.circChance, circMissKeep: a.circMissKeep }
             : {}),
+          ...(run ? { run } : {}),
         });
     }
     return byMove.size ? [...byMove.values()] : undefined;
@@ -1251,8 +1686,13 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: Tails, wantBudget =
         }
       }
     }
-    const finish = next !== null && next !== from ? finishFrom(next, nextLy) : undefined;
-    return { ...r, next, nextLy, line, atGoal, atGoalLeft, nextAtGoal, finish };
+    const lockRun = next !== from ? runOf(next, nextLy) : undefined;
+    // After a run the lines are at the goal: the last option is looked at from there.
+    const done = lockRun && next !== null ? encF(new Map([...decF(next)].map(([l, v]) => [l, { t: v.t, full: true }]))) : next;
+    const finish = done !== null && next !== from ? finishFrom(done, nextLy) : undefined;
+    const { cmpRun, ...rest } = r;
+    const run = lockRun ?? (atGoal ? undefined : cmpRun);
+    return { ...rest, next, nextLy, line, atGoal, atGoalLeft, nextAtGoal, finish, ...(run ? { run } : {}) };
   };
 
   // One option first on line 1 (always legendary). In L1+U2 only a lead option counts there; the others are left out
