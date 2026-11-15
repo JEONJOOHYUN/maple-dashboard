@@ -86,15 +86,16 @@ export function presetLead(preset: AbilityPreset): number[] {
 }
 
 /**
- * Letters of the per-class builds (lib/spec/data/classes.json) → options. 벞 (buff duration) is counted as 공/마: the
- * user's build table treats them as the same line ("공 = 마 = 버프 지속"), and there is no buff-duration value table here.
+ * Letters of the per-class builds (lib/spec/data/classes.json) → options. 벞 (buff duration) is shown and counted as
+ * 공마: the user's build table treats them as the same line ("공 = 마 = 버프 지속"), and there is no buff-duration value
+ * table here, so the table says what the calculator computes (user 2026-11-15: no footnote).
  */
 export const BUILD_LETTERS: Record<string, { key: AbilityKey; label: string }> = {
   패: { key: "pas", label: "패시브" },
   보: { key: "boss", label: "보공" },
   상: { key: "stat", label: "상추뎀" },
   공: { key: "atk", label: "공마" },
-  벞: { key: "atk", label: "버프 지속" },
+  벞: { key: "atk", label: "공마" },
   재: { key: "cool", label: "재사용" },
   크: { key: "crit", label: "크확" },
   피: { key: "hp", label: "최대 HP" },

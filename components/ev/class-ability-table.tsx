@@ -40,7 +40,7 @@ export function ClassAbilityTable({
 
   return (
     <Panel>
-      <Label aside={<span className="text-[11px] text-muted-foreground">{classes.length}직업</span>}>직업별 추천 어빌리티</Label>
+      <Label aside={<span className="text-[11px] text-muted-foreground">누르면 그 조합으로 계산</span>}>직업별 추천 어빌리티</Label>
       <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="직업 찾기" aria-label="직업 찾기" className="h-9" />
       <div className={cn("grid items-end gap-2 px-2.5 text-[11px] text-muted-foreground", COLS)} aria-hidden="true">
         <span className="font-semibold">직업</span>
@@ -69,7 +69,7 @@ export function ClassAbilityTable({
               <button
                 type="button"
                 aria-pressed={on}
-                aria-label={`${c.name}${c.collector ? "(콜렉터 쓸 때)" : ""}: 고급 재설정 ${full}, 일반 재설정 레전드리 ${lead}, 유니크 ${rest.join(" · ")}`}
+                aria-label={`${c.name}${c.collector ? "(콜렉터 기준)" : ""}: 고급 재설정 ${full}, 일반 재설정 레전드리 ${lead}, 유니크 ${rest.join(" · ")}`}
                 onClick={() => onPick(c.name)}
                 className={cn(
                   "grid w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[13px] transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
@@ -79,7 +79,20 @@ export function ClassAbilityTable({
               >
                 <span className={cn("min-w-0", on && "font-bold")}>
                   {c.name}
-                  {c.collector && "*"}
+                  {/* The user's table *: this build is the stronger one only with a collector. The note shows on hover
+                      (user 2026-11-15: no text in the row), to the right so the scrolling list does not clip it; screen
+                      readers get it from the row's label. */}
+                  {c.collector && (
+                    <span className="group/star relative ml-0.5 font-bold text-primary-text">
+                      *
+                      <span
+                        aria-hidden="true"
+                        className="pointer-events-none absolute top-1/2 left-full z-10 ml-1.5 -translate-y-1/2 rounded-md bg-foreground px-2 py-1 text-[11px] font-medium whitespace-nowrap text-background opacity-0 shadow-sm transition-opacity group-hover/star:opacity-100"
+                      >
+                        콜렉터를 쓸 때만 이 조합이 더 셈
+                      </span>
+                    </span>
+                  )}
                 </span>
                 <span className={cn("min-w-0", on && mode === "l3" && "font-bold text-primary-text")}>{full}</span>
                 <span className={cn("min-w-0", on && mode === "l1u2" && "font-bold text-primary-text")}>{normal}</span>
@@ -89,10 +102,6 @@ export function ClassAbilityTable({
         })}
         {shown.length === 0 && <li className="px-2.5 py-2 text-xs text-muted-foreground">맞는 직업이 없어요</li>}
       </ul>
-      <p className="text-[11px] leading-relaxed text-muted-foreground">
-        누르면 그 조합으로 계산 · 일반은 + 앞이 레전드리 줄 · 공마 = 버프 지속(같은 줄로 계산) · 카이저는 버프 지속도 가능 · *
-        콜렉터를 쓸 때만 더 셈
-      </p>
     </Panel>
   );
 }
