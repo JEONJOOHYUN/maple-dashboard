@@ -1,4 +1,4 @@
-# Weekly Sunday Maple foundation-model scores (lib/sunday/ml.ts): feature rows -> TabICL v2 on CPU -> the site.
+# Weekly Sunday Maple foundation-model scores (lib/sunday/ml.ts): feature rows -> TabICL v2 + TabPFN v2 on CPU -> the site.
 # Runs a few times Wednesday to Saturday because the Sunday notice usually comes Friday 10:00 KST (Wed / Thu before a
 # holiday) and the site's Cron records it within hours. A run with nothing new stops after the first step.
 # Secrets: SUPABASE_URL, SUPABASE_ANON_KEY (read the published weeks, like the pages), ML_UPLOAD_SECRET (the same value
@@ -54,10 +54,12 @@ jobs:
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         if: steps.rows.outputs.skip != 'true'
         with:
-          path: ~/.cache/huggingface
-          key: hf-tabicl-classifier-v2-20260212
+          path: |
+            ~/.cache/huggingface
+            ~/.cache/tabpfn
+          key: models-tabicl-classifier-v2-20260212-tabpfn-v2
 
-      - name: TabICL scores
+      - name: Model scores (TabICL + TabPFN)
         if: steps.rows.outputs.skip != 'true'
         run: uv run --project scripts/sunday-ml --frozen python scripts/sunday-ml/predict.py
 

@@ -1,17 +1,44 @@
-// The foundation-model half of the Sunday prediction. Every week a GitHub Actions job (scripts/sunday-ml) builds the
-// feature rows (ml-features.ts), runs TabICL v2 (Hugging Face jingang/TabICL, BSD-3) on them and posts the scores to
-// app/api/sunday/ml, which keeps them in sunday_ml_scores. The pages mix them half and half with the statistical model.
-// Why half and half (backtest 2026-11-15, C:/dev/_work/maple-sunday-data/hf/README.md): alone, TabICL misses most big
-// days (1st pick right 16 of the last 52 Sundays vs 22); mixed, 24 · 40 · 46 of 52 (1st / any of 3 / any of 5) vs
-// 22 · 38 · 45, and better on the 76 weeks before and on 39 earlier weeks no choice was made on. The weight was fixed
-// in advance (0.3 ~ 0.7 score about the same). Without a fresh row the pages show the statistical model alone.
+// The foundation-model part of the Sunday prediction. Every week a GitHub Actions job (scripts/sunday-ml) builds the
+// feature rows (ml-features.ts), runs two pretrained tabular models on them, TabICL v2 (Hugging Face jingang/TabICL,
+// BSD-3) and TabPFN v2 (Prior-Labs/TabPFN-v2-clf, Prior Labs License: "Built with PriorLabs-TabPFN" must be shown),
+// averages them and posts the scores to app/api/sunday/ml (table sunday_ml_scores). The pages mix them with the
+// statistical model (25% on the big days, 75% on the other bundles), then calibrate the mix (ML_CALIBRATION).
+// Without a fresh row: the statistical model alone, uncalibrated.
+// Why (backtests 2026-11-15, C:/dev/_work/maple-sunday-data/hf/README.md): alone, the foundation models miss most big
+// days but rank hunting / enhancing bundles better than the statistical model. Weights and models were chosen on
+// 2025-06-01 ~ 2026-05-03 (49 Sundays: 1st 16 -> 23, one-per-kind top 3 29 -> 36) and read once on the comparison
+// site's 28 Sundays 2026-05-10 ~ 2026-11-15 (1st 13, top 3 23 -> 25, any of 5 28, log loss 5.83 -> 5.27).
 import { BUNDLES } from "./bundles.ts";
 import type { SundayWeek } from "./history.ts";
 import { SEASON_PATCHES, pickFive, themeOdds, type SundayPrediction } from "./predict.ts";
 
-/** Stored with the scores and with every logged prediction that used them; change it with the features or settings. */
-export const ML_MODEL = "tabicl2-2026-11-15";
-export const ML_WEIGHT = 0.5;
+/**
+ * Stored with the scores and with every logged prediction that used them; change it with the features or settings
+ * (the weights and the calibration below included: they change what the pages show and log).
+ */
+export const ML_MODEL = "tabicl2+tabpfn2-2026-11-15";
+/**
+ * Backtest of the mix over the same 52 Sundays as BACKTEST_HITS (2025-11-16 ~ 2026-11-08, site scripts end to end,
+ * C:/dev/_work/maple-sunday-data/hf/e2e.mjs): cards 1 ~ 3 held a real benefit 42 times, the 5 picks 47 times.
+ */
+export const BACKTEST_HITS_ML = { weeks: 52, top3: 42, five: 47 };
+
+/** Share of the model scores on shining / miracle, and on every other bundle. */
+export const ML_WEIGHT_BIG = 0.25;
+export const ML_WEIGHT = 0.75;
+
+/**
+ * Platt scaling of the mixed scores, q = sigmoid(a + b * logit(p)), fitted on the same 49 selection Sundays. The mix
+ * was a little shy: its first card showed 37% on average and came on 46% of the 28 comparison Sundays. Calibrated: 42%,
+ * log loss 5.269 -> 5.220 there (C:/dev/_work/maple-sunday-data/hf/calib.mjs). It only stretches the numbers (b > 1:
+ * likely ones up, unlikely ones down), so the order, the picks and the hit counts stay the same.
+ */
+export const ML_CALIBRATION = { a: 0.368, b: 1.291 };
+
+export function calibrate(p: number, c: { a: number; b: number } = ML_CALIBRATION): number {
+  const q = Math.min(0.999, Math.max(0.001, p));
+  return 1 / (1 + Math.exp(-(c.a + c.b * Math.log(q / (1 - q)))));
+}
 
 export type MlScores = {
   sunday: string;
@@ -60,10 +87,23 @@ export function mlFor(rows: MlScores[], weeks: SundayWeek[], target: string): Ml
   return mine.find((r) => r.data_hash === hash) ?? null;
 }
 
-/** The statistical prediction mixed with the model's scores (bundles it has no score for keep their own). */
-export function blendPrediction(p: SundayPrediction, scores: Record<string, number>, w = ML_WEIGHT): SundayPrediction {
+/**
+ * The statistical prediction mixed with the model's scores (bundles it has no score for keep their own), then
+ * calibrated (`cal` null = the plain mix, for tests).
+ */
+export function blendPrediction(
+  p: SundayPrediction,
+  scores: Record<string, number>,
+  w = ML_WEIGHT,
+  wBig = ML_WEIGHT_BIG,
+  cal: { a: number; b: number } | null = ML_CALIBRATION,
+): SundayPrediction {
   const ranked = p.ranked
-    .map((r) => ({ ...r, p: scores[r.id] === undefined ? r.p : (1 - w) * r.p + w * scores[r.id] }))
+    .map((r) => {
+      const share = r.id === "shining" || r.id === "miracle" ? wBig : w;
+      const mixed = scores[r.id] === undefined ? r.p : (1 - share) * r.p + share * scores[r.id];
+      return { ...r, p: cal ? calibrate(mixed, cal) : mixed };
+    })
     .sort((a, b) => b.p - a.p);
   const pBig = Math.min(0.95, ranked.filter((r) => r.id === "shining" || r.id === "miracle").reduce((s, r) => s + r.p, 0));
   return { ...p, ranked, picks: pickFive(ranked), themes: themeOdds(ranked, pBig), pBig };

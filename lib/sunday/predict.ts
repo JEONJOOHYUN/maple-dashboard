@@ -9,8 +9,8 @@
 // 2026-11-15: + the season rhythm (seasonCall below). Same 38 / 45, the most likely pick right 22/52 instead of 20/52
 // and better probabilities (log loss 5.49 vs 5.59); spring / autumn updates made it worse and are left out
 // (C:/dev/_work/maple-sunday-data/exp/season-model.mjs, V3).
-// 2026-11-15: the pages mix these scores half and half with a foundation model's when its weekly scores are stored
-// (ml.ts); this file stays the statistical half and the fallback.
+// 2026-11-15: the pages mix these scores with two foundation models' weekly scores when they are stored (ml.ts:
+// 25% on the big days, 75% on the other bundles, then calibrated); this file stays the statistical part and the fallback.
 import { THEMES, bundleTheme, isBigBundle, type ThemeId } from "./bundles.ts";
 import patchData from "./data/patches.json" with { type: "json" };
 import type { SundayWeek } from "./history.ts";
@@ -18,6 +18,9 @@ import { weekIndex } from "./history.ts";
 
 /** Stored with every logged prediction (sunday_predictions.model); change it whenever the scores change. */
 export const MODEL_VERSION = "2026-11-15";
+
+/** Backtest of this model alone over the last 52 Sundays (predict.test.ts pins it): weeks where cards 1 ~ 3 / the 5 picks held a real benefit. */
+export const BACKTEST_HITS = { weeks: 52, top3: 38, five: 45 };
 
 /** Training starts at the 2025-03-23 starforce rework: the current benefit line-up; it beat 2023-08 and older starts. */
 export const TRAIN_START = "2025-03-23";
@@ -141,7 +144,9 @@ export type SundayPrediction = {
 };
 
 const isBig: Has = (w) => [...w.bundles].some(isBigBundle);
-const kindOf = (id: string) => (isBigBundle(id) ? "big" : bundleTheme(id) === "hunt" ? "hunt" : bundleTheme(id) ? "enhance" : "other");
+export type BundleKind = "big" | "hunt" | "enhance" | "other";
+/** Kind for the picks: big day (shining / miracle), hunting, enhancing (starforce or option), other (gifts). */
+export const kindOf = (id: string): BundleKind => (isBigBundle(id) ? "big" : bundleTheme(id) === "hunt" ? "hunt" : bundleTheme(id) ? "enhance" : "other");
 
 /** The 5 shown picks from bundles sorted by score: the best of each kind first (hunting bundles all miss together on a big day), then by score. */
 export function pickFive(ranked: { id: string }[]): string[] {
@@ -226,10 +231,16 @@ export function predictSunday(weeks: SundayWeek[], date: string, start = TRAIN_S
   return { date, ranked, picks: pickFive(ranked), themes: themeOdds(ranked, pBig), pBig, missingWeeks: Math.max(0, t - last.t - 1) };
 }
 
-/** The five picks in the order the pages show them: most likely first (the model takes one per kind first). */
+/**
+ * The five picks in the order the pages show them: the one-per-kind three first (by score), then the other two by score.
+ * The first is always the likeliest bundle. Since 2026-11-15 (user: one card per kind, numbered 1 ~ 3): the top three
+ * are what a "top 3" is judged on, and one per kind hit more often (49 selection Sundays, every model mix tried:
+ * 35 ~ 36 vs 32 ~ 33 for the top three by score).
+ */
 export function shownPicks(p: SundayPrediction): string[] {
   const pOf = new Map(p.ranked.map((r) => [r.id, r.p]));
-  return [...p.picks].sort((a, b) => (pOf.get(b) ?? 0) - (pOf.get(a) ?? 0));
+  const byScore = (a: string, b: string) => (pOf.get(b) ?? 0) - (pOf.get(a) ?? 0);
+  return [...p.picks.slice(0, KINDS_FIRST).sort(byScore), ...p.picks.slice(KINDS_FIRST).sort(byScore)];
 }
 
 /** Themes of a recorded Sunday, in display order. */

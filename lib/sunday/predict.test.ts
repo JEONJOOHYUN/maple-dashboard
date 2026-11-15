@@ -3,7 +3,7 @@ import { test } from "node:test";
 import benefits from "./data/benefits.json" with { type: "json" };
 import { BUNDLES, bundleOf } from "./bundles.ts";
 import { SUNDAYS, addWeeks, dateLabel, upcomingSunday } from "./history.ts";
-import { SEASON_PATCHES, bigDayWindow, predictSunday, seasonCall, shownPicks, sundayAfter, themesOf } from "./predict.ts";
+import { BACKTEST_HITS, SEASON_PATCHES, bigDayWindow, predictSunday, seasonCall, shownPicks, sundayAfter, themesOf } from "./predict.ts";
 
 const groupOf = new Map(benefits.map((b) => [b.name, b.group]));
 
@@ -131,6 +131,16 @@ test("page data: recorded week, Friday notice time, stale data", async () => {
   const nov1 = sat.recent.find((w) => w.date === "2026-11-01")!;
   assert.equal(nov1.title, "샤이닝 스타포스 타임");
   assert.ok(nov1.detail.includes("파괴 확률"));
+});
+
+test("the page's hit rates are this backtest", () => {
+  const weeks = SUNDAYS.filter((x) => x.date >= "2025-11-16" && x.date <= "2026-11-08" && x.bundles.size);
+  const picks = weeks.map((w) => [w, shownPicks(predictSunday(SUNDAYS, w.date))] as const);
+  assert.deepEqual(BACKTEST_HITS, {
+    weeks: weeks.length,
+    top3: picks.filter(([w, p]) => p.slice(0, 3).some((id) => w.bundles.has(id))).length,
+    five: picks.filter(([w, p]) => p.some((id) => w.bundles.has(id))).length,
+  });
 });
 
 test("five shown picks: 45/52 over the last year, 27/27 on the 27 comparison weeks", () => {

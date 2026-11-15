@@ -2,8 +2,8 @@ import { nexonUrl } from "../nexon/url.ts";
 import { splitBenefit, type BenefitRow } from "./benefit.ts";
 import { THEMES, bundleLabel, bundleTheme, isBigBundle, type ThemeId } from "./bundles.ts";
 import { SUNDAYS, addWeeks, dateLabel, kstDate, noticeUrl, predictionTarget, upcomingSunday, type SundayWeek } from "./history.ts";
-import { blendPrediction, mlFor, type MlScores } from "./ml.ts";
-import { bigDayWindow, predictSunday, shownPicks, themesOf, type BundleOdds } from "./predict.ts";
+import { BACKTEST_HITS_ML, blendPrediction, mlFor, type MlScores } from "./ml.ts";
+import { BACKTEST_HITS, bigDayWindow, kindOf, predictSunday, shownPicks, themesOf, type BundleKind, type BundleOdds } from "./predict.ts";
 
 export type WeekView = {
   date: string;
@@ -24,7 +24,7 @@ export type WeekView = {
   images: string[];
 };
 
-export type OddsView = BundleOdds & { label: string; theme: ThemeId | null };
+export type OddsView = BundleOdds & { label: string; theme: ThemeId | null; kind: BundleKind };
 
 /** "다음 샤이닝 스타포스 타임 2 ~ 4주 후": the usual gap added to the last time it came. */
 export type BigDayView = {
@@ -49,12 +49,15 @@ export type SundayPageData = {
     themes: { id: ThemeId; label: string; day: string; p: number }[];
     /** "사냥데이 유력" when one theme is likely enough, else null. */
     headline: string | null;
+    /** The five picks in page order: the one-per-kind three (cards 1 ~ 3), then two more (other likely ones). */
     picks: OddsView[];
     ranked: OddsView[];
     bigDays: BigDayView[];
     missingWeeks: number;
     /** True when this week's foundation-model scores were mixed in (ml.ts); false = the statistical model alone. */
     ml: boolean;
+    /** How often cards 1 ~ 3 / the 5 picks held a real benefit over the last 52 Sundays, for the model in use. */
+    hits: { weeks: number; top3: number; five: number };
   };
   recent: WeekView[];
   dataEnd: string;
@@ -111,7 +114,7 @@ function timeLabel(iso: string): string | null {
   return `${dateLabel(kst.slice(0, 10))} ${kst.slice(11, 16)}`;
 }
 
-const odds = (r: BundleOdds): OddsView => ({ ...r, label: bundleLabel(r.id), theme: bundleTheme(r.id) ?? null });
+const odds = (r: BundleOdds): OddsView => ({ ...r, label: bundleLabel(r.id), theme: bundleTheme(r.id) ?? null, kind: kindOf(r.id) });
 
 export function getSundayPageData(now: Date, weeks: SundayWeek[] = SUNDAYS, mlRows: MlScores[] = []): SundayPageData {
   const today = kstDate(now);
@@ -162,6 +165,7 @@ export function getSundayPageData(now: Date, weeks: SundayWeek[] = SUNDAYS, mlRo
       }),
       missingWeeks: p.missingWeeks,
       ml: ml !== null,
+      hits: ml ? BACKTEST_HITS_ML : BACKTEST_HITS,
     },
     recent: recent.map(weekView),
     dataEnd: weeks.at(-1)?.date ?? "",

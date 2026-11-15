@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { SUNDAYS } from "./history.ts";
-import { ML_MODEL, blendPrediction, mlDataHash, mlFor, parseMlUpload, type MlScores } from "./ml.ts";
+import { ML_CALIBRATION, ML_MODEL, ML_WEIGHT, ML_WEIGHT_BIG, blendPrediction, calibrate, mlDataHash, mlFor, parseMlUpload, type MlScores } from "./ml.ts";
 import { MODEL_VERSION, pickFive, predictSunday, themeOdds } from "./predict.ts";
 import { predictionRow } from "./prediction-log.ts";
 import { getSundayPageData } from "./view.ts";
@@ -17,24 +17,41 @@ test("theme odds from the scores are the statistical model's own themes", () => 
   }
 });
 
-test("mixing with the model's own scores changes nothing", () => {
-  const b = blendPrediction(stats, own);
+test("mixing with the model's own scores changes nothing (before calibration)", () => {
+  const b = blendPrediction(stats, own, ML_WEIGHT, ML_WEIGHT_BIG, null);
   assert.deepEqual(b.ranked.map((r) => r.id), stats.ranked.map((r) => r.id));
   assert.deepEqual(b.picks, stats.picks);
   for (const k of Object.keys(stats.themes) as (keyof typeof stats.themes)[]) assert.ok(Math.abs(b.themes[k] - stats.themes[k]) < 1e-12, k);
 });
 
-test("half and half; a bundle without a score keeps its own; picks and themes follow the mixed scores", () => {
-  const b = blendPrediction(stats, { shining: 0.9, "monster-park": 0 });
+test("big days get 25% of the model, the rest 75%; a bundle without a score keeps its own; picks and themes follow", () => {
+  assert.deepEqual([ML_WEIGHT_BIG, ML_WEIGHT], [0.25, 0.75]);
+  const b = blendPrediction(stats, { shining: 0.9, "monster-park": 0, treasure: 0.95 }, ML_WEIGHT, ML_WEIGHT_BIG, null);
   const pOf = (id: string) => b.ranked.find((r) => r.id === id)!.p;
-  assert.ok(Math.abs(pOf("shining") - (own.shining + 0.9) / 2) < 1e-12);
-  assert.ok(Math.abs(pOf("monster-park") - own["monster-park"] / 2) < 1e-12);
-  assert.equal(pOf("treasure"), own.treasure);
-  assert.equal(b.ranked[0].id, "shining");
+  assert.ok(Math.abs(pOf("shining") - (0.75 * own.shining + 0.25 * 0.9)) < 1e-12);
+  assert.ok(Math.abs(pOf("monster-park") - 0.25 * own["monster-park"]) < 1e-12);
+  assert.ok(Math.abs(pOf("treasure") - (0.25 * own.treasure + 0.75 * 0.95)) < 1e-12);
+  assert.equal(pOf("rune"), own.rune);
+  assert.equal(b.ranked[0].id, "treasure");
   assert.deepEqual(b.picks, pickFive(b.ranked));
   assert.ok(Math.abs(b.pBig - (pOf("shining") + pOf("miracle"))) < 1e-12);
   assert.ok(b.themes.starforce > stats.themes.starforce);
   for (let i = 1; i < b.ranked.length; i++) assert.ok(b.ranked[i - 1].p >= b.ranked[i].p);
+});
+
+test("calibration stretches the mixed numbers and keeps the order and the picks", () => {
+  assert.deepEqual(ML_CALIBRATION, { a: 0.368, b: 1.291 });
+  assert.ok(Math.abs(calibrate(0.37) - 0.4209) < 1e-4); // the mix's average first card on the comparison Sundays
+  assert.ok(calibrate(0.5) > 0.5 && calibrate(0.1) < 0.1);
+  const scores = { shining: 0.3, treasure: 0.4, "monster-park": 0.05 };
+  const plain = blendPrediction(stats, scores, ML_WEIGHT, ML_WEIGHT_BIG, null);
+  const b = blendPrediction(stats, scores);
+  assert.deepEqual(b.ranked.map((r) => r.id), plain.ranked.map((r) => r.id));
+  assert.deepEqual(b.picks, plain.picks);
+  const plainOf = (id: string) => plain.ranked.find((r) => r.id === id)!.p;
+  for (const r of b.ranked) assert.ok(Math.abs(r.p - calibrate(plainOf(r.id))) < 1e-12, r.id);
+  assert.ok(Math.abs(b.pBig - (calibrate(plainOf("shining")) + calibrate(plainOf("miracle")))) < 1e-12);
+  assert.deepEqual(b.themes, themeOdds(b.ranked, b.pBig));
 });
 
 const hash15 = mlDataHash(SUNDAYS, "2026-11-15");
@@ -57,16 +74,16 @@ test("scores are used only for the same Sunday, model and recorded weeks", () =>
 
 test("the pages and the prediction log mix in the scores and say so", () => {
   const now = new Date("2026-11-10T03:00:00Z"); // Tue: predicting 2026-11-15
-  const row: MlScores = { sunday: "2026-11-15", model: ML_MODEL, data_end: "2026-11-08", data_hash: hash15, scores: { shining: 0.9 } };
+  const row: MlScores = { sunday: "2026-11-15", model: ML_MODEL, data_end: "2026-11-08", data_hash: hash15, scores: { treasure: 0.95 } };
   const plain = getSundayPageData(now, SUNDAYS);
   const mixed = getSundayPageData(now, SUNDAYS, [row]);
   assert.equal(plain.prediction.ml, false);
   assert.equal(mixed.prediction.ml, true);
-  assert.equal(mixed.prediction.picks[0].id, "shining");
+  assert.equal(mixed.prediction.picks[0].id, "treasure");
   assert.equal(predictionRow(SUNDAYS, now).model, MODEL_VERSION);
   const logged = predictionRow(SUNDAYS, now, [row]);
   assert.equal(logged.model, `${MODEL_VERSION}+${ML_MODEL}`);
-  assert.equal(logged.picks[0].id, "shining");
+  assert.equal(logged.picks[0].id, "treasure");
 });
 
 test("uploads: only a well-formed row of this model", () => {

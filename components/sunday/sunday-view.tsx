@@ -48,7 +48,7 @@ export function SundayView({ data }: { data: SundayPageData }) {
       <div className="flex flex-col gap-3.5">
         {thisWeek.recorded && <ThisWeekBand week={thisWeek} recorded={thisWeek.recorded} />}
         <ThemeBand week={thisWeek} prediction={prediction} />
-        <PicksBand picks={prediction.picks} />
+        <PicksBand picks={prediction.picks} hits={prediction.hits} />
         <Outlook bigDays={prediction.bigDays} last={thisWeek.recorded ? undefined : recent.find((w) => w.date < thisWeek.date)} />
       </div>
 
@@ -115,11 +115,10 @@ export function SundayView({ data }: { data: SundayPageData }) {
           기록 · 넥슨 썬데이 메이플 공지 <span className="whitespace-nowrap">(2023-08 ~ {data.dataEnd})</span>
         </li>
         <li>
-          예측 · 2025-03 스타포스 개편 이후 기록의 주기 통계{data.prediction.ml ? "와 AI 모델(TabICL) 반반" : ""}
+          예측 · 2025-03 스타포스 개편 이후 기록의 주기 통계{data.prediction.ml ? " + AI 모델(TabICL · TabPFN)" : ""}
         </li>
-        <li>적중 · 최근 52주 중 {data.prediction.ml ? 46 : 45}주는 고른 5개 안에 실제 혜택 포함</li>
         <li>샤이닝 · 미라클 예상 · 지난번 + 평소 간격, 간격이 일정하지 않아 범위로 표시</li>
-        <li>넥슨과 무관한 참고용 예측</li>
+        <li>넥슨과 무관한 참고용 예측 · Built with PriorLabs-TabPFN</li>
       </ul>
     </div>
   );
@@ -212,28 +211,70 @@ function ThemeBand({ week, prediction }: { week: SundayPageData["thisWeek"]; pre
   );
 }
 
-/** The five likeliest benefits: a list on narrow screens, five cards in a row on wide ones. */
-function PicksBand({ picks }: { picks: OddsView[] }) {
+/** Card label of each kind; "스페셜": shining and miracle came only on Special Sundays (32 of 32 since 2023-08). */
+const KIND_LABEL: Record<OddsView["kind"], string> = { big: "스페셜", hunt: "사냥", enhance: "강화", other: "기타" };
+
+/** The likeliest benefit of each kind as cards 1 ~ 3 (side by side on wide screens), then two more as short rows. */
+function PicksBand({ picks, hits }: { picks: OddsView[]; hits: SundayPageData["prediction"]["hits"] }) {
+  const top = picks.slice(0, 3);
+  const rest = picks.slice(3);
+  // A single benefit is unlikely on its own (2 ~ 3 of ~15 come a week), so the sure part comes first: how often the
+  // cards held a real benefit (user 2026-11-15: the numbers should look good, honestly).
+  const rate = (n: number) => `${Math.round((n / hits.weeks) * 100)}%`;
   return (
     <section className="flex flex-col gap-3 rounded-lg border border-border bg-card p-[18px] lg:px-6 lg:py-5" aria-labelledby="sunday-picks">
-      <h2 id="sunday-picks" className="text-[15px] font-bold">
-        나올 만한 혜택 5개
-      </h2>
-      <ol className="grid grid-cols-1 gap-2 xl:grid-cols-5 xl:gap-2.5">
-        {picks.map((o, i) => (
-          <li
-            key={o.id}
-            className="grid grid-cols-[24px_minmax(0,1fr)_auto] items-center gap-2.5 rounded-lg bg-muted px-3 py-2.5 xl:grid-cols-[minmax(0,1fr)_auto] xl:content-start xl:items-baseline xl:gap-2 xl:p-3.5"
-          >
-            <b className="font-num text-lg text-primary-text">{i + 1}</b>
-            <span className="flex min-w-0 flex-col gap-0.5 xl:order-3 xl:col-span-2 xl:gap-1">
-              <b className="text-sm xl:min-h-10">{o.label}</b>
-              <span className="text-xs text-muted-foreground">{ago(o)}</span>
+      <div className="flex flex-col gap-2">
+        <h2 id="sunday-picks" className="text-[15px] font-bold">
+          나올 만한 혜택
+        </h2>
+        <dl className="grid grid-cols-2 gap-2 lg:max-w-md">
+          <div className="flex flex-col gap-0.5 rounded-lg bg-primary-soft px-3 py-2">
+            <dt className="text-[11px] text-muted-foreground">1 ~ 3 중 하나 이상 적중</dt>
+            <dd className="font-num text-xl font-bold text-primary-text">{rate(hits.top3)}</dd>
+          </div>
+          <div className="flex flex-col gap-0.5 rounded-lg bg-primary-soft px-3 py-2">
+            <dt className="text-[11px] text-muted-foreground">5개 중 하나 이상 적중</dt>
+            <dd className="font-num text-xl font-bold text-primary-text">{rate(hits.five)}</dd>
+          </div>
+        </dl>
+        <p className="text-[11px] text-muted-foreground">최근 {hits.weeks}주 실제 결과로 계산</p>
+      </div>
+      <ol className="grid grid-cols-1 gap-2 lg:grid-cols-3 lg:gap-2.5">
+        {top.map((o, i) => (
+          <li key={o.id} className="grid grid-cols-[28px_minmax(0,1fr)] items-start gap-2.5 rounded-lg bg-muted px-3.5 py-3">
+            <b className="font-num text-[22px] leading-tight text-primary-text">{i + 1}</b>
+            <span className="flex min-w-0 flex-col gap-1.5">
+              <span className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+                <span className="rounded-full bg-primary-soft px-2 py-0.5 text-[11px] font-bold text-primary-text">{KIND_LABEL[o.kind]}</span>
+                <span className="text-xs text-muted-foreground">{ago(o)}</span>
+              </span>
+              <span className="flex items-baseline justify-between gap-2.5">
+                <b className="min-w-0 text-[15px]">{o.label}</b>
+                <b className="font-num shrink-0 text-[22px]">{pct(o.p)}</b>
+              </span>
             </span>
-            <b className="font-num text-[15px] xl:order-2 xl:text-xl">{pct(o.p)}</b>
           </li>
         ))}
       </ol>
+      {rest.length > 0 && (
+        <div className="flex flex-col gap-2 rounded-lg border border-border px-3.5 py-3">
+          <h3 className="text-xs font-bold text-muted-foreground">그 밖에 유력</h3>
+          <ol className="grid grid-cols-1 gap-2 lg:grid-cols-2 lg:gap-x-6">
+            {rest.map((o, i) => (
+              <li key={o.id} className="grid grid-cols-[28px_minmax(0,1fr)_44px] items-center gap-2.5">
+                <span className="font-num text-[15px] font-bold text-muted-foreground">{i + 4}</span>
+                <span className="flex min-w-0 flex-col gap-1">
+                  <span className="text-[13px]">{o.label}</span>
+                  <span className="h-1 rounded-full bg-muted" aria-hidden="true">
+                    <span className="block h-1 rounded-full bg-muted-foreground" style={{ width: pct(o.p) }} />
+                  </span>
+                </span>
+                <span className="font-num text-right text-[13px] font-bold">{pct(o.p)}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
     </section>
   );
 }
