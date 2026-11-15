@@ -1,0 +1,17 @@
+{
+  "rules": [
+    "여름 · 겨울 시즌 1차 패치 날짜(목요일). 확인 = 넥슨 공식 업데이트 공지 https://maplestory.nexon.com/News/Update",
+    "confirmed: false = 공지 전 추정. 진행 중 이벤트가 끝나는 날의 다음 날을 패치로 봄(2026-11-15 기준: 하이퍼 버닝 부스터 · VIP 사우나가 2026-12-16 에 끝남)",
+    "봄 · 가을 업데이트는 넣지 않음: 큰 날까지 0 ~ 1주로 일정하지 않아 백테스트에서 오히려 나빠짐(2026-11-15)",
+    "2023-08-24 디렉터 교체 뒤부터. 기록(history.json)이 2023-08-27 부터라 그 전 패치는 배울 수 없음"
+  ],
+  "patches": [
+    { "date": "2023-12-21", "season": "winter", "confirmed": true },
+    { "date": "2024-06-20", "season": "summer", "confirmed": true },
+    { "date": "2024-12-19", "season": "winter", "confirmed": true },
+    { "date": "2025-06-19", "season": "summer", "confirmed": true },
+    { "date": "2025-12-18", "season": "winter", "confirmed": true },
+    { "date": "2026-06-18", "season": "summer", "confirmed": true },
+    { "date": "2026-12-17", "season": "winter", "confirmed": false }
+  ]
+}

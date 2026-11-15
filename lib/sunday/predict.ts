@@ -2,13 +2,20 @@
 // 1) shining / miracle are one "big day" cycle (gaps 2~4 weeks in 18 of 22 cases) -> P(big day) from that gap, then split
 //    by each one's own gap; 2) other bundles: gap hazard x recent frequency, learned on non-big weeks; 3) the 3 shown
 //    picks cover different kinds, because hunting bundles all miss together on a big day.
-// Last 52 weeks: 38/52 Sundays had one of the first 3 picks (maplessunday's published record: 24/27 on its 27 weeks,
-// ours 22/27). Five picks are shown since 2026-11-11 (user): 45/52 and 27/27 — the misses were mostly a second hunting
+// Last 52 weeks: 38/52 Sundays had one of the first 3 picks (22/27 on the 27 weeks from 2026-05-10, the comparison
+// window). Five picks are shown since 2026-11-11 (user): 45/52 and 27/27 — the misses were mostly a second hunting
 // benefit at rank 2~4. 551 other models (ML, longer history, cycle scores) did not beat this one out of sample
 // (C:/dev/_work/maple-sunday-data/exp/m2-table.txt).
+// 2026-11-15: + the season rhythm (seasonCall below). Same 38 / 45, the most likely pick right 22/52 instead of 20/52
+// and better probabilities (log loss 5.49 vs 5.59); spring / autumn updates made it worse and are left out
+// (C:/dev/_work/maple-sunday-data/exp/season-model.mjs, V3).
 import { THEMES, bundleTheme, isBigBundle, type ThemeId } from "./bundles.ts";
+import patchData from "./data/patches.json" with { type: "json" };
 import type { SundayWeek } from "./history.ts";
 import { weekIndex } from "./history.ts";
+
+/** Stored with every logged prediction (sunday_predictions.model); change it whenever the scores change. */
+export const MODEL_VERSION = "2026-11-15";
 
 /** Training starts at the 2025-03-23 starforce rework: the current benefit line-up; it beat 2023-08 and older starts. */
 export const TRAIN_START = "2025-03-23";
@@ -60,6 +67,55 @@ function since(train: SundayWeek[], has: Has, t: number): number {
   return 99;
 }
 
+export type SeasonPatch = { date: string; season: "summer" | "winter"; confirmed: boolean };
+export const SEASON_PATCHES = patchData.patches as SeasonPatch[];
+
+/** The Sunday k weeks after the first Sunday that follows a patch day (patches are on Thursdays: +3 days). */
+export function sundayAfter(patch: string, k: number): string {
+  const d = new Date(patch + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + (7 - d.getUTCDay()) + 7 * k);
+  return d.toISOString().slice(0, 10);
+}
+
+export type SeasonCall = {
+  /** "hit" = the Sunday the big day usually comes on; "quiet" = a Sunday between the patch and it. */
+  kind: "hit" | "quiet";
+  /** P(big day) learned from the earlier patches of the same season. */
+  p: number;
+  patch: string;
+  offset: number;
+};
+
+/**
+ * Season rhythm: since the 2023-08 director change every summer / winter season patch was followed by a big day on a
+ * set Sunday (summer +1 week, winter +2), with only hunting or gifts on the Sundays before it (6 of 6). Learned
+ * walk-forward from the earlier patches of the same season whose four following Sundays are recorded in `before`:
+ * the usual offset, how often a big day came on it, how often one came earlier. Null when the date is not near a patch.
+ */
+export function seasonCall(before: SundayWeek[], date: string, patches: SeasonPatch[] = SEASON_PATCHES): SeasonCall | null {
+  const byDate = new Map(before.map((w) => [w.date, w]));
+  const big = (d: string) => [...(byDate.get(d)?.bundles ?? [])].some(isBigBundle);
+  for (const patch of patches) {
+    const k = [0, 1, 2, 3].find((n) => sundayAfter(patch.date, n) === date);
+    if (k === undefined) continue;
+    const done = patches.filter((q) => q.season === patch.season && q.date < patch.date && [0, 1, 2, 3].every((n) => byDate.has(sundayAfter(q.date, n))));
+    const firsts = done.map((q) => [0, 1, 2, 3].find((n) => big(sundayAfter(q.date, n)))).filter((n): n is number => n !== undefined);
+    if (!firsts.length) return null;
+    const counts = new Map<number, number>();
+    for (const n of firsts) counts.set(n, (counts.get(n) ?? 0) + 1);
+    const offset = [...counts].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0][0];
+    if (k > offset) return null;
+    if (k === offset) {
+      const hits = done.filter((q) => big(sundayAfter(q.date, offset))).length;
+      return { kind: "hit", p: (hits + 1) / (done.length + 2), patch: patch.date, offset };
+    }
+    let early = 0;
+    for (const q of done) for (let n = 0; n < offset; n++) if (big(sundayAfter(q.date, n))) early++;
+    return { kind: "quiet", p: (early + 0.5) / (done.length * offset + 1), patch: patch.date, offset };
+  }
+  return null;
+}
+
 export type BundleOdds = {
   id: string;
   /** Model score, roughly a probability. */
@@ -90,14 +146,23 @@ export function predictSunday(weeks: SundayWeek[], date: string, start = TRAIN_S
   if (!train.length) throw new Error(`no Sunday history before ${date}`);
   const active = new Set(before.filter((w) => w.t >= t - ACTIVE_WEEKS).flatMap((w) => [...w.bundles]));
 
-  // stage 1: big day, then which one
-  const pBig = Math.min(0.9, hazard(train, isBig, since(train, isBig, t), 0));
+  // stage 1: big day, then which one. Near a season patch its rhythm overrides the gap: the big day's Sunday goes up,
+  // the Sundays before it go down.
+  const season = seasonCall(before, date);
+  let pBig = Math.min(0.9, hazard(train, isBig, since(train, isBig, t), 0));
+  if (season?.kind === "hit") pBig = Math.max(pBig, season.p);
+  if (season?.kind === "quiet") pBig = Math.min(pBig, season.p);
   const own = (id: string) => {
     const has: Has = (w) => w.bundles.has(id);
     return active.has(id) ? hazard(train, has, since(train, has, t)) : 0;
   };
-  const hS = own("shining");
-  const hM = own("miracle");
+  let hS = own("shining");
+  let hM = own("miracle");
+  if (season?.kind === "hit" && hS > 0 && hM > 0) {
+    // On that Sunday the one that had waited longer came, 5 of 5 times since 2025.
+    const longerShining = since(before, (w) => w.bundles.has("shining"), t) >= since(before, (w) => w.bundles.has("miracle"), t);
+    [hS, hM] = longerShining ? [0.8, 0.2] : [0.2, 0.8];
+  }
   const hSum = hS + hM || 1;
   const scores = new Map<string, number>([
     ["shining", (pBig * hS) / hSum],
@@ -147,6 +212,12 @@ export function predictSunday(weeks: SundayWeek[], date: string, start = TRAIN_S
 
   const last = before[before.length - 1];
   return { date, ranked, picks, themes, missingWeeks: Math.max(0, t - last.t - 1) };
+}
+
+/** The five picks in the order the pages show them: most likely first (the model takes one per kind first). */
+export function shownPicks(p: SundayPrediction): string[] {
+  const pOf = new Map(p.ranked.map((r) => [r.id, r.p]));
+  return [...p.picks].sort((a, b) => (pOf.get(b) ?? 0) - (pOf.get(a) ?? 0));
 }
 
 /** Themes of a recorded Sunday, in display order. */

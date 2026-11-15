@@ -1,9 +1,11 @@
-// Saves a Cron reading into sunday_weeks (server only, service role). Rules live in stored.ts.
+// Saves a Cron reading into sunday_weeks and the shown prediction into sunday_predictions (server only, service role).
+// Rules live in stored.ts and prediction-log.ts.
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import type { SundayReading } from "./auto-update";
-import { SUNDAYS } from "./history";
+import { SUNDAYS, type SundayWeek } from "./history";
 import type { SundayNotice } from "./notice";
-import { planSave, sameNoticeWaiting, writeOnce, type SaveDecision, type StoredStatus } from "./stored";
+import { predictionRow } from "./prediction-log";
+import { mergeStored, planSave, sameNoticeWaiting, writeOnce, type SaveDecision, type StoredStatus, type StoredWeek } from "./stored";
 
 type StoredRow = { status: StoredStatus; notice_id: number | null; images: unknown };
 
@@ -44,6 +46,35 @@ export async function logRun(sunday: string, result: string, ms: number, detail?
   } catch (e) {
     console.error("sunday_cron_runs write failed", e);
   }
+}
+
+/** The weeks the pages use (bundled history + published rows), read fresh: the page cache can lag a run behind. */
+async function publishedWeeks(): Promise<SundayWeek[]> {
+  const { data, error } = await supabaseAdmin()
+    .from("sunday_weeks")
+    .select("sunday, notice_id, special, items, updated_at, images")
+    .in("status", ["auto", "confirmed"])
+    .order("sunday");
+  if (error) throw new Error(`sunday_weeks read: ${error.message}`);
+  return mergeStored(SUNDAYS, (data ?? []) as StoredWeek[]);
+}
+
+/**
+ * Keeps the prediction the pages show right now, once per Sunday and model (the first row stays). Called at the start
+ * of every Cron run (Wed–Sun), so a Sunday's prediction is stored days before its notice. If the weeks cannot be read
+ * nothing is written: a prediction made without them would not be the one on the page. Never fails the run.
+ */
+export async function logPrediction(now: Date): Promise<"logged" | "exists" | "error"> {
+  try {
+    const row = predictionRow(await publishedWeeks(), now);
+    const { error } = await supabaseAdmin().from("sunday_predictions").insert(row);
+    if (!error) return "logged";
+    if (error.code === "23505") return "exists"; // this Sunday and model are already stored
+    console.error("sunday_predictions write failed", error.message);
+  } catch (e) {
+    console.error("sunday_predictions write failed", e);
+  }
+  return "error";
 }
 
 export async function saveReading(r: SundayReading): Promise<SaveDecision> {

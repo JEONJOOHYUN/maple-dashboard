@@ -65,6 +65,12 @@ export function upcomingSunday(now: Date): string {
 
 export const addWeeks = (date: string, n: number) => new Date(Date.parse(date) + n * 604_800_000).toISOString().slice(0, 10);
 
+/** The Sunday the pages predict: this Sunday until it is recorded, then the next one (shared with the prediction log). */
+export function predictionTarget(now: Date, weeks: SundayWeek[]): string {
+  const sunday = upcomingSunday(now);
+  return weeks.some((w) => w.date === sunday) ? addWeeks(sunday, 1) : sunday;
+}
+
 /** "11월 15일(일)" style label. */
 export function dateLabel(date: string, withDay = true): string {
   const d = new Date(date + "T00:00:00Z");

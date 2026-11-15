@@ -1,8 +1,8 @@
 import { nexonUrl } from "../nexon/url.ts";
 import { splitBenefit, type BenefitRow } from "./benefit.ts";
 import { THEMES, bundleLabel, bundleTheme, isBigBundle, type ThemeId } from "./bundles.ts";
-import { SUNDAYS, addWeeks, dateLabel, kstDate, noticeUrl, upcomingSunday, type SundayWeek } from "./history.ts";
-import { bigDayWindow, predictSunday, themesOf, type BundleOdds } from "./predict.ts";
+import { SUNDAYS, addWeeks, dateLabel, kstDate, noticeUrl, predictionTarget, upcomingSunday, type SundayWeek } from "./history.ts";
+import { bigDayWindow, predictSunday, shownPicks, themesOf, type BundleOdds } from "./predict.ts";
 
 export type WeekView = {
   date: string;
@@ -116,8 +116,7 @@ export function getSundayPageData(now: Date, weeks: SundayWeek[] = SUNDAYS): Sun
   const recordedWeek = weeks.find((w) => w.date === sunday) ?? null;
   // The notice goes up on Friday 10:00 KST (= Friday 01:00 UTC), two days before the Sunday.
   const announced = now.getTime() >= Date.parse(sunday) - 2 * 86_400_000 + 3_600_000;
-  // Predict this Sunday until it is recorded, then the next one.
-  const target = recordedWeek ? addWeeks(sunday, 1) : sunday;
+  const target = predictionTarget(now, weeks);
   const p = predictSunday(weeks, target);
   const themes = THEMES.map((x) => ({ id: x.id, label: x.label, day: x.day, p: p.themes[x.id] }));
   const top = [...themes].sort((a, b) => b.p - a.p)[0];
@@ -137,8 +136,7 @@ export function getSundayPageData(now: Date, weeks: SundayWeek[] = SUNDAYS): Sun
       label: dateLabel(target),
       themes,
       headline: top.p >= HEADLINE_P ? `${top.day} 유력` : null,
-      // Shown from the most likely down (the model picks one per kind first, so its own order is not by chance).
-      picks: p.picks.map((id) => odds(p.ranked.find((r) => r.id === id)!)).sort((x, y) => y.p - x.p),
+      picks: shownPicks(p).map((id) => odds(p.ranked.find((r) => r.id === id)!)),
       ranked: p.ranked.filter((r) => r.p >= 0.02).map(odds),
       bigDays: ["shining", "miracle"].flatMap((id) => {
         const w = bigDayWindow(weeks, id, target);

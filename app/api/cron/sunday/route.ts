@@ -16,13 +16,14 @@
 // A week that already waits for review is not read again while its notice is the same (store.ts).
 // The header is required in every environment, the dev server included: the route writes to the real database
 // and spends OCR calls, so opening the URL by hand must not be enough (Codex review 2026-11-10).
+// Every run that is not `?dry=1` first stores the prediction the pages show (sunday_predictions, store.ts).
 import { timingSafeEqual } from "node:crypto";
 import { revalidateTag } from "next/cache";
 import { readSunday } from "@/lib/sunday/auto-update";
 import { upcomingSunday } from "@/lib/sunday/history";
 import { SUNDAY_WEEKS_TAG } from "@/lib/sunday/live";
 import { findSundayNotice } from "@/lib/sunday/notice";
-import { alreadyDone, logRun, saveReading, waitingForReview } from "@/lib/sunday/store";
+import { alreadyDone, logPrediction, logRun, saveReading, waitingForReview } from "@/lib/sunday/store";
 import type { SaveDecision } from "@/lib/sunday/stored";
 
 export const maxDuration = 300;
@@ -46,12 +47,13 @@ export async function GET(request: Request) {
   const sunday = asked ?? upcomingSunday(new Date());
   const dry = params.get("dry") === "1";
   const started = Date.now();
+  const prediction = dry ? null : await logPrediction(new Date());
   try {
     if (!dry) {
       const done = await alreadyDone(sunday);
       if (done) {
         await logRun(sunday, done.reason, Date.now() - started);
-        return Response.json({ sunday, saved: done });
+        return Response.json({ sunday, saved: done, prediction });
       }
     }
     const notice = await findSundayNotice(sunday);
@@ -59,7 +61,7 @@ export async function GET(request: Request) {
       const waiting = await waitingForReview(sunday, notice);
       if (waiting) {
         await logRun(sunday, waiting.reason, Date.now() - started, notice.title);
-        return Response.json({ sunday, saved: waiting });
+        return Response.json({ sunday, saved: waiting, prediction });
       }
     }
     const reading = await readSunday(sunday, notice);
@@ -72,7 +74,7 @@ export async function GET(request: Request) {
     }
     await logRun(sunday, saved.action === "write" ? saved.status : saved.reason, Date.now() - started, reading.notice?.title);
     const { lines, ...rest } = reading;
-    return Response.json({ ...rest, lineCount: lines.length, saved });
+    return Response.json({ ...rest, lineCount: lines.length, saved, prediction });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     console.error("sunday cron failed", e);

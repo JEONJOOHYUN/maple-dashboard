@@ -3,7 +3,7 @@ import { test } from "node:test";
 import benefits from "./data/benefits.json" with { type: "json" };
 import { BUNDLES, bundleOf } from "./bundles.ts";
 import { SUNDAYS, addWeeks, dateLabel, upcomingSunday } from "./history.ts";
-import { bigDayWindow, predictSunday, themesOf } from "./predict.ts";
+import { SEASON_PATCHES, bigDayWindow, predictSunday, seasonCall, shownPicks, sundayAfter, themesOf } from "./predict.ts";
 
 const groupOf = new Map(benefits.map((b) => [b.name, b.group]));
 
@@ -34,7 +34,7 @@ function backtest(from: string, to: string) {
   }
   return { top3, n };
 }
-test("backtest: last 52 weeks 38/52, maplessunday's 27 weeks 22/27", () => {
+test("backtest: last 52 weeks 38/52, the 27 comparison weeks from 2026-05-10 22/27", () => {
   assert.deepEqual(backtest("2025-11-16", "2026-11-08"), { top3: 38, n: 52 });
   assert.deepEqual(backtest("2026-05-10", "2026-11-08"), { top3: 22, n: 27 });
 });
@@ -48,6 +48,33 @@ test("prediction shape: picks cover different kinds, probabilities stay in 0..1"
   assert.equal(p.missingWeeks, 0);
   // two weeks past the data: one Sunday unknown
   assert.equal(predictSunday(SUNDAYS, "2026-11-22").missingWeeks, 1);
+});
+
+test("season patches: Thursdays, in order, summer or winter", () => {
+  const dates = SEASON_PATCHES.map((p) => p.date);
+  assert.deepEqual(dates, [...dates].sort());
+  for (const p of SEASON_PATCHES) {
+    assert.equal(new Date(p.date + "T00:00:00Z").getUTCDay(), 4, p.date);
+    assert.ok(p.season === "summer" || p.season === "winter", p.date);
+  }
+  assert.equal(sundayAfter("2025-12-18", 0), "2025-12-21");
+  assert.equal(sundayAfter("2025-12-18", 2), "2026-01-04");
+});
+
+// Pins C:/dev/_work/maple-sunday-data/exp/season-model.mjs V3: summer +1 / winter +2 big day, quiet Sundays before it.
+test("season rhythm: the big day's Sunday goes up, the Sundays before it go down", () => {
+  const before = (d: string) => SUNDAYS.filter((w) => w.date < d);
+  assert.deepEqual(seasonCall(before("2026-01-04"), "2026-01-04"), { kind: "hit", p: 0.75, patch: "2025-12-18", offset: 2 });
+  assert.equal(seasonCall(before("2025-12-28"), "2025-12-28")?.kind, "quiet");
+  assert.equal(seasonCall(before("2026-06-28"), "2026-06-28")?.offset, 1);
+  assert.equal(seasonCall(before("2026-11-22"), "2026-11-22"), null);
+  // On those Sundays the big day the model leads with is the one that had waited longer (miracle both times).
+  for (const d of ["2026-01-04", "2026-06-28"]) assert.equal(shownPicks(predictSunday(SUNDAYS, d))[0], "miracle", d);
+  const quiet = predictSunday(SUNDAYS, "2025-12-21").ranked.filter((r) => r.id === "shining" || r.id === "miracle");
+  assert.ok(quiet.reduce((s, r) => s + r.p, 0) <= 0.1 + 1e-9);
+  // The most likely shown pick came true on 22 of the last 52 Sundays (20 without the season rhythm).
+  const firstHits = SUNDAYS.filter((w) => w.date >= "2025-11-16" && w.date <= "2026-11-08" && w.bundles.size).filter((w) => w.bundles.has(shownPicks(predictSunday(SUNDAYS, w.date))[0])).length;
+  assert.equal(firstHits, 22);
 });
 
 test("big day is unlikely right after one", () => {
@@ -106,7 +133,7 @@ test("page data: recorded week, Friday notice time, stale data", async () => {
   assert.ok(nov1.detail.includes("파괴 확률"));
 });
 
-test("five shown picks: 45/52 over the last year, 27/27 on maplessunday's 27 weeks", () => {
+test("five shown picks: 45/52 over the last year, 27/27 on the 27 comparison weeks", () => {
   const hits = (from: string, to: string) => {
     const weeks = SUNDAYS.filter((x) => x.date >= from && x.date <= to && x.bundles.size);
     return [weeks.filter((w) => predictSunday(SUNDAYS, w.date).picks.some((id) => w.bundles.has(id))).length, weeks.length];
