@@ -5,7 +5,7 @@ import { ChevronDown, Package } from "lucide-react";
 import { eok } from "@/components/ev/ui";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import type { EventRound } from "@/lib/enhance/events";
+import { roundDates, roundName, type EventGroup, type EventRound } from "@/lib/enhance/events";
 import type { ItemInfo } from "@/lib/enhance/items";
 import type { SkipReason } from "@/lib/enhance/judge";
 import type { SfRow } from "@/lib/enhance/parse";
@@ -148,41 +148,129 @@ export function ItemIcon({ info, size = 36 }: { info: ItemInfo; size?: number })
   );
 }
 
-const ALL_ROUNDS = "\u0000all";
+const NONE = "\u0000none";
 /**
  * Menus of a long list stay under their field, shorter and scrolling when the room below runs out: by default they
  * flipped above it once the list was taller than that room (user, 2026-11-14).
  */
 export const BELOW = { side: "none" } as const;
 
+/** What a set of records added up to, for a date row and the strip: `delta` = null when none had a profit to count. */
+export type EventTally = { count: number; spent: number; delta: number | null };
+
 /**
- * 모아보기 event round pick: "모든 기록" or one round. Hidden while there are no rounds.
- * A menu like the item list (opens below, 256px, scrolls): two years of rounds made a native list taller than the
- * room under it, so it opened upwards (user, 2026-11-14).
+ * 모아보기 event fields (A안, user 2026-11-16): the event, then the dates of one of its rounds. The second field
+ * shows once an event is picked; each of its rows says what that round added up to. The event field names the event
+ * only: how many rounds it had is in the dates field next to it ("전체 13회", user 2026-11-16). Both are menus like
+ * the item list (open below, scroll): two years of rounds were taller than the room under the field.
  */
-export function RoundSelect({ rounds, value, onChange, className }: { rounds: EventRound[]; value: string; onChange: (id: string) => void; className?: string }) {
-  if (rounds.length === 0) return null;
-  const picked = rounds.find((r) => r.id === value);
+export function EventFields({
+  groups,
+  group,
+  round,
+  onPick,
+  tallies,
+  unit,
+  className,
+}: {
+  groups: EventGroup[];
+  group?: EventGroup;
+  round?: EventRound;
+  /** `label` = the group label ("" = 모든 기록), `round` = a round id ("" = every round of it). */
+  onPick: (label: string, round: string) => void;
+  /** The whole group first, then each round in `group.rounds` order. */
+  tallies: EventTally[];
+  unit: string;
+  className?: string;
+}) {
+  if (groups.length === 0) return null;
+  const sub = (t: EventTally | undefined) => (t ? `${unit} ${t.count.toLocaleString("ko-KR")}번 · ${eok(t.spent)}` : "");
+  const rows = group ? [{ id: NONE, name: `전체 ${group.rounds.length}회` }, ...group.rounds.map((r) => ({ id: r.id, name: roundName(group, r) }))] : [];
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger aria-label="이벤트 회차" className={cn(MENU_TRIGGER, "sm:max-w-[240px]", className)}>
-        <span className="truncate">{picked?.label ?? "모든 기록"}</span>
-        <ChevronDown className="pointer-events-none absolute top-1/2 right-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" collisionAvoidance={BELOW} className="max-h-[min(16rem,var(--available-height))] w-64">
-        <DropdownMenuRadioGroup value={picked ? picked.id : ALL_ROUNDS} onValueChange={(next) => onChange(next === ALL_ROUNDS ? "" : String(next))}>
-          <DropdownMenuRadioItem value={ALL_ROUNDS} closeOnClick>
-            모든 기록
-          </DropdownMenuRadioItem>
-          {rounds.map((r) => (
-            <DropdownMenuRadioItem key={r.id} value={r.id} closeOnClick>
-              <span className="truncate">{r.label}</span>
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger aria-label="이벤트" className={cn(MENU_TRIGGER, group && "border-primary/60 font-semibold", className)}>
+          <span className="truncate">{group ? group.label : "모든 기록"}</span>
+          <ChevronDown className="pointer-events-none absolute top-1/2 right-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" collisionAvoidance={BELOW} className="max-h-[min(16rem,var(--available-height))] w-56">
+          <DropdownMenuRadioGroup value={group ? group.label : NONE} onValueChange={(next) => onPick(next === NONE ? "" : String(next), "")}>
+            <DropdownMenuRadioItem value={NONE} closeOnClick>
+              모든 기록
             </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
+            {groups.map((g) => (
+              <DropdownMenuRadioItem key={g.label} value={g.label} closeOnClick>
+                <span className="truncate">{g.label}</span>
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {group && (
+        <DropdownMenu>
+          <DropdownMenuTrigger aria-label="세부 날짜" className={cn(MENU_TRIGGER, className)}>
+            <span className="truncate">{round ? roundName(group, round) : rows[0].name}</span>
+            <ChevronDown className="pointer-events-none absolute top-1/2 right-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" collisionAvoidance={BELOW} className="max-h-[min(20rem,var(--available-height))] w-72">
+            <DropdownMenuRadioGroup value={round ? round.id : NONE} onValueChange={(next) => onPick(group.label, next === NONE ? "" : String(next))}>
+              {rows.map((r, i) => {
+                const t = tallies[i];
+                return (
+                  <DropdownMenuRadioItem key={r.id} value={r.id} closeOnClick className="gap-3 py-1.5">
+                    <span className="flex min-w-0 flex-1 flex-col">
+                      <span className={cn("truncate", i === 0 && "font-semibold")}>{r.name}</span>
+                      <span className="truncate text-xs text-muted-foreground">{sub(t)}</span>
+                    </span>
+                    {t && t.delta !== null && <Delta v={t.delta} className="text-[13px]" />}
+                  </DropdownMenuRadioItem>
+                );
+              })}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+    </>
   );
+}
+
+/**
+ * One line under the 모아보기 fields while an event is picked (A안): the event, its rounds and dates, and what the
+ * cards under it add up to. The profit reads "제외" when nothing in it had one.
+ */
+export function EventStrip({ group, round, tally, unit, deltaLabel, destroy }: { group: EventGroup; round?: EventRound; tally: EventTally; unit: string; deltaLabel: string; destroy?: number }) {
+  const oldest = group.rounds.at(-1);
+  const newest = group.rounds[0];
+  const when = round ? roundName(group, round) : oldest && newest ? `${group.rounds.length}회 · ${roundDates(oldest.from, newest.to)}` : "";
+  return (
+    <Card className="flex flex-wrap items-center gap-x-5 gap-y-1.5 border-primary/40 bg-primary-soft/40 px-4 py-2.5 text-[13px]">
+      <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 font-bold">
+        <span className={cn(CHIP, "border-primary/50 bg-primary-soft text-primary-text")}>{group.label}</span>
+        {when}
+      </span>
+      <span className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+        <span>
+          <span className="text-muted-foreground">{unit}</span> <b className="font-num whitespace-nowrap">{tally.count.toLocaleString("ko-KR")}번</b>
+        </span>
+        <span>
+          <span className="text-muted-foreground">사용 메소</span> <b className="font-num whitespace-nowrap">{eok(tally.spent)}</b>
+        </span>
+        <span>
+          <span className="text-muted-foreground">{deltaLabel}</span> {tally.delta === null ? <b className="text-muted-foreground">제외</b> : <Delta v={tally.delta} />}
+        </span>
+        {destroy !== undefined && (
+          <span>
+            <span className="text-muted-foreground">파괴</span> <b className="font-num whitespace-nowrap">{destroy}번</b>
+          </span>
+        )}
+      </span>
+    </Card>
+  );
+}
+
+/** Under a card while an event (not one round) is picked: how many of its rounds the card was in ("샤타포스 4회 중 3회"). */
+export function RoundsIn({ group, n }: { group: EventGroup; n: number }) {
+  return <span className="mt-2 text-xs font-semibold text-primary-text">{`${group.name ? group.label : "이벤트"} ${group.rounds.length}회 중 ${n}회`}</span>;
 }
 
 /** A menu button that reads like the fields next to it. */

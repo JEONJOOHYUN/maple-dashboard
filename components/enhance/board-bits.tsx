@@ -435,8 +435,8 @@ export function CharacterFilter({ names, value, onChange, className }: { names: 
 export const PICK_W = {
   who: "min-w-[9.5rem] flex-1 sm:w-40 sm:flex-none",
   item: "min-w-[9.5rem] flex-1 sm:w-52 sm:flex-none",
-  // Wraps to the next row on a phone rather than shrinking to "모든…" (five fields on the potential board).
-  round: "min-w-[9.5rem] flex-1 sm:min-w-0 sm:flex-none",
+  // The event and its dates: wrap to the next row on a phone rather than shrinking to "모든…".
+  event: "min-w-[9.5rem] flex-1 sm:min-w-0 sm:flex-none",
 };
 
 /** Cards on one page of a 모아보기 grid (four rows of three) and rows on one page of a 내역 list. */

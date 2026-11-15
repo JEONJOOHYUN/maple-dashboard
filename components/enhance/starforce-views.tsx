@@ -4,13 +4,13 @@ import { useMemo, useRef, useState, type ReactNode } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, Package, Pencil } from "lucide-react";
 import { NumberField, Segment, eok, parseNum } from "@/components/ev/ui";
 import { CARD_PAGE, CharacterFilter, ItemFilter, NO_ITEM_FILTER, PICK_W, ROW_PAGE, itemMatches, liveFilter } from "@/components/enhance/board-bits";
-import { CHIP, Card, Delta, Empty, Gauge, ItemIcon, PickedTotal, RANK_TOP, RankDialog, RankHead, RoundSelect, SKIP_LABEL, Select, SortMenu, type Sort, Tile, TryBadges, signed, signedShort, tone } from "@/components/enhance/parts";
+import { CHIP, Card, Delta, Empty, Gauge, EventFields, EventStrip, ItemIcon, PickedTotal, RANK_TOP, RankDialog, RankHead, RoundsIn, SKIP_LABEL, type EventTally, Select, SortMenu, type Sort, Tile, TryBadges, signed, signedShort, tone } from "@/components/enhance/parts";
 import { Pager, usePage } from "@/components/pager";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import type { ItemOverrides } from "@/lib/enhance/items";
 import { starAfter } from "@/lib/enhance/judge";
 import { dayStart, kstFull, kstShort, kstWeekday } from "@/lib/enhance/kst";
-import { eventRounds, inRound, starEventKind, starEventOn, type EventRound } from "@/lib/enhance/events";
+import { eventGroups, roundsPerCard, splitGroup, starEventKind, type EventGroup, type EventScope } from "@/lib/enhance/events";
 import { buildStats, entryKey, reachedFloor, type Entry, type ItemStat, type Stats, type Tally } from "@/lib/enhance/stats";
 import { FLOOR_STAR } from "@/lib/ev/starforce";
 import { cn } from "@/lib/utils";
@@ -223,6 +223,16 @@ function TryRow({ entry, showItem }: { entry: Entry; showItem: boolean }) {
 
 const PAGE = 100;
 
+const sfTally = (s: Stats): EventTally => ({ count: s.total, spent: s.spent, delta: s.judged > 0 ? s.delta : null });
+
+/** The tries of one event, all of them and per round, counted as the cards count them (one buildStats each). */
+function eventStats(entries: Entry[], group: EventGroup) {
+  const split = splitGroup(entries, group, (e) => e.row.t, (e) => starEventKind(e.row));
+  const all = buildStats(split.all);
+  const rounds = split.rounds.map(buildStats);
+  return { all, rounds, tallies: [all, ...rounds].map(sfTally), cards: roundsPerCard(split.rounds, entryKey) };
+}
+
 export function LogView({ entries, characters, hideLow, onHideLow }: { entries: Entry[]; characters: string[]; hideLow: boolean; onHideLow: (v: boolean) => void }) {
   const [who, setWho] = useState("");
   const [picked, setItem] = useState(NO_ITEM_FILTER);
@@ -281,8 +291,8 @@ export function ItemsView({
   entries: Entry[];
   overrides: ItemOverrides;
   onOverrides: (next: ItemOverrides) => void;
-  /** `round` = the picked event round: the window then counts the same tries as the card. */
-  onOpen: (key: string, round?: EventRound) => void;
+  /** `scope` = the picked event (and round): the window then counts the same tries as the card. */
+  onOpen: (key: string, scope?: EventScope) => void;
   hideLow: boolean;
   onHideLow: (v: boolean) => void;
 }) {
@@ -291,12 +301,17 @@ export function ItemsView({
   const [picked, setFilter] = useState(NO_ITEM_FILTER);
   // One character, as in the 강화 내역 (user, 2026-11-14): the item list next to it follows it.
   const [pickedWho, setWho] = useState("");
-  // One event round (user, 2026-11-14: "회차별"): the cards count only the event tries of that round.
-  const rounds = useMemo(() => eventRounds(entries, (e) => e.row.t, (e) => starEventKind(e.row)), [entries]);
-  const [roundId, setRound] = useState("");
-  const round = rounds.find((r) => r.id === roundId);
-  const inRoundList = useMemo(() => (round ? entries.filter((e) => inRound(round, e.row.t, starEventOn(e.row))) : null), [round, entries]);
-  const shown = useMemo(() => (inRoundList ? buildStats(inRoundList) : stats), [inRoundList, stats]);
+  // One event, then one of its rounds (A안, user 2026-11-16): the cards count only the tries with that event on.
+  const groups = useMemo(() => eventGroups(entries, (e) => e.row.t, (e) => starEventKind(e.row)), [entries]);
+  const [pick, setPick] = useState({ group: "", round: "" });
+  const group = groups.find((g) => g.label === pick.group);
+  const round = group?.rounds.find((r) => r.id === pick.round);
+  const scope = group ? { group, round } : undefined;
+  const ev = useMemo(() => {
+    const g = groups.find((x) => x.label === pick.group);
+    return g ? eventStats(entries, g) : null;
+  }, [groups, pick.group, entries]);
+  const shown = !ev || !group ? stats : round ? ev.rounds[group.rounds.indexOf(round)] : ev.all;
   // Items whose level is unknown come first: they are the ones waiting for an answer.
   const unknown = (it: ItemStat) => (it.info.level > 0 ? 0 : 1);
   const visible = shown.items.filter((it) => !hideLow || reachedFloor(it));
@@ -311,7 +326,7 @@ export function ItemsView({
     .sort(
     (a, b) => unknown(b) - unknown(a) || (sort === "spent" ? b.spent - a.spent : sort === "delta" ? b.delta - a.delta : b.last - a.last) || b.tries - a.tries
   );
-  const pager = usePage(`${round?.id ?? ""}|${sort}|${hideLow}|${who}|${filter.picked}|${filter.query}`, items.length, CARD_PAGE);
+  const pager = usePage(`${pick.group}|${round?.id ?? ""}|${sort}|${hideLow}|${who}|${filter.picked}|${filter.query}`, items.length, CARD_PAGE);
   const top = useRef<HTMLDivElement>(null);
 
   return (
@@ -325,10 +340,13 @@ export function ItemsView({
         <div className="flex flex-wrap items-center gap-2">
           <CharacterFilter names={characters} value={who} onChange={setWho} className={PICK_W.who} />
           <ItemFilter names={names} value={filter} onChange={setFilter} className={PICK_W.item} />
-          <RoundSelect rounds={rounds} value={round?.id ?? ""} onChange={setRound} className={PICK_W.round} />
+          <EventFields groups={groups} group={group} round={round} onPick={(g, r) => setPick({ group: g, round: r })} tallies={ev?.tallies ?? []} unit="강화" className={PICK_W.event} />
           <SortMenu value={sort} onChange={setSort} hideLow={hideLow} onHideLow={onHideLow} className="ml-auto" />
         </div>
       </div>
+      {group && ev && (
+        <EventStrip group={group} round={round} tally={round ? ev.tallies[group.rounds.indexOf(round) + 1] : ev.tallies[0]} unit="강화" deltaLabel="기댓값 대비" destroy={shown.items.reduce((sum, it) => sum + it.destroy, 0)} />
+      )}
       {filter.picked && items.length > 0 && (
         <PickedTotal spent={items.reduce((sum, it) => sum + it.spent, 0)} delta={items.some((it) => it.judged > 0) ? items.reduce((sum, it) => sum + (it.judged > 0 ? it.delta : 0), 0) : null} />
       )}
@@ -348,7 +366,7 @@ export function ItemsView({
               <button
                 type="button"
                 aria-label={`${it.item} 강화 내역 보기`}
-                onClick={() => onOpen(it.key, round)}
+                onClick={() => onOpen(it.key, scope)}
                 className="absolute inset-0 rounded-lg outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
               />
               <span className="absolute top-3.5 left-3.5 text-xs text-muted-foreground">
@@ -411,6 +429,7 @@ export function ItemsView({
                   {it.streak.star}성 · {it.streak.n}번 연속 실패
                 </span>
               )}
+              {group && ev && !round && group.rounds.length > 1 && <RoundsIn group={group} n={ev.cards.get(it.key) ?? 0} />}
               {/* Typing a level makes the item "known": keep its row open while the user is in it. */}
               {open && (
                 <div className="relative z-10 -mx-3.5 mt-3 self-stretch text-left" onFocus={() => setEditing(it.key)}>

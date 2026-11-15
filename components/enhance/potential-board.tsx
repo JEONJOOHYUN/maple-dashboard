@@ -4,12 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { Package, Split } from "lucide-react";
 import { NumberField, eok, parseNum } from "@/components/ev/ui";
 import { BasisButton, BasisRow, CARD_PAGE, CharacterFilter, ItemFilter, NO_ITEM_FILTER, PICK_W, PeriodBar, ROW_PAGE, SyncBanners, ViewTabs, WorldStrip, itemMatches, liveFilter, useGroupsOff, useKnownGroups, usePeriod, useSync } from "@/components/enhance/board-bits";
-import { Card, Delta, Empty, Gauge, ItemIcon, PickedTotal, RANK_TOP, RankDialog, RankHead, RoundSelect, Select, SortMenu, Tile, signed, type Sort } from "@/components/enhance/parts";
+import { Card, Delta, Empty, Gauge, EventFields, EventStrip, ItemIcon, PickedTotal, RANK_TOP, RankDialog, RankHead, RoundsIn, Select, type EventTally, SortMenu, Tile, signed, type Sort } from "@/components/enhance/parts";
 import { Pager, usePage } from "@/components/pager";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { useItemDict, type Rolled } from "@/components/enhance/use-item-dict";
 import { useInsights, useJobs, useWorldOf } from "@/components/enhance/use-worlds";
-import { eventRounds, inRound, type EventRound } from "@/lib/enhance/events";
+import { eventGroups, inGroup, roundsPerCard, splitGroup, type EventGroup, type EventScope } from "@/lib/enhance/events";
 import { itemIcon, type ItemInfo } from "@/lib/enhance/items";
 import { DAY, dayStart, kstFull, kstShort, kstStamp } from "@/lib/enhance/kst";
 import { buildPotStats, potEntries, potEntryKey, type PieceStat, type PotEntry } from "@/lib/enhance/pot-stats";
@@ -103,7 +103,7 @@ function RollRow({ entry, found, showItem }: { entry: PotEntry; found: Icons; sh
   );
 }
 
-function PieceCard({ piece, found, onOpen }: { piece: PieceStat; found: Icons; onOpen: () => void }) {
+function PieceCard({ piece, found, onOpen, note }: { piece: PieceStat; found: Icons; onOpen: () => void; note?: ReactNode }) {
   const cubes = piece.rolls - piece.resets;
   // Bars: every grade-up together in one (rolls and averages add up), then the option it ended on.
   const bars: { key: string; label: ReactNode; used: number; mean: number }[] = [];
@@ -188,6 +188,7 @@ function PieceCard({ piece, found, onOpen }: { piece: PieceStat; found: Icons; o
           {piece.delta !== null ? <Delta v={piece.delta} className="text-sm" /> : <b className="text-[13px] text-muted-foreground">제외</b>}
         </Tile>
       </div>
+      {note}
     </Card>
   );
 }
@@ -392,6 +393,22 @@ function PotInsight({ stats, found, onOpen }: { stats: ReturnType<typeof buildPo
   );
 }
 
+const potEvent = (e: PotEntry) => (e.row.mt ? "미라클 타임" : "");
+
+const potTally = (pieces: PieceStat[]): EventTally => ({
+  count: pieces.reduce((sum, p) => sum + p.rolls, 0),
+  spent: pieces.reduce((sum, p) => sum + p.spent, 0),
+  delta: pieces.some((p) => p.delta !== null) ? pieces.reduce((sum, p) => sum + (p.delta ?? 0), 0) : null,
+});
+
+/** The rolls of one event, all of them and per round, counted as the cards count them. */
+function potEventStats(entries: PotEntry[], group: EventGroup, build: (list: PotEntry[]) => PieceStat[]) {
+  const split = splitGroup(entries, group, (e) => e.row.t, potEvent);
+  const all = build(split.all);
+  const rounds = split.rounds.map(build);
+  return { all, rounds, tallies: [all, ...rounds].map(potTally), cards: roundsPerCard(split.rounds, potEntryKey) };
+}
+
 function PiecesView({
   pieces: all,
   entries,
@@ -403,16 +420,21 @@ function PiecesView({
   entries: PotEntry[];
   build: (list: PotEntry[]) => PieceStat[];
   found: Icons;
-  /** `round` = the picked 미라클 타임 round: the window then counts the same rolls as the card. */
-  onOpen: (key: string, round?: EventRound) => void;
+  /** `scope` = the picked event (and round): the window then counts the same rolls as the card. */
+  onOpen: (key: string, scope?: EventScope) => void;
 }) {
   const [sort, setSort] = useState<Sort>("spent");
-  // One 미라클 타임 round (user, 2026-11-14: "회차별"): the cards count only the miracle-time rolls of that round.
-  const rounds = useMemo(() => eventRounds(entries, (e) => e.row.t, (e) => (e.row.mt ? "미라클 타임" : "")), [entries]);
-  const [roundId, setRound] = useState("");
-  const round = rounds.find((r) => r.id === roundId);
-  const inRoundList = useMemo(() => (round ? entries.filter((e) => inRound(round, e.row.t, e.row.mt)) : null), [round, entries]);
-  const pieces = useMemo(() => (inRoundList ? build(inRoundList) : all), [inRoundList, build, all]);
+  // 미라클 타임, then one of its rounds (A안, user 2026-11-16): the cards count only the miracle-time rolls.
+  const groups = useMemo(() => eventGroups(entries, (e) => e.row.t, potEvent), [entries]);
+  const [pick, setPick] = useState({ group: "", round: "" });
+  const group = groups.find((g) => g.label === pick.group);
+  const round = group?.rounds.find((r) => r.id === pick.round);
+  const scope = group ? { group, round } : undefined;
+  const ev = useMemo(() => {
+    const g = groups.find((x) => x.label === pick.group);
+    return g ? potEventStats(entries, g, build) : null;
+  }, [groups, pick.group, entries, build]);
+  const pieces = !ev || !group ? all : round ? ev.rounds[group.rounds.indexOf(round)] : ev.all;
   const [picked, setFilter] = useState(NO_ITEM_FILTER);
   // 잠재능력 · 에디셔널 · 소울: "" = all of them. The item list follows the kind picked.
   const [kind, setKind] = useState<PotKind | "">("");
@@ -428,7 +450,7 @@ function PiecesView({
   const list = ofWho
     .filter((p) => itemMatches(p.item, filter))
     .sort((a, b) => (sort === "spent" ? b.spent - a.spent : sort === "delta" ? (b.delta ?? -Infinity) - (a.delta ?? -Infinity) : b.last - a.last) || b.rolls - a.rolls);
-  const pager = usePage(`${round?.id ?? ""}|${sort}|${kind}|${who}|${filter.picked}|${filter.query}`, list.length, CARD_PAGE);
+  const pager = usePage(`${pick.group}|${round?.id ?? ""}|${sort}|${kind}|${who}|${filter.picked}|${filter.query}`, list.length, CARD_PAGE);
   const top = useRef<HTMLDivElement>(null);
   return (
     <>
@@ -449,17 +471,24 @@ function PiecesView({
           </Select>
           <CharacterFilter names={characters} value={who} onChange={setWho} className={PICK_W.who} />
           <ItemFilter names={names} value={filter} onChange={setFilter} className={PICK_W.item} />
-          <RoundSelect rounds={rounds} value={round?.id ?? ""} onChange={setRound} className={PICK_W.round} />
+          <EventFields groups={groups} group={group} round={round} onPick={(g, r) => setPick({ group: g, round: r })} tallies={ev?.tallies ?? []} unit="횟수" className={PICK_W.event} />
           <SortMenu value={sort} onChange={setSort} className="ml-auto" />
         </div>
       </div>
+      {group && ev && <EventStrip group={group} round={round} tally={ev.tallies[round ? group.rounds.indexOf(round) + 1 : 0]} unit="횟수" deltaLabel="손익" />}
       {filter.picked && list.length > 0 && (
         <PickedTotal spent={list.reduce((sum, p) => sum + p.spent, 0)} delta={list.some((p) => p.delta !== null) ? list.reduce((sum, p) => sum + (p.delta ?? 0), 0) : null} />
       )}
       {list.length === 0 && <Empty>해당 아이템 없음</Empty>}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {list.slice(pager.from, pager.to).map((piece) => (
-          <PieceCard key={piece.key} piece={piece} found={found} onOpen={() => onOpen(piece.key, round)} />
+          <PieceCard
+            key={piece.key}
+            piece={piece}
+            found={found}
+            onOpen={() => onOpen(piece.key, scope)}
+            note={group && ev && !round && group.rounds.length > 1 ? <RoundsIn group={group} n={ev.cards.get(piece.key) ?? 0} /> : undefined}
+          />
         ))}
       </div>
       <Pager page={pager.page} pages={pager.pages} onPage={pager.go} anchor={top} />
@@ -521,10 +550,10 @@ export function PotentialBoard({ apiKey, account, onForget, switcher }: { apiKey
   const [convText] = useStored<ConvText>("ev:statConv", {});
   const conv = useMemo(() => convFromText(convText, STAT_CONV_DEFAULT), [convText]);
   const [openPiece, setOpenPiece] = useState("");
-  // The 미라클 타임 round the open window counts, when it was opened from one in 모아보기. Its rolls are taken from
+  // The event (and round) the open window counts, when it was opened from one in 모아보기. Its rolls are taken from
   // the current entries on every update, so rolls, fees and worlds that arrive later show up in it too.
-  const [openRound, setOpenRound] = useState<EventRound | null>(null);
-  const openWith = (key: string, round?: EventRound) => (setOpenRound(round ?? null), setOpenPiece(key));
+  const [openScope, setOpenScope] = useState<EventScope | null>(null);
+  const openWith = (key: string, scope?: EventScope) => (setOpenScope(scope ?? null), setOpenPiece(key));
 
   const [sync] = useState(() => new PotentialSync(apiKey, account));
   const { snap, loading, refresh } = useSync(sync, from, to, PotentialSync.serverSnapshot);
@@ -583,8 +612,8 @@ export function PotentialBoard({ apiKey, account, onForget, switcher }: { apiKey
   const { xenons, avengers } = useJobs(apiKey, account);
   const stats = useMemo(() => buildPotStats(entries, conv, xenons, avengers), [entries, conv, xenons, avengers]);
   const buildPieces = useCallback((list: PotEntry[]) => buildPotStats(list, conv, xenons, avengers).pieces, [conv, xenons, avengers]);
-  const openEntries = useMemo(() => (openRound ? entries.filter((e) => inRound(openRound, e.row.t, e.row.mt)) : entries), [openRound, entries]);
-  const openPieces = useMemo(() => (openRound ? buildPieces(openEntries) : stats.pieces), [openRound, openEntries, buildPieces, stats.pieces]);
+  const openEntries = useMemo(() => (openScope ? entries.filter((e) => inGroup(openScope.group, openScope.round, e.row.t, potEvent(e))) : entries), [openScope, entries]);
+  const openPieces = useMemo(() => (openScope ? buildPieces(openEntries) : stats.pieces), [openScope, openEntries, buildPieces, stats.pieces]);
 
   const tiles = [
     { label: "재설정", value: rolls(stats.resets) },

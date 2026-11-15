@@ -58,5 +58,62 @@ export function eventRounds<T>(records: T[], at: (r: T) => number, kind: (r: T) 
   return rounds.map((r) => ({ ...r, id: `${r.from}|${r.what}`, label: `${r.what} · ${roundDates(r.from, r.to)}` })).reverse();
 }
 
-/** Whether a record was in the round: on one of its days, with an event on. */
-export const inRound = (round: EventRound, t: number, on: boolean) => on && round.dates.has(kstDate(t));
+/**
+ * One choice of the 모아보기 event field (A안, user 2026-11-16): one event with its own rounds, or every event
+ * together (`name` = ""). A day with 샤타포스 and 1+1 on belongs to both events, so a three-day 샤타포스 with a 1+1
+ * day inside it is still one 샤타포스 round.
+ */
+export type EventGroup = { name: string; label: string; rounds: EventRound[] };
+
+const parts = (kind: string) => (kind ? kind.split(" · ") : []);
+
+/** The event choices, in badge order: "이벤트 전체" first when there is more than one event. */
+export function eventGroups<T>(records: T[], at: (r: T) => number, kind: (r: T) => string): EventGroup[] {
+  const names = new Set<string>();
+  for (const r of records) for (const name of parts(kind(r))) names.add(name);
+  const rank = (name: string) => (ORDER.includes(name) ? ORDER.indexOf(name) : ORDER.length);
+  const groups = [...names]
+    .sort((a, b) => rank(a) - rank(b) || a.localeCompare(b, "ko"))
+    .map((name) => ({ name, label: name, rounds: eventRounds(records, at, (r) => (parts(kind(r)).includes(name) ? name : "")) }));
+  if (groups.length > 1) groups.unshift({ name: "", label: "이벤트 전체", rounds: eventRounds(records, at, kind) });
+  return groups;
+}
+
+/** What the 모아보기 event fields picked, handed to an item window so it counts the same records. */
+export type EventScope = { group: EventGroup; round?: EventRound };
+
+/** Whether a record counts in a choice: the event on (any, for every event), on one of the round's days when one is picked. */
+export const inGroup = (group: EventGroup, round: EventRound | undefined, t: number, kind: string) =>
+  (group.name ? parts(kind).includes(group.name) : kind !== "") && (!round || round.dates.has(kstDate(t)));
+
+/** A round as its date row reads: the dates alone under one event, with the events under every event. */
+export const roundName = (group: EventGroup, round: EventRound) => (group.name ? roundDates(round.from, round.to) : round.label);
+
+/** The days of a group's rounds, for counting how many rounds a card was in. */
+export function roundOfDay(group: EventGroup): Map<string, number> {
+  const out = new Map<string, number>();
+  group.rounds.forEach((r, i) => r.dates.forEach((d) => out.set(d, i)));
+  return out;
+}
+
+/** A group's records, all of them and per round (in `group.rounds` order), in one pass. */
+export function splitGroup<T>(records: T[], group: EventGroup, at: (r: T) => number, kind: (r: T) => string): { all: T[]; rounds: T[][] } {
+  const day = roundOfDay(group);
+  const all: T[] = [];
+  const rounds = group.rounds.map(() => [] as T[]);
+  for (const r of records) {
+    const t = at(r);
+    if (!inGroup(group, undefined, t, kind(r))) continue;
+    all.push(r);
+    const i = day.get(kstDate(t));
+    if (i !== undefined) rounds[i].push(r);
+  }
+  return { all, rounds };
+}
+
+/** How many rounds each card (by `key`) has records in. */
+export function roundsPerCard<T>(rounds: T[][], key: (r: T) => string): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const list of rounds) for (const k of new Set(list.map(key))) out.set(k, (out.get(k) ?? 0) + 1);
+  return out;
+}
