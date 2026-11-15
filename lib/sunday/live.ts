@@ -38,6 +38,9 @@ export async function loadSundayWeeks(): Promise<SundayWeek[]> {
 /** Cache tag of the foundation-model scores; the upload route (app/api/sunday/ml) clears it. */
 export const SUNDAY_ML_TAG = "sunday-ml";
 
+// The upcoming Sunday's scores plus the past year's: the hit record (hits.ts) predicts the last 52 Sundays again.
+const ML_ROWS = 64;
+
 const loadMlRows = unstable_cache(
   async (): Promise<MlScores[]> => {
     const { data, error } = await supabase
@@ -45,15 +48,16 @@ const loadMlRows = unstable_cache(
       .select("sunday, model, data_end, data_hash, scores")
       .eq("model", ML_MODEL)
       .order("sunday", { ascending: false })
-      .limit(8);
+      .limit(ML_ROWS);
     if (error) throw error;
     return (data ?? []) as MlScores[];
   },
-  ["sunday-ml-v1", ML_MODEL],
+  // "-v2": 64 rows instead of 8 (entries cached before would come back short).
+  ["sunday-ml-v2", ML_MODEL],
   { revalidate: 3600, tags: [SUNDAY_ML_TAG] },
 );
 
-/** The latest foundation-model scores (ml.ts); none, so the statistical model alone, when they cannot be read. */
+/** Recent foundation-model scores (ml.ts); none, so the statistical model alone, when they cannot be read. */
 export async function loadMlScores(): Promise<MlScores[]> {
   try {
     return await loadMlRows();

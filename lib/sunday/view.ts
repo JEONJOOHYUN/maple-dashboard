@@ -2,8 +2,9 @@ import { nexonUrl } from "../nexon/url.ts";
 import { splitBenefit, type BenefitRow } from "./benefit.ts";
 import { THEMES, bundleLabel, bundleTheme, isBigBundle, type ThemeId } from "./bundles.ts";
 import { SUNDAYS, addWeeks, dateLabel, kstDate, noticeUrl, predictionTarget, upcomingSunday, type SundayWeek } from "./history.ts";
-import { BACKTEST_HITS_ML, blendPrediction, mlFor, type MlScores } from "./ml.ts";
-import { BACKTEST_HITS, bigDayWindow, kindOf, predictSunday, shownPicks, themesOf, type BundleKind, type BundleOdds } from "./predict.ts";
+import { recentHits, type HitRecord } from "./hits.ts";
+import { blendPrediction, mlFor, type MlScores } from "./ml.ts";
+import { bigDayWindow, kindOf, predictSunday, shownPicks, themesOf, type BundleKind, type BundleOdds } from "./predict.ts";
 
 export type WeekView = {
   date: string;
@@ -56,8 +57,8 @@ export type SundayPageData = {
     missingWeeks: number;
     /** True when this week's foundation-model scores were mixed in (ml.ts); false = the statistical model alone. */
     ml: boolean;
-    /** How often cards 1 ~ 3 / the 5 picks held a real benefit over the last 52 Sundays, for the model in use. */
-    hits: { weeks: number; top3: number; five: number };
+    /** How often cards 1 ~ 3 / the 5 picks held a real benefit over the last 52 recorded Sundays (hits.ts, live). */
+    hits: HitRecord;
   };
   recent: WeekView[];
   dataEnd: string;
@@ -127,7 +128,8 @@ export function getSundayPageData(now: Date, weeks: SundayWeek[] = SUNDAYS, mlRo
   const p = ml ? blendPrediction(predictSunday(weeks, target), ml.scores) : predictSunday(weeks, target);
   const themes = THEMES.map((x) => ({ id: x.id, label: x.label, day: x.day, p: p.themes[x.id] }));
   const top = [...themes].sort((a, b) => b.p - a.p)[0];
-  const recent = weeks.filter((w) => w.date < sunday || w === recordedWeek).slice(-8).reverse();
+  // 16 weeks: phones show the first 8, wide screens fill the height of the odds card next to it and scroll the rest.
+  const recent = weeks.filter((w) => w.date < sunday || w === recordedWeek).slice(-16).reverse();
 
   return {
     thisWeek: {
@@ -165,7 +167,7 @@ export function getSundayPageData(now: Date, weeks: SundayWeek[] = SUNDAYS, mlRo
       }),
       missingWeeks: p.missingWeeks,
       ml: ml !== null,
-      hits: ml ? BACKTEST_HITS_ML : BACKTEST_HITS,
+      hits: recentHits(weeks, mlRows),
     },
     recent: recent.map(weekView),
     dataEnd: weeks.at(-1)?.date ?? "",

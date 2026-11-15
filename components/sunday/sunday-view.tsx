@@ -59,7 +59,10 @@ export function SundayView({ data }: { data: SundayPageData }) {
         </p>
       )}
 
-      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
+      {/* Side by side the two cards end on one line (user 2026-11-15): the recent list fills the odds card's height and
+          scrolls inside. It is positioned absolute in a flex-1 box, so it never makes the row taller (h-0 + flex-1 did:
+          a % flex-basis turns into the content height while the row is sized). */}
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2 lg:items-stretch">
         <section className="overflow-hidden rounded-lg border border-border bg-card" aria-labelledby="sunday-ranked">
           <h2 id="sunday-ranked" className="px-[18px] py-3.5 text-[15px] font-bold">
             {prediction.label} 혜택별 나올 확률
@@ -95,18 +98,20 @@ export function SundayView({ data }: { data: SundayPageData }) {
           ))}
         </section>
 
-        <section className="overflow-hidden rounded-lg border border-border bg-card" aria-labelledby="sunday-recent">
+        <section className="flex flex-col overflow-hidden rounded-lg border border-border bg-card" aria-labelledby="sunday-recent">
           <div className="flex flex-wrap items-baseline justify-between gap-2 px-[18px] py-3.5">
             <h2 id="sunday-recent" className="text-[15px] font-bold">
               최근 썬데이
             </h2>
             <span className="text-xs text-muted-foreground">공지 기준 기록</span>
           </div>
-          <ul>
-            {recent.map((w) => (
-              <RecentRow key={w.date} week={w} current={w.date === thisWeek.date} />
-            ))}
-          </ul>
+          <div className="lg:relative lg:min-h-0 lg:flex-1">
+            <ul className="lg:absolute lg:inset-0 lg:overflow-y-auto">
+              {recent.map((w, i) => (
+                <RecentRow key={w.date} week={w} current={w.date === thisWeek.date} wideOnly={i >= 8} />
+              ))}
+            </ul>
+          </div>
         </section>
       </div>
 
@@ -321,9 +326,15 @@ function NoticeLink({ href }: { href: string }) {
   );
 }
 
-function RecentRow({ week, current }: { week: WeekView; current: boolean }) {
+function RecentRow({ week, current, wideOnly }: { week: WeekView; current: boolean; wideOnly: boolean }) {
   return (
-    <li className={cn("grid grid-cols-[64px_minmax(0,1fr)] items-baseline gap-2.5 border-t border-border px-[18px] py-2.5 text-[13px]", current && "bg-primary-soft")}>
+    <li
+      className={cn(
+        "grid-cols-[64px_minmax(0,1fr)] items-baseline gap-2.5 border-t border-border px-[18px] py-2.5 text-[13px]",
+        wideOnly ? "hidden lg:grid" : "grid",
+        current && "bg-primary-soft",
+      )}
+    >
       <span className="font-num text-muted-foreground">{week.label.replace(/\(.\)$/, "")}</span>
       <span className="flex min-w-0 flex-col gap-1">
         <span className="flex flex-wrap items-center gap-1.5">

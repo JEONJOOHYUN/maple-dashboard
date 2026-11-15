@@ -19,7 +19,10 @@ import { weekIndex } from "./history.ts";
 /** Stored with every logged prediction (sunday_predictions.model); change it whenever the scores change. */
 export const MODEL_VERSION = "2026-11-15";
 
-/** Backtest of this model alone over the last 52 Sundays (predict.test.ts pins it): weeks where cards 1 ~ 3 / the 5 picks held a real benefit. */
+/**
+ * Backtest of this model alone over 2025-11-16 ~ 2026-11-08 (predict.test.ts pins it): weeks where cards 1 ~ 3 / the 5
+ * picks held a real benefit. The page shows a live record instead (hits.ts), which equals this without model scores.
+ */
 export const BACKTEST_HITS = { weeks: 52, top3: 38, five: 45 };
 
 /** Training starts at the 2025-03-23 starforce rework: the current benefit line-up; it beat 2023-08 and older starts. */

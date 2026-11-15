@@ -17,11 +17,9 @@ import { SEASON_PATCHES, pickFive, themeOdds, type SundayPrediction } from "./pr
  * (the weights and the calibration below included: they change what the pages show and log).
  */
 export const ML_MODEL = "tabicl2+tabpfn2-2026-11-15";
-/**
- * Backtest of the mix over the same 52 Sundays as BACKTEST_HITS (2025-11-16 ~ 2026-11-08, site scripts end to end,
- * C:/dev/_work/maple-sunday-data/hf/e2e.mjs): cards 1 ~ 3 held a real benefit 42 times, the 5 picks 47 times.
- */
-export const BACKTEST_HITS_ML = { weeks: 52, top3: 42, five: 47 };
+// The page's hit record is computed from the stored scores (hits.ts). Backtest of the mix over 2025-11-16 ~ 2026-11-08
+// (site scripts end to end, C:/dev/_work/maple-sunday-data/hf/e2e.mjs): cards 1 ~ 3 held a real benefit 42 of 52
+// times, the 5 picks 47 (statistical model alone 38 · 45, predict.ts BACKTEST_HITS).
 
 /** Share of the model scores on shining / miracle, and on every other bundle. */
 export const ML_WEIGHT_BIG = 0.25;

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { SUNDAYS } from "./history.ts";
+import { recentHits } from "./hits.ts";
 import { ML_CALIBRATION, ML_MODEL, ML_WEIGHT, ML_WEIGHT_BIG, blendPrediction, calibrate, mlDataHash, mlFor, parseMlUpload, type MlScores } from "./ml.ts";
 import { MODEL_VERSION, pickFive, predictSunday, themeOdds } from "./predict.ts";
 import { predictionRow } from "./prediction-log.ts";
@@ -80,6 +81,9 @@ test("the pages and the prediction log mix in the scores and say so", () => {
   assert.equal(plain.prediction.ml, false);
   assert.equal(mixed.prediction.ml, true);
   assert.equal(mixed.prediction.picks[0].id, "treasure");
+  // the hit record is the live one (hits.ts), with the stored rows
+  assert.deepEqual(mixed.prediction.hits, recentHits(SUNDAYS, [row]));
+  assert.deepEqual(plain.prediction.hits, recentHits(SUNDAYS, []));
   assert.equal(predictionRow(SUNDAYS, now).model, MODEL_VERSION);
   const logged = predictionRow(SUNDAYS, now, [row]);
   assert.equal(logged.model, `${MODEL_VERSION}+${ML_MODEL}`);
