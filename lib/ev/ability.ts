@@ -416,13 +416,16 @@ function solve(goals: AbilityGoal[], opts: PlanOpts, tails?: PlanCost[]): Abilit
   );
   /**
    * Resets worth trying from a state: those of the goal its locks belong to, every goal's when nothing is locked. The
-   * miracle circulator takes no locks, so only with nothing locked (with locks it would throw them away).
+   * miracle circulator takes no locks, so only with nothing locked (with locks it would throw them away), and only for
+   * L1+U2: its lines 2 · 3 are unique at best, so it never helps three legendary lines (user, 2026-11-15; never chosen
+   * there even for free).
    */
+  const miracleOK = miraclePrice > 0 && goals.every((g) => g.mode === "l1u2");
   const methodsAt = (s: FState): Method[] => {
     const locked = [...decF(s).values()];
     const gs = locked.length ? [goalAt(locked[0].t)] : goals;
     const ms = [...new Set(gs.flatMap(methodsOf))];
-    return !locked.length && miraclePrice > 0 ? [...ms, "miracle"] : ms;
+    return !locked.length && miracleOK ? [...ms, "miracle"] : ms;
   };
 
   const price = (m: Method, locks: number) =>

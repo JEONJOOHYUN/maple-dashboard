@@ -363,6 +363,8 @@ test("미라클 서큘레이터: own option chances, no locks, top values; at 1.
   assert.equal(viaMiracle.start, "miracle");
   const bossRow = viaMiracle.afterFirstLower.find((r) => r.key === "boss")!;
   assert.ok(Math.abs(bossRow.circ - 30) < 1e-6, `${bossRow.circ}`);
+  // 고급 재설정 never offers it (lines 2 · 3 are unique at best), even for 1 meso.
+  assert.equal(abilityPlan(["pas", "boss", "stat"], "l3", { ...valued, miraclePrice: 1 }).miracle, 0);
   // At 1.5억 no preset uses one, with either reset (일반: free black · chaos, 고급: abyss 2.6억).
   for (const preset of ABILITY_PRESETS)
     for (const mode of ["l3", "l1u2"] as AbilityMode[]) {

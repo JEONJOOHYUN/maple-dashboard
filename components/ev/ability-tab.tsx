@@ -366,7 +366,7 @@ export function AbilityTab() {
             </>
           )}
         </div>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid gap-2 sm:grid-cols-3">
           <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
             가진 명성치
             <NumberField
@@ -387,10 +387,11 @@ export function AbilityTab() {
               inputClassName="w-full"
             />
           </label>
-          {/* The fame-reset build rerolls values with free black · chaos circulators: no price to ask. */}
-          {mode === "l3" && (
+          {/* One price per reset (user, 2026-11-15): 고급 = abyss circulators for the values, 일반 = miracle circulators
+              (black · chaos are free event items, and a miracle never helps three legendary lines). */}
+          {mode === "l3" ? (
             <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
-              심연의 서큘레이터 (억)
+              심연의 서큘레이터 1개 (억)
               <NumberField
                 label="심연의 서큘레이터 1개 가격 (억 메소)"
                 value={circText}
@@ -399,17 +400,18 @@ export function AbilityTab() {
                 inputClassName="w-full"
               />
             </label>
+          ) : (
+            <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
+              미라클 서큘레이터 1개 (억)
+              <NumberField
+                label="미라클 서큘레이터 1개 가격 (억 메소)"
+                value={miracleText}
+                onChange={setMiracleText}
+                decimal
+                inputClassName="w-full"
+              />
+            </label>
           )}
-          <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
-            미라클 서큘레이터 (억)
-            <NumberField
-              label="미라클 서큘레이터 1개 가격 (억 메소)"
-              value={miracleText}
-              onChange={setMiracleText}
-              decimal
-              inputClassName="w-full"
-            />
-          </label>
         </div>
         <Switch
           on={sunday}
@@ -515,7 +517,7 @@ export function AbilityTab() {
               [
                 firstKeep && "첫째 줄은 마지막에 채우는 게 쌈",
                 // The miracle circulator takes no locks: once a line is locked the build goes on with its own reset.
-                plan.start === "miracle" && `잠근 뒤로는 ${METHOD_NAME[mode === "l3" ? "advanced" : "fame"]}`,
+                plan.start === "miracle" && `잠근 뒤로는 ${METHOD_NAME.fame}`,
               ]
                 .filter(Boolean)
                 .join(" · ") || undefined
