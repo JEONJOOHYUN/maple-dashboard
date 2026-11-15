@@ -391,23 +391,25 @@ export function AbilityTab() {
               (black · chaos are free event items, and a miracle never helps three legendary lines). */}
           {mode === "l3" ? (
             <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
-              심연의 서큘레이터 1개 (억)
+              심연의 서큘레이터 1개
               <NumberField
                 label="심연의 서큘레이터 1개 가격 (억 메소)"
                 value={circText}
                 onChange={setCircText}
                 decimal
+                suffix="억"
                 inputClassName="w-full"
               />
             </label>
           ) : (
             <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
-              미라클 서큘레이터 1개 (억)
+              미라클 서큘레이터 1개
               <NumberField
                 label="미라클 서큘레이터 1개 가격 (억 메소)"
                 value={miracleText}
                 onChange={setMiracleText}
                 decimal
+                suffix="억"
                 inputClassName="w-full"
               />
             </label>
