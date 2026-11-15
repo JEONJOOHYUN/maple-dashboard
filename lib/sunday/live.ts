@@ -3,6 +3,7 @@
 import { unstable_cache } from "next/cache";
 import { supabase } from "@/lib/supabase";
 import { SUNDAYS, type SundayWeek } from "./history";
+import { ML_MODEL, type MlScores } from "./ml";
 import { mergeStored, type StoredWeek } from "./stored";
 
 /** Cache tag of the published rows; the Cron clears it as soon as it publishes a week. */
@@ -31,5 +32,33 @@ export async function loadSundayWeeks(): Promise<SundayWeek[]> {
   } catch (e) {
     console.error("sunday_weeks read failed, using bundled history only", e);
     return SUNDAYS;
+  }
+}
+
+/** Cache tag of the foundation-model scores; the upload route (app/api/sunday/ml) clears it. */
+export const SUNDAY_ML_TAG = "sunday-ml";
+
+const loadMlRows = unstable_cache(
+  async (): Promise<MlScores[]> => {
+    const { data, error } = await supabase
+      .from("sunday_ml_scores")
+      .select("sunday, model, data_end, data_hash, scores")
+      .eq("model", ML_MODEL)
+      .order("sunday", { ascending: false })
+      .limit(8);
+    if (error) throw error;
+    return (data ?? []) as MlScores[];
+  },
+  ["sunday-ml-v1", ML_MODEL],
+  { revalidate: 3600, tags: [SUNDAY_ML_TAG] },
+);
+
+/** The latest foundation-model scores (ml.ts); none, so the statistical model alone, when they cannot be read. */
+export async function loadMlScores(): Promise<MlScores[]> {
+  try {
+    return await loadMlRows();
+  } catch (e) {
+    console.error("sunday_ml_scores read failed, using the statistical model alone", e);
+    return [];
   }
 }

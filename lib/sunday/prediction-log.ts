@@ -2,6 +2,7 @@
 // right now, kept before the notice so the real record can be scored later. A backtest can be run again; what was
 // shown cannot. Pure: the Cron reads the weeks and writes the row (store.ts).
 import { predictionTarget, type SundayWeek } from "./history.ts";
+import { ML_MODEL, blendPrediction, mlFor, type MlScores } from "./ml.ts";
 import { MODEL_VERSION, bigDayWindow, predictSunday, shownPicks } from "./predict.ts";
 
 export type Odds = { id: string; p: number };
@@ -20,9 +21,11 @@ export type PredictionRow = {
 
 const round4 = (x: number) => Math.round(x * 10_000) / 10_000;
 
-export function predictionRow(weeks: SundayWeek[], now: Date): PredictionRow {
+/** `mlRows`: the stored foundation-model scores; when the page mixes them in, the row does too (model "stats+ml"). */
+export function predictionRow(weeks: SundayWeek[], now: Date, mlRows: MlScores[] = []): PredictionRow {
   const sunday = predictionTarget(now, weeks);
-  const p = predictSunday(weeks, sunday);
+  const ml = mlFor(mlRows, weeks, sunday);
+  const p = ml ? blendPrediction(predictSunday(weeks, sunday), ml.scores) : predictSunday(weeks, sunday);
   const pOf = new Map(p.ranked.map((r) => [r.id, r.p]));
   const window = (id: string) => {
     const w = bigDayWindow(weeks, id, sunday);
@@ -30,7 +33,7 @@ export function predictionRow(weeks: SundayWeek[], now: Date): PredictionRow {
   };
   return {
     sunday,
-    model: MODEL_VERSION,
+    model: ml ? `${MODEL_VERSION}+${ML_MODEL}` : MODEL_VERSION,
     picks: shownPicks(p).map((id) => ({ id, p: round4(pOf.get(id) ?? 0) })),
     ranked: p.ranked.map((r) => ({ id: r.id, p: round4(r.p) })),
     themes: Object.fromEntries(Object.entries(p.themes).map(([k, v]) => [k, round4(v)])),

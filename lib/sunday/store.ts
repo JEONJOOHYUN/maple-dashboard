@@ -3,6 +3,7 @@
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import type { SundayReading } from "./auto-update";
 import { SUNDAYS, type SundayWeek } from "./history";
+import { ML_MODEL, type MlScores } from "./ml";
 import type { SundayNotice } from "./notice";
 import { predictionRow } from "./prediction-log";
 import { mergeStored, planSave, sameNoticeWaiting, writeOnce, type SaveDecision, type StoredStatus, type StoredWeek } from "./stored";
@@ -59,6 +60,22 @@ async function publishedWeeks(): Promise<SundayWeek[]> {
   return mergeStored(SUNDAYS, (data ?? []) as StoredWeek[]);
 }
 
+/** The latest foundation-model scores, read fresh like the weeks. A failed read gives none: the row is then the
+ * statistical model's, and its model column says so. */
+async function mlScores(): Promise<MlScores[]> {
+  const { data, error } = await supabaseAdmin()
+    .from("sunday_ml_scores")
+    .select("sunday, model, data_end, data_hash, scores")
+    .eq("model", ML_MODEL)
+    .order("sunday", { ascending: false })
+    .limit(8);
+  if (error) {
+    console.error("sunday_ml_scores read failed", error.message);
+    return [];
+  }
+  return (data ?? []) as MlScores[];
+}
+
 /**
  * Keeps the prediction the pages show right now, once per Sunday and model (the first row stays). Called at the start
  * of every Cron run (Wed–Sun), so a Sunday's prediction is stored days before its notice. If the weeks cannot be read
@@ -66,7 +83,8 @@ async function publishedWeeks(): Promise<SundayWeek[]> {
  */
 export async function logPrediction(now: Date): Promise<"logged" | "exists" | "error"> {
   try {
-    const row = predictionRow(await publishedWeeks(), now);
+    const [weeks, ml] = await Promise.all([publishedWeeks(), mlScores()]);
+    const row = predictionRow(weeks, now, ml);
     const { error } = await supabaseAdmin().from("sunday_predictions").insert(row);
     if (!error) return "logged";
     if (error.code === "23505") return "exists"; // this Sunday and model are already stored

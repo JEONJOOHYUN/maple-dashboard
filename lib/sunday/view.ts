@@ -2,6 +2,7 @@ import { nexonUrl } from "../nexon/url.ts";
 import { splitBenefit, type BenefitRow } from "./benefit.ts";
 import { THEMES, bundleLabel, bundleTheme, isBigBundle, type ThemeId } from "./bundles.ts";
 import { SUNDAYS, addWeeks, dateLabel, kstDate, noticeUrl, predictionTarget, upcomingSunday, type SundayWeek } from "./history.ts";
+import { blendPrediction, mlFor, type MlScores } from "./ml.ts";
 import { bigDayWindow, predictSunday, shownPicks, themesOf, type BundleOdds } from "./predict.ts";
 
 export type WeekView = {
@@ -52,6 +53,8 @@ export type SundayPageData = {
     ranked: OddsView[];
     bigDays: BigDayView[];
     missingWeeks: number;
+    /** True when this week's foundation-model scores were mixed in (ml.ts); false = the statistical model alone. */
+    ml: boolean;
   };
   recent: WeekView[];
   dataEnd: string;
@@ -110,14 +113,15 @@ function timeLabel(iso: string): string | null {
 
 const odds = (r: BundleOdds): OddsView => ({ ...r, label: bundleLabel(r.id), theme: bundleTheme(r.id) ?? null });
 
-export function getSundayPageData(now: Date, weeks: SundayWeek[] = SUNDAYS): SundayPageData {
+export function getSundayPageData(now: Date, weeks: SundayWeek[] = SUNDAYS, mlRows: MlScores[] = []): SundayPageData {
   const today = kstDate(now);
   const sunday = upcomingSunday(now);
   const recordedWeek = weeks.find((w) => w.date === sunday) ?? null;
   // The notice goes up on Friday 10:00 KST (= Friday 01:00 UTC), two days before the Sunday.
   const announced = now.getTime() >= Date.parse(sunday) - 2 * 86_400_000 + 3_600_000;
   const target = predictionTarget(now, weeks);
-  const p = predictSunday(weeks, target);
+  const ml = mlFor(mlRows, weeks, target);
+  const p = ml ? blendPrediction(predictSunday(weeks, target), ml.scores) : predictSunday(weeks, target);
   const themes = THEMES.map((x) => ({ id: x.id, label: x.label, day: x.day, p: p.themes[x.id] }));
   const top = [...themes].sort((a, b) => b.p - a.p)[0];
   const recent = weeks.filter((w) => w.date < sunday || w === recordedWeek).slice(-8).reverse();
@@ -157,6 +161,7 @@ export function getSundayPageData(now: Date, weeks: SundayWeek[] = SUNDAYS): Sun
         ];
       }),
       missingWeeks: p.missingWeeks,
+      ml: ml !== null,
     },
     recent: recent.map(weekView),
     dataEnd: weeks.at(-1)?.date ?? "",

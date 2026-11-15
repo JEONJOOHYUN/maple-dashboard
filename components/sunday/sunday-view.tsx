@@ -114,8 +114,10 @@ export function SundayView({ data }: { data: SundayPageData }) {
         <li>
           기록 · 넥슨 썬데이 메이플 공지 <span className="whitespace-nowrap">(2023-08 ~ {data.dataEnd})</span>
         </li>
-        <li>예측 · 2025-03 스타포스 개편 이후 기록의 주기 통계</li>
-        <li>적중 · 최근 52주 중 45주는 고른 5개 안에 실제 혜택 포함</li>
+        <li>
+          예측 · 2025-03 스타포스 개편 이후 기록의 주기 통계{data.prediction.ml ? "와 AI 모델(TabICL) 반반" : ""}
+        </li>
+        <li>적중 · 최근 52주 중 {data.prediction.ml ? 46 : 45}주는 고른 5개 안에 실제 혜택 포함</li>
         <li>샤이닝 · 미라클 예상 · 지난번 + 평소 간격, 간격이 일정하지 않아 범위로 표시</li>
         <li>넥슨과 무관한 참고용 예측</li>
       </ul>

@@ -31,5 +31,5 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", "vendor"]
+  "exclude": ["node_modules", "vendor", "scripts/sunday-ml/.venv"]
 }

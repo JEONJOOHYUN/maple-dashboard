@@ -6,7 +6,7 @@ import { ThumbCarousel } from "@/components/home/thumb-carousel";
 import { SundayHomeCard } from "@/components/sunday/home-card";
 import { Badge } from "@/components/ui/badge";
 import { loadHomeNews } from "@/lib/home/news";
-import { loadSundayWeeks } from "@/lib/sunday/live";
+import { loadMlScores, loadSundayWeeks } from "@/lib/sunday/live";
 import { getSundayPageData } from "@/lib/sunday/view";
 
 const NEXON_NEWS = "https://maplestory.nexon.com/News";
@@ -18,8 +18,8 @@ const NEXON_NEWS = "https://maplestory.nexon.com/News";
 export default async function Home() {
   await connection();
   const now = new Date();
-  const [weeks, news] = await Promise.all([loadSundayWeeks(), loadHomeNews(now)]);
-  const sunday = getSundayPageData(now, weeks);
+  const [weeks, ml, news] = await Promise.all([loadSundayWeeks(), loadMlScores(), loadHomeNews(now)]);
+  const sunday = getSundayPageData(now, weeks, ml);
   const recorded = sunday.thisWeek.recorded;
   const topThemes = [...sunday.prediction.themes].sort((a, b) => b.p - a.p).slice(0, 2);
   return (

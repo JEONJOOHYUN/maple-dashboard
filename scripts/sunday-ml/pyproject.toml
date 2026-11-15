@@ -1,0 +1,23 @@
+[project]
+name = "sunday-ml"
+version = "0.1.0"
+description = "Weekly Sunday Maple foundation-model scores (TabICL v2), run by .github/workflows/sunday-ml.yml"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "numpy",
+  "pandas",
+  "tabicl==2.2.0",
+  "torch==2.11.0",
+]
+
+# CPU build of torch: the default Linux wheel pulls several GB of CUDA libraries the job does not use.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu" }]
+
+[tool.uv]
+package = false

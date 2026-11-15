@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Untouched third-party originals (reference only, not built).
     "vendor/**",
+    // The weekly Sunday model job's local Python environment and outputs (git-ignored).
+    "scripts/sunday-ml/.venv/**",
+    "scripts/sunday-ml/out/**",
   ]),
 ]);
 

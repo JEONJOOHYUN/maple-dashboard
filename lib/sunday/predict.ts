@@ -9,6 +9,8 @@
 // 2026-11-15: + the season rhythm (seasonCall below). Same 38 / 45, the most likely pick right 22/52 instead of 20/52
 // and better probabilities (log loss 5.49 vs 5.59); spring / autumn updates made it worse and are left out
 // (C:/dev/_work/maple-sunday-data/exp/season-model.mjs, V3).
+// 2026-11-15: the pages mix these scores half and half with a foundation model's when its weekly scores are stored
+// (ml.ts); this file stays the statistical half and the fallback.
 import { THEMES, bundleTheme, isBigBundle, type ThemeId } from "./bundles.ts";
 import patchData from "./data/patches.json" with { type: "json" };
 import type { SundayWeek } from "./history.ts";
@@ -132,12 +134,45 @@ export type SundayPrediction = {
   /** The 5 shown picks: best of each kind (big day / hunting / enhancing) first, then by score. */
   picks: string[];
   themes: Record<ThemeId, number>;
+  /** P(big day): shining + miracle, or the big-day cycle alone when neither has come for a year. */
+  pBig: number;
   /** Sundays between the last recorded one and the target that are missing from the data (predictions get worse). */
   missingWeeks: number;
 };
 
 const isBig: Has = (w) => [...w.bundles].some(isBigBundle);
 const kindOf = (id: string) => (isBigBundle(id) ? "big" : bundleTheme(id) === "hunt" ? "hunt" : bundleTheme(id) ? "enhance" : "other");
+
+/** The 5 shown picks from bundles sorted by score: the best of each kind first (hunting bundles all miss together on a big day), then by score. */
+export function pickFive(ranked: { id: string }[]): string[] {
+  const picks: string[] = [];
+  const used = new Set<string>();
+  for (const r of ranked) {
+    if (picks.length === KINDS_FIRST) break;
+    if (used.has(kindOf(r.id))) continue;
+    picks.push(r.id);
+    used.add(kindOf(r.id));
+  }
+  for (const r of ranked) if (picks.length < PICKS && !picks.includes(r.id)) picks.push(r.id);
+  return picks;
+}
+
+/**
+ * P(theme shows up) from bundle scores, the way predictSunday combines them: a big day (shining -> starforce,
+ * miracle -> enhance) and a regular week exclude each other, and on a regular week each bundle of the theme
+ * comes with its score / P(regular week). `pBig` = P(big day).
+ */
+export function themeOdds(ranked: { id: string; p: number }[], pBig: number): Record<ThemeId, number> {
+  const pOf = new Map(ranked.map((r) => [r.id, r.p]));
+  const bigOf: Partial<Record<ThemeId, number>> = { starforce: pOf.get("shining") ?? 0, enhance: pOf.get("miracle") ?? 0 };
+  return Object.fromEntries(
+    THEMES.map(({ id }) => {
+      let none = 1;
+      for (const r of ranked) if (!isBigBundle(r.id) && bundleTheme(r.id) === id) none *= 1 - Math.min(0.95, r.p / (1 - pBig));
+      return [id, (bigOf[id] ?? 0) + (1 - pBig) * (1 - none)];
+    }),
+  ) as Record<ThemeId, number>;
+}
 
 export function predictSunday(weeks: SundayWeek[], date: string, start = TRAIN_START): SundayPrediction {
   const t = weekIndex(date);
@@ -169,14 +204,12 @@ export function predictSunday(weeks: SundayWeek[], date: string, start = TRAIN_S
     ["miracle", (pBig * hM) / hSum],
   ]);
 
-  // stage 2: everything else, learned on regular (non-big) weeks
+  // stage 2: everything else, learned on regular (non-big) weeks; q = score given that it is a regular week
   const regular = train.filter((w) => !isBig(w));
-  const onRegular = new Map<string, number>(); // score given that it is a regular week
   for (const id of active) {
     if (isBigBundle(id)) continue;
     const has: Has = (w) => w.bundles.has(id);
     const q = regular.some(has) ? Math.sqrt(hazard(regular, has, since(regular, has, t)) * decayRate(regular, has)) : 0.01 / (1 - pBig);
-    onRegular.set(id, q);
     scores.set(id, (1 - pBig) * q);
   }
 
@@ -189,29 +222,8 @@ export function predictSunday(weeks: SundayWeek[], date: string, start = TRAIN_S
       return { id, p, sinceWeeks: s === 99 ? null : s, avgGap: gaps.length ? gaps.reduce((x, y) => x + y, 0) / gaps.length : null };
     });
 
-  const picks: string[] = [];
-  const used = new Set<string>();
-  for (const r of ranked) {
-    if (picks.length === KINDS_FIRST) break;
-    if (used.has(kindOf(r.id))) continue;
-    picks.push(r.id);
-    used.add(kindOf(r.id));
-  }
-  for (const r of ranked) if (picks.length < PICKS && !picks.includes(r.id)) picks.push(r.id);
-
-  // P(theme shows up) = its big day (shining -> starforce, miracle -> enhance) + regular week x P(any of its bundles | regular).
-  // Big days and regular weeks exclude each other, so the regular part is combined before multiplying by P(regular) once.
-  const bigOf: Partial<Record<ThemeId, number>> = { starforce: scores.get("shining") ?? 0, enhance: scores.get("miracle") ?? 0 };
-  const themes = Object.fromEntries(
-    THEMES.map(({ id }) => {
-      let none = 1;
-      for (const [b, q] of onRegular) if (bundleTheme(b) === id) none *= 1 - Math.min(0.95, q);
-      return [id, (bigOf[id] ?? 0) + (1 - pBig) * (1 - none)];
-    }),
-  ) as Record<ThemeId, number>;
-
   const last = before[before.length - 1];
-  return { date, ranked, picks, themes, missingWeeks: Math.max(0, t - last.t - 1) };
+  return { date, ranked, picks: pickFive(ranked), themes: themeOdds(ranked, pBig), pBig, missingWeeks: Math.max(0, t - last.t - 1) };
 }
 
 /** The five picks in the order the pages show them: most likely first (the model takes one per kind first). */

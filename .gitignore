@@ -39,3 +39,8 @@ AGENTS.md
 CLAUDE.md
 .claude/
 .agents/
+
+# weekly Sunday model job: outputs and the local Python environment
+/scripts/sunday-ml/out/
+/scripts/sunday-ml/.venv/
+__pycache__/
