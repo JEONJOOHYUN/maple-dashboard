@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { averageTries } from "./luck.ts";
-import { NO_CONV, OPTIONS, SOUL_EXTRA, addWeaponChance, customChance, emblemUseful, linesFirstChance, slotOptions, comboChance, practicalTargets, bestValues, convFromSpec, convFromText, convPct, fixFirstLine, gradeUp, lineTables, resetMeso, soulChance, statTargets, sumChance, weaponChance, type WeaponGoal, WEAPON_TIERS, weaponTierOf } from "./potential.ts";
+import { CUBES, NO_CONV, OPTIONS, SLOTS, SOUL_EXTRA, sellable, addWeaponChance, customChance, emblemUseful, linesFirstChance, slotOptions, comboChance, practicalTargets, bestValues, convFromSpec, convFromText, convPct, fixFirstLine, gradeUp, lineTables, resetMeso, soulChance, statTargets, sumChance, weaponChance, type WeaponGoal, WEAPON_TIERS, weaponTierOf } from "./potential.ts";
 
 const near = (actual: number, expected: number, tolerance: number, label: string) =>
   assert.ok(Math.abs(actual - expected) <= tolerance, `${label}: ${actual} is not within ${tolerance} of ${expected}`);
@@ -445,4 +445,31 @@ test("selling: any main stat (and HP) — whichever stat does best, lines of dif
   // Target chips read like one stat.
   assert.deepEqual(practicalTargets(ring, { conv: conv2, main: "any" }, 3), practicalTargets(ring, { conv: conv2, main: "str" }, 3));
   assert.deepEqual(emblemUseful("anyhp"), emblemUseful("str"));
+});
+
+test("selling: belt too (user, 2026-11-16: belt yes, shoulder no), and every sellable slot has the four stats the same", () => {
+  assert.deepEqual(SLOTS.filter(sellable).map((s) => s.id), ["belt", "face", "eye", "earring", "ring", "pendant", "heart"]);
+  // STR · DEX · INT · LUK (with their per-level and flat lines) share values and chances, so one stat stands in for the
+  // target chips and the prime cube's line 1.
+  let checked = 0;
+  for (const slot of SLOTS.filter(sellable))
+    for (const cube of CUBES.filter((c) => c.kind !== "soul"))
+      for (const grade of ["rare", "epic", "unique", "legendary"] as const)
+        for (const level of [160, 200, 250]) {
+          const rows = lineTables(cube.id, grade, slot.id, level);
+          if (!rows) continue;
+          checked++;
+          for (const line of rows) {
+            const of = (st: string) => JSON.stringify(line.filter((r) => [st, `lv${st}`, `f${st}`].includes(r[0])).map((r) => [r[0].replace(st, ""), r[1], r[2]]));
+            for (const st of ["dex", "int", "luk"]) assert.equal(of(st), of("str"), `${slot.id} ${cube.id} ${grade} Lv.${level} ${st}`);
+          }
+        }
+  assert.ok(checked > 0);
+  // Belt Lv.200 legendary 18 % (Monte Carlo 1M draws agreed within 3σ on black legendary · unique and white legendary, 2026-11-16).
+  const conv = convFromSpec({ level: 280, v9: 2, cd3: 30, atk1: 4, all1: 10 });
+  const belt = lineTables("black", "legendary", "belt", 200)!;
+  const p = (main: "str" | "any" | "anyhp") => sumChance(belt, { type: "stat", min: 18, conv, attack: "atk", main });
+  near(p("str"), 0.03433, 0.00001, "one stat");
+  near(p("any"), 0.13731, 0.00001, "any of four");
+  near(p("anyhp"), 0.17925, 0.00001, "with HP");
 });

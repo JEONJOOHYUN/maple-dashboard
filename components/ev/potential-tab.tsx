@@ -29,6 +29,7 @@ import { type MainStat,
   lineTables,
   resetMeso,
   practicalTargets,
+  sellable,
   sumChance,
   weaponChance,
   type AddWeaponGoal,
@@ -120,8 +121,7 @@ export function PotentialTab() {
   const slot = SLOTS.find((s) => s.id === slotId)!;
   const soul = slot.kind === "soul";
   const weaponLike = slot.kind === "weapon" || slot.kind === "sub" || slot.kind === "emblem";
-  // Accessories only: armour (gloves, hats …) belongs to one class group, so whose main stat it is is already known.
-  const canSell = slot.kind === "acc";
+  const canSell = sellable(slot);
   const saleOn = canSell && !!sale?.on;
   const statMain: MainStat = saleOn ? (sale.hp ? "anyhp" : "any") : mainStat;
   const level = Math.max(1, Math.round(parseNum(levelText, 200)));
@@ -656,7 +656,7 @@ export function PotentialTab() {
                   }
                   setTargetIdx(1);
                 }}
-                // Four cells on accessories: shorter names so they fit a phone.
+                // Four cells where selling is offered: shorter names so they fit a phone.
                 options={[
                   { id: "str", label: "일반", hint: MAIN_HINT.str },
                   { id: "all", label: canSell ? "제논" : "제논 · 올스탯", hint: MAIN_HINT.all },

@@ -411,10 +411,12 @@ export type MainStat = "str" | "all" | "hp" | "any" | "anyhp";
  * Selling (user, 2026-11-16: accessories can be worn by anyone, so people roll them to sell): "any" = met when
  * STR, DEX, INT or LUK reaches the goal — each with its own % · per-level · flat lines plus all stat and the
  * conversions, the same as "str" for that stat (flat magic attack for INT, flat attack for the others) — and "anyhp" = max HP % (the "hp" goal) counts as a fifth choice.
- * One roll is checked once: a STR line and a DEX line do not add up. Accessories only (the screen offers it there):
- * gloves · hats belong to one class group, so their combo goals keep a single main stat.
+ * One roll is checked once: a STR line and a DEX line do not add up. Offered on `sellable` slots only: gloves · hats
+ * belong to one class group, so their combo goals keep a single main stat.
  */
 const SALE_STATS = ["str", "dex", "int", "luk"] as const;
+/** Slots rolled to sell to anyone: accessories and belts (user, 2026-11-16: belt yes, shoulder no). */
+export const sellable = (slot: Slot) => slot.kind === "acc" || slot.id === "belt";
 const isSale = (main: MainStat) => main === "any" || main === "anyhp";
 /** Main stat choices that read a line like "str" does (target chips, emblem lines). */
 const singleStat = (main: MainStat): "str" | "all" | "hp" => (isSale(main) ? "str" : (main as "str" | "all" | "hp"));
