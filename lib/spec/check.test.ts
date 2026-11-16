@@ -166,21 +166,23 @@ test("hyper stat: a few spare points are fine, warn from 10", () => {
   assert.equal(checkSpec(raw).misses.find((m) => m.cat === "하이퍼 스탯")?.what, "10포인트 남음 (1번 프리셋)");
 });
 
-test("title: option warned only under 7 days, the title itself 14 days ahead", () => {
+test("title: the title and its option warned only under 7 days", () => {
   const raw = base();
   const now = new Date("2026-11-09T00:00:00+09:00");
   const boss = { title_name: "보스 칭호", title_description: "보스 몬스터 데미지 +10%" };
-  raw.equipment.title = { ...boss, date_option_expire: "2026-11-16T00:00+09:00" };
-  assert.equal(checkSpec(raw, now).misses.find((m) => m.cat === "칭호"), undefined, "7 days left: no warning");
-  raw.equipment.title = { ...boss, date_option_expire: "2026-11-15T12:00+09:00" };
-  assert.equal(checkSpec(raw, now).misses.find((m) => m.cat === "칭호"), undefined, "6.5 days shows as 7: no warning");
-  raw.equipment.title = { ...boss, date_option_expire: "2026-11-15T00:00+09:00" };
-  assert.deepEqual(checkSpec(raw, now).misses.map((m) => m.what), ["옵션 만료 6일 남음"]);
-  raw.equipment.title = { ...boss, date_expire: "2026-11-20T00:00+09:00" };
-  assert.deepEqual(checkSpec(raw, now).misses.map((m) => m.what), ["기간 만료 11일 남음"]);
+  for (const [key, label] of [["date_option_expire", "옵션"], ["date_expire", "기간"]] as const) {
+    raw.equipment.title = { ...boss, [key]: "2026-11-20T00:00+09:00" };
+    assert.equal(checkSpec(raw, now).misses.find((m) => m.cat === "칭호"), undefined, `${label}: 11 days left, no warning`);
+    raw.equipment.title = { ...boss, [key]: "2026-11-16T00:00+09:00" };
+    assert.equal(checkSpec(raw, now).misses.find((m) => m.cat === "칭호"), undefined, `${label}: 7 days left, no warning`);
+    raw.equipment.title = { ...boss, [key]: "2026-11-15T12:00+09:00" };
+    assert.equal(checkSpec(raw, now).misses.find((m) => m.cat === "칭호"), undefined, `${label}: 6.5 days shows as 7, no warning`);
+    raw.equipment.title = { ...boss, [key]: "2026-11-15T00:00+09:00" };
+    assert.deepEqual(checkSpec(raw, now).misses.map((m) => m.what), [`${label} 만료 6일 남음`]);
+  }
 });
 
-test("title: equipped title (title presets do not follow equipment presets), expiry within 14 days", () => {
+test("title: equipped title (title presets do not follow equipment presets), expiry under 7 days", () => {
   const raw = base();
   raw.equipment.title_preset2 = null; // boss equipment preset is 1, but a null title preset must not matter
   raw.equipment.title = { title_name: "보스 칭호", title_description: "보스 몬스터 데미지 +10%", date_option_expire: "2026-11-15T00:00+09:00" };

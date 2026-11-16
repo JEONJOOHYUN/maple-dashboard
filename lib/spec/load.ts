@@ -7,7 +7,7 @@ import { eventSkillNames, type EventNotice } from "@/lib/spec/event-skill";
 
 export const SPEC_CACHE_SECONDS = 3 * 60 * 60;
 // Bump when check.ts rules change so cached results from older rules are not served.
-const RULES_VERSION = "11";
+const RULES_VERSION = "12";
 
 /** One tag per nickname, so "다시 조회" drops only that character's saved result. */
 export const specTag = (name: string) => `spec-check:${name.trim()}`;

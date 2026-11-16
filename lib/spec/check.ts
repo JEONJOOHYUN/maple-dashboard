@@ -69,9 +69,8 @@ const BOSS_COMMON_CORES = ["스파이더 인 미러", "크레스트 오브 더 �
 const WARRIOR_CORE = "바디 오브 스틸";
 const WARRIOR_CLASSES = new Set(["히어로", "팔라딘", "다크나이트", "소울마스터", "미하일", "블래스터", "데몬슬레이어", "데몬어벤져", "아란", "카이저", "아델", "제로", "렌"]);
 const HP_CLASS = "데몬어벤져";
-// Title warnings: the title itself 14 days ahead, its option only under 7 days (user, 2026-11-16).
-const TITLE_WARN_DAYS = 14;
-const TITLE_OPTION_WARN_DAYS = 7;
+// Title warnings: the title and its option alike, only under 7 days (user, 2026-11-16).
+const TITLE_WARN_DAYS = 7;
 // Hyper stat points left: a few spare points are normal, warn from 10 (user, 2026-11-16).
 const HYPER_WARN_POINTS = 10;
 
@@ -294,13 +293,13 @@ export function checkSpec(raw: SpecRaw, now: Date = new Date(), data: Data = SPE
     add("칭호", "미장착");
   } else {
     if (!/보스 몬스터/.test(title.title_description ?? "")) add("칭호", "보스 데미지 없음", title.title_name);
-    for (const [label, at, warn] of [
-      ["기간", title.date_expire, (d: number) => d <= TITLE_WARN_DAYS],
-      ["옵션", title.date_option_expire, (d: number) => d < TITLE_OPTION_WARN_DAYS],
+    for (const [label, at] of [
+      ["기간", title.date_expire],
+      ["옵션", title.date_option_expire],
     ] as const) {
       if (!at) continue;
       const days = at === "expired" ? -1 : Math.ceil((new Date(at).getTime() - now.getTime()) / 86_400_000);
-      if (warn(days)) add("칭호", days < 0 ? `${label} 만료` : `${label} 만료 ${days}일 남음`, title.title_name);
+      if (days < TITLE_WARN_DAYS) add("칭호", days < 0 ? `${label} 만료` : `${label} 만료 ${days}일 남음`, title.title_name);
     }
   }
 
