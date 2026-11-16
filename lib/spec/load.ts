@@ -7,7 +7,10 @@ import { eventSkillNames, type EventNotice } from "@/lib/spec/event-skill";
 
 export const SPEC_CACHE_SECONDS = 3 * 60 * 60;
 // Bump when check.ts rules change so cached results from older rules are not served.
-const RULES_VERSION = "10";
+const RULES_VERSION = "11";
+
+/** One tag per nickname, so "다시 조회" drops only that character's saved result. */
+export const specTag = (name: string) => `spec-check:${name.trim()}`;
 
 type Loaded = { ok: true; result: SpecResult; at: number } | { ok: false; kind: "notFound" };
 
@@ -58,6 +61,6 @@ export async function getSpec(name: string): Promise<Loaded> {
   const eventSkills = eventSkillNames(await eventNotices().catch(() => []), Date.now());
   return unstable_cache(() => load(key, eventSkills), ["spec-check", RULES_VERSION, SPEC_DATA.updated, eventSkills.join("|"), key], {
     revalidate: SPEC_CACHE_SECONDS,
-    tags: ["spec-check"],
+    tags: ["spec-check", specTag(key)],
   })();
 }

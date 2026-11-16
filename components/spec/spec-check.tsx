@@ -1,16 +1,22 @@
 "use client";
 
-import { useState, useTransition, type FormEvent } from "react";
+import { useEffect, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Check, Lightbulb, Loader2, Search, ShieldAlert, ShieldCheck } from "lucide-react";
+import { AlertCircle, Check, ExternalLink, Lightbulb, Loader2, RotateCw, Search, ShieldAlert, ShieldCheck, X } from "lucide-react";
+import { refreshSpec } from "@/app/spec/actions";
 import { PageHeader } from "@/components/page-header";
 import type { Miss, SpecResult } from "@/lib/spec/check";
+import { useStored } from "@/lib/use-stored";
 import { cn } from "@/lib/utils";
 
 export type SpecView =
   | { kind: "empty" }
-  | { kind: "result"; result: SpecResult; at: number }
+  | { kind: "result"; result: SpecResult; at: number; optimizer: string | null }
   | { kind: "notFound" | "quota" | "failed"; name: string };
+
+// Recent characters (this browser only): people come back to check a fix (user, 2026-11-16).
+const RECENT_KEY = "spec-recent";
+const RECENT_MAX = 8;
 
 const CHECKED = "공용 · 직업 0차 스킬 · 성향 · 유니온 아티팩트 · 칭호 · 5차 · 하이퍼 스탯 · 하이퍼 패시브 · 펫 버프 · 링크 · 어빌리티";
 
@@ -87,7 +93,9 @@ function MissGroup({ cat, items, tip }: { cat: string; items: Miss[]; tip?: bool
   );
 }
 
-function Result({ result, at }: { result: SpecResult; at: number }) {
+type ResultProps = { result: SpecResult; at: number; optimizer: string | null; refreshing: boolean; refreshNote: string; onRefresh: () => void };
+
+function Result({ result, at, optimizer, refreshing, refreshNote, onRefresh }: ResultProps) {
   const [open, setOpen] = useState(true);
   const n = result.misses.length;
   const p = result.presets;
@@ -141,9 +149,34 @@ function Result({ result, at }: { result: SpecResult; at: number }) {
 
         <div className="flex flex-col gap-1 text-xs text-muted-foreground">
           {presetText && <span>보스 프리셋: {presetText}</span>}
-          <span>같은 캐릭터 3시간 동안 저장된 결과 · {fetchedAt(at)} 조회</span>
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span>같은 캐릭터 3시간 동안 저장된 결과 · {fetchedAt(at)} 조회</span>
+            <button
+              type="button"
+              onClick={onRefresh}
+              disabled={refreshing}
+              className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 font-semibold text-foreground hover:bg-secondary disabled:opacity-60"
+            >
+              <RotateCw className={cn("size-3.5", refreshing && "animate-spin")} aria-hidden="true" />
+              다시 조회
+            </button>
+          </span>
+          {refreshNote && <span className="text-[#E2504F]">{refreshNote}</span>}
           {!result.known && <span>새 직업 → 직업별 기준 없음, 공용 항목만 확인</span>}
         </div>
+
+        {optimizer && (
+          <a
+            href={optimizer}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 rounded-lg border border-border px-3.5 py-2.5 text-[13px] font-semibold hover:bg-secondary"
+          >
+            하이퍼 스탯 효율 배분 보기
+            <span className="text-xs font-normal text-muted-foreground">외부 사이트</span>
+            <ExternalLink className="ml-auto size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          </a>
+        )}
       </div>
 
       <div className="overflow-hidden rounded-lg border border-border bg-card">
@@ -197,12 +230,36 @@ export function SpecCheck({ name, view }: { name: string; view: SpecView }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [text, setText] = useState(name);
+  const [recent, setRecent] = useStored<string[]>(RECENT_KEY, []);
+  const [refreshNote, setRefreshNote] = useState("");
+
+  // Only characters that were found are remembered, newest first, under the name NEXON returned.
+  const found = view.kind === "result" ? view.result.name : null;
+  useEffect(() => {
+    if (found) setRecent((prev) => [found, ...(Array.isArray(prev) ? prev : []).filter((n) => n !== found)].slice(0, RECENT_MAX));
+  }, [found, setRecent]);
+  const recentList = Array.isArray(recent) ? recent.filter((n): n is string => typeof n === "string") : [];
+
+  const go = (q: string) => startTransition(() => router.push(`/spec?name=${encodeURIComponent(q)}`));
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
     const q = text.trim();
-    if (!q) return;
-    startTransition(() => router.push(`/spec?name=${encodeURIComponent(q)}`));
+    if (q) go(q);
+  };
+
+  const pick = (n: string) => {
+    setText(n);
+    go(n);
+  };
+
+  // The saved result is keyed by the name in the address, so that is the one dropped.
+  const refresh = () => {
+    setRefreshNote("");
+    startTransition(async () => {
+      if (await refreshSpec(name)) router.refresh();
+      else setRefreshNote("지금은 다시 조회 못 함 → 잠시 뒤 다시");
+    });
   };
 
   return (
@@ -233,8 +290,45 @@ export function SpecCheck({ name, view }: { name: string; view: SpecView }) {
         </button>
       </form>
 
+      {recentList.length > 0 && (
+        <div className="-mt-1 flex flex-wrap items-center gap-1.5">
+          <span className="mr-0.5 text-xs text-muted-foreground">최근 검색</span>
+          {recentList.map((n) => (
+            <span
+              key={n}
+              className={cn(
+                "inline-flex items-center rounded-full border text-[13px]",
+                n === found ? "border-primary bg-primary-soft text-primary-text" : "border-border bg-card",
+              )}
+            >
+              <button type="button" onClick={() => pick(n)} disabled={pending} className="py-1.5 pr-1 pl-3 font-semibold">
+                {n}
+              </button>
+              <button
+                type="button"
+                onClick={() => setRecent((prev) => (Array.isArray(prev) ? prev : []).filter((x) => x !== n))}
+                aria-label={`${n} 최근 검색에서 지우기`}
+                className="py-1.5 pr-2.5 pl-1 opacity-60 hover:opacity-100"
+              >
+                <X className="size-3.5" aria-hidden="true" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
       <div className={cn("transition-opacity", pending && "opacity-50")} aria-busy={pending}>
-        {view.kind === "result" && <Result key={`${view.result.name}-${view.at}`} result={view.result} at={view.at} />}
+        {view.kind === "result" && (
+          <Result
+            key={`${view.result.name}-${view.at}`}
+            result={view.result}
+            at={view.at}
+            optimizer={view.optimizer}
+            refreshing={pending}
+            refreshNote={refreshNote}
+            onRefresh={refresh}
+          />
+        )}
         {view.kind === "empty" && <Message title="닉네임 검색" sub="보스 프리셋 기준으로 공용 스킬 · 아티팩트 · 5차 · 링크 · 어빌리티 등 확인" />}
         {view.kind === "notFound" && <Message title={`"${view.name}" 캐릭터 없음`} sub="닉네임 확인 · 2023년 12월 이후 접속 기록이 있어야 조회됨" />}
         {view.kind === "quota" && <Message title="오늘 조회 한도 다 씀" sub="넥슨 API 하루 한도 → 내일 다시 · 이미 조회한 캐릭터는 3시간 동안 바로 보임" />}

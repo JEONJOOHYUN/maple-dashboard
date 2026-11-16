@@ -125,7 +125,7 @@ test("each rule fires", () => {
   raw.propensity.charisma_level = 80;
   raw.vmatrix.character_v_core_equipment!.find((c) => c.v_core_name === "에르다 노바")!.v_core_level = 4;
   raw.vmatrix.character_v_core_equipment = raw.vmatrix.character_v_core_equipment!.filter((c) => c.v_core_type !== "특수 코어");
-  raw.hyper.hyper_stat_preset_1_remain_point = 7;
+  raw.hyper.hyper_stat_preset_1_remain_point = 12;
   raw.hyperPassive.character_skill![0].skill_level = 0;
   (raw.link.character_link_skill_preset_1 as unknown[]).pop();
   raw.ability.ability_preset_1 = { ability_info: [L(BOSS20), U(STATUS8), U("아이템 드롭률 20% 증가")] };
@@ -138,7 +138,7 @@ test("each rule fires", () => {
   assert.ok(what.includes("카리스마 80 / 100"));
   assert.ok(what.includes("30레벨 미만 1개"));
   assert.ok(what.includes("보스용 없음"));
-  assert.ok(what.includes("7포인트 남음 (1번 프리셋)"));
+  assert.ok(what.includes("12포인트 남음 (1번 프리셋)"));
   assert.ok(what.includes("대부분 찍는 것 1개 안 찍음"));
   assert.ok(what.some((w) => /^대부분 끼는 것 1개 빠짐/.test(w)));
   assert.ok(what.includes("미완성 (1번 프리셋)"));
@@ -156,6 +156,28 @@ test("artifact: warn only when a boss effect is short while points sit in a non-
   raw.artifact.union_artifact_effect = fx.filter((e) => !/메소 획득량/.test(e.name));
   r = checkSpec(raw);
   assert.equal(r.misses.find((m) => m.cat === "유니온 아티팩트"), undefined);
+});
+
+test("hyper stat: a few spare points are fine, warn from 10", () => {
+  const raw = base();
+  raw.hyper.hyper_stat_preset_1_remain_point = 9;
+  assert.equal(checkSpec(raw).misses.find((m) => m.cat === "하이퍼 스탯"), undefined);
+  raw.hyper.hyper_stat_preset_1_remain_point = 10;
+  assert.equal(checkSpec(raw).misses.find((m) => m.cat === "하이퍼 스탯")?.what, "10포인트 남음 (1번 프리셋)");
+});
+
+test("title: option warned only under 7 days, the title itself 14 days ahead", () => {
+  const raw = base();
+  const now = new Date("2026-11-09T00:00:00+09:00");
+  const boss = { title_name: "보스 칭호", title_description: "보스 몬스터 데미지 +10%" };
+  raw.equipment.title = { ...boss, date_option_expire: "2026-11-16T00:00+09:00" };
+  assert.equal(checkSpec(raw, now).misses.find((m) => m.cat === "칭호"), undefined, "7 days left: no warning");
+  raw.equipment.title = { ...boss, date_option_expire: "2026-11-15T12:00+09:00" };
+  assert.equal(checkSpec(raw, now).misses.find((m) => m.cat === "칭호"), undefined, "6.5 days shows as 7: no warning");
+  raw.equipment.title = { ...boss, date_option_expire: "2026-11-15T00:00+09:00" };
+  assert.deepEqual(checkSpec(raw, now).misses.map((m) => m.what), ["옵션 만료 6일 남음"]);
+  raw.equipment.title = { ...boss, date_expire: "2026-11-20T00:00+09:00" };
+  assert.deepEqual(checkSpec(raw, now).misses.map((m) => m.what), ["기간 만료 11일 남음"]);
 });
 
 test("title: equipped title (title presets do not follow equipment presets), expiry within 14 days", () => {
