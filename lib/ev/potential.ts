@@ -152,7 +152,8 @@ export function fixFirstLine(rows: Row[][], cat: string, value: number): Row[][]
   return [[[cat, value, 1, 1]], rows[1], rows[2]];
 }
 
-type Token = { key: string; p: number; cat: string; value: number; own: boolean; limit?: string };
+/** `vec` = one value per candidate stat, for goals met by whichever stat does best (selling, MainStat "any"). */
+type Token = { key: string; p: number; cat: string; value: number; own: boolean; limit?: string; vec?: number[] };
 
 /**
  * Options that cannot fill all three lines (official cube guide): "쓸만한" skills and
@@ -166,7 +167,7 @@ function limitGroup(cat: string): string | undefined {
 }
 
 /** Merge rows into tokens (rows that map to the same token add up) plus the "anything else" remainder. */
-function tokens(rows: Row[], map: (row: Row) => { cat: string; value: number; own: boolean } | null): Token[] {
+function tokens(rows: Row[], map: (row: Row) => { cat: string; value: number; own: boolean; vec?: number[] } | null): Token[] {
   const merged = new Map<string, Token>();
   let used = 0;
   for (const row of rows) {
@@ -175,7 +176,7 @@ function tokens(rows: Row[], map: (row: Row) => { cat: string; value: number; ow
     const t = map(row) ?? (limit ? { cat: "x", value: 0, own: false } : null);
     if (!t) continue;
     used += row[2];
-    const key = `${t.cat}:${t.value}:${t.own ? 1 : 0}:${limit ?? ""}`;
+    const key = `${t.cat}:${t.value}:${t.own ? 1 : 0}:${limit ?? ""}:${t.vec?.join(",") ?? ""}`;
     const cur = merged.get(key);
     if (cur) cur.p += row[2];
     else merged.set(key, { key, p: row[2], ...t, limit });
@@ -271,7 +272,8 @@ export type WeaponGoal = {
  * count) and all stat % alone for a Xenon ("all"). `stat` = the table's category of the stat ("str" stands in for any).
  */
 export function emblemUseful(main: MainStat, stat = "str"): string[] {
-  return ["dmg", ...(main === "hp" ? ["hp"] : main === "all" ? ["all"] : [stat, "all"])];
+  const one = singleStat(main);
+  return ["dmg", ...(one === "hp" ? ["hp"] : one === "all" ? ["all"] : [stat, "all"])];
 }
 
 /** Top value per option = the highest value line 1 can have (40 · 45 % boss / ignore defense, 12 · 13 % attack). */
@@ -403,7 +405,19 @@ export const convFor = (conv: StatConv, additional: boolean): StatConv => (addit
  * (e.g. hat Lv.200 legendary line 1: STR 12 % at 9.76 %, all stat 9 % at 7.32 %, HP 12 % at 9.76 %).
  * For Xenon and Demon Avenger only that line counts; the conversions are for single-stat classes.
  */
-export type MainStat = "str" | "all" | "hp";
+export type MainStat = "str" | "all" | "hp" | "any" | "anyhp";
+
+/**
+ * Selling (user, 2026-11-16: accessories can be worn by anyone, so people roll them to sell): "any" = met when
+ * STR, DEX, INT or LUK reaches the goal — each with its own % · per-level · flat lines plus all stat and the
+ * conversions, the same as "str" for that stat (flat magic attack for INT, flat attack for the others) — and "anyhp" = max HP % (the "hp" goal) counts as a fifth choice.
+ * One roll is checked once: a STR line and a DEX line do not add up. Accessories only (the screen offers it there):
+ * gloves · hats belong to one class group, so their combo goals keep a single main stat.
+ */
+const SALE_STATS = ["str", "dex", "int", "luk"] as const;
+const isSale = (main: MainStat) => main === "any" || main === "anyhp";
+/** Main stat choices that read a line like "str" does (target chips, emblem lines). */
+const singleStat = (main: MainStat): "str" | "all" | "hp" => (isSale(main) ? "str" : (main as "str" | "all" | "hp"));
 
 export type SumGoal =
   | { type: "stat"; min: number; conv?: StatConv; attack?: "atk" | "matk"; main?: MainStat }
@@ -453,6 +467,12 @@ export function sumChance(rows: Row[][], goal: SumGoal): number {
     tokens(line, (r) => {
       if (goal.type === "stat") {
         const main = goal.main ?? "str";
+        if (isSale(main)) {
+          // Each buyer's own attack line: magic attack for INT (mages), attack for the rest (Codex review).
+          const vec = SALE_STATS.map((st) => statValue(r, goal.conv ?? NO_CONV, st === "int" ? "matk" : "atk", st));
+          if (main === "anyhp") vec.push(r[0] === "hp" ? r[1] : 0);
+          return vec.some((x) => x > 0) ? { cat: "v", value: 0, own: false, vec } : null;
+        }
         const v = main === "str" ? statValue(r, goal.conv ?? NO_CONV, goal.attack ?? "atk") : r[0] === main ? r[1] : 0;
         return v > 0 ? { cat: "s", value: v, own: false } : null;
       }
@@ -461,6 +481,13 @@ export function sumChance(rows: Row[][], goal: SumGoal): number {
       return r[0] === "drop" || r[0] === "meso" ? { cat: "m", value: r[1], own: false } : null;
     })
   );
+  if (goal.type === "stat" && isSale(goal.main ?? "str")) {
+    const n = goal.main === "anyhp" ? 5 : 4;
+    return enumerate(lines, (a, b, c) => {
+      for (let i = 0; i < n; i++) if ((a.vec?.[i] ?? 0) + (b.vec?.[i] ?? 0) + (c.vec?.[i] ?? 0) >= goal.min) return true;
+      return false;
+    });
+  }
   return enumerate(lines, (a, b, c) => {
     const xs = [a, b, c];
     if (goal.type === "stat" || goal.type === "cool") return xs.reduce((s, t) => s + (t.cat === "x" ? 0 : t.value), 0) >= goal.min;
@@ -468,16 +495,16 @@ export function sumChance(rows: Row[][], goal: SumGoal): number {
   });
 }
 
-/** One line's worth in main stat % (0 = not a main stat line). */
-function statValue(r: Row, conv: StatConv, attack: "atk" | "matk"): number {
+/** One line's worth in `stat` % (0 = not a line for that stat). STR stands in for any single main stat. */
+function statValue(r: Row, conv: StatConv, attack: "atk" | "matk", stat = "str"): number {
   switch (r[0]) {
-    case "str":
+    case stat:
       return r[1];
     case "all":
       return r[1] * conv.all;
-    case "lvstr":
+    case `lv${stat}`:
       return r[1] * conv.lvstr;
-    case "fstr":
+    case `f${stat}`:
       return r[1] * conv.flat;
     case "cd":
       return r[1] * conv.cd;
@@ -494,7 +521,8 @@ function statValue(r: Row, conv: StatConv, attack: "atk" | "matk"): number {
 
 /** Main-stat sum targets for this table: 3 × best, … 3 × second best (e.g. 36 · 33 · 30 · 27 at Lv.200). */
 export function statTargets(rows: Row[][], main: MainStat = "str"): number[] {
-  const vals = [...new Set(rows.flat().filter((r) => r[0] === main).map((r) => r[1]))].sort((a, b) => b - a);
+  const one = singleStat(main);
+  const vals = [...new Set(rows.flat().filter((r) => r[0] === one).map((r) => r[1]))].sort((a, b) => b - a);
   if (vals.length === 0) return [];
   const [hi, lo = hi] = vals;
   return [...new Set([lo * 3, hi + lo * 2, hi * 2 + lo, hi * 3])].sort((a, b) => a - b);
@@ -516,7 +544,8 @@ export function practicalTargets(
   step: number,
   count = 5,
 ): number[] {
-  const main = goal.main ?? "str";
+  // Selling uses the single-stat chips: the four stats have the same table, so one stands in.
+  const main = singleStat(goal.main ?? "str");
   const value = (r: Row) => (main === "str" ? statValue(r, goal.conv ?? NO_CONV, goal.attack ?? "atk") : r[0] === main ? r[1] : 0);
   // Per line: 0 (any other option) plus every counted value seen at least 1 % of the time.
   const options = rows.map((line) => [0, ...new Set(line.filter((r) => r[2] >= PRACTICAL_P).map(value).filter((v) => v > 0))]);

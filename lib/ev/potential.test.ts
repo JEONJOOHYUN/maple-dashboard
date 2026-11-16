@@ -409,3 +409,40 @@ test("soul tables keep decimal values (증폭 1 · 3단계: 공격력 +1.5 % · 
   assert.ok(lineTables("soul", "legendary", "soul", 3)!.flat().some((r) => r[0] === "atk" && r[1] === 4.5), "stage 3 has attack 4.5 %");
   assert.ok(lineTables("soul", "legendary", "soul", 1)!.flat().some((r) => r[0] === "atk" && r[1] === 1.5), "stage 1 has attack 1.5 %");
 });
+
+test("selling: any main stat (and HP) — whichever stat does best, lines of different stats do not add up", () => {
+  type R = [string, number, number, number];
+  const fixed = (...cats: [string, number][]) => cats.map(([c, v]) => [[c, v, 1, 1]] as R[]) as never;
+  const any = (rows: never, min: number, main: "any" | "anyhp") => sumChance(rows, { type: "stat", min, conv: NO_CONV, main });
+  // STR 10 + DEX 10 + LUK 10: no single stat reaches 20.
+  assert.equal(any(fixed(["str", 10], ["dex", 10], ["luk", 10]), 20, "any"), 0);
+  assert.equal(any(fixed(["str", 10], ["dex", 10], ["luk", 10]), 10, "any"), 1);
+  // All stat counts for every stat: DEX 10 + all 5 + INT 10 → DEX 15.
+  assert.equal(any(fixed(["dex", 10], ["all", 5], ["int", 10]), 15, "any"), 1);
+  // HP only with "anyhp", and all stat does not raise HP.
+  assert.equal(any(fixed(["hp", 12], ["hp", 12], ["all", 9]), 24, "any"), 0);
+  assert.equal(any(fixed(["hp", 12], ["hp", 12], ["all", 9]), 24, "anyhp"), 1);
+  assert.equal(any(fixed(["hp", 12], ["all", 9], ["all", 9]), 24, "anyhp"), 0);
+  // Per-level and flat lines follow their own stat.
+  const conv = convFromSpec({ level: 200, v9: 2, cd3: 30, atk1: 4, all1: 10 });
+  const lv = fixed(["lvluk", 2], ["luk", 9], ["dex", 9]);
+  assert.equal(sumChance(lv, { type: "stat", min: 9 + 2 * conv.lvstr, conv, main: "any" }), 1);
+  assert.equal(sumChance(lv, { type: "stat", min: 9 + 2 * conv.lvstr, conv, main: "str" }), 0, "STR has none of them");
+
+  // Flat attack counts for STR · DEX · LUK buyers, flat magic attack for INT (Codex review).
+  const atkConv = { ...NO_CONV, atkf: 1 };
+  assert.equal(sumChance(fixed(["int", 9], ["matkf", 3], ["atkf", 3]), { type: "stat", min: 12, conv: atkConv, main: "any" }), 1, "INT 9 + magic 3");
+  assert.equal(sumChance(fixed(["int", 9], ["atkf", 3], ["atkf", 3]), { type: "stat", min: 12, conv: atkConv, main: "any" }), 0, "attack does not help INT");
+  assert.equal(sumChance(fixed(["luk", 9], ["matkf", 3], ["atkf", 3]), { type: "stat", min: 12, conv: atkConv, main: "any" }), 1, "LUK 9 + attack 3");
+
+  // Real table (Monte Carlo 400k draws agreed within 3σ, 2026-11-16): more ways in than one stat, HP adds more.
+  const conv2 = convFromSpec({ level: 280, v9: 2, cd3: 30, atk1: 4, all1: 10 });
+  const ring = lineTables("black", "legendary", "ring", 200)!;
+  const p = (main: "str" | "any" | "anyhp") => sumChance(ring, { type: "stat", min: 24, conv: conv2, attack: "atk", main });
+  near(p("str"), 0.00393, 0.00001, "one stat");
+  near(p("any"), 0.01573, 0.00001, "any of four");
+  near(p("anyhp"), 0.02019, 0.00001, "with HP");
+  // Target chips read like one stat.
+  assert.deepEqual(practicalTargets(ring, { conv: conv2, main: "any" }, 3), practicalTargets(ring, { conv: conv2, main: "str" }, 3));
+  assert.deepEqual(emblemUseful("anyhp"), emblemUseful("str"));
+});

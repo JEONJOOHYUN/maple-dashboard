@@ -58,7 +58,10 @@ export function Chip({
   );
 }
 
-/** Segmented control (tabs inside a muted track). */
+/**
+ * Segmented control (tabs inside a muted track). `hint` = a short note shown above the option on mouse hover
+ * (user, 2026-11-16); hover only exists on devices with a mouse, so anything a phone needs stays on screen.
+ */
 export function Segment<T extends string>({
   value,
   options,
@@ -67,28 +70,48 @@ export function Segment<T extends string>({
   className,
 }: {
   value: T;
-  options: { id: T; label: ReactNode }[];
+  options: { id: T; label: ReactNode; hint?: string }[];
   onChange: (id: T) => void;
   label: string;
   className?: string;
 }) {
   return (
     <div role="radiogroup" aria-label={label} className={cn("grid gap-0.5 rounded-lg bg-muted p-[3px]", className)} style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}>
-      {options.map((o) => (
-        <button
-          key={o.id}
-          type="button"
-          role="radio"
-          aria-checked={value === o.id}
-          onClick={() => onChange(o.id)}
-          className={cn(
-            "h-[34px] min-w-0 truncate rounded-md px-2 text-[13px] transition-colors",
-            value === o.id ? "bg-card font-bold text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-          )}
-        >
-          {o.label}
-        </button>
-      ))}
+      {options.map((o, i) => {
+        const button = (
+          <button
+            key={o.id}
+            type="button"
+            role="radio"
+            aria-checked={value === o.id}
+            onClick={() => onChange(o.id)}
+            className={cn(
+              "h-[34px] min-w-0 truncate rounded-md px-2 text-[13px] transition-colors",
+              o.hint && "flex-1",
+              value === o.id ? "bg-card font-bold text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            {o.label}
+            {o.hint && <span className="sr-only">, {o.hint}</span>}
+          </button>
+        );
+        if (!o.hint) return button;
+        // Outside the button (it truncates), pinned to the track's edge at either end so it does not run past it.
+        return (
+          <span key={o.id} className="group/seg relative flex min-w-0">
+            {button}
+            <span
+              aria-hidden="true"
+              className={cn(
+                "pointer-events-none absolute bottom-full z-10 mb-1.5 rounded-md bg-foreground px-2 py-1 text-[11px] font-medium whitespace-nowrap text-background opacity-0 shadow-sm transition-opacity group-hover/seg:opacity-100",
+                i === 0 ? "left-0" : i === options.length - 1 ? "right-0" : "left-1/2 -translate-x-1/2"
+              )}
+            >
+              {o.hint}
+            </span>
+          </span>
+        );
+      })}
     </div>
   );
 }

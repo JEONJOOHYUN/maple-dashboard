@@ -56,8 +56,10 @@ const GRADE_COLOR: Record<Grade, string> = {
   legendary: "border-emerald-400 text-emerald-600 dark:text-emerald-300",
 };
 const TIERS = WEAPON_TIERS;
+/** Hover notes on the main stat choices (user, 2026-11-16: "진짜 간단하게"). */
+const MAIN_HINT = { str: "내 직업 주스탯", all: "올스탯만", hp: "HP만", sale: "모든 주스탯 중 하나라도 · 팔 장비" } as const;
 /** The main stat line an emblem counts, by the main stat setting (emblemUseful). */
-const EMBLEM_STAT: Record<MainStat, string> = { str: "주스탯 · 올스탯", all: "올스탯", hp: "HP" };
+const EMBLEM_STAT: Record<MainStat, string> = { str: "주스탯 · 올스탯", all: "올스탯", hp: "HP", any: "주스탯 · 올스탯", anyhp: "주스탯 · 올스탯" };
 type Extra = "stat" | "cool" | "crit" | "drop";
 // cd8 = what was typed in the main-potential "크뎀 8%" box; cd3 (the unit of the conversion fields) stays the source of truth.
 // atkPct · allPct = attack 1 and all stat 1 % typed as main stat % (2026-11-14); left out, they come from atk1 · all1.
@@ -85,6 +87,8 @@ export function PotentialTab() {
   const attack: "atk" | "matk" = "atk";
   // Xenon counts all stat %, Demon Avenger max HP % (own values and chances in the official table).
   const [mainStat, setMainStat] = useStored<MainStat>("ev:mainStat", "str");
+  // Selling (user, 2026-11-16, option B): accessories anyone can wear are rolled to sell — any main stat, HP optional.
+  const [sale, setSale] = useStored<{ on: boolean; hp: boolean }>("ev:sale", { on: false, hp: false });
   const [ied, setIed] = useState(true);
   // Emblems: damage · main stat lines counted as useful too (off = attack % and ignore defence only).
   const [emblemMore, setEmblemMore] = useState(false);
@@ -116,6 +120,10 @@ export function PotentialTab() {
   const slot = SLOTS.find((s) => s.id === slotId)!;
   const soul = slot.kind === "soul";
   const weaponLike = slot.kind === "weapon" || slot.kind === "sub" || slot.kind === "emblem";
+  // Accessories only: armour (gloves, hats …) belongs to one class group, so whose main stat it is is already known.
+  const canSell = slot.kind === "acc";
+  const saleOn = canSell && !!sale?.on;
+  const statMain: MainStat = saleOn ? (sale.hp ? "anyhp" : "any") : mainStat;
   const level = Math.max(1, Math.round(parseNum(levelText, 200)));
   const potKind: PotKind = soul ? "soul" : kind;
   const cubes = CUBES.filter((c) => c.kind === potKind);
@@ -160,14 +168,14 @@ export function PotentialTab() {
   const sumTargets: { label: string; sub: string; goal: SumGoal }[] = useMemo(() => {
     if (!refRows) return [];
     if (target === "stat") {
-      const chips = practicalTargets(refRows, { conv: statConv, attack, main: mainStat }, kind === "add" ? 2 : 3).map((n) => ({ label: `${n}%`, sub: "이상", goal: { type: "stat", min: n, conv: statConv, attack, main: mainStat } as SumGoal }));
+      const chips = practicalTargets(refRows, { conv: statConv, attack, main: statMain }, kind === "add" ? 2 : 3).map((n) => ({ label: `${n}%`, sub: "이상", goal: { type: "stat", min: n, conv: statConv, attack, main: statMain } as SumGoal }));
       const own = parseNum(customMin, 0);
-      return own > 0 ? [...chips, { label: `${own}%`, sub: "직접", goal: { type: "stat", min: own, conv: statConv, attack, main: mainStat } as SumGoal }] : chips;
+      return own > 0 ? [...chips, { label: `${own}%`, sub: "직접", goal: { type: "stat", min: own, conv: statConv, attack, main: statMain } as SumGoal }] : chips;
     }
     if (target === "cool") return [2, 3, 4, 5, 6].map((n) => ({ label: `−${n}초`, sub: "이상", goal: { type: "cool", min: n } as SumGoal }));
     if (target === "crit") return [1, 2, 3].map((n) => ({ label: `${n}줄`, sub: best.cd ? `+${best.cd * n}%` : "", goal: { type: "crit", lines: n } as SumGoal }));
     return [1, 2, 3].map((n) => ({ label: `${n}줄`, sub: "이상", goal: { type: "drop", lines: n } as SumGoal }));
-  }, [refRows, target, best.cd, statConv, attack, customMin, mainStat, kind]);
+  }, [refRows, target, best.cd, statConv, attack, customMin, statMain, kind]);
   const tIdx = Math.min(targetIdx, Math.max(0, sumTargets.length - 1));
   const comboSpecial = target === "crit" ? "cd" : target === "cool" ? "cool" : null;
   // Hats: cooldown is asked by its total seconds (−2초 and −1초 = 3초), the way the 강화 기록 page reads an option
@@ -215,7 +223,8 @@ export function PotentialTab() {
   const soulNeed = soulRows ? addWeaponNeed(soulRows, attack) : 0;
 
   // Line 1 a prime cube keeps: the best value of what the goal is after.
-  const firstCat: Record<string, string> = { stat: mainStat, cool: "cool", crit: "cd", drop: "drop" };
+  // Selling: the four stats share one table, so STR stands in for the kept line.
+  const firstCat: Record<string, string> = { stat: saleOn ? "str" : mainStat, cool: "cool", crit: "cd", drop: "drop" };
   function primeFirstLabel(rows: ReturnType<typeof lineTables>): string {
     if (!rows) return "";
     const top = bestValues([rows[0]]);
@@ -331,7 +340,7 @@ export function PotentialTab() {
             }${weaponGoal.tier === "v3" ? "" : ` · ${TIERS.find((t) => t.id === weaponGoal.tier)!.label}`}`
           : comboGoal
             ? `${GRADE_LABEL[grade]} ${slot.label} · ${comboText}`
-            : `${GRADE_LABEL[grade]} ${slot.label} · ${extraOptions.find((o) => o.id === target)!.label} ${sumTargets[tIdx]?.label ?? ""} ${sumTargets[tIdx]?.sub ?? ""}`;
+            : `${GRADE_LABEL[grade]} ${slot.label} · ${target === "stat" && saleOn ? (sale.hp ? "모든 주스탯 + HP" : "모든 주스탯") : extraOptions.find((o) => o.id === target)!.label} ${sumTargets[tIdx]?.label ?? ""} ${sumTargets[tIdx]?.sub ?? ""}`;
 
   // No "%" in the name: the range under it ("+9% ~ +12%") already says which line (user, 2026-11-14).
   const attackName = "공격력(마력)";
@@ -606,9 +615,9 @@ export function PotentialTab() {
                 value={mainStat}
                 onChange={setMainStat}
                 options={[
-                  { id: "str", label: "일반" },
-                  { id: "all", label: "제논 · 올스탯" },
-                  { id: "hp", label: "데벤 · HP" },
+                  { id: "str", label: "일반", hint: MAIN_HINT.str },
+                  { id: "all", label: "제논 · 올스탯", hint: MAIN_HINT.all },
+                  { id: "hp", label: "데벤 · HP", hint: MAIN_HINT.hp },
                 ]}
               />
             )}
@@ -636,19 +645,31 @@ export function PotentialTab() {
               {slot.label} · 노릴 옵션 · Lv.{level}
             </Label>
             {(target === "stat" || comboSpecial) && (
-              <Segment
+              <Segment<MainStat | "sale">
                 label="주스탯 종류"
-                value={mainStat}
+                value={saleOn ? "sale" : mainStat}
                 onChange={(m) => {
-                  setMainStat(m);
+                  if (m === "sale") setSale((s) => ({ hp: !!s?.hp, on: true }));
+                  else {
+                    setMainStat(m);
+                    if (canSell) setSale((s) => ({ hp: !!s?.hp, on: false }));
+                  }
                   setTargetIdx(1);
                 }}
+                // Four cells on accessories: shorter names so they fit a phone.
                 options={[
-                  { id: "str", label: "일반" },
-                  { id: "all", label: "제논 · 올스탯" },
-                  { id: "hp", label: "데벤 · HP" },
+                  { id: "str", label: "일반", hint: MAIN_HINT.str },
+                  { id: "all", label: canSell ? "제논" : "제논 · 올스탯", hint: MAIN_HINT.all },
+                  { id: "hp", label: canSell ? "데벤" : "데벤 · HP", hint: MAIN_HINT.hp },
+                  ...(canSell ? [{ id: "sale" as const, label: "판매용", hint: MAIN_HINT.sale }] : []),
                 ]}
               />
+            )}
+            {target === "stat" && saleOn && (
+              <>
+                <Switch on={!!sale.hp} onChange={(hp) => setSale({ on: true, hp })} label="HP 도 치기" note="데몬어벤져에게도 팔 때" />
+                <span className="text-[11px] text-muted-foreground">STR · DEX · INT · LUK{sale.hp ? " · HP" : ""} 중 하나라도 목표 이상 · 환산 포함</span>
+              </>
             )}
             {/* No 공격력 / 마력 choice here: in the official table the flat attack and magic lines have the same values and
                 chances on every slot (188 pairs checked 2026-11-10), so the result is the same either way. */}
@@ -714,7 +735,7 @@ export function PotentialTab() {
               <span className="inline-flex flex-wrap items-center gap-1.5 text-[12px] font-semibold">
                 목표 직접
                 <NumberField
-                  label={mainStat === "str" ? "주스탯 환산 목표 직접 입력" : `${mainStat === "all" ? "올스탯" : "HP"} 목표 직접 입력`}
+                  label={statMain === "all" || statMain === "hp" ? `${statMain === "all" ? "올스탯" : "HP"} 목표 직접 입력` : "주스탯 환산 목표 직접 입력"}
                   value={customMin}
                   onChange={(t) => {
                     setCustomMin(t);
@@ -727,7 +748,7 @@ export function PotentialTab() {
                 <span className="font-normal text-muted-foreground">이상</span>
               </span>
             )}
-            {target === "stat" && mainStat === "str" && (
+            {target === "stat" && (statMain === "str" || saleOn) && (
               <div className="flex flex-col gap-2 rounded-md border border-border bg-card p-2.5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <button
