@@ -1,6 +1,6 @@
 // Default values the user can change on the page. Prices move with patches and the market:
 // update them here together with the date.
-export const DEFAULTS_UPDATED = "2026-11-11";
+export const DEFAULTS_UPDATED = "2026-11-17";
 
 /** Star force items by level. Icons are Nexon Open API item icon codes (item_icon of character item-equipment, the same for every
  * character; found 2026-11-09 on 청운적운 · 푸소 · 귤민 incl. presets). Shown straight from Nexon, never stored here.
@@ -68,12 +68,18 @@ export const SPARE_EOK = 10;
 /** Multipliers offered for "expected value × n". */
 export const MULTIPLIERS = [1, 1.07, 1.12];
 
-/** MVP: items to buy with cash and sell on the auction house (cash price, auction price in 억). From the user, 2026-11-08. */
-export const MVP_ITEMS: { id: string; chip: string; name: string; cash: number; auctionEok: number }[] = [
+/** MVP: the row that opens the 부티크 기프트 and sells the tickets (its price is one 부티크 티켓, in 만 메소). */
+export const BOUTIQUE_OPEN_ID = "boutiqueOpen";
+/**
+ * MVP: items to buy with cash and sell on the auction house (cash price, auction price in 억). From the user, 2026-11-08.
+ * 부티크 기프트 (user, 2026-11-17): 33,000원 = 10개, sold as it is or opened for 부티크 티켓 at 5,300만 each.
+ */
+export const MVP_ITEMS: { id: string; chip: string; name: string; cash: number; auctionEok: number; ticketMan?: number }[] = [
   { id: "pga", chip: "플가", name: "플래티넘 카르마의 가위", cash: 5900, auctionEok: 3 },
   { id: "royal", chip: "로얄", name: "로얄스타일 쿠폰 10개", cash: 22000, auctionEok: 12 },
   { id: "berry", chip: "원더베리", name: "위습의 원더베리", cash: 54000, auctionEok: 28 },
-  { id: "boutique", chip: "부티크", name: "부티크", cash: 33000, auctionEok: 17 },
+  { id: "boutique", chip: "부티크 기프트", name: "부티크 기프트 10개 · 그대로", cash: 33000, auctionEok: 17 },
+  { id: BOUTIQUE_OPEN_ID, chip: "부티크 기프트 까서", name: "부티크 기프트 10개 · 까서", cash: 33000, auctionEok: 0, ticketMan: 5300 },
 ];
 /** MVP: charge methods people use most (user, 2026-11-08). Gift cards 5만원권, 월 20만 each, 60만 together. */
 export const MVP_METHODS = [

@@ -4,7 +4,9 @@ import { useState, type ReactNode } from "react";
 import { X } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { Chip, NumberField, Segment, parseNum } from "@/components/ev/ui";
-import { CREDIT_PCT, CREDIT_SHOP, GIFT_WON_PER_10K, MESO_MARKET_MP, MVP_ITEMS, MVP_MESO_WON, MVP_METHODS } from "@/lib/ev/defaults";
+import { BoutiqueCard, type BoutiqueTab } from "@/components/mvp/boutique-card";
+import { BOUTIQUE_OPEN_ID, CREDIT_PCT, CREDIT_SHOP, GIFT_WON_PER_10K, MESO_MARKET_MP, MVP_ITEMS, MVP_MESO_WON, MVP_METHODS } from "@/lib/ev/defaults";
+import { ticketsPer10 } from "@/lib/mvp/boutique";
 import {
   MESO_SELL_KEEP,
   MVP_TIERS,
@@ -33,9 +35,15 @@ const md = (day: string) => `${Number(day.slice(5, 7))}/${Number(day.slice(8, 10
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 const mdw = (day: string) => `${md(day)}(${DOW[new Date(`${day}T00:00:00Z`).getUTCDay()]})`;
 
+/** price = auction price in 억, or one 부티크 티켓 in 만 on the opened 부티크 기프트 row. */
 type Item = { id: string; name: string; cash: string; price: string };
 type ShopItem = { id: string; name: string; credit: string; price: string };
 type Settings = {
+  /** 2 = 부티크 기프트 rows (2026-11-17). Older saves are upgraded on read, see `upgrade`. */
+  v?: number;
+  /** "이미 깐 것": gifts opened and tickets received. */
+  opened: { n: string; t: string };
+  boutiqueTab: BoutiqueTab;
   discounts: Record<string, string>;
   wonRate: string;
   mmRate: string;
@@ -52,7 +60,12 @@ type Settings = {
   sum13: string;
   drop: string;
 };
+const SETTINGS_V = 2;
+const itemOf = (i: (typeof MVP_ITEMS)[number]): Item => ({ id: i.id, name: i.name, cash: String(i.cash), price: String(i.ticketMan ?? i.auctionEok) });
 const DEFAULT_SETTINGS: Settings = {
+  v: SETTINGS_V,
+  opened: { n: "", t: "" },
+  boutiqueTab: "before",
   discounts: Object.fromEntries(MVP_METHODS.map((m) => [m.id, String(m.discountPct)])),
   wonRate: String(MVP_MESO_WON),
   mmRate: String(MESO_MARKET_MP),
@@ -60,13 +73,34 @@ const DEFAULT_SETTINGS: Settings = {
   fee: 3,
   useCredit: true,
   creditNow: "",
-  items: MVP_ITEMS.map((i) => ({ id: i.id, name: i.name, cash: String(i.cash), price: String(i.auctionEok) })),
+  items: MVP_ITEMS.map(itemOf),
   shop: CREDIT_SHOP.map((i) => ({ id: i.id, name: i.name, credit: String(i.credit), price: String(i.auctionEok) })),
   target: "next",
   custom: "",
   sum13: "",
   drop: "",
 };
+
+/**
+ * Saves from before 2026-11-17 keep their whole item list, so new rows would never reach them: "부티크" (the old name,
+ * only if untouched) becomes "부티크 기프트 10개 · 그대로" and the opened row goes right after it, once (v 2 after that,
+ * so a row the person takes out stays out).
+ */
+function upgrade(raw: Partial<Settings>): Settings {
+  const s = { ...DEFAULT_SETTINGS, ...raw };
+  if ((raw.v ?? 1) >= SETTINGS_V) return s;
+  const asIs = MVP_ITEMS.find((i) => i.id === "boutique")!;
+  const items = s.items.map((it) => (it.id === "boutique" && it.name === "부티크" ? { ...it, name: asIs.name } : it));
+  if (!items.some((it) => it.id === BOUTIQUE_OPEN_ID)) {
+    const at = items.findIndex((it) => it.id === "boutique");
+    items.splice(at < 0 ? items.length : at + 1, 0, itemOf(MVP_ITEMS.find((i) => i.id === BOUTIQUE_OPEN_ID)!));
+  }
+  return { ...s, items, v: SETTINGS_V };
+}
+/** Tickets from ten opens the opened row counts on: the average without the 500+ jackpots (user, 2026-11-17: 30.6). */
+const TICKETS_PER_10 = ticketsPer10();
+/** 억 the opened row sells for, from one ticket in 만. */
+const openedEok = (ticketMan: number) => (TICKETS_PER_10 * ticketMan) / 10_000;
 const ROUTE_LABEL: Record<Route["mode"], string> = { best: "최저가 · 추천", mm: "전부 메소마켓", gift: "선물식" };
 
 function TierDot({ tier }: { tier: MvpTier | null }) {
@@ -133,8 +167,8 @@ export function MvpCalculator() {
   const [draft, setDraft] = useState({ name: "", cash: "", price: "" });
   const [shopDraft, setShopDraft] = useState({ name: "", credit: "", price: "" });
 
-  const s = { ...DEFAULT_SETTINGS, ...settings };
-  const update = (patch: Partial<Settings>) => setSettings((prev) => ({ ...DEFAULT_SETTINGS, ...prev, ...patch }));
+  const s = upgrade(settings);
+  const update = (patch: Partial<Settings>) => setSettings((prev) => ({ ...upgrade(prev), ...patch }));
 
   if (now === 0) {
     return (
@@ -182,7 +216,12 @@ export function MvpCalculator() {
     useCredit: s.useCredit,
     creditNow: parseNum(s.creditNow, 0),
   };
-  const items = s.items.map((it) => ({ id: it.id, name: it.name, cash: parseNum(it.cash, 0), eok: parseNum(it.price, 0) }));
+  const items = s.items.map((it) => ({
+    id: it.id,
+    name: it.name,
+    cash: parseNum(it.cash, 0),
+    eok: it.id === BOUTIQUE_OPEN_ID ? openedEok(parseNum(it.price, 0)) : parseNum(it.price, 0),
+  }));
   const shop = s.shop.map((it) => ({ id: it.id, name: it.name, credit: parseNum(it.credit, 0), eok: parseNum(it.price, 0) }));
   const routes = (["best", "mm", "gift"] as const).map((mode) => sellRoute(plan.charged, pay, mode, items, shop, market));
   const net = (r: Route) => plan.pay - r.won;
@@ -205,6 +244,20 @@ export function MvpCalculator() {
   const top = Math.max(1, ...rows.map((r) => r.total));
   const pga = rows.find((r) => r.id === "pga" && r.total > 0) ?? rows.find((r) => r.kind === "mm");
   const ratio = (v: number) => (pga && pga.total > 0 && v > 0 ? (v / pga.total).toFixed(2) : "—");
+
+  // 부티크 기프트 그대로 vs 까서 (user, 2026-11-17, 시안 B): each row says how far it is from the other way.
+  const asIsRow = rows.find((r) => r.id === "boutique" && r.base10k > 0);
+  const openRow = rows.find((r) => r.id === BOUTIQUE_OPEN_ID && r.base10k > 0);
+  const boutiqueTag = (id: string): { text: string; up: boolean } | null => {
+    if (!asIsRow || !openRow || (id !== "boutique" && id !== BOUTIQUE_OPEN_ID)) return null;
+    const [mine, other, otherName] = id === "boutique" ? [asIsRow, openRow, "까서"] : [openRow, asIsRow, "그대로"];
+    const diff = Math.round(mine.base10k - other.base10k);
+    if (diff === 0) return { text: `${otherName} 팔기와 같음`, up: false };
+    return { text: `${otherName} 팔기보다 1만원당 ${diff > 0 ? "+" : "−"}${Math.abs(diff).toLocaleString("ko-KR")}원`, up: diff > 0 };
+  };
+  const openItem = s.items.find((it) => it.id === BOUTIQUE_OPEN_ID);
+  const asIsItem = s.items.find((it) => it.id === "boutique");
+  const per10k = (eok: number, cash: number) => (cash > 0 ? (auctionWon(eok, market) / cash) * 10_000 + bonus : 0);
 
   const setItem = (id: string, patch: Partial<Item>) => update({ items: s.items.map((x) => (x.id === id ? { ...x, ...patch } : x)) });
   const setShop = (id: string, patch: Partial<ShopItem>) => update({ shop: s.shop.map((x) => (x.id === id ? { ...x, ...patch } : x)) });
@@ -379,7 +432,14 @@ export function MvpCalculator() {
                   </td>
                   <td className="px-2 py-2.5">
                     {r.kind === "item" ? (
-                      <b>{r.item!.name}</b>
+                      <span className="flex flex-col gap-0.5">
+                        <b>{r.item!.name}</b>
+                        {boutiqueTag(r.id) && (
+                          <span className={cn("text-xs", boutiqueTag(r.id)!.up ? "font-semibold text-primary-text" : "text-muted-foreground")}>
+                            {boutiqueTag(r.id)!.text}
+                          </span>
+                        )}
+                      </span>
                     ) : r.kind === "mm" ? (
                       <b>메소마켓</b>
                     ) : (
@@ -394,10 +454,20 @@ export function MvpCalculator() {
                     )}
                   </td>
                   <td className="px-2 py-2.5 text-right">
-                    {r.kind === "item" ? (
+                    {r.kind === "item" && r.id === BOUTIQUE_OPEN_ID ? (
+                      <span className="inline-flex flex-col items-end gap-1">
+                        <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                          티켓
+                          <NumberField label="부티크 티켓 1개 가격 (만 메소)" value={r.item!.price} onChange={(t) => setItem(r.id, { price: t })} suffix="만" inputClassName="h-8 w-20 text-xs" />
+                        </span>
+                        <span className="text-[11px] whitespace-nowrap text-muted-foreground">
+                          × {TICKETS_PER_10.toFixed(1)}개 = {koreanUnits(openedEok(parseNum(r.item!.price, 0)) * 1e8)}
+                        </span>
+                      </span>
+                    ) : r.kind === "item" ? (
                       <NumberField label={`${r.item!.name} 경매장 가격 (억)`} value={r.item!.price} onChange={(t) => setItem(r.id, { price: t })} decimal suffix="억" className="justify-end" inputClassName="h-8 w-16 text-xs" />
                     ) : (
-                      <span className="text-xs text-muted-foreground">{r.kind === "mm" ? `1억 = ${s.mmRate}메포` : `1만 캐시 = ${num(market.giftWonPer10k)}원`}</span>
+                      <span className="text-xs text-muted-foreground">{r.kind === "mm" ? `1억 = ${num(market.mpPer100m)}메포` : `1만 캐시 = ${num(market.giftWonPer10k)}원`}</span>
                     )}
                   </td>
                   <td className="px-2 py-2.5">
@@ -452,7 +522,7 @@ export function MvpCalculator() {
             <button
               key={p.id}
               type="button"
-              onClick={() => update({ items: [...s.items, { id: p.id, name: p.name, cash: String(p.cash), price: String(p.auctionEok) }] })}
+              onClick={() => update({ items: [...s.items, itemOf(p)] })}
               className="h-8 rounded-full border border-dashed border-border px-3 text-xs text-muted-foreground hover:text-foreground"
             >
               + {p.chip}
@@ -460,6 +530,19 @@ export function MvpCalculator() {
           ))}
         </div>
       </section>
+
+      {(openItem || asIsItem) && (
+        <BoutiqueCard
+          tab={s.boutiqueTab}
+          onTab={(tab) => update({ boutiqueTab: tab })}
+          ticketMan={parseNum(openItem?.price ?? "", MVP_ITEMS.find((i) => i.id === BOUTIQUE_OPEN_ID)!.ticketMan!)}
+          cashPer10={parseNum((openItem ?? asIsItem)!.cash, 33_000)}
+          opened={s.opened}
+          onOpened={(opened) => update({ opened })}
+          per10k={per10k}
+          pgaPer10k={pga && pga.id === "pga" ? pga.total : null}
+        />
+      )}
 
       <section className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
