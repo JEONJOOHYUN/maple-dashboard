@@ -388,8 +388,10 @@ test("periods: stat cash items worn + the world's 마스터라벨 set when used,
   );
   const misses = checkSpec(raw, now).misses.filter((m) => m.cat === "캐시 장비" || m.cat === "펫");
   assert.deepEqual(misses, [
-    { cat: "캐시 장비", what: "기간 만료 3일 남음", detail: ["오로라 반지"] },
-    { cat: "펫", what: "기간 만료 1마리", detail: ["쁘띠 플로라"] },
+    { cat: "캐시 장비", what: "기간 만료 3일 남음", detail: ["오로라 반지"], tier: "urgent" },
+    { cat: "펫", what: "기간 만료 1마리", detail: ["쁘띠 플로라"], tier: "urgent" },
+    // two pets out of three (the one that is over still takes its place)
+    { cat: "펫", what: "1자리 비어 있음", detail: ["지금 2마리 · 3마리까지 · 한 마리에 펫 버프 2개"], tier: "long" },
   ]);
   // The world's set is ignored when the character does not use it (귤민: its own set counts).
   raw.cash.world_share_master_label_activate_flag = "0";
@@ -451,6 +453,7 @@ test("마스터라벨 플러스: labels with stats left but no 전투 플러스 
   assert.deepEqual(plusMiss(), [
     {
       cat: "마스터라벨 플러스",
+      tier: "long",
       what: "전투 플러스 꺼짐",
       detail: ["마라벨 5개 능력치 179일 남음 · 성장 플러스만 켜짐", "켜면 공격력 · 마력 +60 · 올스탯 +140 (4만 캐시 · 90일)"],
     },
@@ -467,4 +470,208 @@ test("마스터라벨 플러스: labels with stats left but no 전투 플러스 
   raw.cash.world_share_master_label_activate_flag = "1";
   raw.otherStat = undefined;
   assert.deepEqual(plusMiss(), []);
+});
+
+test("class skills that only come with the liberated secondary weapon are not asked for (user, 2026-11-17)", () => {
+  // 아스트라 인퓨전 is learned by wearing the liberated secondary (24 ranked demons: all 22 with it have the skill,
+  // the 2 without do not), so it is not something to "fill in for almost nothing".
+  for (const [cls, rule] of Object.entries(SPEC_DATA.classes)) {
+    assert.ok(!rule.skills0.some((s) => s.name === "아스트라 인퓨전"), cls);
+  }
+});
+
+test("common skills say how to fill them: 여제의 축복 changes at 24, 연합의 의지 is a quest (user, 2026-11-17)", () => {
+  const hintAt = (lv: number) => {
+    const raw = base();
+    raw.skill0.character_skill!.find((s) => s.skill_name === "여제의 축복")!.skill_level = lv;
+    return checkSpec(raw, new Date("2026-11-09T00:00:00+09:00")).misses.find((m) => m.what.startsWith("여제의 축복"))?.detail;
+  };
+  assert.deepEqual(hintAt(23), ["시그너스 · 미하일 캐릭터 육성"]);
+  // from 24 on, raising characters no longer helps: only 고귀한 정신 lifts the cap
+  assert.deepEqual(hintAt(24), ["고귀한 정신 퀘스트 미완료"]);
+  assert.deepEqual(hintAt(29), ["고귀한 정신 퀘스트 미완료"]);
+  assert.equal(hintAt(30), undefined);
+
+  const raw = base();
+  raw.skill0.character_skill = raw.skill0.character_skill!.filter((s) => s.skill_name !== "연합의 의지");
+  const will = checkSpec(raw, new Date("2026-11-09T00:00:00+09:00")).misses.find((m) => m.what === "연합의 의지 안 배움");
+  assert.deepEqual(will?.detail, ["[연합] 퀘스트 미완료"]);
+});
+
+test("5th job: hunting-only common cores are not asked for (user, 2026-11-17)", () => {
+  const raw = base();
+  const cores = raw.vmatrix.character_v_core_equipment!;
+  cores.push({ v_core_name: "에르다 샤워", v_core_type: "공용 코어", v_core_level: 0 });
+  cores.push({ v_core_name: "쓸만한 홀리 심볼", v_core_type: "공용 코어", v_core_level: 10 });
+  assert.equal(checkSpec(raw).misses.find((m) => m.cat === "5차 공용 코어"), undefined);
+  // a boss-side one at the same level is still asked for
+  cores.push({ v_core_name: "쓸만한 샤프 아이즈", v_core_type: "공용 코어", v_core_level: 10 });
+  const miss = checkSpec(raw).misses.find((m) => m.cat === "5차 공용 코어");
+  assert.equal(miss?.what, "30레벨 미만 1개");
+  assert.deepEqual(miss?.detail, ["쓸만한 샤프 아이즈 10"]);
+});
+
+// ---------- order · pictures · the two checks added with the C layout (user, 2026-11-17) ----------
+const AT = new Date("2026-11-09T00:00:00+09:00");
+
+test("order: what runs out, then a few clicks, then quests, then what takes time or meso", () => {
+  const raw = base();
+  raw.propensity.charisma_level = 80; // long (checked early)
+  raw.skill0.character_skill = raw.skill0.character_skill!.filter((s) => s.skill_name !== "연합의 의지"); // quest
+  raw.hyper.hyper_stat_preset_1_remain_point = 12; // now (checked late)
+  raw.equipment.title = { title_name: "보스 칭호", title_description: "보스 몬스터 데미지 +10%", date_expire: "2026-11-11T00:00+09:00" }; // urgent
+  const r = checkSpec(raw, AT);
+  assert.deepEqual(
+    r.misses.map((m) => [m.tier, m.cat]),
+    [
+      ["urgent", "칭호"],
+      ["now", "하이퍼 스탯"],
+      ["quest", "공용 스킬"],
+      ["long", "성향"],
+    ],
+  );
+});
+
+test("여제의 축복 is a quest from 24 and raising characters below it; 정령의 축복 is raising characters", () => {
+  const tierAt = (name: string, lv: number) => {
+    const raw = base();
+    raw.skill0.character_skill!.find((s) => s.skill_name === name)!.skill_level = lv;
+    return checkSpec(raw, AT).misses.find((m) => m.what.startsWith(name))?.tier;
+  };
+  assert.equal(tierAt("여제의 축복", 23), "long");
+  assert.equal(tierAt("여제의 축복", 24), "quest");
+  assert.equal(tierAt("정령의 축복", 19), "long");
+});
+
+test("gear with upgrade slots left on the boss preset is listed with how many (new)", () => {
+  const raw = base();
+  // preset 1 is the boss one (the ring); preset 2 is the hunting one and is not looked at
+  (raw.equipment.item_equipment_preset_1 as Record<string, unknown>[]).push(
+    { item_name: "페어리 하트", scroll_upgradeable_count: "10", item_icon: "https://open.api.nexon.com/static/maplestory/item/icon/HEART" },
+    { item_name: "다 쓴 모자", scroll_upgradeable_count: "0" },
+  );
+  (raw.equipment.item_equipment_preset_2 as Record<string, unknown>[]).push({ item_name: "사냥 벨트", scroll_upgradeable_count: "3" });
+  const miss = checkSpec(raw, AT).misses.find((m) => m.cat === "주문서 강화");
+  assert.equal(miss?.what, "횟수 남은 장비 1개 (1번 프리셋)");
+  assert.equal(miss?.tier, "long");
+  assert.deepEqual(miss?.detail, ["페어리 하트 10회"]);
+  assert.deepEqual(miss?.tiles, [{ name: "페어리 하트", sub: "10회 남음", icon: "https://open.api.nexon.com/static/maplestory/item/icon/HEART" }]);
+  // nothing left anywhere → no line
+  assert.equal(checkSpec(base(), AT).misses.find((m) => m.cat === "주문서 강화"), undefined);
+});
+
+test("a pet wearing no pet gear is listed; geared, shared-and-geared and expired pets are not (new)", () => {
+  const raw = base();
+  Object.assign(raw.pet, {
+    pet_1_name: "글로리",
+    pet_1_icon: "https://open.api.nexon.com/static/maplestory/item/icon/PET",
+    pet_1_equipment: { item_name: null },
+    pet_2_name: "쁘띠 데스",
+    pet_2_equipment: { item_name: "펫 장비" },
+    // the same pet as the shared one of the world, where it does wear gear
+    pet_3_name: "벨라",
+    pet_3_equipment: null,
+    world_share_pet_1_name: "벨라",
+    world_share_pet_1_equipment: { item_name: "펫 장비" },
+    // over: cannot wear anything
+    world_share_pet_2_name: "쁘띠 플로라",
+    world_share_pet_2_date_expire: "2026-11-01T00:00+09:00",
+    world_share_pet_2_equipment: null,
+  });
+  const miss = checkSpec(raw, AT).misses.find((m) => m.cat === "펫 장비");
+  assert.equal(miss?.what, "장비 없는 펫 1마리");
+  assert.equal(miss?.tier, "long");
+  assert.deepEqual(miss?.tiles, [{ name: "글로리", sub: "장비 없음", icon: "https://open.api.nexon.com/static/maplestory/item/icon/PET" }]);
+  // no pets in the response → no line
+  assert.equal(checkSpec(base(), AT).misses.find((m) => m.cat === "펫 장비"), undefined);
+});
+
+test("pet buffs: 쓸만한 홀리 심볼 is asked of every class but 비숍 (user, 2026-11-17)", () => {
+  for (const cls of Object.keys(SPEC_DATA.classes)) {
+    const raw = base();
+    raw.basic.character_class = cls;
+    raw.pet = {};
+    const miss = checkSpec(raw, AT).misses.find((m) => m.cat === "펫 버프");
+    const asked = (miss?.tiles ?? []).some((t) => t.name === "쓸만한 홀리 심볼");
+    assert.equal(asked, cls !== "비숍", cls);
+  }
+});
+
+test("pictures: every 5th job common core, link, pet buff and class skill we may list has one in the table", () => {
+  // A character with nothing: all the lists come out, and none of their tiles is left without a picture.
+  for (const cls of Object.keys(SPEC_DATA.classes)) {
+    const raw = base();
+    raw.basic.character_class = cls;
+    raw.pet = {};
+    raw.link = {};
+    raw.skill0.character_skill = [];
+    for (const c of raw.vmatrix.character_v_core_equipment!) c.v_core_level = 1;
+    const r = checkSpec(raw, AT);
+    for (const m of r.misses) {
+      if (["펫 버프", "링크 스킬", "5차 공용 코어"].includes(m.cat)) for (const t of m.tiles ?? []) assert.ok(t.icon, `${cls} · ${m.cat} · ${t.name}`);
+      if (["공용 스킬", "직업 0차 스킬"].includes(m.cat)) assert.ok(m.icon, `${cls} · ${m.what}`);
+    }
+  }
+  // addresses stay on the official host
+  const raw = base();
+  raw.skill0.character_skill!.find((s) => s.skill_name === "여제의 축복")!.skill_level = 24;
+  Object.assign(raw.skill0.character_skill!.find((s) => s.skill_name === "여제의 축복")!, { skill_icon: "https://example.com/x.png" });
+  const icon = checkSpec(raw, AT).misses.find((m) => m.what.startsWith("여제의 축복"))?.icon;
+  assert.ok(icon?.startsWith("https://open.api.nexon.com/static/maplestory/skill/icon/"));
+});
+
+test("fewer than three pets: the empty places are listed, and missing pet buffs are no longer 'a few clicks' (user, 2026-11-17)", () => {
+  const nl = SPEC_DATA.classes["나이트로드"];
+  // one pet (listed as the shared one of the world too), both of its buff places used
+  const raw = base();
+  raw.pet = {
+    pet_1_name: "글로리",
+    pet_1_auto_skill: { skill_1: nl.petBuff[0], skill_2: nl.petBuff[1] },
+    world_share_pet_1_name: "글로리",
+    world_share_pet_1_auto_skill: { skill_1: nl.petBuff[0], skill_2: nl.petBuff[1] },
+  };
+  const r = checkSpec(raw, AT);
+  const slots = r.misses.find((m) => m.cat === "펫");
+  assert.equal(slots?.what, "2자리 비어 있음");
+  assert.equal(slots?.tier, "long");
+  assert.deepEqual(slots?.detail, ["지금 1마리 · 3마리까지 · 한 마리에 펫 버프 2개"]);
+  const buffs = r.misses.find((m) => m.cat === "펫 버프");
+  assert.ok(buffs?.what.endsWith("빠짐 · 넣을 자리 없음"), buffs?.what);
+  assert.equal(buffs?.tier, "long");
+
+  // the same pet with one buff place still free → adding a buff is a few clicks
+  (raw.pet.pet_1_auto_skill as { skill_2: string | null }).skill_2 = null;
+  (raw.pet.world_share_pet_1_auto_skill as { skill_2: string | null }).skill_2 = null;
+  const free = checkSpec(raw, AT).misses.find((m) => m.cat === "펫 버프");
+  assert.equal(free?.tier, "now");
+  assert.ok(!free?.what.includes("넣을 자리 없음"));
+
+  // three pets → no line about places; no pet names at all (older saved shapes) → nothing is guessed
+  Object.assign(raw.pet, { pet_2_name: "쁘띠 데스", pet_3_name: "벨라" });
+  assert.equal(checkSpec(raw, AT).misses.find((m) => m.cat === "펫"), undefined);
+  assert.equal(checkSpec(base(), AT).misses.find((m) => m.cat === "펫"), undefined);
+});
+
+test("5th job boost cores at level 0 come as tiles with the picture of the first skill they boost", () => {
+  const raw = base();
+  raw.vmatrix.character_v_core_equipment!.push(
+    { v_core_name: "쿼드러플 스로우/다크 플레어 강화", v_core_type: "강화 코어", v_core_level: 0 },
+    { v_core_name: "이름 없는 스킬 강화", v_core_type: "강화 코어", v_core_level: 0 },
+    { v_core_name: "써든레이드 강화", v_core_type: "강화 코어", v_core_level: 25 },
+  );
+  const miss = checkSpec(raw, AT).misses.find((m) => m.cat === "5차 강화 코어");
+  assert.equal(miss?.what, "0레벨 2개");
+  assert.deepEqual(
+    miss?.tiles?.map((t) => [t.name, t.sub]),
+    [
+      ["쿼드러플 스로우/다크 플레어 강화", "0레벨"],
+      ["이름 없는 스킬 강화", "0레벨"],
+    ],
+  );
+  // two skills the table knows → both pictures, to be drawn split along the diagonal like the core in the game
+  const [both, none] = miss!.tiles!;
+  assert.ok(both.icon && both.icon2 && both.icon !== both.icon2);
+  // a skill the table does not know simply has no picture (the page draws a plain icon)
+  assert.equal(none.icon, null);
+  assert.equal(none.icon2, null);
 });

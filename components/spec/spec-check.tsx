@@ -2,10 +2,11 @@
 
 import { useEffect, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, Check, ExternalLink, Lightbulb, Loader2, RotateCw, Search, ShieldAlert, ShieldCheck, X } from "lucide-react";
+import { Award, ChartColumn, Check, Dices, ExternalLink, Heart, Hexagon, Loader2, PawPrint, RotateCw, Search, ShieldAlert, ShieldCheck, Shirt, Sparkles, Tag, X, type LucideIcon } from "lucide-react";
 import { refreshSpec } from "@/app/spec/actions";
 import { PageHeader } from "@/components/page-header";
-import type { Miss, SpecResult } from "@/lib/spec/check";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import type { Miss, SpecResult, Tier, Tile } from "@/lib/spec/check";
 import { periodGroups } from "@/lib/spec/period-rows";
 import { useStored } from "@/lib/use-stored";
 import { cn } from "@/lib/utils";
@@ -20,7 +21,7 @@ const RECENT_KEY = "spec-recent";
 const RECENT_MAX = 8;
 
 const CHECKED =
-  "공용 · 직업 0차 스킬 · 성향 · 유니온 아티팩트 · 칭호 · 캐시 장비 · 펫 기간 · 마스터라벨 플러스 · 5차 · 하이퍼 스탯 · 하이퍼 패시브 · 펫 버프 · 링크 · 어빌리티";
+  "공용 · 직업 0차 스킬 · 성향 · 유니온 아티팩트 · 칭호 · 주문서 강화 · 캐시 장비 · 펫 기간 · 펫 장비 · 마스터라벨 플러스 · 5차 · 하이퍼 스탯 · 하이퍼 패시브 · 펫 버프 · 링크 · 어빌리티";
 
 const kstTime = (ms: number) =>
   new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })
@@ -47,50 +48,235 @@ function DetailLine({ text }: { text: string }) {
   );
 }
 
-/** Misses of the same category under one title, in check order. */
-function groupByCat(list: Miss[]) {
-  const groups: { cat: string; items: Miss[] }[] = [];
-  for (const m of list) {
-    const g = groups.find((x) => x.cat === m.cat);
-    if (g) g.items.push(m);
-    else groups.push({ cat: m.cat, items: [m] });
-  }
-  return groups;
+// How much a line takes to fill (user, 2026-11-17): the chip on every line. The list comes already in this order.
+const TIER: Record<Tier, { label: string; className: string }> = {
+  urgent: { label: "기간 임박", className: "bg-[rgba(226,80,79,0.14)] text-[#E2504F]" },
+  now: { label: "바로 됨", className: "bg-primary-soft text-primary-text" },
+  quest: { label: "조금만", className: "bg-secondary text-foreground" },
+  long: { label: "시간 · 메소", className: "border border-border text-muted-foreground" },
+};
+
+function TierChip({ tier, className }: { tier: Tier; className?: string }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex h-[22px] w-[68px] shrink-0 items-center justify-center rounded-full text-[11px] font-bold whitespace-nowrap",
+        TIER[tier].className,
+        className,
+      )}
+    >
+      {TIER[tier].label}
+    </span>
+  );
 }
 
-function MissGroup({ cat, items, tip }: { cat: string; items: Miss[]; tip?: boolean }) {
+// Categories the game has no picture for get a plain icon.
+const CAT_ICON: Record<string, LucideIcon> = {
+  "하이퍼 스탯": ChartColumn,
+  "유니온 아티팩트": Hexagon,
+  칭호: Award,
+  성향: Heart,
+  어빌리티: Dices,
+  "캐시 장비": Shirt,
+  펫: PawPrint,
+  "펫 장비": PawPrint,
+  "마스터라벨 플러스": Tag,
+};
+
+// Two pictures in one square, cut along the diagonal with a hairline between them — how the game draws a boost core
+// (its first skill at the top left, its second at the bottom right).
+const HALF_TOP_LEFT = { clipPath: "polygon(0 0, calc(100% - 1px) 0, 0 calc(100% - 1px))" };
+const HALF_BOTTOM_RIGHT = { clipPath: "polygon(100% 1px, 100% 100%, 1px 100%)" };
+
+/** One picture of a thing: a alone, or a and b sharing the square. */
+type Pic = { a: string; b?: string | null };
+
+/** A game picture at the size given (size-8 in a box, size-6 on a line); with b, the two split along the diagonal. */
+function GamePic({ pic, size }: { pic: Pic; size: string }) {
+  if (!pic.b) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={pic.a} alt="" loading="lazy" className={cn("shrink-0 object-contain", size)} />;
+  }
   return (
-    <div className="grid grid-cols-[30px_minmax(0,1fr)] gap-3 border-t border-border px-4 py-3 sm:px-[18px]">
-      <span
-        className={cn(
-          "flex size-[30px] items-center justify-center rounded-lg",
-          tip ? "bg-primary-soft text-primary-text" : "bg-[rgba(226,80,79,0.14)] text-[#E2504F]",
-        )}
-      >
-        {tip ? <Lightbulb className="size-4" aria-hidden="true" /> : <AlertCircle className="size-4" aria-hidden="true" />}
-      </span>
-      <div className="flex min-w-0 flex-col gap-1.5">
-        <b className="text-sm leading-[30px]">{cat}</b>
-        {items.map((m, i) => (
-          <div key={i} className="flex min-w-0 flex-col gap-0.5">
-            <span className="text-[13px] font-semibold">{m.what}</span>
-            {m.detail.map((d, j) => (
-              <DetailLine key={j} text={d} />
-            ))}
-            {m.rows && (
-              <div className="mt-1 grid grid-cols-[auto_auto_auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-[13px] text-muted-foreground tabular-nums">
-                {m.rows.map((r, j) =>
-                  r.map((c, k) => (
-                    <span key={`${j}-${k}`} className={cn("whitespace-nowrap", k === 2 && "text-right", k === 3 && "whitespace-normal")}>
-                      {c}
-                    </span>
-                  )),
-                )}
-              </div>
-            )}
-          </div>
+    <span className={cn("relative shrink-0", size)}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={pic.a} alt="" loading="lazy" className="absolute inset-0 size-full object-contain" style={HALF_TOP_LEFT} />
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={pic.b} alt="" loading="lazy" className="absolute inset-0 size-full object-contain" style={HALF_BOTTOM_RIGHT} />
+    </span>
+  );
+}
+
+/** A game picture in a rounded box; without one, the plain icon of the category. */
+function PicBox({ pic, cat, large }: { pic?: Pic; cat?: string; large?: boolean }) {
+  const Plain = (cat && CAT_ICON[cat]) || Sparkles;
+  return (
+    <span className={cn("flex shrink-0 items-center justify-center rounded-[10px] border border-border bg-secondary", large ? "size-12" : "size-11")}>
+      {pic ? <GamePic pic={pic} size="size-8" /> : <Plain className="size-5 text-muted-foreground" aria-hidden="true" />}
+    </span>
+  );
+}
+
+/** Every picture a line has: its own, its tiles, its table rows. */
+const picsOf = (m: Miss): Pic[] => [
+  ...(m.icon ? [{ a: m.icon }] : []),
+  ...(m.tiles ?? []).flatMap((x) => (x.icon ? [{ a: x.icon, b: x.icon2 }] : [])),
+  ...(m.rowIcons ?? []).flatMap((x) => (x ? [{ a: x }] : [])),
+];
+
+/**
+ * A line opens when there is more to show than fits beside its title. One thing (a single link, one piece of gear)
+ * is named right on the line instead, so nobody has to open a line to read one word.
+ */
+const opens = (m: Miss) => (m.tiles?.length ?? 0) > 1 || !!m.rows?.length || m.detail.length > 1;
+
+/** The first lines as cards. Long lists stay in the list below, where they can open. */
+const CARD_MAX = 3;
+const fitsCard = (m: Miss) => !m.rows?.length && (m.tiles?.length ?? 0) <= 4;
+
+function TopCard({ miss }: { miss: Miss }) {
+  return (
+    <li className="flex gap-3 rounded-lg border border-primary/45 bg-card p-3.5 @xl:flex-col @xl:gap-2.5 @xl:p-4">
+      <PicBox pic={picsOf(miss)[0]} cat={miss.cat} large />
+      {/* The chip shares the line of the category, so the text under it keeps the whole width of a narrow card. */}
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="flex items-center justify-between gap-2">
+          <span className="text-xs break-keep text-muted-foreground">{miss.cat}</span>
+          <TierChip tier={miss.tier} />
+        </span>
+        <b className="text-sm leading-snug break-keep">{miss.what}</b>
+        {miss.detail.map((d, i) => (
+          <DetailLine key={i} text={d} />
         ))}
       </div>
+    </li>
+  );
+}
+
+function Tiles({ tiles, cat }: { tiles: Tile[]; cat: string }) {
+  return (
+    // Each tile is three rows of the list's own grid (picture · name · the line under it), so along one row of tiles
+    // the names share a height and the lines under them sit level (user, 2026-11-17: "레벨 위치 통일").
+    <ul className="grid grid-cols-[repeat(auto-fill,minmax(76px,1fr))] gap-x-1.5 gap-y-1">
+      {tiles.map((x) => (
+        <li key={x.name} className="row-span-3 grid grid-rows-subgrid justify-items-center pb-2.5 text-center">
+          <PicBox pic={x.icon ? { a: x.icon, b: x.icon2 } : undefined} cat={cat} />
+          <span className="text-[11px] leading-tight font-semibold break-keep">{x.name}</span>
+          <span className="text-[11px] leading-tight font-semibold whitespace-nowrap text-primary-text">{x.sub}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * The closed part of a line: category over what is missing, then small pictures, the chip, and (when it opens) the
+ * arrow the accordion adds. Sized by the width of the list, not of the window (the list is half the page on a desktop):
+ * a narrow list puts the chip beside the category and drops the pictures, so the text keeps its width.
+ */
+function LineHead({ miss, chip }: { miss: Miss; chip: boolean }) {
+  const pics = picsOf(miss);
+  const beside = !opens(miss) ? miss.detail[0] : undefined;
+  return (
+    <>
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="flex items-center gap-2">
+          <b className="text-[13px] leading-normal break-keep">{miss.cat}</b>
+          {chip && <TierChip tier={miss.tier} className="@sm:hidden" />}
+        </span>
+        <span className="text-[13px] leading-normal font-normal break-keep">
+          <span className="font-semibold">{miss.what}</span>
+          {beside && (
+            <>
+              {" "}
+              <DetailLine text={beside} />
+            </>
+          )}
+        </span>
+      </span>
+      {pics.length > 0 && (
+        <span className="hidden shrink-0 items-center gap-1 @lg:flex">
+          {pics.slice(0, 3).map((pic, i) => (
+            <GamePic key={i} pic={pic} size="size-6" />
+          ))}
+          {pics.length > 3 && <span className="text-[11px] font-semibold text-muted-foreground">+{pics.length - 3}</span>}
+        </span>
+      )}
+      {chip && <TierChip tier={miss.tier} className="hidden @sm:inline-flex" />}
+    </>
+  );
+}
+
+function LineBody({ miss }: { miss: Miss }) {
+  return (
+    <div className="flex flex-col gap-2">
+      {/* Tiles are the same list as the text, with pictures: one or the other. */}
+      {(miss.tiles?.length ?? 0) > 1 ? <Tiles tiles={miss.tiles!} cat={miss.cat} /> : miss.detail.map((d, i) => <DetailLine key={i} text={d} />)}
+      {miss.rows && (
+        <div className="grid grid-cols-[auto_auto_auto_minmax(0,1fr)] items-center gap-x-3 gap-y-1 text-[13px] text-muted-foreground tabular-nums">
+          {miss.rows.map((r, j) =>
+            r.map((c, k) => (
+              <span key={`${j}-${k}`} className={cn("whitespace-nowrap", k === 0 && "flex items-center gap-1.5 text-foreground", k === 2 && "text-right", k === 3 && "whitespace-normal")}>
+                {k === 0 && miss.rowIcons?.[j] && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={miss.rowIcons[j]!} alt="" loading="lazy" className="size-5 object-contain" />
+                )}
+                {c}
+              </span>
+            )),
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** The list: lines with more to show open on a press, the others are plain lines. */
+function Lines({ items, chip }: { items: Miss[]; chip: boolean }) {
+  return (
+    <Accordion multiple className="overflow-hidden rounded-lg border border-border bg-card">
+      {items.map((m, i) =>
+        opens(m) ? (
+          <AccordionItem key={i} value={`${i}`}>
+            <AccordionTrigger className="min-h-[56px] items-center gap-3 rounded-none px-4 py-2.5 hover:bg-secondary/60 hover:no-underline">
+              <LineHead miss={m} chip={chip} />
+            </AccordionTrigger>
+            <AccordionContent className="px-4 pb-4">
+              <LineBody miss={m} />
+            </AccordionContent>
+          </AccordionItem>
+        ) : (
+          <div key={i} className="flex min-h-[56px] items-center gap-3 px-4 py-2.5 not-last:border-b">
+            <LineHead miss={m} chip={chip} />
+            {/* keeps the chip in line with the lines that carry an arrow */}
+            <span className="size-4 shrink-0" aria-hidden="true" />
+          </div>
+        ),
+      )}
+    </Accordion>
+  );
+}
+
+/**
+ * Desktop: do the cards sit under the character (left) or above the list (right)? Whichever leaves the two columns
+ * closer in height (user, 2026-11-17: "좌우 밸런스"). Rough heights are enough, and the answer comes from the result
+ * alone, so nothing jumps to the other column when a line is opened.
+ */
+function cardsUnderCharacter(result: SpecResult, cards: number, lines: number, optimizer: boolean) {
+  if (!cards || !lines) return false;
+  const periods = periodGroups(result.periods ?? [], result.labelPlus ?? null);
+  const character = 300 + (periods.length ? 44 + periods.reduce((sum, g) => sum + 40 + g.rows.length * 26, 0) : 0) + (optimizer ? 56 : 0);
+  const asRows = 34 + cards * 92;
+  const asGrid = 34 + 250;
+  const lists = 34 + lines * 62 + (result.tips.length ? 44 + result.tips.length * 62 : 0);
+  return Math.abs(character + asRows - lists) < Math.abs(character - (asGrid + lists));
+}
+
+function ListTitle({ title, note }: { title: string; note: string }) {
+  return (
+    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 px-0.5">
+      <b className="text-[15px]">{title}</b>
+      <span className="text-xs text-muted-foreground">{note}</span>
     </div>
   );
 }
@@ -129,6 +315,20 @@ type ResultProps = { result: SpecResult; at: number; optimizer: string | null; r
 function Result({ result, at, optimizer, refreshing, refreshNote, onRefresh }: ResultProps) {
   const [open, setOpen] = useState(true);
   const n = result.misses.length;
+  const top = result.misses.filter(fitsCard).slice(0, CARD_MAX);
+  const rest = result.misses.filter((m) => !top.includes(m));
+  const under = cardsUnderCharacter(result, top.length, rest.length, !!optimizer);
+  const cards =
+    n > 0 && open && top.length > 0 ? (
+      <>
+        <ListTitle title="먼저 채울 것" note="보스 프리셋 기준" />
+        <ul className="grid grid-cols-[minmax(0,1fr)] gap-2.5 @xl:grid-cols-3">
+          {top.map((m, i) => (
+            <TopCard key={i} miss={m} />
+          ))}
+        </ul>
+      </>
+    ) : null;
   const p = result.presets;
   const presetText = [
     p.eq && `장비 ${p.eq}`,
@@ -141,91 +341,93 @@ function Result({ result, at, optimizer, refreshing, refreshNote, onRefresh }: R
 
   return (
     <section className="grid items-start gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-      <div className="flex flex-col gap-3.5 rounded-lg border border-border bg-card p-4 sm:p-5">
-        <div className="flex items-center gap-3.5">
-          <span className="flex size-[84px] shrink-0 items-center justify-center overflow-hidden rounded-lg bg-secondary">
-            {result.image ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={result.image} alt={`${result.name} 캐릭터`} className="size-[230px] max-w-none shrink-0 object-contain" />
-            ) : (
-              <span className="text-[11px] text-muted-foreground">캐릭터</span>
-            )}
-          </span>
-          <div className="flex min-w-0 flex-col gap-1">
-            <b className="font-heading text-[22px] leading-tight break-all">{result.name}</b>
-            <span className="text-[13px] text-muted-foreground">
-              Lv.{result.level} · {result.cls} · {result.world}
+      {/* The character alone stays in view on a desktop while the list beside it grows as lines open. */}
+      <div className={cn("@container flex min-w-0 flex-col gap-3", !under && "lg:sticky lg:top-4")}>
+        <div className="relative flex flex-col gap-3.5 rounded-lg border border-border bg-card p-4 sm:p-5">
+          <div className="flex items-start gap-3.5">
+            <span className="flex size-[84px] shrink-0 items-center justify-center overflow-hidden rounded-lg bg-secondary">
+              {result.image ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={result.image} alt={`${result.name} 캐릭터`} className="size-[230px] max-w-none shrink-0 object-contain" />
+              ) : (
+                <span className="text-[11px] text-muted-foreground">캐릭터</span>
+              )}
             </span>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => n && setOpen((o) => !o)}
-          aria-expanded={n ? open : undefined}
-          className={cn(
-            "flex w-full items-center gap-2.5 rounded-lg border px-3.5 py-3 text-left",
-            n
-              ? "cursor-pointer border-[rgba(226,80,79,0.5)] bg-[rgba(226,80,79,0.12)] text-[#E2504F]"
-              : "cursor-default border-[rgba(76,175,110,0.5)] bg-[rgba(76,175,110,0.12)] text-[#3FA765]",
-          )}
-        >
-          {n ? <ShieldAlert className="size-[22px] shrink-0" aria-hidden="true" /> : <ShieldCheck className="size-[22px] shrink-0" aria-hidden="true" />}
-          <span className="flex flex-col gap-0.5">
-            <b className="text-[15px]">{n ? `놓친 스펙 ${n}개` : "빠진 것 없음"}</b>
-            <span className="text-xs opacity-85">{n ? "보스 기준 · 돈 거의 안 드는 것부터" : "확인한 항목 모두 채움"}</span>
-          </span>
-          {n > 0 && <span className="ml-auto text-xs font-bold">{open ? "목록 닫기" : "목록 보기"}</span>}
-        </button>
-
-        <Periods result={result} />
-
-        <div className="flex flex-col gap-1 text-xs text-muted-foreground">
-          {presetText && <span>보스 프리셋: {presetText}</span>}
-          <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span>같은 캐릭터 3시간 동안 저장된 결과 · {fetchedAt(at)} 조회</span>
+            {/* Only the name makes room for the button at the corner, so the line under it keeps the full width. */}
+            <div className="flex min-w-0 flex-1 flex-col gap-1 self-center">
+              <b className="pr-10 font-heading text-[22px] leading-tight break-all @sm:pr-[92px]">{result.name}</b>
+              <span className="text-[13px] break-keep text-muted-foreground">
+                Lv.{result.level} · {result.cls} · {result.world}
+              </span>
+            </div>
             <button
               type="button"
               onClick={onRefresh}
               disabled={refreshing}
-              className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 font-semibold text-foreground hover:bg-secondary disabled:opacity-60"
+              aria-label="다시 조회"
+              title={`${fetchedAt(at)} 조회`}
+              className="absolute top-4 right-4 inline-flex h-8 items-center gap-1 rounded-md border border-border px-2 text-xs font-semibold whitespace-nowrap hover:bg-secondary disabled:opacity-60 sm:top-5 sm:right-5"
             >
               <RotateCw className={cn("size-3.5", refreshing && "animate-spin")} aria-hidden="true" />
-              다시 조회
+              <span className="hidden @sm:inline">다시 조회</span>
             </button>
-          </span>
-          {refreshNote && <span className="text-[#E2504F]">{refreshNote}</span>}
-          {!result.known && <span>새 직업 → 직업별 기준 없음, 공용 항목만 확인</span>}
-        </div>
+          </div>
 
-        {optimizer && (
-          <a
-            href={optimizer}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 rounded-lg border border-border px-3.5 py-2.5 text-[13px] font-semibold hover:bg-secondary"
+          <button
+            type="button"
+            onClick={() => n && setOpen((o) => !o)}
+            aria-expanded={n ? open : undefined}
+            className={cn(
+              "flex w-full items-center gap-2.5 rounded-lg border px-3.5 py-3 text-left",
+              n
+                ? "cursor-pointer border-[rgba(226,80,79,0.5)] bg-[rgba(226,80,79,0.12)] text-[#E2504F]"
+                : "cursor-default border-[rgba(76,175,110,0.5)] bg-[rgba(76,175,110,0.12)] text-[#3FA765]",
+            )}
           >
-            하이퍼 스탯 효율 배분 보기
-            <span className="text-xs font-normal text-muted-foreground">외부 사이트</span>
-            <ExternalLink className="ml-auto size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-          </a>
-        )}
+            {n ? <ShieldAlert className="size-[22px] shrink-0" aria-hidden="true" /> : <ShieldCheck className="size-[22px] shrink-0" aria-hidden="true" />}
+            <span className="flex flex-col gap-0.5">
+              <b className="text-[15px]">{n ? `놓친 스펙 ${n}개` : "빠진 것 없음"}</b>
+              <span className="text-xs opacity-85">{n ? "보스 기준 · 바로 되는 것부터" : "확인한 항목 모두 채움"}</span>
+            </span>
+            {n > 0 && <span className="ml-auto text-xs font-bold">{open ? "목록 닫기" : "목록 보기"}</span>}
+          </button>
+
+          <Periods result={result} />
+
+          <div className="flex flex-col gap-1 text-xs text-muted-foreground">
+            {presetText && <span>보스 프리셋: {presetText}</span>}
+            {refreshNote && <span className="text-[#E2504F]">{refreshNote}</span>}
+            {!result.known && <span>새 직업 → 직업별 기준 없음, 공용 항목만 확인</span>}
+          </div>
+
+          {optimizer && (
+            <a
+              href={optimizer}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 rounded-lg border border-border px-3.5 py-2.5 text-[13px] font-semibold hover:bg-secondary"
+            >
+              하이퍼 스탯 효율 배분 보기
+              <span className="text-xs font-normal text-muted-foreground">외부 사이트</span>
+              <ExternalLink className="ml-auto size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            </a>
+          )}
+        </div>
+        {under && cards && <div className="mt-2 flex flex-col gap-3">{cards}</div>}
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-border bg-card">
-        {n > 0 && open && (
+      <div className="@container flex min-w-0 flex-col gap-3">
+        {!under && cards}
+        {n > 0 && open && rest.length > 0 && (
           <>
-            <div className="flex flex-wrap items-baseline justify-between gap-2 px-4 py-4 sm:px-[18px]">
-              <b className="text-[15px]">놓친 스펙</b>
-              <span className="text-xs text-muted-foreground">보스 프리셋 기준</span>
+            <div className={cn(!under && top.length > 0 && "mt-2")}>
+              <ListTitle title={top.length ? `나머지 ${rest.length}개` : "놓친 스펙"} note={top.length ? "줄을 누르면 펼쳐짐" : "보스 프리셋 기준"} />
             </div>
-            {groupByCat(result.misses).map((g) => (
-              <MissGroup key={g.cat} cat={g.cat} items={g.items} />
-            ))}
+            <Lines items={rest} chip />
           </>
         )}
         {n === 0 && (
-          <div className="flex flex-col items-center gap-2 px-4 py-9 text-center">
+          <div className="flex flex-col items-center gap-2 rounded-lg border border-border bg-card px-4 py-9 text-center">
             <span className="flex size-12 items-center justify-center rounded-full bg-[rgba(76,175,110,0.16)] text-[#3FA765]">
               <Check className="size-6" aria-hidden="true" />
             </span>
@@ -233,16 +435,15 @@ function Result({ result, at, optimizer, refreshing, refreshNote, onRefresh }: R
             <span className="text-[13px] text-muted-foreground">확인하는 항목 모두 채움</span>
           </div>
         )}
-        {n > 0 && !open && <div className="px-4 py-9 text-center text-[13px] text-muted-foreground">왼쪽 배지 → 목록 열기</div>}
+        {n > 0 && !open && (
+          <div className="rounded-lg border border-border bg-card px-4 py-9 text-center text-[13px] text-muted-foreground">왼쪽 배지 → 목록 열기</div>
+        )}
         {result.tips.length > 0 && (
           <>
-            <div className="flex flex-wrap items-baseline justify-between gap-2 border-t border-border px-4 py-3 sm:px-[18px]">
-              <b className="text-[13px]">참고</b>
-              <span className="text-xs text-muted-foreground">개수에 안 셈 · 메소나 시간이 드는 것</span>
+            <div className="mt-2">
+              <ListTitle title="참고" note="개수에 안 셈 · 메소나 시간이 드는 것" />
             </div>
-            {groupByCat(result.tips).map((g) => (
-              <MissGroup key={g.cat} cat={g.cat} items={g.items} tip />
-            ))}
+            <Lines items={result.tips} chip={false} />
           </>
         )}
       </div>

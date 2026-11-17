@@ -1,6 +1,10 @@
 // "남은 기간" box of 숨은 스펙업 (시안 B, user 2026-11-17: "줄바꿈이나 글을 깔끔하게"): one title per kind, then
 // rows of [what · date · days] so nothing wraps in the middle of a phrase. Red = the same thing is in 놓친 스펙.
-import { PERIOD_WARN_DAYS, type Period } from "./check.ts";
+import type { Period } from "./check.ts";
+
+// Stat cash items: warned like titles, under 7 days (their days left are always shown apart, user 2026-11-17).
+// Kept here, not in check.ts: the page imports this file, and check.ts carries the class data and the icon table.
+export const PERIOD_WARN_DAYS = 7;
 
 export type PeriodRow = { what: string; date: string; days: string; warn: boolean };
 export type PeriodGroup = { title: string; /** Right of the title (마스터라벨 플러스 only). */ value?: string; warn: boolean; rows: PeriodRow[]; notes: string[] };

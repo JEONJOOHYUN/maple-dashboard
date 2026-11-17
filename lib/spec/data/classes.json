@@ -206,13 +206,7 @@
       "atkBuff": [
         "영웅의 메아리"
       ],
-      "skills0": [
-        {
-          "name": "아스트라 인퓨전",
-          "max": 1,
-          "effect": "최종 데미지 10%"
-        }
-      ],
+      "skills0": [],
       "ability": {
         "full": [
           "보상공",
@@ -249,13 +243,7 @@
       "atkBuff": [
         "영웅의 메아리"
       ],
-      "skills0": [
-        {
-          "name": "아스트라 인퓨전",
-          "max": 1,
-          "effect": "최종 데미지 10%"
-        }
-      ],
+      "skills0": [],
       "ability": {
         "full": [
           "재보피"
