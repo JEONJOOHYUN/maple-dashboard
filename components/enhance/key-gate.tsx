@@ -218,7 +218,8 @@ export function KeyGate({ saved, onConnect, onForgetAll }: { saved: SavedKey[]; 
             {/* Up here, not in small print at the bottom (user, 2026-11-17: hard to see). A key made for another
                 MapleStory service works too (user, 2026-11-15; other games' keys do not). */}
             {i === 0 && (
-              <div className="ml-[30px] flex flex-col gap-1 rounded-md border border-border bg-card px-3 py-2.5 text-[13px] leading-relaxed">
+              // Same left edge and width as step 03's box (user, 2026-11-17: the boxes of one list line up).
+              <div className="flex flex-col gap-1 rounded-md border border-border bg-card px-3 py-2.5 text-[13px] leading-relaxed">
                 <span>
                   <b>이미 키가 있으면</b> → 새로 안 받아도 됨 · 다른 메이플 서비스 키도 가능
                 </span>
