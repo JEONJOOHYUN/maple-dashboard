@@ -13,7 +13,10 @@ import { ThemeProvider } from "@/components/theme-provider";
 // Big numbers only (font-num). Official NEXON files, unmodified (license: fonts/Maplestory/LICENSE.md).
 // unicode-range keeps it to ASCII so units like 억 or 명 fall through to Pretendard
 // (Maplestory Korean read too heavy, user decision 2026-11-08).
-// Not preloaded: ~690KB per weight, and Light is not used yet.
+// Not preloaded: ~690KB per weight (about 310KB each on the wire). Both weights do get downloaded on the tool
+// pages: numbers without a bold class resolve to Light. Kept as is (user, 2026-11-17) since the text shows at once
+// with the fallback (display: swap) and the files are cached after the first visit; the license does not allow
+// subsetting or converting them.
 const maple = localFont({
   variable: "--font-maple",
   src: [
