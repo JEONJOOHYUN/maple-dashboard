@@ -21,9 +21,10 @@ const meso = (tickets: number, ticketMan: number) => `${koreanUnits(tickets * ti
 
 /**
  * 부티크 기프트 (user, 2026-11-17, 시안 D1): "까기 전" = what ten opens usually give, "이미 깐 것" = how one's own opens
- * went (share of people with as many or more, and the 1만원당 it came to).
+ * went (share of people with as many or more, and the 1만원당 it came to). Opened under its row of the ranking
+ * (user, 2026-11-17: "효율 순위에서 열고 닫는 걸로"), so it has no frame of its own.
  */
-export function BoutiqueCard({
+export function BoutiquePanel({
   tab,
   onTab,
   ticketMan,
@@ -57,9 +58,8 @@ export function BoutiqueCard({
   const vsAvg = (perGift / (PER_10 / 10) - 1) * 100;
 
   return (
-    <section className="flex flex-col gap-3.5 rounded-lg border border-border bg-card p-4">
+    <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <b className="text-[15px]">부티크 기프트</b>
         <Segment
           label="부티크 기프트 보기"
           value={tab}
@@ -70,12 +70,12 @@ export function BoutiqueCard({
           ]}
           className="w-52"
         />
+        <span className="text-xs text-muted-foreground">10개 기준 · 10번째는 피버(최소 10개) · 티켓 {ticketMan.toLocaleString("ko-KR")}만</span>
       </div>
 
       {tab === "before" ? (
         <>
-          <span className="text-xs text-muted-foreground">10개 기준 · 10번째는 피버(최소 10개) · 티켓 {ticketMan.toLocaleString("ko-KR")}만</span>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-2 @sm:grid-cols-3">
             {LUCK.map((l) => (
               <LuckBox key={l.label} label={l.label} value={meso(l.tickets, ticketMan)} sub={`티켓 ${l.tickets}개`} />
             ))}
@@ -86,7 +86,7 @@ export function BoutiqueCard({
         </>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-2 @sm:grid-cols-2">
             <label className="flex h-10 min-w-0 items-center justify-between gap-2 rounded-lg border border-border bg-background pr-1 pl-3 text-[13px] text-muted-foreground">
               <span className="truncate">깐 개수</span>
               <NumberField label="깐 부티크 기프트 개수" value={opened.n} onChange={(v) => onOpened({ ...opened, n: v })} suffix="개" inputClassName="h-8 w-16" />
@@ -124,6 +124,6 @@ export function BoutiqueCard({
           <span className="text-xs text-muted-foreground">10번째마다 피버 · 판매 기간이 바뀌면 처음부터 셈</span>
         </>
       )}
-    </section>
+    </div>
   );
 }

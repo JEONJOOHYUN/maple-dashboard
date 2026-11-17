@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
-import { X } from "lucide-react";
+import { Fragment, useState, type ReactNode } from "react";
+import { ChevronDown, X } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { Chip, NumberField, Segment, parseNum } from "@/components/ev/ui";
-import { BoutiqueCard, type BoutiqueTab } from "@/components/mvp/boutique-card";
+import { BoutiquePanel, type BoutiqueTab } from "@/components/mvp/boutique-panel";
 import { BOUTIQUE_OPEN_ID, CREDIT_PCT, CREDIT_SHOP, GIFT_WON_PER_10K, MESO_MARKET_MP, MVP_ITEMS, MVP_MESO_WON, MVP_METHODS } from "@/lib/ev/defaults";
 import { ticketsPer10 } from "@/lib/mvp/boutique";
 import {
@@ -44,6 +44,8 @@ type Settings = {
   /** "이미 깐 것": gifts opened and tickets received. */
   opened: { n: string; t: string };
   boutiqueTab: BoutiqueTab;
+  /** The 부티크 기프트 panel is open under its row of the ranking. */
+  boutiqueShow: boolean;
   discounts: Record<string, string>;
   wonRate: string;
   mmRate: string;
@@ -66,6 +68,7 @@ const DEFAULT_SETTINGS: Settings = {
   v: SETTINGS_V,
   opened: { n: "", t: "" },
   boutiqueTab: "before",
+  boutiqueShow: false,
   discounts: Object.fromEntries(MVP_METHODS.map((m) => [m.id, String(m.discountPct)])),
   wonRate: String(MVP_MESO_WON),
   mmRate: String(MESO_MARKET_MP),
@@ -257,6 +260,8 @@ export function MvpCalculator() {
   };
   const openItem = s.items.find((it) => it.id === BOUTIQUE_OPEN_ID);
   const asIsItem = s.items.find((it) => it.id === "boutique");
+  // The row the 부티크 기프트 panel opens under (user, 2026-11-17: open and close it in the ranking, not a card apart).
+  const panelRowId = openItem ? BOUTIQUE_OPEN_ID : asIsItem ? "boutique" : null;
   const per10k = (eok: number, cash: number) => (cash > 0 ? (auctionWon(eok, market) / cash) * 10_000 + bonus : 0);
 
   const setItem = (id: string, patch: Partial<Item>) => update({ items: s.items.map((x) => (x.id === id ? { ...x, ...patch } : x)) });
@@ -411,7 +416,7 @@ export function MvpCalculator() {
           <b className="text-[15px]">효율 순위 · 1만원당 돌려받는 돈</b>
           {market.useCredit && <span className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">크레딧 포함</span>}
         </div>
-        <div className="relative overflow-x-auto">
+        <div className="@container relative overflow-x-auto">
           <table className="w-full min-w-[720px] border-collapse text-[13px]">
             <thead>
               <tr className="text-xs text-muted-foreground">
@@ -426,7 +431,8 @@ export function MvpCalculator() {
             </thead>
             <tbody>
               {rows.map((r, i) => (
-                <tr key={r.id} className={cn("border-t border-border", i === 0 && r.total > 0 && "bg-primary-soft")}>
+                <Fragment key={r.id}>
+                <tr className={cn("border-t border-border", i === 0 && r.total > 0 && "bg-primary-soft")}>
                   <td className="px-4 py-2.5">
                     <b className={cn("font-num text-lg", i === 0 ? "text-primary-text" : "text-muted-foreground")}>{i + 1}</b>
                   </td>
@@ -438,6 +444,18 @@ export function MvpCalculator() {
                           <span className={cn("text-xs", boutiqueTag(r.id)!.up ? "font-semibold text-primary-text" : "text-muted-foreground")}>
                             {boutiqueTag(r.id)!.text}
                           </span>
+                        )}
+                        {/* Phones: the table scrolls sideways and its right end is off screen, so the toggle stays here. */}
+                        {r.id === panelRowId && (
+                          <button
+                            type="button"
+                            aria-expanded={s.boutiqueShow}
+                            onClick={() => update({ boutiqueShow: !s.boutiqueShow })}
+                            className="mt-0.5 inline-flex items-center gap-1 self-start rounded-md text-xs font-semibold text-primary-text outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50 @min-[720px]:hidden"
+                          >
+                            {s.boutiqueShow ? "접기" : "펼치기"}
+                            <ChevronDown className={cn("size-3.5 transition-transform", s.boutiqueShow && "rotate-180")} aria-hidden="true" />
+                          </button>
                         )}
                       </span>
                     ) : r.kind === "mm" ? (
@@ -480,18 +498,53 @@ export function MvpCalculator() {
                   </td>
                   <td className="px-2 py-2.5 text-right font-num">{ratio(r.total)}</td>
                   <td className="px-2 py-2.5 text-right">
-                    {r.kind === "item" && (
-                      <button
-                        type="button"
-                        aria-label={`${r.item!.name} 빼기`}
-                        onClick={() => update({ items: s.items.filter((x) => x.id !== r.id) })}
-                        className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:text-destructive"
-                      >
-                        <X className="size-3.5" aria-hidden="true" />
-                      </button>
-                    )}
+                    <span className="inline-flex flex-col items-end gap-1">
+                      {r.kind === "item" && (
+                        <button
+                          type="button"
+                          aria-label={`${r.item!.name} 빼기`}
+                          onClick={() => update({ items: s.items.filter((x) => x.id !== r.id) })}
+                          className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:text-destructive"
+                        >
+                          <X className="size-3.5" aria-hidden="true" />
+                        </button>
+                      )}
+                      {/* Under the ×, at the row's right end, when the whole table fits (user, 2026-11-17: "X 아래에 펼치기 접기"). */}
+                      {r.id === panelRowId && (
+                        <button
+                          type="button"
+                          aria-expanded={s.boutiqueShow}
+                          title="까기 전 · 이미 깐 결과"
+                          onClick={() => update({ boutiqueShow: !s.boutiqueShow })}
+                          className="hidden h-7 items-center gap-0.5 rounded-md px-1.5 text-xs font-semibold whitespace-nowrap text-primary-text outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 @min-[720px]:inline-flex"
+                        >
+                          {s.boutiqueShow ? "접기" : "펼치기"}
+                          <ChevronDown className={cn("size-3.5 transition-transform", s.boutiqueShow && "rotate-180")} aria-hidden="true" />
+                        </button>
+                      )}
+                    </span>
                   </td>
                 </tr>
+                {r.id === panelRowId && s.boutiqueShow && (
+                  <tr className="border-t border-border bg-muted/40">
+                    <td colSpan={7} className="p-0">
+                      {/* As wide as the visible box and pinned left: on a phone the table scrolls sideways, the panel does not. */}
+                      <div className="@container sticky left-0 w-[100cqw] px-4 py-3.5">
+                        <BoutiquePanel
+                          tab={s.boutiqueTab}
+                          onTab={(tab) => update({ boutiqueTab: tab })}
+                          ticketMan={parseNum(openItem?.price ?? "", MVP_ITEMS.find((x) => x.id === BOUTIQUE_OPEN_ID)!.ticketMan!)}
+                          cashPer10={parseNum((openItem ?? asIsItem)!.cash, 33_000)}
+                          opened={s.opened}
+                          onOpened={(opened) => update({ opened })}
+                          per10k={per10k}
+                          pgaPer10k={pga && pga.id === "pga" ? pga.total : null}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               ))}
             </tbody>
           </table>
@@ -530,19 +583,6 @@ export function MvpCalculator() {
           ))}
         </div>
       </section>
-
-      {(openItem || asIsItem) && (
-        <BoutiqueCard
-          tab={s.boutiqueTab}
-          onTab={(tab) => update({ boutiqueTab: tab })}
-          ticketMan={parseNum(openItem?.price ?? "", MVP_ITEMS.find((i) => i.id === BOUTIQUE_OPEN_ID)!.ticketMan!)}
-          cashPer10={parseNum((openItem ?? asIsItem)!.cash, 33_000)}
-          opened={s.opened}
-          onOpened={(opened) => update({ opened })}
-          per10k={per10k}
-          pgaPer10k={pga && pga.id === "pga" ? pga.total : null}
-        />
-      )}
 
       <section className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
