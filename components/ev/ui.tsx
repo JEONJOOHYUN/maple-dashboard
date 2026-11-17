@@ -1,8 +1,9 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useLayoutEffect, useRef, type ReactNode } from "react";
 import { LUCK_LEVELS, triesAt } from "@/lib/ev/luck";
 import { koreanUnits } from "@/lib/format";
+import { caretAfter, cleanNumberText, groupDigits, keptBefore } from "@/lib/number-text";
 import { cn } from "@/lib/utils";
 
 /** Card section used by every calculator tab. */
@@ -136,7 +137,10 @@ export function Switch({ on, onChange, label, note }: { on: boolean; onChange: (
   );
 }
 
-/** Small number field. Keeps the raw text so "1." or "" can be typed; parent gets the parsed number. */
+/**
+ * Small number field. The parent keeps the plain text ("1234.5", so "1." or "" can be typed) and parses it;
+ * the field shows it with commas ("1,234.5") and keeps the caret after the same digit while commas come and go.
+ */
 export function NumberField({
   value,
   onChange,
@@ -156,14 +160,34 @@ export function NumberField({
   className?: string;
   inputClassName?: string;
 }) {
+  const ref = useRef<HTMLInputElement>(null);
+  // Digits typed before the caret, waiting until the grouped text is on screen.
+  const pending = useRef<number | null>(null);
+  const putCaret = () => {
+    const el = ref.current;
+    const kept = pending.current;
+    if (!el || kept === null) return;
+    pending.current = null;
+    if (document.activeElement !== el) return;
+    const at = caretAfter(el.value, kept, decimal);
+    el.setSelectionRange(at, at);
+  };
+  useLayoutEffect(putCaret);
   return (
     <span className={cn("inline-flex items-center gap-1.5 text-[13px] text-muted-foreground", className)}>
       <input
+        ref={ref}
         aria-label={label}
         inputMode={decimal ? "decimal" : "numeric"}
-        value={value}
+        value={groupDigits(String(value ?? ""))}
         placeholder={placeholder}
-        onChange={(e) => onChange(e.target.value.replace(decimal ? /[^0-9.]/g : /[^0-9]/g, "").slice(0, 12))}
+        onChange={(e) => {
+          const el = e.target;
+          pending.current = keptBefore(el.value, el.selectionStart ?? el.value.length, decimal);
+          onChange(cleanNumberText(el.value, decimal));
+          // When the text stays the same (a comma deleted) nothing re-renders: put the caret back after React restores it.
+          requestAnimationFrame(putCaret);
+        }}
         className={cn(
           "h-9 w-20 min-w-0 rounded-lg border border-input bg-background px-2 text-right font-num text-sm text-foreground outline-none focus:border-ring focus:ring-3 focus:ring-ring/40",
           inputClassName
@@ -175,7 +199,8 @@ export function NumberField({
 }
 
 export const parseNum = (text: string, fallback = 0) => {
-  const n = parseFloat(text);
+  // Saved settings from older versions may hold a number instead of text.
+  const n = parseFloat(typeof text === "string" ? text.replace(/,/g, "") : String(text));
   return Number.isFinite(n) ? n : fallback;
 };
 
