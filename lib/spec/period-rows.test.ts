@@ -36,7 +36,7 @@ test("남은 기간 box: one title per kind, same-day things on one row, red whe
       ],
       notes: [],
     },
-    { title: "마스터라벨 플러스", value: "켜짐", warn: false, rows: [], notes: ["성장 · 전투 · 마라벨 5개 기준", "끝나는 날은 넥슨 API 에 없음"] },
+    { title: "마스터라벨 플러스", value: "켜짐", warn: false, rows: [], notes: ["성장 · 전투 · 마라벨 5개 기준"] },
   ]);
 });
 

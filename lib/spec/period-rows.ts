@@ -46,7 +46,7 @@ export function periodGroups(periods: Period[], labelPlus: string[] | null): Per
       warn: !combat && labels.length > 0,
       rows: [],
       notes: labelPlus.length
-        ? [`${kinds.join(" · ")}${count ? ` · 마라벨 ${count}개 기준` : ""}`, "끝나는 날은 넥슨 API 에 없음"]
+        ? [`${kinds.join(" · ")}${count ? ` · 마라벨 ${count}개 기준` : ""}`]
         : ["성장 · 전투 둘 다 없음"],
     });
   }
