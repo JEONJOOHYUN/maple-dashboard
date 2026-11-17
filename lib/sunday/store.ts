@@ -1,10 +1,15 @@
-// Saves a Cron reading into sunday_weeks and the shown prediction into sunday_predictions (server only, service role).
-// Rules live in stored.ts and prediction-log.ts.
+// Saves a Cron reading into sunday_weeks, the shown prediction into sunday_predictions and the season patch dates the
+// event notices show into sunday_patches (server only, service role). Rules live in stored.ts, prediction-log.ts and
+// patches.ts.
+import { nexonGet } from "@/lib/nexon/api";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import type { SundayReading } from "./auto-update";
-import { SUNDAYS, type SundayWeek } from "./history";
+import { SUNDAYS, kstDate, type SundayWeek } from "./history";
 import { ML_MODEL, type MlScores } from "./ml";
 import type { SundayNotice } from "./notice";
+import type { EventNotice } from "./notice-parse";
+import { checkSeasonPatch, eventSpans, mergePatches, type PatchCheck, type StoredPatch } from "./patches";
+import { SEASON_PATCHES, type SeasonPatch } from "./predict";
 import { predictionRow } from "./prediction-log";
 import { mergeStored, planSave, sameNoticeWaiting, writeOnce, type SaveDecision, type StoredStatus, type StoredWeek } from "./stored";
 
@@ -76,6 +81,52 @@ async function mlScores(): Promise<MlScores[]> {
   return (data ?? []) as MlScores[];
 }
 
+/** Stored season patch rows, read fresh (the page cache can lag a run behind). Throws when they cannot be read. */
+async function patchRows(): Promise<StoredPatch[]> {
+  const { data, error } = await supabaseAdmin().from("sunday_patches").select("season_key, date, season, confirmed").order("date");
+  if (error) throw new Error(`sunday_patches read: ${error.message}`);
+  return (data ?? []) as StoredPatch[];
+}
+
+/** The season patch dates the pages use; the bundled list when the rows cannot be read, as the pages fall back to. */
+async function seasonPatches(): Promise<SeasonPatch[]> {
+  try {
+    return mergePatches(SEASON_PATCHES, await patchRows());
+  } catch (e) {
+    console.error("sunday_patches read failed, using the bundled patch dates", e);
+    return SEASON_PATCHES;
+  }
+}
+
+/**
+ * The next season patch from the NEXON event notices (patches.ts checkSeasonPatch): writes sunday_patches when the
+ * notices move or confirm it, nothing otherwise. Called first in every Cron run, so the prediction stored right after
+ * already uses it. `dry` looks without writing. Never fails the run.
+ */
+export async function checkPatches(now: Date, dry: boolean): Promise<PatchCheck | { action: "error"; message: string }> {
+  try {
+    const [stored, { event_notice }] = await Promise.all([patchRows(), nexonGet<{ event_notice: EventNotice[] }>("notice-event", {})]);
+    const check = checkSeasonPatch(mergePatches(SEASON_PATCHES, stored), eventSpans(event_notice ?? []), kstDate(now));
+    if (check.action === "write" && !dry) {
+      const { error } = await supabaseAdmin().from("sunday_patches").upsert({
+        season_key: check.key,
+        date: check.patch.date,
+        season: check.patch.season,
+        confirmed: check.patch.confirmed,
+        basis: check.basis,
+        evidence: check.evidence,
+        updated_at: new Date().toISOString(),
+      });
+      if (error) throw new Error(`sunday_patches write: ${error.message}`);
+    }
+    return check;
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.error("season patch check failed", message);
+    return { action: "error", message };
+  }
+}
+
 /**
  * Keeps the prediction the pages show right now, once per Sunday and model (the first row stays). Called at the start
  * of every Cron run (Wed–Sun), so a Sunday's prediction is stored days before its notice. If the weeks cannot be read
@@ -83,8 +134,8 @@ async function mlScores(): Promise<MlScores[]> {
  */
 export async function logPrediction(now: Date): Promise<"logged" | "exists" | "error"> {
   try {
-    const [weeks, ml] = await Promise.all([publishedWeeks(), mlScores()]);
-    const row = predictionRow(weeks, now, ml);
+    const [weeks, ml, patches] = await Promise.all([publishedWeeks(), mlScores(), seasonPatches()]);
+    const row = predictionRow(weeks, now, ml, patches);
     const { error } = await supabaseAdmin().from("sunday_predictions").insert(row);
     if (!error) return "logged";
     if (error.code === "23505") return "exists"; // this Sunday and model are already stored

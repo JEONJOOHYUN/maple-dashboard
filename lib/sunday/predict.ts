@@ -182,7 +182,8 @@ export function themeOdds(ranked: { id: string; p: number }[], pBig: number): Re
   ) as Record<ThemeId, number>;
 }
 
-export function predictSunday(weeks: SundayWeek[], date: string, start = TRAIN_START): SundayPrediction {
+/** `patches` = the season patch dates (patches.ts mergePatches: the bundled list + the ones the Cron found). */
+export function predictSunday(weeks: SundayWeek[], date: string, start = TRAIN_START, patches: SeasonPatch[] = SEASON_PATCHES): SundayPrediction {
   const t = weekIndex(date);
   const before = weeks.filter((w) => w.date < date);
   const train = before.filter((w) => w.date >= start);
@@ -191,7 +192,7 @@ export function predictSunday(weeks: SundayWeek[], date: string, start = TRAIN_S
 
   // stage 1: big day, then which one. Near a season patch its rhythm overrides the gap: the big day's Sunday goes up,
   // the Sundays before it go down.
-  const season = seasonCall(before, date);
+  const season = seasonCall(before, date, patches);
   let pBig = Math.min(0.9, hazard(train, isBig, since(train, isBig, t), 0));
   if (season?.kind === "hit") pBig = Math.max(pBig, season.p);
   if (season?.kind === "quiet") pBig = Math.min(pBig, season.p);

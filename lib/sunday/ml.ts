@@ -10,7 +10,7 @@
 // site's 28 Sundays 2026-05-10 ~ 2026-11-15 (1st 13, top 3 23 -> 25, any of 5 28, log loss 5.83 -> 5.27).
 import { BUNDLES } from "./bundles.ts";
 import type { SundayWeek } from "./history.ts";
-import { SEASON_PATCHES, pickFive, themeOdds, type SundayPrediction } from "./predict.ts";
+import { SEASON_PATCHES, pickFive, themeOdds, type SeasonPatch, type SundayPrediction } from "./predict.ts";
 
 /**
  * Stored with the scores and with every logged prediction that used them; change it with the features or settings
@@ -66,22 +66,24 @@ function hash53(text: string): string {
 /**
  * Fingerprint of the inputs of the feature rows for `target` (ml-features.ts): every recorded Sunday before it with its
  * bundles, and the season patch dates. The last date alone is not enough: a missing week published later or a
- * corrected week changes the rows without changing it (Codex review 2026-11-15).
+ * corrected week changes the rows without changing it (Codex review 2026-11-15). A patch date the Cron moves changes
+ * it too (patches.ts), while confirming an estimated date does not (same date, same rows).
  */
-export function mlDataHash(weeks: SundayWeek[], target: string): string {
+export function mlDataHash(weeks: SundayWeek[], target: string, patches: SeasonPatch[] = SEASON_PATCHES): string {
   const days = weeks.filter((w) => w.date < target).map((w) => `${w.date}:${[...w.bundles].sort().join("+")}`);
-  const patches = SEASON_PATCHES.map((p) => `${p.date}:${p.season}`);
-  return hash53(`${days.join("|")}#${patches.join("|")}`);
+  const dates = patches.map((p) => `${p.date}:${p.season}`);
+  return hash53(`${days.join("|")}#${dates.join("|")}`);
 }
 
 /**
- * The scores to use for `target`: this model's row, computed from exactly the Sundays the page has before the target.
- * A row made before a week was recorded, filled in or corrected is ignored until the job runs again.
+ * The scores to use for `target`: this model's row, computed from exactly the Sundays (and season patch dates) the page
+ * has before the target. A row made before a week was recorded, filled in or corrected is ignored until the job runs
+ * again.
  */
-export function mlFor(rows: MlScores[], weeks: SundayWeek[], target: string): MlScores | null {
+export function mlFor(rows: MlScores[], weeks: SundayWeek[], target: string, patches: SeasonPatch[] = SEASON_PATCHES): MlScores | null {
   const mine = rows.filter((r) => r.sunday === target && r.model === ML_MODEL);
   if (!mine.length) return null;
-  const hash = mlDataHash(weeks, target);
+  const hash = mlDataHash(weeks, target, patches);
   return mine.find((r) => r.data_hash === hash) ?? null;
 }
 

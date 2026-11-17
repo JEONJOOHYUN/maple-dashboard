@@ -16,14 +16,15 @@
 // A week that already waits for review is not read again while its notice is the same (store.ts).
 // The header is required in every environment, the dev server included: the route writes to the real database
 // and spends OCR calls, so opening the URL by hand must not be enough (Codex review 2026-11-10).
-// Every run that is not `?dry=1` first stores the prediction the pages show (sunday_predictions, store.ts).
+// Every run first checks the season patch dates against the NEXON event notices (sunday_patches, store.ts
+// checkPatches; `?dry=1` only reports), then, unless `?dry=1`, stores the prediction the pages show (sunday_predictions).
 import { timingSafeEqual } from "node:crypto";
 import { revalidateTag } from "next/cache";
 import { readSunday } from "@/lib/sunday/auto-update";
 import { upcomingSunday } from "@/lib/sunday/history";
 import { SUNDAY_WEEKS_TAG } from "@/lib/sunday/live";
 import { findSundayNotice } from "@/lib/sunday/notice";
-import { alreadyDone, logPrediction, logRun, saveReading, waitingForReview } from "@/lib/sunday/store";
+import { alreadyDone, checkPatches, logPrediction, logRun, saveReading, waitingForReview } from "@/lib/sunday/store";
 import type { SaveDecision } from "@/lib/sunday/stored";
 
 export const maxDuration = 300;
@@ -34,6 +35,21 @@ function authorized(request: Request): boolean {
   const given = Buffer.from(request.headers.get("authorization") ?? "");
   const want = Buffer.from(`Bearer ${secret}`);
   return given.length === want.length && timingSafeEqual(given, want);
+}
+
+type PatchResult = Awaited<ReturnType<typeof checkPatches>>;
+
+/** The run-log result for a season patch check worth a row: a write, or anything but "nothing changed". */
+function patchNote(p: PatchResult): string | null {
+  if (p.action === "write") return `patch-${p.patch.confirmed ? "confirmed" : "estimated"}`;
+  if (p.action === "error") return "patch-error";
+  return p.reason === "unchanged" ? null : `patch-${p.reason}`;
+}
+
+function patchDetail(p: PatchResult): string {
+  if (p.action === "write") return [`${p.key} ${p.patch.date} (${p.basis})`, ...p.evidence.map((e) => `${e.title} ${e.start}~${e.end}`)].join(" · ");
+  if (p.action === "error") return p.message;
+  return p.date ?? "";
 }
 
 export async function GET(request: Request) {
@@ -47,13 +63,19 @@ export async function GET(request: Request) {
   const sunday = asked ?? upcomingSunday(new Date());
   const dry = params.get("dry") === "1";
   const started = Date.now();
-  const prediction = dry ? null : await logPrediction(new Date());
+  const now = new Date();
+  // The patch first, so the prediction stored next already uses a date the notices moved or confirmed. A write or a
+  // notice that does not fit the rule leaves a row in sunday_cron_runs, so nobody has to read the logs to see it.
+  const patch = await checkPatches(now, dry);
+  if (patch.action === "write" && !dry) revalidateTag(SUNDAY_WEEKS_TAG, { expire: 0 });
+  if (!dry && patchNote(patch)) await logRun(sunday, patchNote(patch)!, Date.now() - started, patchDetail(patch));
+  const prediction = dry ? null : await logPrediction(now);
   try {
     if (!dry) {
       const done = await alreadyDone(sunday);
       if (done) {
         await logRun(sunday, done.reason, Date.now() - started);
-        return Response.json({ sunday, saved: done, prediction });
+        return Response.json({ sunday, saved: done, prediction, patch });
       }
     }
     const notice = await findSundayNotice(sunday);
@@ -61,7 +83,7 @@ export async function GET(request: Request) {
       const waiting = await waitingForReview(sunday, notice);
       if (waiting) {
         await logRun(sunday, waiting.reason, Date.now() - started, notice.title);
-        return Response.json({ sunday, saved: waiting, prediction });
+        return Response.json({ sunday, saved: waiting, prediction, patch });
       }
     }
     const reading = await readSunday(sunday, notice);
@@ -74,11 +96,11 @@ export async function GET(request: Request) {
     }
     await logRun(sunday, saved.action === "write" ? saved.status : saved.reason, Date.now() - started, reading.notice?.title);
     const { lines, ...rest } = reading;
-    return Response.json({ ...rest, lineCount: lines.length, saved, prediction });
+    return Response.json({ ...rest, lineCount: lines.length, saved, prediction, patch });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     console.error("sunday cron failed", e);
     await logRun(sunday, "error", Date.now() - started, message);
-    return Response.json({ sunday, error: message }, { status: 502 });
+    return Response.json({ sunday, error: message, patch }, { status: 502 });
   }
 }

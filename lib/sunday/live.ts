@@ -4,6 +4,8 @@ import { unstable_cache } from "next/cache";
 import { supabase } from "@/lib/supabase";
 import { SUNDAYS, type SundayWeek } from "./history";
 import { ML_MODEL, type MlScores } from "./ml";
+import { mergePatches, type StoredPatch } from "./patches";
+import { SEASON_PATCHES, type SeasonPatch } from "./predict";
 import { mergeStored, type StoredWeek } from "./stored";
 
 /** Cache tag of the published rows; the Cron clears it as soon as it publishes a week. */
@@ -32,6 +34,28 @@ export async function loadSundayWeeks(): Promise<SundayWeek[]> {
   } catch (e) {
     console.error("sunday_weeks read failed, using bundled history only", e);
     return SUNDAYS;
+  }
+}
+
+// Season patch dates the Cron found in the event notices (patches.ts), cached with the weeks: the Cron clears the same
+// tag when it writes one.
+const loadPatchRows = unstable_cache(
+  async (): Promise<StoredPatch[]> => {
+    const { data, error } = await supabase.from("sunday_patches").select("season_key, date, season, confirmed").order("date");
+    if (error) throw error;
+    return (data ?? []) as StoredPatch[];
+  },
+  ["sunday-patches-v1"],
+  { revalidate: 3600, tags: [SUNDAY_WEEKS_TAG] },
+);
+
+/** The season patch dates for every prediction on the pages; the bundled list alone when the rows cannot be read. */
+export async function loadSeasonPatches(): Promise<SeasonPatch[]> {
+  try {
+    return mergePatches(SEASON_PATCHES, await loadPatchRows());
+  } catch (e) {
+    console.error("sunday_patches read failed, using the bundled patch dates", e);
+    return SEASON_PATCHES;
   }
 }
 

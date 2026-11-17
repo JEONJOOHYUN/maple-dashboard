@@ -11,6 +11,8 @@ import { fileURLToPath } from "node:url";
 import { SUNDAYS, predictionTarget } from "../../lib/sunday/history.ts";
 import { ML_COLUMNS, mlRows } from "../../lib/sunday/ml-features.ts";
 import { ML_MODEL, mlDataHash } from "../../lib/sunday/ml.ts";
+import { mergePatches } from "../../lib/sunday/patches.ts";
+import { SEASON_PATCHES } from "../../lib/sunday/predict.ts";
 import { mergeStored } from "../../lib/sunday/stored.ts";
 
 const OUT = path.join(path.dirname(fileURLToPath(import.meta.url)), "out");
@@ -32,10 +34,20 @@ const asked = process.argv[2];
 if (asked && !/^\d{4}-\d{2}-\d{2}$/.test(asked)) throw new Error("argument must be YYYY-MM-DD");
 const stored = await rest("sunday_weeks?select=sunday,notice_id,special,items,updated_at,images&status=in.(auto,confirmed)&order=sunday");
 const weeks = mergeStored(SUNDAYS, stored);
+// The season patch dates the pages use (lib/sunday/patches.ts): the bundled list + the ones the Cron found. If the rows
+// cannot be read, the bundled list, as the pages fall back to; a mismatch only makes the pages use the statistical
+// model until the next run.
+let patchRows = [];
+try {
+  patchRows = await rest("sunday_patches?select=season_key,date,season,confirmed&order=date");
+} catch (e) {
+  console.log(`sunday_patches not read (${e.message}): using the bundled patch dates`);
+}
+const patches = mergePatches(SEASON_PATCHES, patchRows);
 const sunday = asked || predictionTarget(new Date(), weeks);
 const dataEnd = weeks.filter((w) => w.date < sunday).at(-1)?.date;
 if (!dataEnd) throw new Error(`no Sunday before ${sunday}`);
-const dataHash = mlDataHash(weeks, sunday);
+const dataHash = mlDataHash(weeks, sunday, patches);
 
 if (!asked) {
   const have = await rest(`sunday_ml_scores?select=data_hash&sunday=eq.${sunday}&model=eq.${encodeURIComponent(ML_MODEL)}`);
@@ -46,7 +58,7 @@ if (!asked) {
   }
 }
 
-const { train, target } = mlRows(weeks, sunday);
+const { train, target } = mlRows(weeks, sunday, patches);
 const cell = (v) => (Number.isFinite(v) ? String(v) : "");
 const lines = [["date", "bundle", "y", ...ML_COLUMNS].join(",")];
 for (const r of [...train, ...target]) lines.push([r.date, r.bundle, r.y ?? "", ...r.x.map(cell)].join(","));

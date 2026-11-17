@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { connection } from "next/server";
 import { SundayView } from "@/components/sunday/sunday-view";
-import { loadMlScores, loadSundayWeeks } from "@/lib/sunday/live";
+import { loadMlScores, loadSeasonPatches, loadSundayWeeks } from "@/lib/sunday/live";
 import { getSundayPageData } from "@/lib/sunday/view";
 
 export const metadata: Metadata = { title: "썬데이 메이플" };
@@ -11,6 +11,6 @@ export const metadata: Metadata = { title: "썬데이 메이플" };
 // (the database rows are cached in lib/sunday/live.ts).
 export default async function SundayPage() {
   await connection();
-  const [weeks, ml] = await Promise.all([loadSundayWeeks(), loadMlScores()]);
-  return <SundayView data={getSundayPageData(new Date(), weeks, ml)} />;
+  const [weeks, ml, patches] = await Promise.all([loadSundayWeeks(), loadMlScores(), loadSeasonPatches()]);
+  return <SundayView data={getSundayPageData(new Date(), weeks, ml, patches)} />;
 }

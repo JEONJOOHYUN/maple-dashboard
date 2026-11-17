@@ -2,9 +2,20 @@ import { nexonUrl } from "../nexon/url.ts";
 import { splitBenefit, type BenefitRow } from "./benefit.ts";
 import { THEMES, bundleLabel, bundleTheme, isBigBundle, type ThemeId } from "./bundles.ts";
 import { SUNDAYS, addWeeks, dateLabel, kstDate, noticeUrl, predictionTarget, upcomingSunday, type SundayWeek } from "./history.ts";
-import { recentHits, type HitRecord } from "./hits.ts";
+import { HIT_WEEKS, recentHits, type HitRecord } from "./hits.ts";
 import { blendPrediction, mlFor, type MlScores } from "./ml.ts";
-import { bigDayWindow, kindOf, predictSunday, shownPicks, themesOf, type BundleKind, type BundleOdds } from "./predict.ts";
+import {
+  SEASON_PATCHES,
+  TRAIN_START,
+  bigDayWindow,
+  kindOf,
+  predictSunday,
+  shownPicks,
+  themesOf,
+  type BundleKind,
+  type BundleOdds,
+  type SeasonPatch,
+} from "./predict.ts";
 
 export type WeekView = {
   date: string;
@@ -117,15 +128,22 @@ function timeLabel(iso: string): string | null {
 
 const odds = (r: BundleOdds): OddsView => ({ ...r, label: bundleLabel(r.id), theme: bundleTheme(r.id) ?? null, kind: kindOf(r.id) });
 
-export function getSundayPageData(now: Date, weeks: SundayWeek[] = SUNDAYS, mlRows: MlScores[] = []): SundayPageData {
+/** `patches` = the season patch dates (live.ts loadSeasonPatches: the bundled list + the ones the Cron found). */
+export function getSundayPageData(
+  now: Date,
+  weeks: SundayWeek[] = SUNDAYS,
+  mlRows: MlScores[] = [],
+  patches: SeasonPatch[] = SEASON_PATCHES,
+): SundayPageData {
   const today = kstDate(now);
   const sunday = upcomingSunday(now);
   const recordedWeek = weeks.find((w) => w.date === sunday) ?? null;
   // The notice goes up on Friday 10:00 KST (= Friday 01:00 UTC), two days before the Sunday.
   const announced = now.getTime() >= Date.parse(sunday) - 2 * 86_400_000 + 3_600_000;
   const target = predictionTarget(now, weeks);
-  const ml = mlFor(mlRows, weeks, target);
-  const p = ml ? blendPrediction(predictSunday(weeks, target), ml.scores) : predictSunday(weeks, target);
+  const ml = mlFor(mlRows, weeks, target, patches);
+  const stats = predictSunday(weeks, target, TRAIN_START, patches);
+  const p = ml ? blendPrediction(stats, ml.scores) : stats;
   const themes = THEMES.map((x) => ({ id: x.id, label: x.label, day: x.day, p: p.themes[x.id] }));
   const top = [...themes].sort((a, b) => b.p - a.p)[0];
   // 16 weeks: phones show the first 8, wide screens fill the height of the odds card next to it and scroll the rest.
@@ -167,7 +185,7 @@ export function getSundayPageData(now: Date, weeks: SundayWeek[] = SUNDAYS, mlRo
       }),
       missingWeeks: p.missingWeeks,
       ml: ml !== null,
-      hits: recentHits(weeks, mlRows),
+      hits: recentHits(weeks, mlRows, HIT_WEEKS, patches),
     },
     recent: recent.map(weekView),
     dataEnd: weeks.at(-1)?.date ?? "",

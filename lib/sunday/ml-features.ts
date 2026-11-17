@@ -6,7 +6,7 @@
 // ml-features.test.ts pins the port to the experiment's numbers.
 import { bundleTheme, isBigBundle } from "./bundles.ts";
 import type { SundayWeek } from "./history.ts";
-import { SEASON_PATCHES, seasonCall, sundayAfter } from "./predict.ts";
+import { SEASON_PATCHES, seasonCall, sundayAfter, type SeasonPatch } from "./predict.ts";
 
 /** Columns in file order; `bid` is categorical (bundle index), the rest numeric. */
 export const ML_COLUMNS = [
@@ -34,11 +34,11 @@ function typeOf(w: SundayWeek): string {
   return ks.has("O") ? "O" : "X";
 }
 
-function seasonFeatures(before: SundayWeek[], date: string) {
-  const c = seasonCall(before, date);
+function seasonFeatures(before: SundayWeek[], date: string, patches: SeasonPatch[]) {
+  const c = seasonCall(before, date, patches);
   let since = 26;
   let winter = 0;
-  for (const p of SEASON_PATCHES) {
+  for (const p of patches) {
     const s0 = sundayAfter(p.date, 0);
     if (s0 > date) break;
     since = Math.min(26, Math.round((Date.parse(date) - Date.parse(s0)) / 604_800_000));
@@ -54,7 +54,16 @@ const r6 = (v: number) => (Number.isFinite(v) ? +v.toFixed(6) : NaN);
  * Rows of one Sunday (`date`, index `j` in `weeks` or `weeks.length` for a Sunday not recorded yet), built from
  * weeks[0..j-1]. `bids` = the bundle ids in a fixed order (categorical index).
  */
-function rowsFor(weeks: SundayWeek[], types: string[], j: number, date: string, t: number, bids: string[], truth: Set<string> | null): MlRow[] {
+function rowsFor(
+  weeks: SundayWeek[],
+  types: string[],
+  j: number,
+  date: string,
+  t: number,
+  bids: string[],
+  truth: Set<string> | null,
+  patches: SeasonPatch[],
+): MlRow[] {
   const hist = weeks.slice(0, j);
   const T = t;
   const app = new Map<string, number[]>();
@@ -105,7 +114,7 @@ function rowsFor(weeks: SundayWeek[], types: string[], j: number, date: string, 
   const dT = last.t;
   let dDen = 0;
   for (const w of hist) dDen += 0.5 ** ((dT - w.t) / 26);
-  const season = seasonFeatures(hist, date);
+  const season = seasonFeatures(hist, date, patches);
 
   const rows: MlRow[] = [];
   for (const b of active) {
@@ -138,15 +147,22 @@ function rowsFor(weeks: SundayWeek[], types: string[], j: number, date: string, 
 
 /**
  * Training rows for every recorded Sunday after the first `ML_MIN_HISTORY`, then the rows of `target` (a Sunday after
- * the last recorded one). `weeks` = recorded Sundays in date order (bundled history + published weeks).
+ * the last recorded one). `weeks` = recorded Sundays in date order (bundled history + published weeks). `patches` = the
+ * season patch dates the pages use (patches.ts mergePatches), so the features match the page's season rhythm.
  */
-export function mlRows(weeks: SundayWeek[], target: string): { bids: string[]; train: MlRow[]; target: MlRow[] } {
+export function mlRows(
+  weeks: SundayWeek[],
+  target: string,
+  patches: SeasonPatch[] = SEASON_PATCHES,
+): { bids: string[]; train: MlRow[]; target: MlRow[] } {
   const before = weeks.filter((w) => w.date < target);
   if (before.length <= ML_MIN_HISTORY) throw new Error(`not enough Sundays before ${target}`);
   const bids = [...new Set(before.flatMap((w) => [...w.bundles]))].sort();
   const types = before.map(typeOf);
   const train: MlRow[] = [];
-  for (let j = ML_MIN_HISTORY; j < before.length; j++) train.push(...rowsFor(before, types, j, before[j].date, before[j].t, bids, before[j].bundles));
+  for (let j = ML_MIN_HISTORY; j < before.length; j++) {
+    train.push(...rowsFor(before, types, j, before[j].date, before[j].t, bids, before[j].bundles, patches));
+  }
   const t = Math.round(Date.parse(target) / 604_800_000);
-  return { bids, train, target: rowsFor(before, types, before.length, target, t, bids, null) };
+  return { bids, train, target: rowsFor(before, types, before.length, target, t, bids, null, patches) };
 }

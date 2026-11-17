@@ -7,7 +7,7 @@
 // Next to each rate (user 2026-11-17): its change since last week and the last 12 Sundays as dots.
 import type { SundayWeek } from "./history.ts";
 import { ML_MODEL, blendPrediction, type MlScores } from "./ml.ts";
-import { TRAIN_START, predictSunday, shownPicks } from "./predict.ts";
+import { SEASON_PATCHES, TRAIN_START, predictSunday, shownPicks, type SeasonPatch } from "./predict.ts";
 
 export const HIT_WEEKS = 52;
 /** Recorded Sundays drawn as dots under each rate. */
@@ -29,7 +29,7 @@ export type HitRecord = Counts & {
   marks: WeekHit[];
 };
 
-export function recentHits(weeks: SundayWeek[], mlRows: MlScores[], n = HIT_WEEKS): HitRecord {
+export function recentHits(weeks: SundayWeek[], mlRows: MlScores[], n = HIT_WEEKS, patches: SeasonPatch[] = SEASON_PATCHES): HitRecord {
   // Any stored row of this model for that Sunday counts, even if a week before it was corrected afterwards: the record
   // is what the page showed then.
   const scores = new Map(mlRows.filter((r) => r.model === ML_MODEL).map((r) => [r.sunday, r.scores]));
@@ -37,7 +37,7 @@ export function recentHits(weeks: SundayWeek[], mlRows: MlScores[], n = HIT_WEEK
   // model can predict (it needs a recorded week from TRAIN_START on before them).
   const recorded = weeks.filter((w) => w.bundles.size && w.date > TRAIN_START).slice(-(n + 1));
   const rows = recorded.map((w) => {
-    const stats = predictSunday(weeks, w.date);
+    const stats = predictSunday(weeks, w.date, TRAIN_START, patches);
     const s = scores.get(w.date);
     const picks = shownPicks(s ? blendPrediction(stats, s) : stats);
     return {

@@ -3,7 +3,7 @@
 // shown cannot. Pure: the Cron reads the weeks and writes the row (store.ts).
 import { predictionTarget, type SundayWeek } from "./history.ts";
 import { ML_MODEL, blendPrediction, mlFor, type MlScores } from "./ml.ts";
-import { MODEL_VERSION, bigDayWindow, predictSunday, shownPicks } from "./predict.ts";
+import { MODEL_VERSION, SEASON_PATCHES, TRAIN_START, bigDayWindow, predictSunday, shownPicks, type SeasonPatch } from "./predict.ts";
 
 export type Odds = { id: string; p: number };
 
@@ -21,11 +21,15 @@ export type PredictionRow = {
 
 const round4 = (x: number) => Math.round(x * 10_000) / 10_000;
 
-/** `mlRows`: the stored foundation-model scores; when the page mixes them in, the row does too (model "stats+ml"). */
-export function predictionRow(weeks: SundayWeek[], now: Date, mlRows: MlScores[] = []): PredictionRow {
+/**
+ * `mlRows`: the stored foundation-model scores; when the page mixes them in, the row does too (model "stats+ml").
+ * `patches`: the season patch dates the pages use (patches.ts mergePatches).
+ */
+export function predictionRow(weeks: SundayWeek[], now: Date, mlRows: MlScores[] = [], patches: SeasonPatch[] = SEASON_PATCHES): PredictionRow {
   const sunday = predictionTarget(now, weeks);
-  const ml = mlFor(mlRows, weeks, sunday);
-  const p = ml ? blendPrediction(predictSunday(weeks, sunday), ml.scores) : predictSunday(weeks, sunday);
+  const ml = mlFor(mlRows, weeks, sunday, patches);
+  const stats = predictSunday(weeks, sunday, TRAIN_START, patches);
+  const p = ml ? blendPrediction(stats, ml.scores) : stats;
   const pOf = new Map(p.ranked.map((r) => [r.id, r.p]));
   const window = (id: string) => {
     const w = bigDayWindow(weeks, id, sunday);
