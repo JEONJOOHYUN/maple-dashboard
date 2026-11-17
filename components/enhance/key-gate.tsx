@@ -36,6 +36,8 @@ const STEPS = [
 ];
 /** Signed out, NEXON sends this to its sign-in page and back (checked 2026-11-12). */
 const REGISTER_URL = "https://openapi.nexon.com/ko/my-application/create-app/";
+/** The application list, where an existing key is copied (same sign-in round trip, checked 2026-11-17). */
+const LIST_URL = "https://openapi.nexon.com/ko/my-application/";
 
 // What the service-stage form asks for (user, 2026-11-12: visitors register a service-stage application, as other
 // record sites have them do — 500 calls a second and 20,000,000 a day instead of 5 and 1,000).
@@ -213,6 +215,24 @@ export function KeyGate({ saved, onConnect, onForgetAll }: { saved: SavedKey[]; 
                 <ExternalLink className="size-3.5" aria-hidden="true" />
               </a>
             )}
+            {/* Up here, not in small print at the bottom (user, 2026-11-17: hard to see). A key made for another
+                MapleStory service works too (user, 2026-11-15; other games' keys do not). */}
+            {i === 0 && (
+              <div className="ml-[30px] flex flex-col gap-1 rounded-md border border-border bg-card px-3 py-2.5 text-[13px] leading-relaxed">
+                <span>
+                  <b>이미 키가 있으면</b> → 새로 안 받아도 됨 · 다른 메이플 서비스 키도 가능
+                </span>
+                <a
+                  href={LIST_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 self-start font-semibold text-primary-text outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
+                >
+                  애플리케이션 목록 열기 → API Key 복사
+                  <ExternalLink className="size-3.5" aria-hidden="true" />
+                </a>
+              </div>
+            )}
             {i === FILL_STEP && (
               <dl className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2.5 gap-y-2 rounded-md border border-border bg-card px-3 py-2.5 text-xs">
                 {FILL.map((f) => (
@@ -226,11 +246,7 @@ export function KeyGate({ saved, onConnect, onForgetAll }: { saved: SavedKey[]; 
             )}
           </Fragment>
         ))}
-        <div className="flex flex-col gap-1 text-xs leading-relaxed text-muted-foreground">
-          {/* A key someone already made for another MapleStory service is theirs to use here too (user, 2026-11-15). */}
-          <p>다른 메이플 서비스 키도 가능 → 새로 안 받아도 됨</p>
-          <p>개발 단계로 받은 키도 가능 → 하루 1,000건 · 느리게 받음</p>
-        </div>
+        <p className="text-xs leading-relaxed text-muted-foreground">개발 단계로 받은 키도 가능 → 하루 1,000건 · 느리게 받음</p>
       </section>
     </div>
   );
