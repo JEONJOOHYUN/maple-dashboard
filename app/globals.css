@@ -152,4 +152,15 @@
     scrollbar-gutter: stable;
     @apply font-sans;
   }
+  /*
+   * Pictures are not something to grab (user, 2026-11-18): no dragging out, no "save image" from the right-click
+   * or long-press menu. Only a deterrent — what a browser shows can always be captured. Clicks and scrolling go to
+   * the element around the picture, so nothing may hang a handler on an <img> itself.
+   */
+  img {
+    pointer-events: none;
+    user-select: none;
+    -webkit-user-drag: none;
+    -webkit-touch-callout: none;
+  }
 }
