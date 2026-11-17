@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { koreanMeso, symbolGaps } from "./symbol.ts";
-import { SPEC_DATA, abilityComplete, abilityLetter, bossPresets, checkSpec, type SpecRaw } from "./check.ts";
+import { SPEC_DATA, abilityComplete, abilityLetter, bossPresets, checkSpec, labelPlusOf, periodsOf, type SpecRaw } from "./check.ts";
 
 const L = (v: string) => ({ ability_grade: "레전드리", ability_value: v });
 const U = (v: string) => ({ ability_grade: "유니크", ability_value: v });
@@ -336,4 +336,135 @@ test("보약: the running event's skill is asked for by name, nothing when no ev
   assert.deepEqual(find(has, ["아르고 호의 가호"]), []);
   assert.deepEqual(find(base(), []), []);
   assert.deepEqual(checkSpec(base(), now).misses.filter((m) => m.cat === "보약"), []);
+});
+
+// Shapes from the API (2026-11-17 probes: 흑소 uses the world's 마스터라벨 set, 귤민 its own; 먹음쟁이 기간제 rings).
+const ML = (slot: string, name: string, at: string, opt = [{ option_type: "STR", option_value: "30" }]) => ({
+  cash_item_equipment_slot: slot,
+  cash_item_name: name,
+  cash_item_label: "마스터라벨",
+  cash_item_option: opt,
+  date_expire: null,
+  date_option_expire: at,
+});
+
+test("periods: stat cash items worn + the world's 마스터라벨 set when used, pets once each (user, 2026-11-17)", () => {
+  const now = new Date("2026-11-17T12:00:00+09:00");
+  const raw = base();
+  raw.cash = {
+    world_share_master_label_activate_flag: "1",
+    cash_item_equipment_base: [
+      { cash_item_equipment_slot: "반지1", cash_item_name: "오로라 반지", cash_item_label: null, cash_item_option: [{ option_type: "STR", option_value: "1" }], date_expire: "2026-11-20T01:51+09:00", date_option_expire: null },
+      { cash_item_equipment_slot: "반지2", cash_item_name: "혈맹의 반지", cash_item_label: null, cash_item_option: [], date_expire: "2026-11-18T20:17+09:00", date_option_expire: null },
+      { cash_item_equipment_slot: "무기", cash_item_name: "달걀 마라카스", cash_item_label: "블랙라벨", cash_item_option: [{ option_type: "공격력", option_value: "22" }], date_expire: null, date_option_expire: "2026-12-20T00:00+09:00" },
+      { cash_item_equipment_slot: "모자", cash_item_name: "피의 서약", cash_item_label: "마스터라벨", cash_item_option: [], date_expire: null, date_option_expire: null },
+    ],
+    // Looks only: a preset item's stats are not counted.
+    cash_item_equipment_preset_1: [ML("모자", "프리셋 모자", "2026-11-18T00:00+09:00")],
+    world_share_master_label_base: [ML("모자", "청몽잠", "2027-08-20T01:00+09:00"), ML("상의", "청몽선율", "2027-05-14T17:00+09:00")],
+  };
+  raw.pet = {
+    ...raw.pet,
+    pet_1_name: "쁘띠 플로라",
+    pet_1_date_expire: "2026-11-17T00:00+09:00",
+    world_share_pet_1_name: "쁘띠 플로라",
+    world_share_pet_1_date_expire: "2026-11-17T00:00+09:00",
+    pet_2_name: "카이",
+    pet_2_date_expire: "2027-05-29T23:00+09:00",
+    pet_3_name: null,
+    pet_3_date_expire: null,
+  };
+  const p = periodsOf(raw, now);
+  assert.deepEqual(
+    p.map((x) => [x.kind, x.name, x.days, x.at]),
+    [
+      ["pet", "쁘띠 플로라", -1, "2026-11-17"],
+      ["cashItem", "오로라 반지", 3, "2026-11-20"],
+      ["cashStat", "달걀 마라카스", 33, "2026-12-20"],
+      ["label", "청몽선율", 179, "2027-05-14"],
+      ["pet", "카이", 194, "2027-05-29"],
+      ["label", "청몽잠", 276, "2027-08-20"],
+    ],
+  );
+  const misses = checkSpec(raw, now).misses.filter((m) => m.cat === "캐시 장비" || m.cat === "펫");
+  assert.deepEqual(misses, [
+    { cat: "캐시 장비", what: "기간 만료 3일 남음", detail: ["오로라 반지"] },
+    { cat: "펫", what: "기간 만료 1마리", detail: ["쁘띠 플로라"] },
+  ]);
+  // The world's set is ignored when the character does not use it (귤민: its own set counts).
+  raw.cash.world_share_master_label_activate_flag = "0";
+  assert.ok(!periodsOf(raw, now).some((x) => x.kind === "label"));
+  // Nothing fetched (older saved shapes): no periods, no misses.
+  assert.deepEqual(periodsOf(base(), now), []);
+});
+
+test("마스터라벨 플러스: running ones and how many labels they count (official 2026-08-20 table)", () => {
+  const raw = base();
+  raw.otherStat = {
+    other_stat: [
+      { other_stat_type: "[마스터라벨 플러스] 성장 플러스", stat_info: [{ stat_name: "추가 경험치 획득", stat_value: "100" }] },
+      { other_stat_type: "[마스터라벨 플러스] 전투 플러스", stat_info: [{ stat_name: "공격력", stat_value: "40" }, { stat_name: "STR", stat_value: "90" }] },
+      { other_stat_type: "다른 효과", stat_info: [] },
+    ],
+  };
+  assert.deepEqual(labelPlusOf(raw), ["성장 플러스 · 마라벨 5개", "전투 플러스 · 마라벨 4개"]);
+  assert.deepEqual(labelPlusOf(base()), []);
+});
+
+test("title: one hour past the end is 만료, not 0일 남음", () => {
+  const raw = base();
+  raw.equipment.title = { title_name: "보스 칭호", title_description: "보스 몬스터 데미지 +10%", date_option_expire: "2026-11-17T11:00+09:00" };
+  const what = checkSpec(raw, new Date("2026-11-17T12:00:00+09:00")).misses.filter((m) => m.cat === "칭호").map((m) => m.what);
+  assert.deepEqual(what, ["옵션 만료"]);
+});
+
+test("links: a missing link shows the class that gives it, and every standard link has one (user, 2026-11-17)", () => {
+  const raw = base();
+  const links = raw.link.character_link_skill_preset_1 as { skill_name: string }[];
+  raw.link.character_link_skill_preset_1 = links.filter((l) => l.skill_name !== "프라이어 프리퍼레이션" && l.skill_name !== "임피리컬 널리지");
+  const miss = checkSpec(raw, new Date("2026-11-09T00:00:00+09:00")).misses.find((m) => m.cat === "링크 스킬")!;
+  assert.deepEqual(miss.detail, ["임피리컬 널리지 (모험가 마법사) · 프라이어 프리퍼레이션 (카인)"]);
+  for (const [job, rule] of Object.entries(SPEC_DATA.classes))
+    for (const l of rule.link) assert.ok(SPEC_DATA.linkOwners?.[l], `${job}: ${l}`);
+  assert.equal(SPEC_DATA.linkOwners?.["판단"], "키네시스");
+  assert.equal(SPEC_DATA.linkOwners?.["커버넌트"], "레테");
+});
+
+test("마스터라벨 플러스: labels with stats left but no 전투 플러스 → warned (user, 2026-11-17)", () => {
+  const now = new Date("2026-11-17T12:00:00+09:00");
+  const raw = base();
+  raw.cash = {
+    world_share_master_label_activate_flag: "1",
+    cash_item_equipment_base: [],
+    world_share_master_label_base: [
+      ML("모자", "청몽잠", "2027-08-20T01:00+09:00"),
+      ML("상의", "청몽선율", "2027-05-14T17:00+09:00"),
+      ML("신발", "청몽운", "2027-05-14T17:00+09:00"),
+      ML("망토", "달빛 눈물", "2027-05-20T19:00+09:00"),
+      ML("무기", "환호지선", "2027-05-14T23:00+09:00"),
+    ],
+  };
+  const plusMiss = () => checkSpec(raw, now).misses.filter((m) => m.cat === "마스터라벨 플러스");
+  const growth = { other_stat_type: "[마스터라벨 플러스] 성장 플러스", stat_info: [{ stat_name: "추가 경험치 획득", stat_value: "100" }] };
+  const combat = { other_stat_type: "[마스터라벨 플러스] 전투 플러스", stat_info: [{ stat_name: "공격력", stat_value: "60" }] };
+  raw.otherStat = { other_stat: [growth] };
+  assert.deepEqual(plusMiss(), [
+    {
+      cat: "마스터라벨 플러스",
+      what: "전투 플러스 꺼짐",
+      detail: ["마라벨 5개 능력치 179일 남음 · 성장 플러스만 켜짐", "켜면 공격력 · 마력 +60 · 올스탯 +140 (4만 캐시 · 90일)"],
+    },
+  ]);
+  raw.otherStat = { other_stat: [] };
+  assert.equal(plusMiss()[0].detail[0], "마라벨 5개 능력치 179일 남음");
+  raw.otherStat = { other_stat: [growth, combat] };
+  assert.deepEqual(plusMiss(), []);
+  // No master label worn (the world set not used): nothing to warn.
+  raw.otherStat = { other_stat: [] };
+  raw.cash.world_share_master_label_activate_flag = "0";
+  assert.deepEqual(plusMiss(), []);
+  // other-stat did not come back: skipped.
+  raw.cash.world_share_master_label_activate_flag = "1";
+  raw.otherStat = undefined;
+  assert.deepEqual(plusMiss(), []);
 });

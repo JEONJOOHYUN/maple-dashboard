@@ -1,4 +1,4 @@
-// Server only: nickname → NEXON Open API responses (13 calls, fired together) → checkSpec result,
+// Server only: nickname → NEXON Open API responses (15 calls, fired together) → checkSpec result,
 // cached 3 hours per nickname so the same character is not fetched again.
 import { unstable_cache } from "next/cache";
 import { NexonError, nexonGet, nexonOcid } from "@/lib/nexon/api";
@@ -7,7 +7,7 @@ import { eventSkillNames, type EventNotice } from "@/lib/spec/event-skill";
 
 export const SPEC_CACHE_SECONDS = 3 * 60 * 60;
 // Bump when check.ts rules change so cached results from older rules are not served.
-const RULES_VERSION = "12";
+const RULES_VERSION = "13";
 
 /** One tag per nickname, so "다시 조회" drops only that character's saved result. */
 export const specTag = (name: string) => `spec-check:${name.trim()}`;
@@ -27,7 +27,7 @@ async function load(name: string, eventSkills: string[]): Promise<Loaded> {
     nexonGet<SpecRaw[K]>(path, { ...q, ...extra });
   // Fired together: with the service-stage key nothing spaces them (a development-stage key falls back to 220 ms
   // between starts, see lib/nexon/api.ts).
-  const [basic, skill0, hyperPassive, vmatrix, propensity, artifact, equipment, hyper, link, ability, pet, symbol] = await Promise.all([
+  const [basic, skill0, hyperPassive, vmatrix, propensity, artifact, equipment, hyper, link, ability, pet, symbol, cash, otherStat] = await Promise.all([
     get<"basic">("character/basic"),
     get<"skill0">("character/skill", { character_skill_grade: "0" }),
     get<"hyperPassive">("character/skill", { character_skill_grade: "hyperpassive" }),
@@ -40,8 +40,11 @@ async function load(name: string, eventSkills: string[]): Promise<Loaded> {
     get<"ability">("character/ability"),
     get<"pet">("character/pet-equipment"),
     get<"symbol">("character/symbol-equipment"),
+    // Periods and 마스터라벨 플러스 only: when these two fail the rest of the check still stands (their checks are skipped).
+    get<"cash">("character/cashitem-equipment").catch(() => undefined),
+    get<"otherStat">("character/other-stat").catch(() => undefined),
   ]);
-  const raw: SpecRaw = { basic, skill0, hyperPassive, vmatrix, propensity, artifact, equipment, hyper, link, ability, pet, symbol };
+  const raw: SpecRaw = { basic, skill0, hyperPassive, vmatrix, propensity, artifact, equipment, hyper, link, ability, pet, symbol, cash, otherStat };
   // A character that never logged in after the API started (2023-12) comes back with empty fields.
   if (!raw.basic?.character_class) return { ok: false, kind: "notFound" };
   return { ok: true, result: checkSpec(raw, new Date(), SPEC_DATA, eventSkills), at: Date.now() };

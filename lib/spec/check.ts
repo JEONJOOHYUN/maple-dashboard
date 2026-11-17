@@ -20,6 +20,17 @@ type Title = { title_name?: string | null; title_description?: string | null; da
 type HyperStat = { stat_type: string; stat_level: number };
 type AbilityLine = { ability_grade: string; ability_value: string };
 type AutoSkill = { skill_1?: string | null; skill_2?: string | null } | null;
+type CashItem = {
+  cash_item_equipment_slot?: string;
+  cash_item_name?: string;
+  cash_item_label?: string | null;
+  cash_item_option?: { option_type: string; option_value: string }[];
+  /** The item itself (기간제), null = permanent. */
+  date_expire?: string | null;
+  /** Its stats (마스터라벨 = 능력치 유효 기간 190 days). The API drops the stats once they run out. */
+  date_option_expire?: string | null;
+};
+type OtherStat = { other_stat_type?: string; stat_info?: { stat_name: string; stat_value: string }[] };
 
 export type SpecRaw = {
   basic: { character_name: string; world_name: string; character_class: string; character_level: number; character_image?: string };
@@ -37,6 +48,10 @@ export type SpecRaw = {
   ability: Record<string, unknown> & { preset_no?: number };
   pet: Record<string, unknown>;
   symbol: { symbol?: SymbolIn[] };
+  /** character/cashitem-equipment (optional: older saved shapes and tests have none). */
+  cash?: Record<string, unknown> & { world_share_master_label_activate_flag?: string | null };
+  /** character/other-stat: 마스터라벨 플러스 shows up here while it runs (its end date is not in the API). */
+  otherStat?: { other_stat?: OtherStat[] };
 };
 
 // ---------- data file ----------
@@ -58,6 +73,8 @@ type Data = {
     vCoreMin: number;
     bossSpecialCores: string[];
   };
+  /** Link skill → the class (or 모험가 전사 · 시그너스 … group) that gives it, from the API (2026-11-17). */
+  linkOwners?: Record<string, string>;
   classes: Record<string, ClassRule>;
 };
 export const SPEC_DATA = classesJson as unknown as Data;
@@ -73,10 +90,84 @@ const HP_CLASS = "데몬어벤져";
 const TITLE_WARN_DAYS = 7;
 // Hyper stat points left: a few spare points are normal, warn from 10 (user, 2026-11-16).
 const HYPER_WARN_POINTS = 10;
+// Stat cash items: warned like titles, under 7 days (their days left are always shown apart, user 2026-11-17).
+export const PERIOD_WARN_DAYS = 7;
+// 마스터라벨 플러스 by master labels worn (official notice 2026-08-20): 전투 = 공격력, 성장 = 추가 경험치.
+const PLUS_COUNT: Record<string, Record<string, number>> = {
+  "전투 플러스": { "10": 1, "20": 2, "30": 3, "40": 4, "60": 5 },
+  "성장 플러스": { "25": 1, "40": 2, "55": 3, "70": 4, "100": 5 },
+};
+/** 전투 플러스 by master labels worn (1 ~ 5): [공격력 · 마력, 올스탯]. Same notice. */
+const COMBAT_PLUS: [number, number][] = [
+  [10, 15],
+  [20, 40],
+  [30, 65],
+  [40, 90],
+  [60, 140],
+];
+
+/** Whole days until `at`, rounded up ("6.5일" → 7); anything already past (even an hour) or "expired" = −1. */
+function daysTo(at: string, now: Date): number {
+  const ms = at === "expired" ? -1 : new Date(at).getTime() - now.getTime();
+  return ms > 0 ? Math.ceil(ms / 86_400_000) : -1;
+}
+
+/**
+ * Stat cash items and pets that run out. Stats come from the cash items worn (base; presets only change the look —
+ * 귤민 shows its 마스터라벨 stats from base while wearing preset 3) and, when the character uses it, the world's shared
+ * 마스터라벨 set. Pets = own + the world's shared pets, the same pet once.
+ */
+export function periodsOf(raw: SpecRaw, now: Date): Period[] {
+  const out: Period[] = [];
+  const seen = new Set<string>();
+  const push = (p: Period) => {
+    const key = `${p.kind}|${p.slot}|${p.name}|${p.at}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(p);
+  };
+  const cash = raw.cash;
+  const lists = [cash?.cash_item_equipment_base, cash?.additional_cash_item_equipment_base];
+  if (cash?.world_share_master_label_activate_flag === "1") lists.push(cash.world_share_master_label_base);
+  for (const list of lists) {
+    for (const it of (Array.isArray(list) ? list : []) as CashItem[]) {
+      if (!it.cash_item_option?.length) continue;
+      const base = { name: it.cash_item_name ?? "", slot: it.cash_item_equipment_slot ?? "" };
+      if (it.date_option_expire)
+        push({ ...base, kind: it.cash_item_label === "마스터라벨" ? "label" : "cashStat", days: daysTo(it.date_option_expire, now), at: it.date_option_expire.slice(0, 10) });
+      if (it.date_expire) push({ ...base, kind: "cashItem", days: daysTo(it.date_expire, now), at: it.date_expire.slice(0, 10) });
+    }
+  }
+  for (const prefix of ["pet", "world_share_pet"])
+    for (const i of [1, 2, 3]) {
+      const name = raw.pet[`${prefix}_${i}_name`];
+      const at = raw.pet[`${prefix}_${i}_date_expire`];
+      if (typeof name === "string" && name && typeof at === "string" && at)
+        push({ kind: "pet", name, slot: "", days: daysTo(at, now), at: at === "expired" ? "" : at.slice(0, 10) });
+    }
+  return out.sort((a, b) => a.days - b.days);
+}
+
+/** "전투 플러스 · 마라벨 5개" for each 마스터라벨 플러스 running now. */
+export function labelPlusOf(raw: SpecRaw): string[] {
+  return (raw.otherStat?.other_stat ?? []).flatMap((o) => {
+    const kind = o.other_stat_type?.match(/^\[마스터라벨 플러스\]\s*(.+)$/)?.[1]?.trim();
+    if (!kind) return [];
+    const key = kind === "전투 플러스" ? "공격력" : "추가 경험치 획득";
+    const value = o.stat_info?.find((s) => s.stat_name === key)?.stat_value ?? "";
+    const n = PLUS_COUNT[kind]?.[value];
+    return [n ? `${kind} · 마라벨 ${n}개` : kind];
+  });
+}
 
 // ---------- result ----------
 /** detail = lines under the subtitle (" · " separated items never break inside); rows = aligned table (symbols). */
 export type Miss = { cat: string; what: string; detail: string[]; rows?: string[][] };
+/**
+ * Something that runs out (user, 2026-11-17): stat cash items and pets. days = whole days left, rounded up like
+ * titles (−1 = over); at = the end, "YYYY-MM-DD" in KST.
+ */
+export type Period = { kind: "label" | "cashStat" | "cashItem" | "pet"; name: string; slot: string; days: number; at: string };
 export type SpecResult = {
   name: string;
   world: string;
@@ -87,6 +178,10 @@ export type SpecResult = {
   misses: Miss[];
   /** Suggestions that cost something or are optional — shown, but not counted as "놓친 스펙". */
   tips: Miss[];
+  /** Stat cash items and pets with an end, soonest first (pets already over are in misses too). */
+  periods: Period[];
+  /** 마스터라벨 플러스 running now, e.g. ["성장 플러스 · 마라벨 5개", "전투 플러스 · 마라벨 5개"]; null = other-stat did not come back. */
+  labelPlus: string[] | null;
   /** False when the class is not in the data file (new class): class rules were skipped. */
   known: boolean;
 };
@@ -281,12 +376,7 @@ export function checkSpec(raw: SpecRaw, now: Date = new Date(), data: Data = SPE
   );
   // Days left before the title (or its option) runs out; Infinity = no expiry. The boss title that lasts longest wins,
   // so an expired copy in one preset does not hide a good one in another.
-  const daysLeft = (t: NonNullable<Title>) =>
-    Math.min(
-      ...[t.date_expire, t.date_option_expire].map((at) =>
-        !at ? Infinity : at === "expired" ? -1 : Math.ceil((new Date(at).getTime() - now.getTime()) / 86_400_000),
-      ),
-    );
+  const daysLeft = (t: NonNullable<Title>) => Math.min(...[t.date_expire, t.date_option_expire].map((at) => (!at ? Infinity : daysTo(at, now))));
   const bossTitles = titles.filter((t) => /보스 몬스터/.test(t.title_description ?? ""));
   const title = bossTitles.sort((a, b) => daysLeft(b) - daysLeft(a))[0] ?? titles[0] ?? null;
   if (!title?.title_name) {
@@ -298,9 +388,37 @@ export function checkSpec(raw: SpecRaw, now: Date = new Date(), data: Data = SPE
       ["옵션", title.date_option_expire],
     ] as const) {
       if (!at) continue;
-      const days = at === "expired" ? -1 : Math.ceil((new Date(at).getTime() - now.getTime()) / 86_400_000);
+      const days = daysTo(at, now);
       if (days < TITLE_WARN_DAYS) add("칭호", days < 0 ? `${label} 만료` : `${label} 만료 ${days}일 남음`, title.title_name);
     }
+  }
+
+  // Stat cash items under 7 days, pets already over (an expired pet cannot be called out: no pet buffs or pet gear).
+  const periods = periodsOf(raw, now);
+  const CASH_WHAT: Record<string, string> = { label: "마스터라벨 능력치", cashStat: "능력치", cashItem: "기간" };
+  const soon = new Map<string, string[]>();
+  for (const p of periods)
+    if (p.kind !== "pet" && p.days < PERIOD_WARN_DAYS) {
+      const what = `${CASH_WHAT[p.kind]} 만료${p.days < 0 ? "" : ` ${p.days}일 남음`}`;
+      soon.set(what, [...(soon.get(what) ?? []), p.name]);
+    }
+  for (const [what, names] of soon) add("캐시 장비", what, list(names));
+  const petsOver = periods.filter((p) => p.kind === "pet" && p.days < 0);
+  if (petsOver.length) add("펫", `기간 만료 ${petsOver.length}마리`, list(petsOver.map((p) => p.name)));
+
+  // Master labels with stats left but no 전투 플러스 (user, 2026-11-17): the plus only works on labels whose stats run,
+  // and it is the boss half (성장 플러스 is experience). Skipped when other-stat did not come back.
+  const labelPlus = raw.otherStat ? labelPlusOf(raw) : null;
+  const labelsLeft = periods.filter((p) => p.kind === "label" && p.days >= 0);
+  const labelSlots = Math.min(5, new Set(labelsLeft.map((p) => p.slot)).size);
+  if (labelPlus && labelSlots && !labelPlus.some((x) => x.startsWith("전투 플러스"))) {
+    const [atk, stat] = COMBAT_PLUS[labelSlots - 1];
+    add(
+      "마스터라벨 플러스",
+      "전투 플러스 꺼짐",
+      `마라벨 ${labelSlots}개 능력치 ${Math.min(...labelsLeft.map((p) => p.days))}일 남음${labelPlus.length ? " · 성장 플러스만 켜짐" : ""}`,
+      `켜면 공격력 · 마력 +${atk} · 올스탯 +${stat} (4만 캐시 · 90일)`,
+    );
   }
 
   // 5th job (V matrix)
@@ -352,8 +470,10 @@ export function checkSpec(raw: SpecRaw, now: Date = new Date(), data: Data = SPE
     // All three presets empty → nothing equipped: every standard link counts as missing.
     const have = new Set((presets.link ? preset<Skill[]>(raw.link, "character_link_skill_preset_", presets.link) ?? [] : []).map((s) => s.skill_name));
     const linkMiss = rule.link.filter((n) => !have.has(n));
+    // With the class that gives it (user, 2026-11-17: "프라이어 프리퍼레이션 is 카인's").
+    const owner = (n: string) => (data.linkOwners?.[n] ? `${n} (${data.linkOwners[n]})` : n);
     if (linkMiss.length)
-      add("링크 스킬", presets.link ? `대부분 끼는 것 ${linkMiss.length}개 빠짐 (${presets.link}번 프리셋)` : "미장착", list(linkMiss));
+      add("링크 스킬", presets.link ? `대부분 끼는 것 ${linkMiss.length}개 빠짐 (${presets.link}번 프리셋)` : "미장착", list(linkMiss.map(owner)));
 
     if (presets.ability) {
       const lines = preset<{ ability_info?: AbilityLine[] }>(raw.ability, "ability_preset_", presets.ability)?.ability_info ?? [];
@@ -398,6 +518,8 @@ export function checkSpec(raw: SpecRaw, now: Date = new Date(), data: Data = SPE
     presets,
     misses,
     tips,
+    periods,
+    labelPlus,
     known: !!rule,
   };
 }

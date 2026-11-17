@@ -6,6 +6,7 @@ import { AlertCircle, Check, ExternalLink, Lightbulb, Loader2, RotateCw, Search,
 import { refreshSpec } from "@/app/spec/actions";
 import { PageHeader } from "@/components/page-header";
 import type { Miss, SpecResult } from "@/lib/spec/check";
+import { periodGroups } from "@/lib/spec/period-rows";
 import { useStored } from "@/lib/use-stored";
 import { cn } from "@/lib/utils";
 
@@ -18,7 +19,8 @@ export type SpecView =
 const RECENT_KEY = "spec-recent";
 const RECENT_MAX = 8;
 
-const CHECKED = "공용 · 직업 0차 스킬 · 성향 · 유니온 아티팩트 · 칭호 · 5차 · 하이퍼 스탯 · 하이퍼 패시브 · 펫 버프 · 링크 · 어빌리티";
+const CHECKED =
+  "공용 · 직업 0차 스킬 · 성향 · 유니온 아티팩트 · 칭호 · 캐시 장비 · 펫 기간 · 마스터라벨 플러스 · 5차 · 하이퍼 스탯 · 하이퍼 패시브 · 펫 버프 · 링크 · 어빌리티";
 
 const kstTime = (ms: number) =>
   new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })
@@ -93,6 +95,35 @@ function MissGroup({ cat, items, tip }: { cat: string; items: Miss[]; tip?: bool
   );
 }
 
+/** Stat cash items · pets · 마스터라벨 플러스 (시안 B, user 2026-11-17): title per kind, rows of what · date · days. */
+function Periods({ result }: { result: SpecResult }) {
+  const groups = periodGroups(result.periods ?? [], result.labelPlus ?? null);
+  if (!groups.length) return null;
+  return (
+    <div className="flex flex-col divide-y divide-border rounded-lg border border-border">
+      <b className="px-3.5 py-2.5 text-[13px]">남은 기간</b>
+      {groups.map((g) => (
+        <div key={g.title} className="flex flex-col gap-1.5 px-3.5 py-2.5">
+          <div className="flex items-baseline justify-between gap-3">
+            <b className="text-[13px]">{g.title}</b>
+            {g.value && <b className={cn("text-[13px]", g.warn ? "text-[#E2504F]" : "text-foreground")}>{g.value}</b>}
+          </div>
+          {g.rows.map((r) => (
+            <div key={`${r.what}-${r.date}`} className="grid grid-cols-[minmax(0,1fr)_auto_3.25rem] items-baseline gap-x-3">
+              <DetailLine text={r.what} />
+              <span className="font-num text-[13px] text-muted-foreground tabular-nums">{r.date}</span>
+              <b className={cn("text-right font-num text-[13px] tabular-nums", r.warn && "text-[#E2504F]")}>{r.days}</b>
+            </div>
+          ))}
+          {g.notes.map((n) => (
+            <DetailLine key={n} text={n} />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 type ResultProps = { result: SpecResult; at: number; optimizer: string | null; refreshing: boolean; refreshNote: string; onRefresh: () => void };
 
 function Result({ result, at, optimizer, refreshing, refreshNote, onRefresh }: ResultProps) {
@@ -146,6 +177,8 @@ function Result({ result, at, optimizer, refreshing, refreshNote, onRefresh }: R
           </span>
           {n > 0 && <span className="ml-auto text-xs font-bold">{open ? "목록 닫기" : "목록 보기"}</span>}
         </button>
+
+        <Periods result={result} />
 
         <div className="flex flex-col gap-1 text-xs text-muted-foreground">
           {presetText && <span>보스 프리셋: {presetText}</span>}
