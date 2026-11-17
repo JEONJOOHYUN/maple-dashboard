@@ -2,6 +2,8 @@ import { ExternalLink, Sparkles, Star, Sun, Swords, TriangleAlert, type LucideIc
 import { PageHeader } from "@/components/page-header";
 import { NoticeImage } from "@/components/sunday/notice-image";
 import { THEMES, type ThemeId } from "@/lib/sunday/bundles";
+import { dateLabel } from "@/lib/sunday/history";
+import { hitChange, hitChangeLabel, hitRate, type HitKey, type WeekHit } from "@/lib/sunday/hits";
 import type { OddsView, SundayPageData, WeekView } from "@/lib/sunday/view";
 import { cn } from "@/lib/utils";
 
@@ -219,30 +221,32 @@ function ThemeBand({ week, prediction }: { week: SundayPageData["thisWeek"]; pre
 /** Card label of each kind; "스페셜": shining and miracle came only on Special Sundays (32 of 32 since 2023-08). */
 const KIND_LABEL: Record<OddsView["kind"], string> = { big: "스페셜", hunt: "사냥", enhance: "강화", other: "기타" };
 
+type Hits = SundayPageData["prediction"]["hits"];
+
 /** The likeliest benefit of each kind as cards 1 ~ 3 (side by side on wide screens), then two more as short rows. */
-function PicksBand({ picks, hits }: { picks: OddsView[]; hits: SundayPageData["prediction"]["hits"] }) {
+function PicksBand({ picks, hits }: { picks: OddsView[]; hits: Hits }) {
   const top = picks.slice(0, 3);
   const rest = picks.slice(3);
   // A single benefit is unlikely on its own (2 ~ 3 of ~15 come a week), so the sure part comes first: how often the
-  // cards held a real benefit (user 2026-11-15: the numbers should look good, honestly).
-  const rate = (n: number) => `${Math.round((n / hits.weeks) * 100)}%`;
+  // cards held a real benefit over the last 52 Sundays (user 2026-11-15: the numbers should look good, honestly), with
+  // the change since last week and the last 12 Sundays as dots. The period sits at the right end of the title row,
+  // over the boxes' right edge like "최근 썬데이 · 공지 기준 기록" below, and says 적중률 so it is not read as the period
+  // the predictions come from (user 2026-11-17: "최근 1년" reads better than "최근 52주"). A year covers each season
+  // once (summer / winter patch big days).
+  const period = hits.weeks === 52 ? "최근 1년 적중률" : `최근 ${hits.weeks}주 적중률`;
   return (
     <section className="flex flex-col gap-3 rounded-lg border border-border bg-card p-[18px] lg:px-6 lg:py-5" aria-labelledby="sunday-picks">
       <div className="flex flex-col gap-2">
-        <h2 id="sunday-picks" className="text-[15px] font-bold">
-          나올 만한 혜택
-        </h2>
+        <div className="flex flex-wrap items-baseline justify-between gap-2 lg:max-w-md">
+          <h2 id="sunday-picks" className="text-[15px] font-bold">
+            나올 만한 혜택
+          </h2>
+          <span className="text-xs text-muted-foreground">{period}</span>
+        </div>
         <dl className="grid grid-cols-2 gap-2 lg:max-w-md">
-          <div className="flex flex-col gap-0.5 rounded-lg bg-primary-soft px-3 py-2">
-            <dt className="text-[11px] text-muted-foreground">1 ~ 3 중 하나 이상 적중</dt>
-            <dd className="font-num text-xl font-bold text-primary-text">{rate(hits.top3)}</dd>
-          </div>
-          <div className="flex flex-col gap-0.5 rounded-lg bg-primary-soft px-3 py-2">
-            <dt className="text-[11px] text-muted-foreground">5개 중 하나 이상 적중</dt>
-            <dd className="font-num text-xl font-bold text-primary-text">{rate(hits.five)}</dd>
-          </div>
+          <HitStat label="1 ~ 3 중 하나 이상 적중" hits={hits} pick="top3" />
+          <HitStat label="5개 중 하나 이상 적중" hits={hits} pick="five" />
         </dl>
-        <p className="text-[11px] text-muted-foreground">최근 {hits.weeks}주 실제 결과로 계산</p>
       </div>
       <ol className="grid grid-cols-1 gap-2 lg:grid-cols-3 lg:gap-2.5">
         {top.map((o, i) => (
@@ -281,6 +285,73 @@ function PicksBand({ picks, hits }: { picks: OddsView[]; hits: SundayPageData["p
         </div>
       )}
     </section>
+  );
+}
+
+/** One rate of the hit record: the percent, its change since last week and the last 12 Sundays as dots. */
+function HitStat({ label, hits, pick }: { label: string; hits: Hits; pick: HitKey }) {
+  return (
+    // Bottom-aligned, so the numbers and dots of both boxes stay on one line when a label wraps (320 px); on a narrow
+    // box the chip moves under the number instead of squeezing it.
+    <div className="flex flex-col justify-between gap-1 rounded-lg bg-primary-soft px-3 py-2">
+      <dt className="text-[11px] text-muted-foreground">{label}</dt>
+      <dd className="flex flex-col gap-1.5">
+        <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <b className="shrink-0 font-num text-xl font-bold whitespace-nowrap text-primary-text">{hitRate(hits[pick], hits.weeks)}%</b>
+          <HitChange change={hitChange(hits, pick)} />
+        </span>
+        {/* "최근 12주" right of the dots (user 2026-11-17); a phone box is too narrow, so there it wraps under them. */}
+        <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+          <HitDots marks={hits.marks} pick={pick} />
+          <span aria-hidden="true" className="text-[11px] leading-none whitespace-nowrap text-muted-foreground">
+            최근 {hits.marks.length}주
+          </span>
+        </span>
+      </dd>
+    </div>
+  );
+}
+
+const CHANGE_CHIP = "rounded-full bg-card px-2 text-[11px] leading-[18px] font-bold whitespace-nowrap";
+const CHANGE_TONE = { none: "text-muted-foreground", same: "text-muted-foreground", up: "text-gain", down: "text-loss" } as const;
+
+/** "-" before there is a last week to compare, "유지" when the same, "▲ 2%" / "▼ 2%" (hits.ts hitChangeLabel). */
+function HitChange({ change }: { change: number | null }) {
+  const { text, tone, spoken } = hitChangeLabel(change);
+  return (
+    <span className={cn(CHANGE_CHIP, CHANGE_TONE[tone])}>
+      <span aria-hidden="true">{text}</span>
+      <span className="sr-only">{spoken}</span>
+    </span>
+  );
+}
+
+/** The last 12 recorded Sundays, oldest left: filled = held a benefit, ring = missed; hovering one names its Sunday.
+ * Scales down on screens too narrow for its 117 px. */
+function HitDots({ marks, pick }: { marks: WeekHit[]; pick: HitKey }) {
+  const width = marks.length * 10 - 3;
+  const hit = marks.filter((m) => m[pick]).length;
+  return (
+    <svg
+      viewBox={`0 0 ${width} 8`}
+      preserveAspectRatio="xMinYMid meet"
+      className="h-2 w-full"
+      style={{ maxWidth: width }}
+      role="img"
+      aria-label={`최근 ${marks.length}주 중 ${hit}주 적중`}
+    >
+      {marks.map((m, i) =>
+        m[pick] ? (
+          <circle key={m.date} cx={3.5 + i * 10} cy={4} r={3.5} className="fill-primary-text">
+            <title>{`${dateLabel(m.date)} 적중`}</title>
+          </circle>
+        ) : (
+          <circle key={m.date} cx={3.5 + i * 10} cy={4} r={2.75} strokeWidth={1.5} className="fill-none stroke-muted-foreground">
+            <title>{`${dateLabel(m.date)} 빗나감`}</title>
+          </circle>
+        ),
+      )}
+    </svg>
   );
 }
 
