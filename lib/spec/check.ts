@@ -569,11 +569,12 @@ export function checkSpec(raw: SpecRaw, now: Date = new Date(), data: Data = SPE
     );
   }
 
-  // Master labels worn whose stats are gone (user, 2026-11-18: "낀 사람이거나 기간이 몇 개만 남은 사람은 알려줘야"): the API
-  // keeps a worn label but drops its stats once they run out, so periodsOf never sees it. Nobody wearing one: no line.
+  // Master labels with stats on only some places (user, 2026-11-18): the API keeps a worn label but drops its stats once
+  // they run out, so periodsOf never sees it. Only a partial set is called out — none worn, or worn for the set effect
+  // with every stat gone, is a choice ("세트효과만 받으려는 사람도 있고"), and a full set has nothing missing.
   const labels = labelPieces(raw, now);
   const withStats = labels.filter((l) => l.days !== null).length;
-  if (labels.length && withStats < LABEL_SET.length) {
+  if (withStats > 0 && withStats < LABEL_SET.length) {
     const bare = labels.filter((l) => l.days === null);
     const lines = [
       // The first line is what the tiles show (an opened line shows the tiles in its place), so it is always there.

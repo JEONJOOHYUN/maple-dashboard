@@ -718,23 +718,24 @@ test("artifact AP: only what can still go into a crystal counts", () => {
   assert.deepEqual(ap(5), ["AP 5 남음"]); // no crystal list: as before
 });
 
-test("master labels: a worn set with places whose stats ran out is called out, nobody wearing one is not (user, 2026-11-18)", () => {
+test("master labels: only a set with stats on some places is called out (user, 2026-11-18)", () => {
   const now = new Date("2026-11-18T12:00:00+09:00");
   const gone = (slot: string, name: string) => ({ ...ML(slot, name, "x", []), date_option_expire: null });
   const line = (raw: SpecRaw) => checkSpec(raw, now).misses.find((m) => m.cat === "마스터라벨");
   // nobody wearing one
   assert.equal(line(base()), undefined);
-  // 언현 (2026-11-18): the whole set worn, every stat run out
+  // 언현 (2026-11-18): the whole set worn for its set effect, every stat run out → a choice, nothing here
   const all = base();
   all.cash = { cash_item_equipment_base: ["모자", "상의", "신발", "망토", "무기"].map((s) => gone(s, `${s} 마라벨`)) } as SpecRaw["cash"];
-  const a = line(all)!;
-  assert.equal(a.what, "능력치 있는 마라벨 0 / 5부위");
-  assert.equal(a.detail[0], "능력치 없음: 모자 모자 마라벨 · 상의 상의 마라벨 · 신발 신발 마라벨 · 망토 망토 마라벨 · 무기 무기 마라벨");
-  assert.equal(a.detail.length, 1);
-  // 데몬10세기: one weapon, run out → the four places without one are named too
+  assert.equal(line(all), undefined);
+  // 데몬10세기: one weapon, run out → nothing here either
   const one = base();
   one.cash = { cash_item_equipment_base: [gone("무기", "피의 서약")] } as SpecRaw["cash"];
-  assert.deepEqual(line(one)!.detail, ["능력치 없음: 무기 피의 서약", "마라벨 안 낀 부위: 모자 · 상의 · 신발 · 망토"]);
+  assert.equal(line(one), undefined);
+  // one with stats, one without, three places empty → both lines
+  const two = base();
+  two.cash = { cash_item_equipment_base: [ML("모자", "A", "2027-01-01T00:00+09:00"), gone("무기", "피의 서약")] } as SpecRaw["cash"];
+  assert.deepEqual(line(two)!.detail, ["능력치 없음: 무기 피의 서약", "마라벨 안 낀 부위: 상의 · 신발 · 망토"]);
   // some left: those show their days (gray), the rest "능력치 없음"
   const some = base();
   some.cash = {
