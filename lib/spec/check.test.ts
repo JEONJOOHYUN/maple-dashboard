@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { koreanMeso, symbolGaps } from "./symbol.ts";
-import { SPEC_DATA, abilityComplete, abilityLetter, bossPresets, checkSpec, labelPlusOf, periodsOf, type SpecRaw } from "./check.ts";
+import { SPEC_DATA, abilityComplete, abilityLetter, artifactSpendable, bossPresets, checkSpec, labelPieces, labelPlusOf, periodsOf, type SpecRaw } from "./check.ts";
 
 const L = (v: string) => ({ ability_grade: "레전드리", ability_value: v });
 const U = (v: string) => ({ ability_grade: "유니크", ability_value: v });
@@ -674,4 +674,97 @@ test("5th job boost cores at level 0 come as tiles with the picture of the first
   // a skill the table does not know simply has no picture (the page draws a plain icon)
   assert.equal(none.icon, null);
   assert.equal(none.icon2, null);
+});
+
+test("hyper passive line opens on the five most taken, marking what the character has", () => {
+  const nl = SPEC_DATA.classes["나이트로드"];
+  assert.equal(nl.hyperPassiveTop.length, 5);
+  // every class's standard picks are among its five most taken (the line shows them all)
+  for (const [job, c] of Object.entries(SPEC_DATA.classes))
+    assert.ok(c.hyperPassive.every((n) => c.hyperPassiveTop.includes(n)), job);
+  const raw = base();
+  raw.hyperPassive.character_skill![0].skill_level = 0;
+  const hp = checkSpec(raw, new Date("2026-11-09T00:00:00+09:00")).misses.find((m) => m.cat === "하이퍼 패시브")!;
+  assert.equal(hp.what, "대부분 찍는 것 1개 안 찍음");
+  assert.deepEqual(hp.tiles!.map((t) => t.name), nl.hyperPassiveTop);
+  const missed = nl.hyperPassive[0];
+  for (const t of hp.tiles!) {
+    const has = t.name !== missed && nl.hyperPassive.includes(t.name);
+    assert.equal(!!t.done, has, t.name);
+    assert.equal(t.sub, has ? "찍음" : "안 찍음");
+  }
+});
+
+test("artifact AP: only what can still go into a crystal counts", () => {
+  // the real characters of 2026-11-18 (crystal levels · left AP → spendable)
+  assert.equal(artifactSpendable(5, [5, 5, 5, 5, 5, 5, 5, 5]), 0); // Lv.58: all eight at Lv.5, the ninth opens at Lv.60
+  assert.equal(artifactSpendable(8, [5, 5, 5, 4, 5, 5, 3]), 8);
+  assert.equal(artifactSpendable(1, [5, 5, 5, 5, 5, 5, 1]), 1);
+  assert.equal(artifactSpendable(5, [5, 5, 5, 5, 5, 4, 4]), 3); // Lv.4 → 5 is 3 AP: one of the two, 2 left over
+  // a step costs 1 · 2 · 2 · 3: one point cannot take a Lv.2 crystal to Lv.3
+  assert.equal(artifactSpendable(1, [5, 2]), 0);
+  assert.equal(artifactSpendable(4, [5, 4]), 3);
+
+  const ap = (remain: number, levels?: number[]) => {
+    const raw = base();
+    raw.artifact.union_artifact_remain_ap = remain;
+    if (levels) raw.artifact.union_artifact_crystal = levels.map((level, i) => ({ name: `크리스탈 ${i}`, level }));
+    return checkSpec(raw, new Date("2026-11-09T00:00:00+09:00")).misses.filter((m) => /^AP /.test(m.what)).map((m) => m.what);
+  };
+  assert.deepEqual(ap(5, [5, 5, 5, 5, 5, 5, 5, 5]), []);
+  assert.deepEqual(ap(5, [5, 5, 5, 5, 5, 5, 5, 4]), ["AP 5 남음 · 3 쓸 수 있음"]);
+  assert.deepEqual(ap(8, [5, 5, 5, 4, 5, 5, 3]), ["AP 8 남음"]);
+  assert.deepEqual(ap(5), ["AP 5 남음"]); // no crystal list: as before
+});
+
+test("master labels: a worn set with places whose stats ran out is called out, nobody wearing one is not (user, 2026-11-18)", () => {
+  const now = new Date("2026-11-18T12:00:00+09:00");
+  const gone = (slot: string, name: string) => ({ ...ML(slot, name, "x", []), date_option_expire: null });
+  const line = (raw: SpecRaw) => checkSpec(raw, now).misses.find((m) => m.cat === "마스터라벨");
+  // nobody wearing one
+  assert.equal(line(base()), undefined);
+  // 언현 (2026-11-18): the whole set worn, every stat run out
+  const all = base();
+  all.cash = { cash_item_equipment_base: ["모자", "상의", "신발", "망토", "무기"].map((s) => gone(s, `${s} 마라벨`)) } as SpecRaw["cash"];
+  const a = line(all)!;
+  assert.equal(a.what, "능력치 있는 마라벨 0 / 5부위");
+  assert.equal(a.detail[0], "능력치 없음: 모자 모자 마라벨 · 상의 상의 마라벨 · 신발 신발 마라벨 · 망토 망토 마라벨 · 무기 무기 마라벨");
+  assert.equal(a.detail.length, 1);
+  // 데몬10세기: one weapon, run out → the four places without one are named too
+  const one = base();
+  one.cash = { cash_item_equipment_base: [gone("무기", "피의 서약")] } as SpecRaw["cash"];
+  assert.deepEqual(line(one)!.detail, ["능력치 없음: 무기 피의 서약", "마라벨 안 낀 부위: 모자 · 상의 · 신발 · 망토"]);
+  // some left: those show their days (gray), the rest "능력치 없음"
+  const some = base();
+  some.cash = {
+    cash_item_equipment_base: [ML("모자", "A", "2027-01-01T00:00+09:00"), ML("상의", "B", "2026-11-23T12:00+09:00"), gone("신발", "C"), gone("망토", "D"), gone("무기", "E")],
+  } as SpecRaw["cash"];
+  const s = line(some)!;
+  assert.equal(s.what, "능력치 있는 마라벨 2 / 5부위");
+  assert.deepEqual(s.tiles!.map((t) => [t.name, t.sub, !!t.done]), [["A", "44일 남음", true], ["B", "5일 남음", true], ["C", "능력치 없음", false], ["D", "능력치 없음", false], ["E", "능력치 없음", false]]);
+  // 흑소 · 귀심: the world's shared set, all five with stats → nothing here
+  const shared = base();
+  shared.cash = { world_share_master_label_activate_flag: "1", world_share_master_label_base: ["모자", "상의", "신발", "망토", "무기"].map((p) => ML(p, p, "2027-05-01T00:00+09:00")) } as SpecRaw["cash"];
+  assert.equal(line(shared), undefined);
+  assert.equal(labelPieces(shared, now).length, 5);
+  // the shared set when it is off does not count (귤민 wears its own)
+  shared.cash!.world_share_master_label_activate_flag = "0";
+  assert.equal(labelPieces(shared, now).length, 0);
+});
+
+test("master labels: stats past their date count as none; a partial set keeps the places without one (review, 2026-11-18)", () => {
+  const now = new Date("2026-11-18T12:00:00+09:00");
+  const line = (raw: SpecRaw) => checkSpec(raw, now).misses.find((m) => m.cat === "마스터라벨");
+  // options still there but the date passed (or "expired") → no stats
+  const past = base();
+  past.cash = {
+    cash_item_equipment_base: [ML("모자", "A", "2026-11-17T00:00+09:00"), ML("상의", "B", "expired"), ML("신발", "C", "2027-01-01T00:00+09:00")],
+  } as SpecRaw["cash"];
+  const p = line(past)!;
+  assert.equal(p.what, "능력치 있는 마라벨 1 / 5부위");
+  assert.deepEqual(p.tiles!.map((t) => [t.name, t.sub]), [["A", "능력치 없음"], ["B", "능력치 없음"], ["C", "44일 남음"]]);
+  // three worn, all with stats: the first line names them (the tiles' line), the second the two places left
+  const three = base();
+  three.cash = { cash_item_equipment_base: ["모자", "상의", "신발"].map((s) => ML(s, s, "2027-01-01T00:00+09:00")) } as SpecRaw["cash"];
+  assert.deepEqual(line(three)!.detail, ["낀 마라벨: 모자 모자 · 상의 상의 · 신발 신발", "마라벨 안 낀 부위: 망토 · 무기"]);
 });

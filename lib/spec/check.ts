@@ -29,6 +29,7 @@ type CashItem = {
   cash_item_equipment_slot?: string;
   cash_item_name?: string;
   cash_item_label?: string | null;
+  cash_item_icon?: string | null;
   cash_item_option?: { option_type: string; option_value: string }[];
   /** The item itself (기간제), null = permanent. */
   date_expire?: string | null;
@@ -46,7 +47,11 @@ export type SpecRaw = {
     character_v_matrix_remain_slot_upgrade_point?: number;
   };
   propensity: { charisma_level?: number; sensibility_level?: number; insight_level?: number; willingness_level?: number };
-  artifact: { union_artifact_effect?: { name: string; level: number }[]; union_artifact_remain_ap?: number };
+  artifact: {
+    union_artifact_effect?: { name: string; level: number }[];
+    union_artifact_crystal?: { name: string; level: number }[];
+    union_artifact_remain_ap?: number;
+  };
   equipment: Record<string, unknown> & { preset_no?: number; title?: Title; title_preset1?: Title; title_preset2?: Title; title_preset3?: Title };
   hyper: Record<string, unknown> & { use_preset_no?: string | number };
   link: Record<string, unknown>;
@@ -66,6 +71,8 @@ type ClassRule = {
   ability: { full: string[]; practical: string; collector?: boolean };
   artifactCooldown: boolean;
   hyperPassive: string[];
+  /** The five hyper passives most taken, most first: what a character puts its five points in. */
+  hyperPassiveTop: string[];
   petBuff: string[];
   link: string[];
 };
@@ -160,6 +167,32 @@ export function periodsOf(raw: SpecRaw, now: Date): Period[] {
   return out.sort((a, b) => a.days - b.days);
 }
 
+/** The five places a master label set fills (every full set worn on 2026-11-18: 언현 · 준민나로12 · 흑소 · 귀심 · 귤민). */
+const LABEL_SET = ["모자", "상의", "신발", "망토", "무기"];
+
+/**
+ * Master labels in effect, one per place: those worn (base) and, when the world's shared set is on, that set. days =
+ * days of stats left, null = none (run out — the API drops them). A place with stats in either list counts as having them.
+ */
+export function labelPieces(raw: SpecRaw, now: Date): { slot: string; name: string; icon: string | null; days: number | null }[] {
+  const cash = raw.cash;
+  const lists = [cash?.cash_item_equipment_base, cash?.additional_cash_item_equipment_base];
+  if (cash?.world_share_master_label_activate_flag === "1") lists.push(cash.world_share_master_label_base);
+  const bySlot = new Map<string, { slot: string; name: string; icon: string | null; days: number | null }>();
+  for (const list of lists)
+    for (const it of (Array.isArray(list) ? list : []) as CashItem[]) {
+      if (it.cash_item_label !== "마스터라벨") continue;
+      const slot = it.cash_item_equipment_slot ?? "";
+      // Stats past their date (or "expired") count as none, like stats the API already dropped.
+      const left = it.cash_item_option?.length && it.date_option_expire ? daysTo(it.date_option_expire, now) : -1;
+      const days = left >= 0 ? left : null;
+      const had = bySlot.get(slot);
+      if (!had || (had.days === null && days !== null) || (had.days !== null && days !== null && days > had.days))
+        bySlot.set(slot, { slot, name: it.cash_item_name ?? "", icon: apiIcon(it.cash_item_icon), days });
+    }
+  return [...bySlot.values()].sort((a, b) => LABEL_SET.indexOf(a.slot) - LABEL_SET.indexOf(b.slot));
+}
+
 /** "전투 플러스 · 마라벨 5개" for each 마스터라벨 플러스 running now. */
 export function labelPlusOf(raw: SpecRaw): string[] {
   return (raw.otherStat?.other_stat ?? []).flatMap((o) => {
@@ -182,7 +215,7 @@ export type Tier = "urgent" | "now" | "quest" | "long";
  * One thing of a miss drawn as an icon tile (5th job cores, links, gear …); icon null = no picture for it.
  * icon2 = a second picture sharing the tile: a boost core is drawn as its two skills split along the diagonal.
  */
-export type Tile = { name: string; sub?: string; icon: string | null; icon2?: string | null };
+export type Tile = { name: string; sub?: string; icon: string | null; icon2?: string | null; done?: boolean };
 /**
  * detail = lines under the subtitle (" · " separated items never break inside); rows = aligned table (symbols),
  * rowIcons = its picture per row; icon = the one picture of a single-thing miss; tiles = the things as icon tiles.
@@ -224,6 +257,23 @@ const apiIcon = (url: unknown): string | null => (typeof url === "string" && url
 // ---------- helpers ----------
 const preset = <T>(obj: Record<string, unknown>, prefix: string, i: number) => obj[`${prefix}${i}`] as T | undefined;
 const list = (names: string[]) => names.join(" · ");
+
+// AP to raise a crystal Lv.1→2, 2→3, 3→4, 4→5 (official guide, 2026-11-18). The game hands out the crystals with the
+// artifact level (3 at Lv.1, one more every 10 levels, 9 at Lv.60), so the API's list is every slot there is.
+const CRYSTAL_STEP_AP = [1, 2, 2, 3];
+
+/** The most of `remain` AP that can go into these crystals (each raised a step at a time, up to Lv.5). */
+export function artifactSpendable(remain: number, levels: number[]): number {
+  let can = new Set([0]);
+  for (const lv of levels) {
+    const steps = [0];
+    for (let s = Math.max(1, lv); s < 5; s++) steps.push(steps[steps.length - 1] + CRYSTAL_STEP_AP[s - 1]);
+    const next = new Set<number>();
+    for (const a of can) for (const b of steps) if (a + b <= remain) next.add(a + b);
+    can = next;
+  }
+  return Math.max(...can);
+}
 
 /** Ability line → letter used in the data file (패 보 상 공 재 크 피 벞), or null for anything else. */
 export function abilityLetter(value: string): string | null {
@@ -416,7 +466,12 @@ export function checkSpec(raw: SpecRaw, now: Date = new Date(), data: Data = SPE
       `보스에 안 쓰는 효과: ${wasted.map((e) => `${effectName(e.name)} Lv.${e.level}`).join(" · ")}`,
     );
   }
-  if ((raw.artifact.union_artifact_remain_ap ?? 0) > 0) add("now", "유니온 아티팩트", `AP ${raw.artifact.union_artifact_remain_ap} 남음`);
+  // Left AP counts only as far as it can go into a crystal (user, 2026-11-18): at Lv.58 eight crystals at Lv.5 leave
+  // nothing to raise until the ninth opens. Without the crystal list (older saved shape) every point counts as before.
+  const remainAp = raw.artifact.union_artifact_remain_ap ?? 0;
+  const crystals = raw.artifact.union_artifact_crystal;
+  const spendAp = crystals?.length ? artifactSpendable(remainAp, crystals.map((c) => c.level)) : remainAp;
+  if (spendAp > 0) add("now", "유니온 아티팩트", spendAp < remainAp ? `AP ${remainAp} 남음 · ${spendAp} 쓸 수 있음` : `AP ${remainAp} 남음`);
 
   // Title: title_preset1~3 do not follow equipment presets (2026-11-09: 흑소 · 광선 · 청운적운 · 데몬10세기 keep it in
   // title_preset1 whatever equipment preset they use), so the boss title may sit in any of them while a hunting title
@@ -507,6 +562,24 @@ export function checkSpec(raw: SpecRaw, now: Date = new Date(), data: Data = SPE
     );
   }
 
+  // Master labels worn whose stats are gone (user, 2026-11-18: "낀 사람이거나 기간이 몇 개만 남은 사람은 알려줘야"): the API
+  // keeps a worn label but drops its stats once they run out, so periodsOf never sees it. Nobody wearing one: no line.
+  const labels = labelPieces(raw, now);
+  const withStats = labels.filter((l) => l.days !== null).length;
+  if (labels.length && withStats < LABEL_SET.length) {
+    const bare = labels.filter((l) => l.days === null);
+    const lines = [
+      // The first line is what the tiles show (an opened line shows the tiles in its place), so it is always there.
+      bare.length ? `능력치 없음: ${list(bare.map((l) => `${l.slot} ${l.name}`))}` : `낀 마라벨: ${list(labels.map((l) => `${l.slot} ${l.name}`))}`,
+      ...(labels.length < LABEL_SET.length ? [`마라벨 안 낀 부위: ${list(LABEL_SET.filter((s) => !labels.some((l) => l.slot === s)))}`] : []),
+    ];
+    add("long", "마스터라벨", `능력치 있는 마라벨 ${withStats} / ${LABEL_SET.length}부위`, ...lines).tiles = labels.map((l) =>
+      l.days === null
+        ? { name: l.name, sub: "능력치 없음", icon: l.icon }
+        : { name: l.name, sub: `${l.days}일 남음`, icon: l.icon, done: true },
+    );
+  }
+
   // 5th job (V matrix)
   const cores = raw.vmatrix.character_v_core_equipment ?? [];
   const coreLv = (name: string) => cores.find((c) => c.v_core_name === name)?.v_core_level ?? 0;
@@ -558,8 +631,12 @@ export function checkSpec(raw: SpecRaw, now: Date = new Date(), data: Data = SPE
     const hpMiss = rule.hyperPassive.filter((n) => !picked.has(n));
     // The API lists a hyper passive (with its icon) even at level 0.
     const hpIcon = (n: string) => apiIcon((raw.hyperPassive.character_skill ?? []).find((s) => s.skill_name === n)?.skill_icon) ?? tableIcon(n);
+    // Opened, the line shows the five most taken with what this character has (user, 2026-11-18), not only the misses.
+    const hpShown = [...rule.hyperPassiveTop, ...hpMiss.filter((n) => !rule.hyperPassiveTop.includes(n))];
     if (hpMiss.length)
-      add("now", "하이퍼 패시브", `대부분 찍는 것 ${hpMiss.length}개 안 찍음`, list(hpMiss)).tiles = hpMiss.map((n) => ({ name: n, sub: "안 찍음", icon: hpIcon(n) }));
+      add("now", "하이퍼 패시브", `대부분 찍는 것 ${hpMiss.length}개 안 찍음`, list(hpMiss)).tiles = hpShown.map((n) =>
+        picked.has(n) ? { name: n, sub: "찍음", icon: hpIcon(n), done: true } : { name: n, sub: "안 찍음", icon: hpIcon(n) },
+      );
 
     // pet buffs (own pets + world shared pets)
     const auto = [1, 2, 3].flatMap((i) =>

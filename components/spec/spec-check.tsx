@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Award, ChartColumn, Check, Dices, ExternalLink, Heart, Hexagon, Loader2, PawPrint, RotateCw, Search, ShieldAlert, ShieldCheck, Shirt, Sparkles, Tag, X, type LucideIcon } from "lucide-react";
+import { Check, ExternalLink, Loader2, RotateCw, Search, ShieldAlert, ShieldCheck, X } from "lucide-react";
 import { refreshSpec } from "@/app/spec/actions";
 import { PageHeader } from "@/components/page-header";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -10,6 +10,17 @@ import type { Miss, SpecResult, Tier, Tile } from "@/lib/spec/check";
 import { periodGroups } from "@/lib/spec/period-rows";
 import { useStored } from "@/lib/use-stored";
 import { cn } from "@/lib/utils";
+// Static imports, like the menu icons: each address carries a content hash.
+import artAbility from "@/public/icons/spec/ability.svg";
+import artArtifact from "@/public/icons/spec/artifact.svg";
+import artCash from "@/public/icons/spec/cash.svg";
+import artHyperStat from "@/public/icons/spec/hyper-stat.svg";
+import artLabelPlus from "@/public/icons/spec/label-plus.svg";
+import artMisc from "@/public/icons/spec/misc.svg";
+import artPet from "@/public/icons/spec/pet.svg";
+import artPetGear from "@/public/icons/spec/pet-gear.svg";
+import artPropensity from "@/public/icons/spec/propensity.svg";
+import artTitle from "@/public/icons/spec/title.svg";
 
 export type SpecView =
   | { kind: "empty" }
@@ -21,7 +32,7 @@ const RECENT_KEY = "spec-recent";
 const RECENT_MAX = 8;
 
 const CHECKED =
-  "공용 · 직업 0차 스킬 · 성향 · 유니온 아티팩트 · 칭호 · 주문서 강화 · 캐시 장비 · 펫 기간 · 펫 장비 · 마스터라벨 플러스 · 5차 · 하이퍼 스탯 · 하이퍼 패시브 · 펫 버프 · 링크 · 어빌리티";
+  "공용 · 직업 0차 스킬 · 성향 · 유니온 아티팩트 · 칭호 · 주문서 강화 · 캐시 장비 · 펫 기간 · 펫 장비 · 마스터라벨 · 마스터라벨 플러스 · 5차 · 하이퍼 스탯 · 하이퍼 패시브 · 펫 버프 · 링크 · 어빌리티";
 
 const kstTime = (ms: number) =>
   new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })
@@ -33,20 +44,70 @@ function fetchedAt(ms: number) {
   return `${t.month}/${t.day} ${t.hour}:${t.minute}`;
 }
 
-/** "부족: 공격력/마력 Lv.1 · 크리티컬 확률 Lv.10" — each " · " item stays on one line; breaks only between items. */
+/**
+ * "부족: 공격력/마력 Lv.1 · 크리티컬 확률 Lv.10" — each " · " item keeps to one line and breaks only between items,
+ * unless one item alone is wider than the box (a narrow card): then it wraps between words instead of spilling out.
+ */
 function DetailLine({ text }: { text: string }) {
-  const items = text.split(" · ");
+  return <Pieces text={text} className="text-[13px] leading-normal text-muted-foreground" />;
+}
+
+/** Split on " · " except inside brackets: "보스 프리셋(장비 · 하이퍼)을 찾아" stays one item. */
+function splitItems(text: string): string[] {
+  const out = [""];
+  let depth = 0;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === "(") depth++;
+    if (ch === ")") depth = Math.max(0, depth - 1);
+    if (depth === 0 && text.startsWith(" · ", i)) {
+      out.push("");
+      i += 2;
+    } else out[out.length - 1] += ch;
+  }
+  return out;
+}
+
+const NBSP = "\u00a0";
+
+/** DetailLine's " · " list for any text: pieces break between them, and the dot ends a line, never starts one. */
+function Pieces({ text, className }: { text: string; className?: string }) {
+  // "보스에 안 쓰는 효과: A · B" — the label is a piece of its own, so a long first item does not drag it along.
+  const cut = text.indexOf(": ");
+  const label = cut > 0 && cut < 16 ? text.slice(0, cut + 1) : null;
+  const items = splitItems(label ? text.slice(cut + 2) : text);
+  // "Lv.10" or "+10,500" stays with its name, a bracket keeps its words, and a last word of one or two letters
+  // ("…그 세팅으로 확인") never sits alone on a line.
+  const glue = (s: string) =>
+    s
+      .replace(/ (?=(Lv\.|\+?[\d.,]+[%회개일]?$))/g, NBSP)
+      .replace(/\([^)]*\)/g, (m) => m.replaceAll(" ", NBSP))
+      .replace(/ (\S{1,2})$/, `${NBSP}$1`);
   return (
-    <span className="text-[13px] leading-normal text-muted-foreground">
+    <span className={className}>
+      {label && <span className="inline-block max-w-full break-keep">{label}</span>}
+      {label && " "}
       {items.map((it, i) => (
         <span key={i}>
-          <span className="whitespace-nowrap">{it}</span>
-          {i < items.length - 1 && " · "}
+          <span className="inline-block max-w-full break-keep">
+            {glue(it)}
+            {i < items.length - 1 && `${NBSP}·`}
+          </span>
+          {i < items.length - 1 && " "}
         </span>
       ))}
     </span>
   );
 }
+
+/** A title like "24포인트 남음 (1번 프리셋)" or "여제의 축복 24 / 30": the bracket and the "a / b" each keep together. */
+const whatText = (what: string) =>
+  what
+    .replace(/\([^)]*\)/g, (m) => m.replaceAll(" ", NBSP))
+    .replace(/(\d+) \/ (\d+)/g, `$1${NBSP}/${NBSP}$2`)
+    .replace(/(\d\S*) (남음|미만|부위)/g, `$1${NBSP}$2`)
+    // a last word of one or two letters ("넣을 자리 없음" → "없음") never sits alone
+    .replace(/ (\S{1,2})$/, `${NBSP}$1`);
 
 // How much a line takes to fill (user, 2026-11-17): the chip on every line. The list comes already in this order.
 const TIER: Record<Tier, { label: string; className: string }> = {
@@ -70,18 +131,21 @@ function TierChip({ tier, className }: { tier: Tier; className?: string }) {
   );
 }
 
-// Categories the game has no picture for get a plain icon.
-const CAT_ICON: Record<string, LucideIcon> = {
-  "하이퍼 스탯": ChartColumn,
-  "유니온 아티팩트": Hexagon,
-  칭호: Award,
-  성향: Heart,
-  어빌리티: Dices,
-  "캐시 장비": Shirt,
-  펫: PawPrint,
-  "펫 장비": PawPrint,
-  "마스터라벨 플러스": Tag,
+// Categories the game API has no picture for get one of ours, in the menu icons' style (user, 2026-11-18: the thin
+// line icons looked empty next to the game pictures; drawn by Codex, originals outside the repository). Others: misc.
+const CAT_ART: Record<string, { src: string }> = {
+  "하이퍼 스탯": artHyperStat,
+  "유니온 아티팩트": artArtifact,
+  칭호: artTitle,
+  성향: artPropensity,
+  어빌리티: artAbility,
+  "캐시 장비": artCash,
+  펫: artPet,
+  "펫 장비": artPetGear,
+  마스터라벨: artLabelPlus,
+  "마스터라벨 플러스": artLabelPlus,
 };
+const catArt = (cat?: string) => ((cat && CAT_ART[cat]) || artMisc).src;
 
 // Two pictures in one square, cut along the diagonal with a hairline between them — how the game draws a boost core
 // (its first skill at the top left, its second at the bottom right).
@@ -107,12 +171,11 @@ function GamePic({ pic, size }: { pic: Pic; size: string }) {
   );
 }
 
-/** A game picture in a rounded box; without one, the plain icon of the category. */
+/** A game picture in a rounded box; without one, our picture of the category. */
 function PicBox({ pic, cat, large }: { pic?: Pic; cat?: string; large?: boolean }) {
-  const Plain = (cat && CAT_ICON[cat]) || Sparkles;
   return (
     <span className={cn("flex shrink-0 items-center justify-center rounded-[10px] border border-border bg-secondary", large ? "size-12" : "size-11")}>
-      {pic ? <GamePic pic={pic} size="size-8" /> : <Plain className="size-5 text-muted-foreground" aria-hidden="true" />}
+      <GamePic pic={pic ?? { a: catArt(cat) }} size="size-8" />
     </span>
   );
 }
@@ -120,7 +183,8 @@ function PicBox({ pic, cat, large }: { pic?: Pic; cat?: string; large?: boolean 
 /** Every picture a line has: its own, its tiles, its table rows. */
 const picsOf = (m: Miss): Pic[] => [
   ...(m.icon ? [{ a: m.icon }] : []),
-  ...(m.tiles ?? []).flatMap((x) => (x.icon ? [{ a: x.icon, b: x.icon2 }] : [])),
+  // What is missing first: a line can also show what is already done (hyper passives, master labels with stats).
+  ...[...(m.tiles ?? [])].sort((x, y) => Number(!!x.done) - Number(!!y.done)).flatMap((x) => (x.icon ? [{ a: x.icon, b: x.icon2 }] : [])),
   ...(m.rowIcons ?? []).flatMap((x) => (x ? [{ a: x }] : [])),
 ];
 
@@ -144,7 +208,7 @@ function TopCard({ miss }: { miss: Miss }) {
           <span className="text-xs break-keep text-muted-foreground">{miss.cat}</span>
           <TierChip tier={miss.tier} />
         </span>
-        <b className="text-sm leading-snug break-keep">{miss.what}</b>
+        <b className="text-sm leading-snug break-keep">{whatText(miss.what)}</b>
         {miss.detail.map((d, i) => (
           <DetailLine key={i} text={d} />
         ))}
@@ -161,8 +225,17 @@ function Tiles({ tiles, cat }: { tiles: Tile[]; cat: string }) {
       {tiles.map((x) => (
         <li key={x.name} className="row-span-3 grid grid-rows-subgrid justify-items-center pb-2.5 text-center">
           <PicBox pic={x.icon ? { a: x.icon, b: x.icon2 } : undefined} cat={cat} />
-          <span className="text-[11px] leading-tight font-semibold break-keep">{x.name}</span>
-          <span className="text-[11px] leading-tight font-semibold whitespace-nowrap text-primary-text">{x.sub}</span>
+          <span className="text-[11px] leading-tight font-semibold text-balance break-keep">
+            {/* "데몬 임팩트-보너스 어택": break after the hyphen first, so "어택" is not left alone on the last line */}
+            {x.name.split(/(?<=-)/).map((part, i) => (
+              <span key={i} className="inline-block max-w-full">
+                {part}
+              </span>
+            ))}
+          </span>
+          <span className={cn("text-[11px] leading-tight font-semibold whitespace-nowrap", x.done ? "text-muted-foreground" : "text-primary-text")}>
+            {x.sub}
+          </span>
         </li>
       ))}
     </ul>
@@ -175,7 +248,9 @@ function Tiles({ tiles, cat }: { tiles: Tile[]; cat: string }) {
  * a narrow list puts the chip beside the category and drops the pictures, so the text keeps its width.
  */
 function LineHead({ miss, chip }: { miss: Miss; chip: boolean }) {
-  const pics = picsOf(miss);
+  const own = picsOf(miss);
+  // No game picture: the category's own, in the same place.
+  const pics = own.length ? own : [{ a: catArt(miss.cat) }];
   const beside = !opens(miss) ? miss.detail[0] : undefined;
   return (
     <>
@@ -185,7 +260,7 @@ function LineHead({ miss, chip }: { miss: Miss; chip: boolean }) {
           {chip && <TierChip tier={miss.tier} className="@sm:hidden" />}
         </span>
         <span className="text-[13px] leading-normal font-normal break-keep">
-          <span className="font-semibold">{miss.what}</span>
+          <span className="font-semibold">{whatText(miss.what)}</span>
           {beside && (
             <>
               {" "}
@@ -211,17 +286,34 @@ function LineBody({ miss }: { miss: Miss }) {
   return (
     <div className="flex flex-col gap-2">
       {/* Tiles are the same list as the text, with pictures: one or the other. */}
-      {(miss.tiles?.length ?? 0) > 1 ? <Tiles tiles={miss.tiles!} cat={miss.cat} /> : miss.detail.map((d, i) => <DetailLine key={i} text={d} />)}
+      {/* The first detail line is what the tiles show; any line after it (마스터라벨: places without one) stays. */}
+      {(miss.tiles?.length ?? 0) > 1 ? (
+        <>
+          <Tiles tiles={miss.tiles!} cat={miss.cat} />
+          {miss.detail.slice(1).map((d, i) => (
+            <DetailLine key={i} text={d} />
+          ))}
+        </>
+      ) : (
+        miss.detail.map((d, i) => <DetailLine key={i} text={d} />)
+      )}
       {miss.rows && (
-        <div className="grid grid-cols-[auto_auto_auto_minmax(0,1fr)] items-center gap-x-3 gap-y-1 text-[13px] text-muted-foreground tabular-nums">
+        // A narrow list (a phone) has no room for a fourth column: the stats go under their row instead.
+        <div className="grid grid-cols-[auto_auto_minmax(0,1fr)] items-center gap-x-3 gap-y-1 text-[13px] text-muted-foreground tabular-nums @sm:grid-cols-[auto_auto_auto_minmax(0,1fr)]">
           {miss.rows.map((r, j) =>
             r.map((c, k) => (
-              <span key={`${j}-${k}`} className={cn("whitespace-nowrap", k === 0 && "flex items-center gap-1.5 text-foreground", k === 2 && "text-right", k === 3 && "whitespace-normal")}>
+              <span key={`${j}-${k}`} className={cn(
+                  "whitespace-nowrap",
+                  k === 0 && "flex items-center gap-1.5 text-foreground",
+                  k === 2 && "text-right",
+                  k === 3 && "col-span-full mb-1 pl-[26px] whitespace-normal @sm:col-span-1 @sm:mb-0 @sm:pl-0",
+                )}
+              >
                 {k === 0 && miss.rowIcons?.[j] && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={miss.rowIcons[j]!} alt="" loading="lazy" className="size-5 object-contain" />
                 )}
-                {c}
+                {k === 3 ? <Pieces text={c} /> : c}
               </span>
             )),
           )}
@@ -570,8 +662,8 @@ export function SpecCheck({ name, view }: { name: string; view: SpecView }) {
       </div>
 
       <div className="flex flex-col gap-1 text-xs leading-relaxed text-muted-foreground">
-        <span>확인하는 것: {CHECKED}</span>
-        <span>기준: 직업별 상위 캐릭터 대부분의 선택 · 보스 프리셋(장비 · 하이퍼 · 링크 · 어빌)을 찾아 그 세팅으로 확인</span>
+        <Pieces text={`확인하는 것: ${CHECKED}`} />
+        <Pieces text="기준: 직업별 상위 캐릭터 대부분의 선택 · 보스 프리셋(장비 · 하이퍼 · 링크 · 어빌)을 찾아 그 세팅으로 확인" />
         <span>Data based on NEXON Open API</span>
       </div>
     </div>

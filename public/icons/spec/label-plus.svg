@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" aria-hidden="true">
+<defs><filter id="label-plus-shadow" x="-35%" y="-100%" width="170%" height="300%"><feGaussianBlur stdDeviation="1.7"/></filter><filter id="label-plus-plush" x="-15%" y="-20%" width="130%" height="140%" color-interpolation-filters="sRGB"><feOffset in="SourceAlpha" dx="-1.3" dy="-1.8" result="shift"/><feComposite in="SourceAlpha" in2="shift" operator="out" result="edge"/><feGaussianBlur in="edge" stdDeviation="1.3" result="soft"/><feComposite in="SourceGraphic" in2="soft" operator="in" result="shade"/><feComponentTransfer in="shade" result="shade"><feFuncR type="linear" slope=".65"/><feFuncG type="linear" slope=".65"/><feFuncB type="linear" slope=".65"/></feComponentTransfer><feOffset in="SourceAlpha" dx="1" dy="1.4" result="lit"/><feComposite in="SourceAlpha" in2="lit" operator="out"/><feGaussianBlur stdDeviation=".9" result="lightmask"/><feFlood flood-color="#fff9ed" flood-opacity=".7"/><feComposite in2="lightmask" operator="in" result="light"/><feMerge><feMergeNode in="SourceGraphic"/><feMergeNode in="shade"/><feMergeNode in="light"/></feMerge><feComposite in2="SourceAlpha" operator="in"/></filter><radialGradient id="label-plus-blue" cx="30%" cy="22%" r="78%"><stop offset="0" stop-color="#c7f3ff"/><stop offset="0.5" stop-color="#479ce9"/><stop offset="1" stop-color="#2361b7"/></radialGradient><radialGradient id="label-plus-panel" cx="30%" cy="22%" r="78%"><stop offset="0" stop-color="#e6fbff"/><stop offset="0.5" stop-color="#79c2f3"/><stop offset="1" stop-color="#4790d5"/></radialGradient><radialGradient id="label-plus-gold" cx="30%" cy="22%" r="78%"><stop offset="0" stop-color="#fff0a7"/><stop offset="0.5" stop-color="#ffd257"/><stop offset="1" stop-color="#eaa536"/></radialGradient><radialGradient id="label-plus-coin" cx="30%" cy="22%" r="78%"><stop offset="0" stop-color="#ffe997"/><stop offset="0.5" stop-color="#ffc94f"/><stop offset="1" stop-color="#e9a439"/></radialGradient></defs>
+<ellipse cx="32" cy="57" rx="22" ry="2.8" fill="#66432b" opacity=".18" filter="url(#label-plus-shadow)"/>
+<g transform="rotate(-10 30 30)">
+<rect x="6" y="13" width="46" height="35" rx="6.5" fill="#2365af"/>
+<rect x="6" y="11" width="46" height="35" rx="6.5" fill="url(#label-plus-blue)" filter="url(#label-plus-plush)"/>
+<rect x="10" y="15" width="38" height="27" rx="4" fill="url(#label-plus-panel)" filter="url(#label-plus-plush)"/>
+<path d="M12 20Q12 17 15 17H21Q18 18 15 18Q13 18 12 20Z" fill="#fff" opacity=".85"/>
+<path d="M35 24A8.5 8.5 0 1 1 18 24A8.5 8.5 0 1 1 35 24ZM33.4 24A6.9 6.9 0 1 0 19.6 24A6.9 6.9 0 1 0 33.4 24Z" fill="#eaffff" fill-rule="evenodd" opacity=".9"/>
+<g transform="rotate(45 26.5 24)">
+<path d="M26.5 17L28.5 19.5V24.7H30.2V26.3H27.6V29.7H25.4V26.3H22.8V24.7H24.5V19.5Z" fill="#edfaff"/>
+<path d="M26.5 17L26.5 24.7H24.5V19.5Z" fill="#fff"/>
+</g>
+<path d="M38 17H41V20H44V23H41V26H38V23H35V20H38Z" fill="#fff"/>
+<g transform="translate(27 36.7) scale(0.72)"><ellipse cx="-9.3" cy="3.1" rx="3.3" ry="1.8" fill="#ffb3a7"/><ellipse cx="9.3" cy="3.1" rx="3.3" ry="1.8" fill="#ffb3a7"/><ellipse cx="-6.4" cy="0" rx="1.65" ry="1.95" fill="#5a3a26"/><ellipse cx="6.4" cy="0" rx="1.65" ry="1.95" fill="#5a3a26"/><path d="M-3.4 1.8Q0 5.4 3.4 1.8Q3.9 1.5 3.8 2.3C3.2 6.5-3.2 6.5-3.8 2.3Q-3.9 1.5-3.4 1.8Z" fill="#5a3a26"/></g>
+<ellipse cx="15" cy="13.5" rx="4" ry="1.2" fill="white" opacity=".76"/>
+</g>
+<circle cx="47" cy="46" r="12" fill="#c48a2b"/>
+<circle cx="47" cy="44.8" r="12" fill="url(#label-plus-gold)" filter="url(#label-plus-plush)"/>
+<circle cx="47" cy="44.8" r="8.6" fill="#d69a31"/>
+<circle cx="47" cy="44.2" r="7.3" fill="url(#label-plus-coin)" filter="url(#label-plus-plush)"/>
+<path d="M47 38.7L48.7 42L52.2 42.5L49.7 45L50.3 48.5L47 46.8L43.7 48.5L44.3 45L41.8 42.5L45.3 42Z" fill="#fff1ac"/>
+<ellipse cx="41.5" cy="37" rx="3.4" ry="1.5" transform="rotate(-38 41.5 37)" fill="#fff" opacity=".8"/>
+</svg>

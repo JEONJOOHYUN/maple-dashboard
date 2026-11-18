@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" aria-hidden="true">
+<defs><filter id="ability-shadow" x="-35%" y="-100%" width="170%" height="300%"><feGaussianBlur stdDeviation="1.7"/></filter><filter id="ability-plush" x="-15%" y="-20%" width="130%" height="140%" color-interpolation-filters="sRGB"><feOffset in="SourceAlpha" dx="-1.3" dy="-1.8" result="shift"/><feComposite in="SourceAlpha" in2="shift" operator="out" result="edge"/><feGaussianBlur in="edge" stdDeviation="1.3" result="soft"/><feComposite in="SourceGraphic" in2="soft" operator="in" result="shade"/><feComponentTransfer in="shade" result="shade"><feFuncR type="linear" slope=".65"/><feFuncG type="linear" slope=".65"/><feFuncB type="linear" slope=".65"/></feComponentTransfer><feOffset in="SourceAlpha" dx="1" dy="1.4" result="lit"/><feComposite in="SourceAlpha" in2="lit" operator="out"/><feGaussianBlur stdDeviation=".9" result="lightmask"/><feFlood flood-color="#fff9ed" flood-opacity=".7"/><feComposite in2="lightmask" operator="in" result="light"/><feMerge><feMergeNode in="SourceGraphic"/><feMergeNode in="shade"/><feMergeNode in="light"/></feMerge><feComposite in2="SourceAlpha" operator="in"/></filter><radialGradient id="ability-gold" cx="30%" cy="22%" r="78%"><stop offset="0" stop-color="#fff0a7"/><stop offset="0.5" stop-color="#ffd257"/><stop offset="1" stop-color="#eaa536"/></radialGradient><radialGradient id="ability-orb" cx="30%" cy="22%" r="78%"><stop offset="0" stop-color="#e5ffff"/><stop offset="0.5" stop-color="#46b8fa"/><stop offset="1" stop-color="#2168cc"/></radialGradient><radialGradient id="ability-light" cx="30%" cy="22%" r="78%"><stop offset="0" stop-color="#fff"/><stop offset="0.5" stop-color="#b5f8ff"/><stop offset="1" stop-color="#4ab9f4"/></radialGradient><radialGradient id="ability-jewel" cx="30%" cy="22%" r="78%"><stop offset="0" stop-color="#ddffff"/><stop offset="0.5" stop-color="#61d8f7"/><stop offset="1" stop-color="#198ac6"/></radialGradient></defs>
+<ellipse cx="32" cy="57" rx="22" ry="2.8" fill="#66432b" opacity=".18" filter="url(#ability-shadow)"/>
+<g fill="url(#ability-gold)" filter="url(#ability-plush)">
+<path d="M22 16C18 7 8 8 8 15Q8 20 14 20Q10 16 13 14Q17 12 19 20L21 33Q15 33 10 27Q7 24 6 27Q5 34 13 39Q7 39 7 42Q10 49 23 45L28 39Z"/>
+<path d="M42 16C46 7 56 8 56 15Q56 20 50 20Q54 16 51 14Q47 12 45 20L43 33Q49 33 54 27Q57 24 58 27Q59 34 51 39Q57 39 57 42Q54 49 41 45L36 39Z"/>
+<path d="M16 35Q32 48 48 35L47 44Q42 49 37 50H27Q22 49 17 44Z"/>
+</g>
+<path d="M9 29Q13 35 20 36L19 39Q12 37 9 29ZM55 29Q51 35 44 36L45 39Q52 37 55 29Z" fill="#fff3b8"/>
+<circle cx="32" cy="26" r="18.6" fill="#bb8b32"/>
+<circle cx="32" cy="25.2" r="18.5" fill="url(#ability-gold)" filter="url(#ability-plush)"/>
+<circle cx="32" cy="25.2" r="16.4" fill="url(#ability-orb)" filter="url(#ability-plush)"/>
+<ellipse cx="27" cy="20" rx="10" ry="8.5" fill="url(#ability-light)" opacity=".45"/>
+<path d="M19 29Q24 41 37 37Q28 43 22 36Z" fill="#75e4ff" opacity=".7"/>
+<g transform="translate(32 29) scale(0.85)"><ellipse cx="-9.3" cy="3.1" rx="3.3" ry="1.8" fill="#ffb3a7"/><ellipse cx="9.3" cy="3.1" rx="3.3" ry="1.8" fill="#ffb3a7"/><ellipse cx="-6.4" cy="0" rx="1.65" ry="1.95" fill="#5a3a26"/><ellipse cx="6.4" cy="0" rx="1.65" ry="1.95" fill="#5a3a26"/><path d="M-3.4 1.8Q0 5.4 3.4 1.8Q3.9 1.5 3.8 2.3C3.2 6.5-3.2 6.5-3.8 2.3Q-3.9 1.5-3.4 1.8Z" fill="#5a3a26"/></g>
+<ellipse cx="24" cy="16.5" rx="6.2" ry="3.2" transform="rotate(-36 24 16.5)" fill="#fff" opacity=".86"/>
+<ellipse cx="37" cy="13.7" rx="2.1" ry="1.1" transform="rotate(20 37 13.7)" fill="#eaffff" opacity=".7"/>
+<path d="M18 40Q24 41 28 45L25 48Q20 46 18 40ZM46 40Q40 41 36 45L39 48Q44 46 46 40Z" fill="url(#ability-gold)" filter="url(#ability-plush)"/>
+<path d="M32 43Q34 43 36 46L40 50L34 57Q32 59 30 57L24 50L28 46Q30 43 32 43Z" fill="url(#ability-gold)" filter="url(#ability-plush)"/>
+<path d="M32 46L36.5 50L32 55L27.5 50Z" fill="url(#ability-jewel)" filter="url(#ability-plush)"/>
+<path d="M32 46V50H27.5Z" fill="#dcffff" opacity=".8"/>
+<path d="M18 7Q19 13 23 14Q19 15 18 21Q17 15 13 14Q17 13 18 7Z" fill="#fffdf3"/>
+<path d="M49 19Q50 24 54 25Q50 26 49 31Q48 26 44 25Q48 24 49 19Z" fill="#f6ffff"/>
+</svg>
