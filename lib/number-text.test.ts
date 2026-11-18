@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { caretAfter, cleanNumberText, groupDigits, keptBefore } from "./number-text.ts";
+import { caretAfter, cleanNumberText, forwardDeleteText, groupDigits, keptBefore } from "./number-text.ts";
 
 test("groupDigits: commas every three digits of the whole part, any size", () => {
   assert.equal(groupDigits(""), "");
@@ -42,4 +42,17 @@ test("caret: stays after the same digit when commas appear or go", () => {
   // Decimals: the dot counts as a kept character.
   assert.equal(caretAfter(groupDigits(cleanNumberText("1234.5", true)), keptBefore("1234.5", 5, true), true), 6);
   assert.equal(caretAfter("1,000", 0), 0);
+});
+
+test("forwardDeleteText: Delete before a comma takes the digit after it, other deletes are left alone", () => {
+  // "1|,234" Delete → the browser leaves "1234" (caret 1) → "134"
+  assert.equal(forwardDeleteText("1234", 1, "1234"), "134");
+  // "12|,345,678" Delete → "12345,678" (caret 2) → the 3 goes: 1,245,678
+  assert.equal(cleanNumberText(forwardDeleteText("12345,678", 2, "12345678")), "1245678");
+  // a digit was deleted: nothing more
+  assert.equal(forwardDeleteText("1,34", 1, "1234"), "1,34");
+  // decimals: Delete on the comma before "234.5"
+  assert.equal(forwardDeleteText("1234.5", 1, "1234.5", true), "134.5");
+  // nothing after the caret to take
+  assert.equal(forwardDeleteText("1", 1, "1"), "1");
 });

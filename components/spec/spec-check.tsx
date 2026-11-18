@@ -222,8 +222,8 @@ function Tiles({ tiles, cat }: { tiles: Tile[]; cat: string }) {
     // Each tile is three rows of the list's own grid (picture · name · the line under it), so along one row of tiles
     // the names share a height and the lines under them sit level (user, 2026-11-17: "레벨 위치 통일").
     <ul className="grid grid-cols-[repeat(auto-fill,minmax(76px,1fr))] gap-x-1.5 gap-y-1">
-      {tiles.map((x) => (
-        <li key={x.name} className="row-span-3 grid grid-rows-subgrid justify-items-center pb-2.5 text-center">
+      {tiles.map((x, i) => (
+        <li key={`${i}-${x.name}`} className="row-span-3 grid grid-rows-subgrid justify-items-center pb-2.5 text-center">
           <PicBox pic={x.icon ? { a: x.icon, b: x.icon2 } : undefined} cat={cat} />
           <span className="text-[11px] leading-tight font-semibold text-balance break-keep">
             {/* "데몬 임팩트-보너스 어택": break after the hyphen first, so "어택" is not left alone on the last line */}

@@ -3,7 +3,7 @@
 import { useLayoutEffect, useRef, type ReactNode } from "react";
 import { LUCK_LEVELS, triesAt } from "@/lib/ev/luck";
 import { koreanUnits } from "@/lib/format";
-import { caretAfter, cleanNumberText, groupDigits, keptBefore } from "@/lib/number-text";
+import { caretAfter, cleanNumberText, forwardDeleteText, groupDigits, keptBefore } from "@/lib/number-text";
 import { cn } from "@/lib/utils";
 
 /** Card section used by every calculator tab. */
@@ -183,8 +183,11 @@ export function NumberField({
         placeholder={placeholder}
         onChange={(e) => {
           const el = e.target;
-          pending.current = keptBefore(el.value, el.selectionStart ?? el.value.length, decimal);
-          onChange(cleanNumberText(el.value, decimal));
+          const caret = el.selectionStart ?? el.value.length;
+          const forward = (e.nativeEvent as InputEvent).inputType === "deleteContentForward";
+          const text = forward ? forwardDeleteText(el.value, caret, String(value ?? ""), decimal) : el.value;
+          pending.current = keptBefore(text, caret, decimal);
+          onChange(cleanNumberText(text, decimal));
           // When the text stays the same (a comma deleted) nothing re-renders: put the caret back after React restores it.
           requestAnimationFrame(putCaret);
         }}

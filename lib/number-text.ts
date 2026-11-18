@@ -38,3 +38,14 @@ export function caretAfter(text: string, kept: number, decimal = false): number 
   }
   return text.length;
 }
+
+/**
+ * Delete pressed right before a comma removes only the comma, which grouping puts straight back: the caret would stay
+ * before it for good (review 2026-11-18). Then the digit after the comma goes too, as Backspace on a comma goes past
+ * it. `text` / `caret` = the field after the browser's delete, `before` = the plain text before it.
+ */
+export function forwardDeleteText(text: string, caret: number, before: string, decimal = false): string {
+  if (cleanNumberText(text, decimal) !== cleanNumberText(before, decimal)) return text;
+  const next = text.slice(caret).search(keepRe(decimal));
+  return next < 0 ? text : text.slice(0, caret + next) + text.slice(caret + next + 1);
+}

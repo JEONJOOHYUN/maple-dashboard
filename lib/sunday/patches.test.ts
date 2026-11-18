@@ -148,3 +148,17 @@ test("the predictions follow the merged dates: a moved patch changes the season 
   assert.notEqual(mlDataHash(SUNDAYS, "2026-11-22", moved), mlDataHash(SUNDAYS, "2026-11-22"));
   assert.equal(mlDataHash(SUNDAYS, "2026-11-22", sure), mlDataHash(SUNDAYS, "2026-11-22"));
 });
+
+test("a patch that came a week earlier than estimated: the next season's long events give it the same day (review 2026-11-18)", () => {
+  // The summer events still run to 12-16 (the 12-17 estimate), but the winter season started on 12-10.
+  const early: EventSpan[] = [...NOV17, { title: "겨울 시즌 이벤트", start: "2026-12-10", end: "2027-06-09" }];
+  const r = checkSeasonPatch(SEASON_PATCHES, early, "2026-12-10");
+  assert.equal(r.action, "write");
+  if (r.action !== "write") return;
+  assert.deepEqual(r.patch, winter("2026-12-10", true));
+  assert.equal(r.basis, "season-started");
+  assert.deepEqual(r.evidence.map((e) => e.title), ["겨울 시즌 이벤트"]);
+  // A short event starting early is not a season: the estimate stands.
+  const short: EventSpan[] = [...NOV17, { title: "짧은 이벤트", start: "2026-12-10", end: "2027-01-07" }];
+  assert.deepEqual(checkSeasonPatch(SEASON_PATCHES, short, "2026-12-10"), { action: "skip", reason: "unchanged", date: "2026-12-17" });
+});

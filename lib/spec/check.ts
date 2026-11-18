@@ -157,12 +157,13 @@ export function periodsOf(raw: SpecRaw, now: Date): Period[] {
       if (it.date_expire) push({ ...base, kind: "cashItem", days: daysTo(it.date_expire, now), at: it.date_expire.slice(0, 10) });
     }
   }
+  // The same place (1 ~ 3) as own and as the world's shared pet is one pet; two pets of one name in two places are two.
   for (const prefix of ["pet", "world_share_pet"])
     for (const i of [1, 2, 3]) {
       const name = raw.pet[`${prefix}_${i}_name`];
       const at = raw.pet[`${prefix}_${i}_date_expire`];
       if (typeof name === "string" && name && typeof at === "string" && at)
-        push({ kind: "pet", name, slot: "", days: daysTo(at, now), at: at === "expired" ? "" : at.slice(0, 10) });
+        push({ kind: "pet", name, slot: `${i}`, days: daysTo(at, now), at: at === "expired" ? "" : at.slice(0, 10) });
     }
   return out.sort((a, b) => a.days - b.days);
 }
@@ -521,30 +522,36 @@ export function checkSpec(raw: SpecRaw, now: Date = new Date(), data: Data = SPE
   const petsOver = periods.filter((p) => p.kind === "pet" && p.days < 0);
   if (petsOver.length) add("urgent", "펫", `기간 만료 ${petsOver.length}마리`, list(petsOver.map((p) => p.name)));
 
-  // Pets wearing no pet gear (new, user 2026-11-17). A pet listed both as the character's own and as the shared one of
-  // the world counts as geared when either copy is; pets already over cannot wear anything (the line above has them).
-  const petGear = new Map<string, { geared: boolean; icon: string | null }>();
-  for (const prefix of ["pet", "world_share_pet"])
-    for (const i of [1, 2, 3]) {
+  // Pets by place (1 ~ 3). The API sends the world's shared pets as a second copy of the same places (pet_1 =
+  // world_share_pet_1: 10 of 10 characters on 2026-11-18), so one place = one pet; two pets of the same name in two
+  // places are still two pets (review 2026-11-18 — they were merged by name before).
+  const petPlaces = [1, 2, 3].flatMap((i) => {
+    const copies = ["pet", "world_share_pet"].filter((prefix) => {
       const name = raw.pet[`${prefix}_${i}_name`];
-      if (typeof name !== "string" || !name) continue;
+      return typeof name === "string" && !!name;
+    });
+    if (!copies.length) return [];
+    const name = raw.pet[`${copies[0]}_${i}_name`] as string;
+    // A place is over only when every copy of it is over; geared when either copy wears something.
+    const over = copies.every((prefix) => {
       const at = raw.pet[`${prefix}_${i}_date_expire`];
-      if (typeof at === "string" && at && daysTo(at, now) < 0) continue;
-      const worn = raw.pet[`${prefix}_${i}_equipment`] as { item_name?: string | null } | null | undefined;
-      const seen = petGear.get(name);
-      petGear.set(name, { geared: !!worn?.item_name || !!seen?.geared, icon: seen?.icon ?? apiIcon(raw.pet[`${prefix}_${i}_icon`]) });
-    }
+      return typeof at === "string" && !!at && daysTo(at, now) < 0;
+    });
+    const geared = copies.some((prefix) => !!(raw.pet[`${prefix}_${i}_equipment`] as { item_name?: string | null } | null | undefined)?.item_name);
+    const icon = copies.map((prefix) => apiIcon(raw.pet[`${prefix}_${i}_icon`])).find(Boolean) ?? null;
+    return [{ name, over, geared, icon }];
+  });
+  // Pets wearing no pet gear (new, user 2026-11-17); pets already over cannot wear anything (the line above has them).
+  const livePets = petPlaces.filter((p) => !p.over);
   // Fewer than three pets (user, 2026-11-17: "펫 1마리면 2마리 빠진 거"). A pet that is over still takes its place and
-  // is reported as over, so every named pet counts here.
-  const petNames = new Set(
-    ["pet", "world_share_pet"].flatMap((prefix) => [1, 2, 3].map((i) => raw.pet[`${prefix}_${i}_name`])).filter((n): n is string => typeof n === "string" && !!n),
-  );
-  const petSlotsEmpty = PET_SLOTS - Math.min(PET_SLOTS, petNames.size);
+  // is reported as over, so every named place counts here.
+  const petSlotsEmpty = PET_SLOTS - Math.min(PET_SLOTS, petPlaces.length);
   // Tests and older saved shapes have pet buffs but no pet names: without any name the count is unknown.
-  if (petNames.size && petSlotsEmpty) add("long", "펫", `${petSlotsEmpty}자리 비어 있음`, `지금 ${petNames.size}마리 · ${PET_SLOTS}마리까지 · 한 마리에 펫 버프 ${BUFFS_PER_PET}개`);
-  const bare = [...petGear].filter(([, v]) => !v.geared);
+  if (petPlaces.length && petSlotsEmpty)
+    add("long", "펫", `${petSlotsEmpty}자리 비어 있음`, `지금 ${petPlaces.length}마리 · ${PET_SLOTS}마리까지 · 한 마리에 펫 버프 ${BUFFS_PER_PET}개`);
+  const bare = livePets.filter((p) => !p.geared);
   if (bare.length)
-    add("long", "펫 장비", `장비 없는 펫 ${bare.length}마리`, list(bare.map(([name]) => name))).tiles = bare.map(([name, v]) => ({ name, sub: "장비 없음", icon: v.icon }));
+    add("long", "펫 장비", `장비 없는 펫 ${bare.length}마리`, list(bare.map((p) => p.name))).tiles = bare.map((p) => ({ name: p.name, sub: "장비 없음", icon: p.icon }));
 
   // Master labels with stats left but no 전투 플러스 (user, 2026-11-17): the plus only works on labels whose stats run,
   // and it is the boss half (성장 플러스 is experience). Skipped when other-stat did not come back.
@@ -651,8 +658,8 @@ export function checkSpec(raw: SpecRaw, now: Date = new Date(), data: Data = SPE
     const petMiss = petStd.filter((n) => !petSet.has(n));
     // With every buff place of the pets taken, nothing can be added before another pet is (데몬10세기: one pet, both
     // of its places used, four buffs missing). Unknown pet count → as before.
-    const buffPlaces = Math.min(PET_SLOTS, petGear.size) * BUFFS_PER_PET;
-    const noPlace = petNames.size > 0 && petSet.size >= buffPlaces;
+    const buffPlaces = Math.min(PET_SLOTS, livePets.length) * BUFFS_PER_PET;
+    const noPlace = petPlaces.length > 0 && petSet.size >= buffPlaces;
     if (petMiss.length)
       add(noPlace ? "long" : "now", "펫 버프", `대부분 등록하는 것 ${petMiss.length}개 빠짐${noPlace ? " · 넣을 자리 없음" : ""}`, list(petMiss)).tiles = petMiss.map((n) => ({
         name: n,

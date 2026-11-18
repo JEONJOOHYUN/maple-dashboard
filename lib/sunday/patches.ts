@@ -109,7 +109,16 @@ export function checkSeasonPatch(known: SeasonPatch[], events: EventSpan[], toda
   }
   let confirmed = false;
   let evidence: EventSpan[] = running.filter((e) => e.end === runningEnd);
-  if (date <= today) {
+  // A season that already started before the estimate (a patch moved earlier, review 2026-11-18): its long events
+  // (SEASON_LONG_DAYS+, only ever started on a season patch) give the day now, not once the estimate has passed.
+  const estimate = date;
+  const early = events.filter((e) => long(e) && e.start > last.date && e.start <= today && e.start < estimate && inSeason(e.start, season));
+  if (date > today && early.length) {
+    date = early.map((e) => e.start).sort()[0];
+    confirmed = true;
+    basis = "season-started";
+    evidence = early.filter((e) => e.start === date);
+  } else if (date <= today) {
     const opened = events.filter((e) => e.start === date);
     if (opened.length) {
       confirmed = true;

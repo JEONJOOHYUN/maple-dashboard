@@ -566,17 +566,18 @@ test("a pet wearing no pet gear is listed; geared, shared-and-geared and expired
     pet_1_name: "글로리",
     pet_1_icon: "https://open.api.nexon.com/static/maplestory/item/icon/PET",
     pet_1_equipment: { item_name: null },
-    pet_2_name: "쁘띠 데스",
-    pet_2_equipment: { item_name: "펫 장비" },
-    // the same pet as the shared one of the world, where it does wear gear
-    pet_3_name: "벨라",
-    pet_3_equipment: null,
-    world_share_pet_1_name: "벨라",
-    world_share_pet_1_equipment: { item_name: "펫 장비" },
-    // over: cannot wear anything
+    // over (both copies of its place): cannot wear anything
+    pet_2_name: "쁘띠 플로라",
+    pet_2_date_expire: "2026-11-01T00:00+09:00",
+    pet_2_equipment: null,
     world_share_pet_2_name: "쁘띠 플로라",
     world_share_pet_2_date_expire: "2026-11-01T00:00+09:00",
     world_share_pet_2_equipment: null,
+    // the same place as the shared one of the world (the API's shape: same place number), where it does wear gear
+    pet_3_name: "벨라",
+    pet_3_equipment: null,
+    world_share_pet_3_name: "벨라",
+    world_share_pet_3_equipment: { item_name: "펫 장비" },
   });
   const miss = checkSpec(raw, AT).misses.find((m) => m.cat === "펫 장비");
   assert.equal(miss?.what, "장비 없는 펫 1마리");
@@ -767,4 +768,29 @@ test("master labels: stats past their date count as none; a partial set keeps th
   const three = base();
   three.cash = { cash_item_equipment_base: ["모자", "상의", "신발"].map((s) => ML(s, s, "2027-01-01T00:00+09:00")) } as SpecRaw["cash"];
   assert.deepEqual(line(three)!.detail, ["낀 마라벨: 모자 모자 · 상의 상의 · 신발 신발", "마라벨 안 낀 부위: 망토 · 무기"]);
+});
+
+test("pets are counted by place: own + world-shared copies of a place are one pet, same-named pets are not merged (review 2026-11-18)", () => {
+  const now = new Date("2026-11-18T12:00:00+09:00");
+  const lines = (pet: Record<string, unknown>) =>
+    checkSpec({ ...base(), pet } as SpecRaw, now).misses.filter((m) => m.cat === "펫" || m.cat === "펫 장비" || m.cat === "펫 버프");
+  const at = "2027-03-01T00:00+09:00";
+  // three pets of one name, the world's copy of each place too (how the API sends a shared set): three pets, no empty place
+  const same: Record<string, unknown> = {};
+  for (const i of [1, 2, 3])
+    for (const p of ["pet", "world_share_pet"]) {
+      same[`${p}_${i}_name`] = "쁘띠 주황버섯";
+      same[`${p}_${i}_date_expire`] = at;
+      same[`${p}_${i}_equipment`] = i === 2 ? null : { item_name: "펫 장비" };
+    }
+  const s = lines(same);
+  assert.equal(s.find((m) => m.cat === "펫"), undefined);
+  // one of the three wears nothing → one bare pet (it was hidden by the others' gear when merged by name)
+  assert.equal(s.find((m) => m.cat === "펫 장비")!.what, "장비 없는 펫 1마리");
+  // one pet only, own and shared copy of place 1 → two empty places, not one pet counted twice
+  const one = { pet_1_name: "글로리", pet_1_date_expire: at, world_share_pet_1_name: "글로리", world_share_pet_1_date_expire: at };
+  assert.equal(lines(one).find((m) => m.cat === "펫")!.what, "2자리 비어 있음");
+  // periods: same-named pets in three places are three rows
+  const periods = periodsOf({ ...base(), pet: same } as SpecRaw, now).filter((p) => p.kind === "pet");
+  assert.equal(periods.length, 3);
 });
