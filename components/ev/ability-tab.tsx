@@ -92,7 +92,8 @@ export function AbilityTab({ classes }: { classes: ClassAbility[] }) {
   const lead = presetLead(preset)[0];
   const famePerUnit = (parseNum(fame5kText, 0) * 1e4) / 5000;
   const unitOf = (k: AbilityKey) => ABILITY_VALUES[k].unit;
-  const have = parseNum(haveText, 0);
+  // Typed in 만 (user, 2026-11-18): "12.5" = 125,000 fame.
+  const have = Math.round(parseNum(haveText, 0) * 1e4);
 
   // Line order shown: in L1+U2 the legendary-only option has to be the first line.
   const order =
@@ -526,9 +527,11 @@ export function AbilityTab({ classes }: { classes: ClassAbility[] }) {
             <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
               가진 명성치
               <NumberField
-                label="가진 명성치"
+                label="가진 명성치 (만)"
                 value={haveText}
                 onChange={setHaveText}
+                decimal
+                suffix="만"
                 inputClassName="w-full"
               />
             </label>
