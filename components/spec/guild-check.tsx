@@ -8,10 +8,22 @@ import { useRouter } from "next/navigation";
 import { Loader2, Search, X } from "lucide-react";
 import { Chip } from "@/components/ev/ui";
 import { PageHeader } from "@/components/page-header";
-import { Message, SPEC_DESCRIPTION } from "@/components/spec/spec-check";
+import { Message, Pieces, SPEC_DESCRIPTION, whatText } from "@/components/spec/spec-check";
 import { SpecTabs } from "@/components/spec/spec-tabs";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Tier } from "@/lib/spec/check";
-import { CLASS_COLUMNS, MAX_GUILD_NAME, SORTS, columnCounts, sortRows, type MemberRow, type SortBy } from "@/lib/spec/guild-table";
+import {
+  CLASS_COLUMNS,
+  GUILD_COLUMNS,
+  MAX_GUILD_NAME,
+  SORTS,
+  columnCounts,
+  matchName,
+  sortRows,
+  type Cell,
+  type MemberRow,
+  type SortBy,
+} from "@/lib/spec/guild-table";
 import { useStored } from "@/lib/use-stored";
 import { cn } from "@/lib/utils";
 
@@ -22,7 +34,7 @@ export type GuildView =
   | { kind: "notFound" | "limit" | "busy" | "quota" | "failed"; name: string }
   | { kind: "pick"; name: string; guilds: GuildInfo[] }
   /** pieces = the members, a few at a time, as the server finishes them; others = guilds of the name in other worlds. */
-  | { kind: "guild"; guild: GuildInfo; cols: string[]; pieces: Promise<MemberRow[]>[]; others: number };
+  | { kind: "guild"; guild: GuildInfo; pieces: Promise<MemberRow[]>[]; others: number };
 
 // Recent guilds (this browser only), like the recent characters of the 개인 tab.
 type Recent = { name: string; world: string };
@@ -38,7 +50,8 @@ const guildHref = (name: string, world?: string) =>
   `/spec?guild=${encodeURIComponent(name)}${world ? `&world=${encodeURIComponent(world)}` : ""}`;
 const n = (v: number) => v.toLocaleString("ko-KR");
 
-// A miss is orange whatever it takes, except what only raising other characters fills (여제 under 24, 정령): outlined.
+// A miss is orange whatever it takes, except what cannot be filled right away (여제 under 24 = raising other
+// characters, pet buffs with no free place): outlined.
 const TONE: Record<Tier, string> = {
   urgent: "bg-primary-soft text-primary-text",
   now: "bg-primary-soft text-primary-text",
@@ -46,11 +59,26 @@ const TONE: Record<Tier, string> = {
   long: "border border-border text-muted-foreground",
 };
 
-function Pill({ tone, title, children }: { tone: string; title?: string; children: ReactNode }) {
+/**
+ * A missed line as a pill; the whole line (what is missing, then its details) in the site's own bubble on hover or
+ * focus (user, 2026-11-20: "테마에 맞춰서", the browser's title box before). Details break only between " · " items.
+ */
+function Pill({ cell }: { cell: Cell }) {
   return (
-    <span title={title} className={cn("inline-block rounded-full px-2.5 py-0.5 text-xs font-bold whitespace-nowrap", tone)}>
-      {children}
-    </span>
+    <Tooltip>
+      <TooltipTrigger
+        render={<span tabIndex={0} />}
+        className={cn("inline-block cursor-default rounded-full px-2.5 py-0.5 text-xs font-bold whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-primary", TONE[cell.tier])}
+      >
+        {cell.text}
+      </TooltipTrigger>
+      <TooltipContent className="max-w-[min(18rem,calc(100vw-2rem))] flex-col items-start gap-1 py-2 text-left leading-snug">
+        <b className="break-keep">{whatText(cell.what)}</b>
+        {cell.detail.map((d, i) => (
+          <Pieces key={i} text={d} className="text-xs opacity-80" />
+        ))}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -109,15 +137,13 @@ function CellView({ row, col }: { row: Extract<MemberRow, { ok: true }>; col: st
   return (
     <span className="inline-flex flex-col items-center gap-1">
       {cells.map((c, i) => (
-        <Pill key={i} tone={TONE[c.tier]} title={c.note}>
-          {c.text}
-        </Pill>
+        <Pill key={i} cell={c} />
       ))}
     </span>
   );
 }
 
-function MemberLine({ row, cols }: { row: MemberRow; cols: string[] }) {
+function MemberLine({ row, cols }: { row: MemberRow; cols: readonly string[] }) {
   return (
     <tr className="border-t border-border">
       <th scope="row" className="sticky left-0 z-[1] bg-card px-3.5 py-2 text-left font-normal">
@@ -144,9 +170,11 @@ function MemberLine({ row, cols }: { row: MemberRow; cols: string[] }) {
   );
 }
 
-function GuildResult({ guild, cols, pieces, others }: { guild: GuildInfo; cols: string[]; pieces: Promise<MemberRow[]>[]; others: number }) {
+function GuildResult({ guild, pieces, others }: { guild: GuildInfo; pieces: Promise<MemberRow[]>[]; others: number }) {
+  const cols = GUILD_COLUMNS;
   const router = useRouter();
   const [retrying, startRetry] = useTransition();
+  const [query, setQuery] = useState("");
   // Rows as the pieces arrive. A new set of pieces (다시 확인) starts over: state is set aside per set.
   const [got, setGot] = useState<{ from: Promise<MemberRow[]>[]; rows: MemberRow[]; eta: number | null }>({ from: pieces, rows: [], eta: null });
   if (got.from !== pieces) setGot({ from: pieces, rows: [], eta: null });
@@ -181,7 +209,10 @@ function GuildResult({ guild, cols, pieces, others }: { guild: GuildInfo; cols: 
   const unchecked = rows.filter((r) => !r.ok);
   const failed = unchecked.filter((r) => !r.ok && r.reason === "failed").length;
   const recentCount = rows.filter((r) => r.ok && r.recent).length;
-  const visible = useMemo(() => sortRows(recentOnly ? rows.filter((r) => r.ok && r.recent) : rows, sortBy), [rows, sortBy, recentOnly]);
+  const visible = useMemo(
+    () => sortRows(matchName(recentOnly ? rows.filter((r) => r.ok && r.recent) : rows, query), sortBy),
+    [rows, sortBy, recentOnly, query],
+  );
   const shown = visible.slice(0, limit);
 
   return (
@@ -237,15 +268,24 @@ function GuildResult({ guild, cols, pieces, others }: { guild: GuildInfo; cols: 
         <Chip on={recentOnly} soft onClick={() => setRecentOnly((v) => !v)}>
           최근 7일 접속만{recentOnly ? ` ${n(recentCount)}명` : ""}
         </Chip>
-      </div>
-
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-0.5 text-xs text-muted-foreground">
-        <span>칸 제목 → 그 스킬 놓친 사람부터</span>
-        <span className="flex flex-wrap items-center gap-2">
-          <Pill tone={TONE.quest}>놓침</Pill>
-          <Pill tone={TONE.long}>다른 캐릭터 육성</Pill>
-          <span>✓ 다 배움</span>
-        </span>
+        {/* A member by name (user, 2026-11-20): its own line on a phone, the right end on a wider screen. */}
+        <label className="order-first flex h-9 w-full items-center gap-2 rounded-lg border border-border bg-card pr-1 pl-3 focus-within:border-primary sm:order-none sm:ml-auto sm:w-56">
+          <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <span className="sr-only">길드원 이름으로 찾기</span>
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="길드원 찾기"
+            autoComplete="off"
+            spellCheck={false}
+            className="h-8 min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground sm:text-[13px]"
+          />
+          {query && (
+            <button type="button" onClick={() => setQuery("")} aria-label="길드원 찾기 지우기" className="flex size-7 shrink-0 items-center justify-center rounded-md opacity-60 hover:opacity-100">
+              <X className="size-3.5" aria-hidden="true" />
+            </button>
+          )}
+        </label>
       </div>
 
       {/* relative: the hidden "다 배움" labels (absolute) stay inside the scroll box instead of widening the page on a phone */}
@@ -407,9 +447,9 @@ export function GuildCheck({ name, view }: { name: string; view: GuildView }) {
       )}
 
       <div className={cn("transition-opacity", pending && "opacity-50")} aria-busy={pending}>
-        {view.kind === "guild" && <GuildResult guild={view.guild} cols={view.cols} pieces={view.pieces} others={view.others} />}
+        {view.kind === "guild" && <GuildResult guild={view.guild} pieces={view.pieces} others={view.others} />}
         {view.kind === "pick" && <WorldPick name={view.name} guilds={view.guilds} />}
-        {view.kind === "empty" && <Message title="길드 검색" sub="길드원마다 놓친 직업 0차 · 공용 스킬 · 하이퍼 패시브를 표 하나로" />}
+        {view.kind === "empty" && <Message title="길드 검색" sub="길드원마다 놓친 0차 스킬 · 연합의 의지 · 하이퍼 패시브 · 링크 · 펫 버프를 표 하나로" />}
         {view.kind === "notFound" && <Message title={`"${view.name}" 길드 없음`} sub="길드 이름 확인 · 영문은 대소문자까지 같아야 함" />}
         {view.kind === "limit" && <Message title="길드 검색 잠시 멈춤" sub="짧은 시간에 너무 많이 검색 → 1시간 안에 다시 됨" />}
         {view.kind === "busy" && <Message title="오늘 길드 검색 한도 다 씀" sub="넥슨 API 하루 한도 보호 → 내일 다시 · 개인 검색은 그대로 됨" />}
@@ -418,7 +458,7 @@ export function GuildCheck({ name, view }: { name: string; view: GuildView }) {
       </div>
 
       <div className="flex flex-col gap-1 text-xs leading-relaxed text-muted-foreground">
-        <span className="break-keep">확인하는 것: 직업 0차 · 공격 버프 · 연합의 의지 · 여제의 축복 · 정령의 축복 · 하이퍼 패시브 · 보약(이벤트 중) → 나머지는 이름을 누르면 개인 탭에서</span>
+        <span className="break-keep">확인하는 것: 0차 스킬(이벤트 중엔 보약도) · 연합의 의지 · 여제의 축복 · 하이퍼 패시브 · 링크 · 펫 버프 → 나머지는 이름을 누르면 개인 탭에서</span>
         <span>Data based on NEXON Open API</span>
       </div>
     </div>

@@ -848,16 +848,31 @@ test("guild view: a member's skill lines are exactly the character check's skill
     ["호영", [{ skill_name: "여제의 축복", skill_level: 18 }, { skill_name: "괴이봉인", skill_level: 4 }, { skill_name: "익스클루시브 스펠", skill_level: 1 }]],
   ] as const) {
     const raw = base();
+    const rule = SPEC_DATA.classes[cls];
     raw.basic = { ...raw.basic, character_class: cls };
     raw.skill0 = { character_skill: skills.map((s) => ({ ...s })) };
-    raw.hyperPassive = { character_skill: SPEC_DATA.classes[cls].hyperPassive.map((n) => ({ skill_name: n, skill_level: 1 })) };
+    raw.hyperPassive = { character_skill: rule.hyperPassive.map((n) => ({ skill_name: n, skill_level: 1 })) };
+    // the class's own standard links and pet buffs, all in place
+    raw.link = { character_link_skill_preset_1: rule.link.map((n) => ({ skill_name: n, skill_level: 2 })) };
+    const buffs = [...new Set([...rule.petBuff, "쓸만한 홀리 심볼"])];
+    raw.pet = Object.fromEntries(
+      ["pet_1", "pet_2", "pet_3", "world_share_pet_1", "world_share_pet_2", "world_share_pet_3"].map((p, i) => [`${p}_auto_skill`, { skill_1: buffs[i * 2] ?? null, skill_2: buffs[i * 2 + 1] ?? null }]),
+    );
     cases.push({ raw });
   }
-  for (const { raw, ev = [] } of cases) assert.deepEqual(checkSkills(raw, SPEC_DATA, ev), skillLines(raw, ev));
-  // the guild check needs only basic + 0th-job + hyper passive, and finds the Evan's missing skill
+  // Night Lord with two standard links off its boss preset and a pet buff not registered (2026-11-20: the guild shows these too)
+  const nlLinks = base();
+  nlLinks.link.character_link_skill_preset_1 = (nlLinks.link.character_link_skill_preset_1 as { skill_name: string }[]).slice(2);
+  (nlLinks.pet.pet_1_auto_skill as { skill_1: string | null }).skill_1 = null;
+  cases.push({ raw: nlLinks });
+  for (const { raw, ev = [] } of cases) assert.deepEqual(checkSkills(raw, SPEC_DATA, ev, now), skillLines(raw, ev));
+  const nlLines = checkSkills(nlLinks, SPEC_DATA, [], now);
+  assert.ok(nlLines.some((m) => m.cat === "링크 스킬" && /2개 빠짐/.test(m.what)));
+  assert.ok(nlLines.some((m) => m.cat === "펫 버프" && /1개 빠짐/.test(m.what)));
+  // the guild check needs only basic · 0th-grade skills · hyper passives · links · pets, and finds the Evan's missing skill
   const evan = cases[2].raw;
-  const only = checkSkills({ basic: evan.basic, skill0: evan.skill0, hyperPassive: evan.hyperPassive });
+  const only = checkSkills({ basic: evan.basic, skill0: evan.skill0, hyperPassive: evan.hyperPassive, link: evan.link, pet: evan.pet }, SPEC_DATA, [], now);
   assert.deepEqual(only.map((m) => m.what), ["계승된 의지 안 배움"]);
   // easiest first: hyper passive (바로 됨) → quests → raising other characters
-  assert.deepEqual(checkSkills(nl, SPEC_DATA, ["아르고 호의 가호"]).map((m) => m.tier), ["now", "quest", "quest", "quest", "quest", "long"]);
+  assert.deepEqual(checkSkills(nl, SPEC_DATA, ["아르고 호의 가호"], now).map((m) => m.tier), ["now", "quest", "quest", "quest", "quest", "long"]);
 });

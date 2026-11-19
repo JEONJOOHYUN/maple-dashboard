@@ -1,8 +1,9 @@
 // 숨은 스펙업 · 길드 (user, 2026-11-19: "길드로도 검색되게" · "중요한 스킬들"). Server only.
 // Guild name → the guild of that name in every world → each member's skill lines (checkSkills: the very lines the
-// character view shows). Four calls a member (id · basic · 0th-job skills · hyper passives) through nexonGetBulk,
-// which keeps a search to 250 a second; a member's lines are cached 3 hours like a character, so a guild looked at
-// again costs nothing. Measured 2026-11-19: 1,078 members = 4,346 calls (the biggest guild seen), 366 = 1,468.
+// character view shows). Six calls a member (id · basic · 0th-grade skills · hyper passives · links · pets, the last
+// two since 2026-11-20) through nexonGetBulk, which keeps a search to 250 a second; a member's lines are cached 3 hours
+// like a character, so a guild looked at again costs nothing. Measured 2026-11-19 with four calls a member: 1,078
+// members = 4,346 calls (the biggest guild seen), 366 = 1,468.
 import "server-only";
 import { unstable_cache } from "next/cache";
 import { NexonError, nexonGet, nexonGetBulk, nexonOcid } from "@/lib/nexon/api";
@@ -54,7 +55,7 @@ export function findGuilds(name: string): Promise<GuildHit[]> {
 }
 
 // Bump when a member's row changes shape, so rows cached in the old shape are not served.
-const ROW_VERSION = "3";
+const ROW_VERSION = "4";
 
 async function loadMember(name: string, eventSkills: string[]): Promise<MemberRow> {
   let ocid: string;
@@ -65,14 +66,16 @@ async function loadMember(name: string, eventSkills: string[]): Promise<MemberRo
     throw e;
   }
   const q = { ocid };
-  const [basic, skill0, hyperPassive] = await Promise.all([
+  const [basic, skill0, hyperPassive, link, pet] = await Promise.all([
     nexonGetBulk<SkillRaw["basic"] & { access_flag?: string }>("character/basic", q),
     nexonGetBulk<SkillRaw["skill0"]>("character/skill", { ...q, character_skill_grade: "0" }),
     nexonGetBulk<SkillRaw["hyperPassive"]>("character/skill", { ...q, character_skill_grade: "hyperpassive" }),
+    nexonGetBulk<SkillRaw["link"]>("character/link-skill", q),
+    nexonGetBulk<SkillRaw["pet"]>("character/pet-equipment", q),
   ]);
   // Never logged in since the API began (2023-12): empty fields, like the character view's "not found".
   if (!basic?.character_class) return { ok: false, name, reason: "notFound" };
-  const cells = checkSkills({ basic, skill0, hyperPassive }, SPEC_DATA, eventSkills)
+  const cells = checkSkills({ basic, skill0, hyperPassive, link: link ?? {}, pet: pet ?? {} }, SPEC_DATA, eventSkills)
     .map(cellOf)
     .filter((c): c is Cell => !!c);
   return {

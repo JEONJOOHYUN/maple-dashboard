@@ -75,7 +75,7 @@ function splitItems(text: string): string[] {
 const NBSP = "\u00a0";
 
 /** DetailLine's " · " list for any text: pieces break between them, and the dot ends a line, never starts one. */
-function Pieces({ text, className }: { text: string; className?: string }) {
+export function Pieces({ text, className }: { text: string; className?: string }) {
   // "보스에 안 쓰는 효과: A · B" — the label is a piece of its own, so a long first item does not drag it along.
   const cut = text.indexOf(": ");
   const label = cut > 0 && cut < 16 ? text.slice(0, cut + 1) : null;
@@ -105,7 +105,7 @@ function Pieces({ text, className }: { text: string; className?: string }) {
 }
 
 /** A title like "24포인트 남음 (1번 프리셋)" or "여제의 축복 24 / 30": the bracket and the "a / b" each keep together. */
-const whatText = (what: string) =>
+export const whatText = (what: string) =>
   what
     .replace(/\([^)]*\)/g, (m) => m.replaceAll(" ", NBSP))
     .replace(/(\d+) \/ (\d+)/g, `$1${NBSP}/${NBSP}$2`)

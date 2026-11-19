@@ -379,23 +379,28 @@ export function bossPresets(raw: SpecRaw, rule: ClassRule | undefined) {
     const lv = (t: string) => stats.find((s) => s.stat_type === t)?.stat_level ?? 0;
     return { i, s: [lv("보스 몬스터 공격 시 데미지 증가") + lv("방어율 무시") + lv("데미지")] };
   });
+  const abilityScores = [1, 2, 3].flatMap((i) => {
+    const lines = preset<{ ability_info?: AbilityLine[] }>(raw.ability, "ability_preset_", i)?.ability_info ?? [];
+    return lines.length ? [{ i, s: abilityScore(lines, rule?.ability) }] : [];
+  });
+  return { eq: pickBest(eqScores), hyper: pickBest(hyperScores), link: linkPreset(raw, rule), ability: pickBest(abilityScores) };
+}
+
+/** The boss link preset: the one with the most of the class's standard links (then the most links). Needs only links. */
+function linkPreset(raw: Pick<SpecRaw, "link">, rule: ClassRule | undefined): number | null {
   const std = new Set(rule?.link ?? []);
   const linkScores = [1, 2, 3].flatMap((i) => {
     const skills = preset<Skill[]>(raw.link, "character_link_skill_preset_", i) ?? [];
     return skills.length ? [{ i, s: [skills.filter((s) => std.has(s.skill_name)).length, skills.length] }] : [];
   });
-  const abilityScores = [1, 2, 3].flatMap((i) => {
-    const lines = preset<{ ability_info?: AbilityLine[] }>(raw.ability, "ability_preset_", i)?.ability_info ?? [];
-    return lines.length ? [{ i, s: abilityScore(lines, rule?.ability) }] : [];
-  });
-  return { eq: pickBest(eqScores), hyper: pickBest(hyperScores), link: pickBest(linkScores), ability: pickBest(abilityScores) };
+  return pickBest(linkScores);
 }
 
 // ---------- skills (the character check and the guild view share these) ----------
-/** What the skill checks read: the guild view fetches only these for each member (lib/spec/guild.ts). */
-export type SkillRaw = Pick<SpecRaw, "basic" | "skill0" | "hyperPassive">;
-/** Categories of the skill lines: what the guild view shows of a member. */
-export const SKILL_CATS = ["직업 0차 스킬", "공용 스킬", "보약", "하이퍼 패시브"] as const;
+/** What the guild checks read: the guild view fetches only these for each member (lib/spec/guild.ts). */
+export type SkillRaw = Pick<SpecRaw, "basic" | "skill0" | "hyperPassive" | "link" | "pet">;
+/** Categories of the lines checkSkills gives: what the guild view can show of a member. */
+export const SKILL_CATS = ["직업 0차 스킬", "공용 스킬", "보약", "하이퍼 패시브", "펫 버프", "링크 스킬"] as const;
 
 // How to fill each one (user, 2026-11-17). 여제의 축복 goes to 24 by raising Cygnus / Mihile characters and from
 // there to 30 only through their 고귀한 정신 (NEXON's skill text), so the hint changes at 24.
@@ -455,15 +460,88 @@ function hyperPassiveMiss(raw: SkillRaw, rule: ClassRule): Miss | null {
   return m;
 }
 
+type PetPlace = { name: string; over: boolean; geared: boolean; icon: string | null };
+
 /**
- * A guild member's check (user, 2026-11-19: "중요한 스킬들"): the skill lines of checkSpec — the same lines, from the
- * same functions, so a member reads the same here and in the character view — easiest first.
+ * Pets by place (1 ~ 3). The API sends the world's shared pets as a second copy of the same places (pet_1 =
+ * world_share_pet_1: 10 of 10 characters on 2026-11-18), so one place = one pet; two pets of the same name in two
+ * places are still two pets (review 2026-11-18 — they were merged by name before).
  */
-export function checkSkills(raw: SkillRaw, data: Data = SPEC_DATA, eventSkills: readonly string[] = []): Miss[] {
-  const rule = data.classes[raw.basic.character_class];
+function petPlacesOf(raw: Pick<SpecRaw, "pet">, now: Date): PetPlace[] {
+  return [1, 2, 3].flatMap((i) => {
+    const copies = ["pet", "world_share_pet"].filter((prefix) => {
+      const name = raw.pet[`${prefix}_${i}_name`];
+      return typeof name === "string" && !!name;
+    });
+    if (!copies.length) return [];
+    const name = raw.pet[`${copies[0]}_${i}_name`] as string;
+    // A place is over only when every copy of it is over; geared when either copy wears something.
+    const over = copies.every((prefix) => {
+      const at = raw.pet[`${prefix}_${i}_date_expire`];
+      return typeof at === "string" && !!at && daysTo(at, now) < 0;
+    });
+    const geared = copies.some((prefix) => !!(raw.pet[`${prefix}_${i}_equipment`] as { item_name?: string | null } | null | undefined)?.item_name);
+    const icon = copies.map((prefix) => apiIcon(raw.pet[`${prefix}_${i}_icon`])).find(Boolean) ?? null;
+    return [{ name, over, geared, icon }];
+  });
+}
+
+/** Pet buffs the class's top characters nearly all register (own pets + the world's shared pets) that are missing. */
+function petBuffMiss(raw: Pick<SpecRaw, "pet">, rule: ClassRule, cls: string, places: PetPlace[]): Miss | null {
+  const auto = [1, 2, 3].flatMap((i) =>
+    [`pet_${i}_auto_skill`, `world_share_pet_${i}_auto_skill`].flatMap((k) => {
+      const a = raw.pet[k] as AutoSkill;
+      return a ? [a.skill_1, a.skill_2] : [];
+    }),
+  );
+  const petSet = new Set(auto.filter((x): x is string => !!x));
+  // 쓸만한 홀리 심볼 is asked of every class but 비숍, which has its own 홀리 심볼 (user, 2026-11-17).
+  const petStd = cls === HOLY_SYMBOL_CLASS || rule.petBuff.includes(DECENT_HOLY_SYMBOL) ? rule.petBuff : [...rule.petBuff, DECENT_HOLY_SYMBOL];
+  const petMiss = petStd.filter((n) => !petSet.has(n));
+  if (!petMiss.length) return null;
+  // With every buff place of the pets taken, nothing can be added before another pet is (데몬10세기: one pet, both
+  // of its places used, four buffs missing). Unknown pet count → as before.
+  const live = places.filter((p) => !p.over);
+  const buffPlaces = Math.min(PET_SLOTS, live.length) * BUFFS_PER_PET;
+  const noPlace = places.length > 0 && petSet.size >= buffPlaces;
+  const m = miss(noPlace ? "long" : "now", "펫 버프", `대부분 등록하는 것 ${petMiss.length}개 빠짐${noPlace ? " · 넣을 자리 없음" : ""}`, list(petMiss));
+  m.key = SKILL_KEY.petBuff;
+  m.tiles = petMiss.map((n) => ({ name: n, sub: "빠짐", icon: tableIcon(n) }));
+  return m;
+}
+
+/**
+ * Standard links (the class's own link comes separately and is not in the list) missing from the boss link preset.
+ * All three presets empty → nothing equipped: every standard link counts as missing.
+ */
+function linkMissLine(raw: Pick<SpecRaw, "link">, rule: ClassRule, data: Data, presetNo: number | null): Miss | null {
+  const have = new Set((presetNo ? preset<Skill[]>(raw.link, "character_link_skill_preset_", presetNo) ?? [] : []).map((s) => s.skill_name));
+  const linkMiss = rule.link.filter((n) => !have.has(n));
+  if (!linkMiss.length) return null;
+  // With the class that gives it (user, 2026-11-17: "프라이어 프리퍼레이션 is 카인's").
+  const owner = (n: string) => (data.linkOwners?.[n] ? `${n} (${data.linkOwners[n]})` : n);
+  const m = miss("now", "링크 스킬", presetNo ? `대부분 끼는 것 ${linkMiss.length}개 빠짐 (${presetNo}번 프리셋)` : "미장착", list(linkMiss.map(owner)));
+  m.key = SKILL_KEY.link;
+  m.tiles = linkMiss.map((n) => ({ name: n, sub: data.linkOwners?.[n], icon: tableIcon(n) }));
+  return m;
+}
+
+/**
+ * A guild member's check (user, 2026-11-19: "중요한 스킬들", 2026-11-20 + 펫 버프 · 링크): lines of checkSpec — the
+ * same lines, from the same functions, so a member reads the same here and in the character view — easiest first.
+ */
+export function checkSkills(raw: SkillRaw, data: Data = SPEC_DATA, eventSkills: readonly string[] = [], now: Date = new Date()): Miss[] {
+  const cls = raw.basic.character_class;
+  const rule = data.classes[cls];
   const out = zeroSkillMisses(raw, rule, data, eventSkills);
-  const hp = rule ? hyperPassiveMiss(raw, rule) : null;
-  if (hp) out.push(hp);
+  if (rule) {
+    for (const line of [
+      hyperPassiveMiss(raw, rule),
+      petBuffMiss(raw, rule, cls, petPlacesOf(raw, now)),
+      linkMissLine(raw, rule, data, linkPreset(raw, rule)),
+    ])
+      if (line) out.push(line);
+  }
   return out.sort(byTier);
 }
 
@@ -593,25 +671,7 @@ export function checkSpec(raw: SpecRaw, now: Date = new Date(), data: Data = SPE
   const petsOver = periods.filter((p) => p.kind === "pet" && p.days < 0);
   if (petsOver.length) add("urgent", "펫", `기간 만료 ${petsOver.length}마리`, list(petsOver.map((p) => p.name)));
 
-  // Pets by place (1 ~ 3). The API sends the world's shared pets as a second copy of the same places (pet_1 =
-  // world_share_pet_1: 10 of 10 characters on 2026-11-18), so one place = one pet; two pets of the same name in two
-  // places are still two pets (review 2026-11-18 — they were merged by name before).
-  const petPlaces = [1, 2, 3].flatMap((i) => {
-    const copies = ["pet", "world_share_pet"].filter((prefix) => {
-      const name = raw.pet[`${prefix}_${i}_name`];
-      return typeof name === "string" && !!name;
-    });
-    if (!copies.length) return [];
-    const name = raw.pet[`${copies[0]}_${i}_name`] as string;
-    // A place is over only when every copy of it is over; geared when either copy wears something.
-    const over = copies.every((prefix) => {
-      const at = raw.pet[`${prefix}_${i}_date_expire`];
-      return typeof at === "string" && !!at && daysTo(at, now) < 0;
-    });
-    const geared = copies.some((prefix) => !!(raw.pet[`${prefix}_${i}_equipment`] as { item_name?: string | null } | null | undefined)?.item_name);
-    const icon = copies.map((prefix) => apiIcon(raw.pet[`${prefix}_${i}_icon`])).find(Boolean) ?? null;
-    return [{ name, over, geared, icon }];
-  });
+  const petPlaces = petPlacesOf(raw, now);
   // Pets wearing no pet gear (new, user 2026-11-17); pets already over cannot wear anything (the line above has them).
   const livePets = petPlaces.filter((p) => !p.over);
   // Fewer than three pets (user, 2026-11-17: "펫 1마리면 2마리 빠진 거"). A pet that is over still takes its place and
@@ -709,40 +769,11 @@ export function checkSpec(raw: SpecRaw, now: Date = new Date(), data: Data = SPE
     const hp = hyperPassiveMiss(raw, rule);
     if (hp) misses.push(hp);
 
-    // pet buffs (own pets + world shared pets)
-    const auto = [1, 2, 3].flatMap((i) =>
-      [`pet_${i}_auto_skill`, `world_share_pet_${i}_auto_skill`].flatMap((k) => {
-        const a = raw.pet[k] as AutoSkill;
-        return a ? [a.skill_1, a.skill_2] : [];
-      }),
-    );
-    const petSet = new Set(auto.filter((x): x is string => !!x));
-    // 쓸만한 홀리 심볼 is asked of every class but 비숍, which has its own 홀리 심볼 (user, 2026-11-17).
-    const petStd = cls === HOLY_SYMBOL_CLASS || rule.petBuff.includes(DECENT_HOLY_SYMBOL) ? rule.petBuff : [...rule.petBuff, DECENT_HOLY_SYMBOL];
-    const petMiss = petStd.filter((n) => !petSet.has(n));
-    // With every buff place of the pets taken, nothing can be added before another pet is (데몬10세기: one pet, both
-    // of its places used, four buffs missing). Unknown pet count → as before.
-    const buffPlaces = Math.min(PET_SLOTS, livePets.length) * BUFFS_PER_PET;
-    const noPlace = petPlaces.length > 0 && petSet.size >= buffPlaces;
-    if (petMiss.length)
-      add(noPlace ? "long" : "now", "펫 버프", `대부분 등록하는 것 ${petMiss.length}개 빠짐${noPlace ? " · 넣을 자리 없음" : ""}`, list(petMiss)).tiles = petMiss.map((n) => ({
-        name: n,
-        sub: "빠짐",
-        icon: tableIcon(n),
-      }));
-
-    // links (boss preset; the class's own link comes separately and is not in the standard list)
-    // All three presets empty → nothing equipped: every standard link counts as missing.
-    const have = new Set((presets.link ? preset<Skill[]>(raw.link, "character_link_skill_preset_", presets.link) ?? [] : []).map((s) => s.skill_name));
-    const linkMiss = rule.link.filter((n) => !have.has(n));
-    // With the class that gives it (user, 2026-11-17: "프라이어 프리퍼레이션 is 카인's").
-    const owner = (n: string) => (data.linkOwners?.[n] ? `${n} (${data.linkOwners[n]})` : n);
-    if (linkMiss.length)
-      add("now", "링크 스킬", presets.link ? `대부분 끼는 것 ${linkMiss.length}개 빠짐 (${presets.link}번 프리셋)` : "미장착", list(linkMiss.map(owner))).tiles = linkMiss.map((n) => ({
-        name: n,
-        sub: data.linkOwners?.[n],
-        icon: tableIcon(n),
-      }));
+    // pet buffs (own pets + world shared pets) · links (boss preset): the guild view shares these lines
+    const pets = petBuffMiss(raw, rule, cls, petPlaces);
+    if (pets) misses.push(pets);
+    const links = linkMissLine(raw, rule, data, presets.link);
+    if (links) misses.push(links);
 
     if (presets.ability) {
       const lines = preset<{ ability_info?: AbilityLine[] }>(raw.ability, "ability_preset_", presets.ability)?.ability_info ?? [];

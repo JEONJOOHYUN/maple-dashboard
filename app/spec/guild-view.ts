@@ -3,17 +3,16 @@ import "server-only";
 import type { GuildInfo, GuildView } from "@/components/spec/guild-check";
 import { NexonError } from "@/lib/nexon/api";
 import { allowAttempt, clientIp } from "@/lib/rate-limit";
-import { SPEC_DATA } from "@/lib/spec/check";
 import { checkMembers, findGuilds, type GuildHit } from "@/lib/spec/guild";
-import { MAX_GUILD_NAME, guildColumns } from "@/lib/spec/guild-table";
+import { MAX_GUILD_NAME } from "@/lib/spec/guild-table";
 import { currentEventSkills } from "@/lib/spec/load";
 
 // A visitor's guild searches (a world list or a guild, cached or not), counted per address.
 const SEARCHES_PER_HOUR = 30;
-// The whole site's guild checks a day, in NEXON calls (4 a member, counted even when the members come from the
+// The whole site's guild checks a day, in NEXON calls (6 a member, counted even when the members come from the
 // cache): half of what NEXON allows our key a day (20,000,000, official guide 2026-11-20), so a run of guild
 // searches can never take the 개인 tab and the other tools down with it.
-const CALLS_PER_MEMBER = 4;
+const CALLS_PER_MEMBER = 6;
 const GUILD_CALLS_PER_DAY = 10_000_000;
 
 /** What the page gets of a guild: everything but the member list (sent as checked rows instead). */
@@ -36,7 +35,6 @@ export async function guildView(name: string, world: string): Promise<GuildView>
     return {
       kind: "guild",
       guild: info(hit),
-      cols: guildColumns(SPEC_DATA.common.skills0.map((s) => s.name), eventSkills.length > 0),
       pieces: checkMembers(hit.members, eventSkills),
       others: hits.length - 1,
     };
