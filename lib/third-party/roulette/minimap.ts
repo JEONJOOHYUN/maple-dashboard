@@ -197,17 +197,27 @@ export class Minimap implements UIObject {
     this.ctx.restore();
   }
 
-  private drawMarbles(params: RenderParameters) {
-    const { marbles } = params;
-    const viewPort = {
-      x: params.camera.x,
-      y: params.camera.y,
-      w: params.size.x,
-      h: params.size.y,
-      zoom: params.camera.zoom * initialZoom,
-    };
-    marbles.forEach((marble) => {
-      marble.render(this.ctx, 1, false, true, undefined, viewPort, params.theme);
-    });
+  /**
+   * Every marble as a dot, one path per colour (user, 2026-11-19: hundreds of marbles — "이름*100"). Drawn one by one,
+   * each marble cost two transform calls, a path and a fill every frame.
+   */
+  private drawMarbles({ marbles }: RenderParameters) {
+    const byColor = new Map<string, { x: number; y: number; r: number }[]>();
+    for (const marble of marbles) {
+      const { x, y } = marble.lastPositionOrRead();
+      const dot = { x, y, r: marble.size };
+      const dots = byColor.get(marble.color);
+      if (dots) dots.push(dot);
+      else byColor.set(marble.color, [dot]);
+    }
+    for (const [color, dots] of byColor) {
+      this.ctx.fillStyle = color;
+      this.ctx.beginPath();
+      for (const d of dots) {
+        this.ctx.moveTo(d.x + d.r, d.y);
+        this.ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+      }
+      this.ctx.fill();
+    }
   }
 }

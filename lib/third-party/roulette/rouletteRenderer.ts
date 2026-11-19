@@ -3,7 +3,7 @@
 import type { Camera } from './camera';
 import { canvasHeight, canvasWidth, initialZoom, Themes, winnerAreaHeight } from './constants';
 import type { GameObject } from './gameObject';
-import type { Marble } from './marble';
+import { drawMarbles, type Marble } from './marble';
 import type { WinnerRange } from './options';
 import type { ParticleManager } from './particleManager';
 import type { StageDef } from './stage';
@@ -182,9 +182,8 @@ export class RouletteRenderer {
     const firstIndex = winnerRange.start - winners.length;
     const lastIndex = winnerRange.end - winners.length;
     const viewPort = { x: camera.x, y: camera.y, w: size.x, h: size.y, zoom: camera.zoom * initialZoom };
-    marbles.forEach((marble, i) => {
-      marble.render(this.ctx, camera.zoom * initialZoom, i >= firstIndex && i <= lastIndex, false, marble.skin ?? undefined, viewPort, this._theme);
-    });
+    // All marbles in one pass (bodies by colour, names as stamps): see drawMarbles.
+    drawMarbles(this.ctx, marbles, camera.zoom * initialZoom, viewPort, this._theme, firstIndex, lastIndex);
   }
 
   private renderWinner(winner: Marble, theme: ColorTheme) {

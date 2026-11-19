@@ -18,6 +18,9 @@ export interface IPhysics {
 
   getMarblePosition(id: number): { x: number; y: number; angle: number };
 
+  /** getMarblePosition without the angle: one call less into the engine, for the per-step loop. */
+  getMarbleXY(id: number): { x: number; y: number };
+
   getEntities(): MapEntityState[];
 
   impact(id: number): void;

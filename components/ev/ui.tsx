@@ -150,6 +150,7 @@ export function NumberField({
   placeholder,
   className,
   inputClassName,
+  disabled,
 }: {
   value: string;
   onChange: (text: string) => void;
@@ -159,6 +160,7 @@ export function NumberField({
   placeholder?: string;
   className?: string;
   inputClassName?: string;
+  disabled?: boolean;
 }) {
   const ref = useRef<HTMLInputElement>(null);
   // Digits typed before the caret, waiting until the grouped text is on screen.
@@ -179,6 +181,7 @@ export function NumberField({
         ref={ref}
         aria-label={label}
         inputMode={decimal ? "decimal" : "numeric"}
+        disabled={disabled}
         value={groupDigits(String(value ?? ""))}
         placeholder={placeholder}
         onChange={(e) => {

@@ -140,6 +140,13 @@ export class Box2dPhysics implements IPhysics {
     }
   }
 
+  getMarbleXY(id: number): { x: number; y: number } {
+    const marble = this.marbleMap[id];
+    if (!marble) return { x: 0, y: 0 };
+    const pos = marble.GetPosition();
+    return { x: pos.x, y: pos.y };
+  }
+
   getEntities(): MapEntityState[] {
     return this.entities.map((entity) => {
       return {

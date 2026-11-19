@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 import { Map as MapIcon, Minus, Plus, RotateCcw, X } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
-import { Chip } from "@/components/ev/ui";
+import { Chip, NumberField, parseNum } from "@/components/ev/ui";
 import type { Roulette } from "@/lib/third-party/roulette/roulette";
 import { useStored } from "@/lib/use-stored";
 import { cn } from "@/lib/utils";
@@ -21,8 +21,36 @@ const DEFAULT_ENTRIES: Entry[] = [
   { name: "파티원 3", count: 1 },
 ];
 const MAX_PEOPLE = 30;
-const MAX_MARBLES = 10;
+// Marbles on the board, everyone together (user, 2026-11-19: "100개 이런식도", like the original's "이름*100").
+// One person may hold them all. The cap = the most that never slows down (user, 2026-11-20: "속도 안 늦어지는 선 안에
+// 맥시멈"), measured at a 60 Hz frame rate: a PC stays at 60 frames a second at every speed up to 550 (5x: 550 →
+// 58.5 ~ 59, 600 → 57.5), and a phone with a 4x slower CPU keeps 1x smooth there (about 70% busy).
+const MAX_TOTAL = 550;
 const SPEEDS = [1, 2, 3, 5];
+
+/** Digits typed → a marble count from 1 to `max`; nothing usable keeps `fallback`. */
+function countFrom(text: string, fallback: number, max: number): number {
+  const n = Math.floor(parseNum(text, NaN));
+  return Number.isFinite(n) ? Math.min(Math.max(1, n), Math.max(1, max)) : fallback;
+}
+
+/**
+ * What the browser kept, read as a list the board can take: whole counts from 1, at most MAX_PEOPLE people and
+ * MAX_TOTAL marbles together. A page from before a lower cap, or a hand-edited store, would otherwise line up any
+ * number of marbles. Names stay as they are (an empty one is a name being typed).
+ */
+function cleanEntries(raw: unknown): Entry[] {
+  if (!Array.isArray(raw)) return DEFAULT_ENTRIES;
+  const valid = raw.filter((e): e is Entry => !!e && typeof e === "object" && typeof (e as Entry).name === "string").slice(0, MAX_PEOPLE);
+  let total = 0;
+  return valid.map((e, i) => {
+    // Everyone after this one keeps a marble, so nobody drops out when the stored counts are too many.
+    const later = valid.length - i - 1;
+    const count = Math.min(Math.max(1, Math.floor(Number(e.count)) || 1), MAX_TOTAL - total - later);
+    total += count;
+    return { name: e.name, count };
+  });
+}
 
 type Snapshot = { finished: string[]; live: string[] };
 
@@ -30,13 +58,17 @@ export function PinballGame() {
   const { resolvedTheme } = useTheme();
   const dark = resolvedTheme !== "light";
   const palette = dark ? PAL_DARK : PAL_LIGHT;
-  const [entries, setEntries] = useStored<Entry[]>("pinball:entries", DEFAULT_ENTRIES);
+  const [stored, setEntries] = useStored<Entry[]>("pinball:entries", DEFAULT_ENTRIES);
+  // Edits go through this cleaned list (update(i) writes it back), so indexes always match what is shown.
+  const entries = useMemo(() => cleanEntries(stored), [stored]);
   const [rule, setRule] = useState<Rule>("first");
   const [speed, setSpeed] = useState(1);
   // The map of the course on the board: open unless it was closed in this browser.
   const [mapOpen, setMapOpen] = useStored<boolean>("pinball:map", true);
   const [open, setOpen] = useState(-1);
   const [nameDraft, setNameDraft] = useState("");
+  // The open chip's marble count as typed; it becomes the count on Enter or when the box is left.
+  const [countDraft, setCountDraft] = useState("");
   const [draft, setDraft] = useState("");
   const [status, setStatus] = useState<"loading" | "ready" | "running" | "done" | "error">("loading");
   const [snap, setSnap] = useState<Snapshot>({ finished: [], live: [] });
@@ -158,7 +190,17 @@ export function PinballGame() {
   const totalMarbles = people.reduce((s, p) => s + p.count, 0);
 
   function update(i: number, patch: Partial<Entry>) {
-    setEntries((prev) => prev.map((e, k) => (k === i ? { ...e, ...patch } : e)));
+    setEntries((prev) => cleanEntries(prev).map((e, k) => (k === i ? { ...e, ...patch } : e)));
+  }
+  /** The most marbles person `i` may hold: what everyone else leaves of MAX_TOTAL. */
+  const roomFor = (i: number) => MAX_TOTAL - entries.reduce((s, e, k) => (k === i ? s : s + e.count), 0);
+  /** Save the typed count (1 ~ the room left); text that is not a number keeps the old count. */
+  function setCount(i: number, text: string) {
+    const e = entries[i];
+    if (!e) return;
+    const count = countFrom(text, e.count, roomFor(i));
+    setCountDraft(String(count));
+    if (count !== e.count) update(i, { count });
   }
   /** Save the edited name; an empty name or one another person already has keeps the old name. */
   function rename(i: number) {
@@ -178,13 +220,16 @@ export function PinballGame() {
       .filter(Boolean);
     if (!names.length) return;
     setEntries((prev) => {
-      const next = [...prev];
+      const next = cleanEntries(prev);
+      let total = next.reduce((s, e) => s + e.count, 0);
       for (const raw of names) {
-        // "이름*3" = three marbles, like the original.
+        // "이름*3" = three marbles, like the original; a count past the room left is cut to it.
         const m = raw.match(/^(.*?)\s*\*\s*(\d+)$/);
         const name = (m ? m[1] : raw).slice(0, 12);
-        const count = m ? Math.min(MAX_MARBLES, Math.max(1, Number(m[2]))) : 1;
-        if (name && !next.some((e) => e.name.trim() === name) && next.length < MAX_PEOPLE) next.push({ name, count });
+        if (!name || next.some((e) => e.name.trim() === name) || next.length >= MAX_PEOPLE || total >= MAX_TOTAL) continue;
+        const count = m ? countFrom(m[2], 1, MAX_TOTAL - total) : 1;
+        next.push({ name, count });
+        total += count;
       }
       return next;
     });
@@ -192,6 +237,8 @@ export function PinballGame() {
   }
 
   const running = status === "running";
+  // Every marble place taken: nobody more can come in (each person needs one), so adding is closed.
+  const full = entries.reduce((s, e) => s + e.count, 0) >= MAX_TOTAL;
 
   return (
     <div className="flex flex-col gap-4 lg:gap-5">
@@ -206,7 +253,8 @@ export function PinballGame() {
           <section className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <b className="text-[15px]">
-                참가자 {people.length}명 · 구슬 {totalMarbles}개
+                참가자 {people.length}명 · 구슬 {totalMarbles.toLocaleString("ko-KR")}개
+                {full && <span className="text-primary-text"> · 최대</span>}
               </b>
               <span className="text-xs text-muted-foreground">이름 누르면 이름 · 구슬 수 수정</span>
             </div>
@@ -230,18 +278,35 @@ export function PinballGame() {
                       }}
                       className="h-7 w-20 min-w-0 rounded-md border border-primary/40 bg-card px-1.5 text-[13px] font-bold outline-none focus:border-primary"
                     />
-                    <button type="button" disabled={running} onClick={() => update(i, { count: Math.max(1, e.count - 1) })} aria-label={`${e.name} 구슬 하나 빼기`} className="flex size-7 items-center justify-center rounded-full hover:bg-card disabled:opacity-40">
+                    <button type="button" disabled={running || e.count <= 1} onClick={() => setCount(i, String(e.count - 1))} aria-label={`${e.name} 구슬 하나 빼기`} className="flex size-7 items-center justify-center rounded-full hover:bg-card disabled:opacity-40">
                       <Minus className="size-3.5" aria-hidden="true" />
                     </button>
-                    <b className="w-6 text-center font-num">×{e.count}</b>
-                    <button type="button" disabled={running} onClick={() => update(i, { count: Math.min(MAX_MARBLES, e.count + 1) })} aria-label={`${e.name} 구슬 하나 더하기`} className="flex size-7 items-center justify-center rounded-full hover:bg-card disabled:opacity-40">
+                    {/* Typed straight in (user, 2026-11-19), saved on Enter or when the box is left. */}
+                    <span
+                      onBlur={() => setCount(i, countDraft)}
+                      onKeyDown={(ev) => {
+                        if (ev.key === "Enter" && !ev.nativeEvent.isComposing) {
+                          setCount(i, countDraft);
+                          setOpen(-1);
+                        }
+                      }}
+                    >
+                      <NumberField
+                        label={`${e.name} 구슬 수`}
+                        value={countDraft}
+                        onChange={setCountDraft}
+                        disabled={running}
+                        inputClassName="h-7 w-14 border-primary/40 bg-card px-1 text-center text-[13px] font-bold disabled:opacity-40"
+                      />
+                    </span>
+                    <button type="button" disabled={running || e.count >= roomFor(i)} onClick={() => setCount(i, String(e.count + 1))} aria-label={`${e.name} 구슬 하나 더하기`} className="flex size-7 items-center justify-center rounded-full hover:bg-card disabled:opacity-40">
                       <Plus className="size-3.5" aria-hidden="true" />
                     </button>
                     <button
                       type="button"
                       disabled={running}
                       onClick={() => {
-                        setEntries((prev) => prev.filter((_, k) => k !== i));
+                        setEntries((prev) => cleanEntries(prev).filter((_, k) => k !== i));
                         setOpen(-1);
                       }}
                       aria-label={`${e.name} 빼기`}
@@ -257,12 +322,13 @@ export function PinballGame() {
                     onClick={() => {
                       setOpen(i);
                       setNameDraft(e.name);
+                      setCountDraft(String(e.count));
                     }}
                     className="inline-flex h-9 items-center gap-1.5 rounded-full border border-border px-3 text-[13px] hover:border-primary/60"
                   >
                     <span aria-hidden="true" className="size-3.5 shrink-0 rounded-full" style={{ background: colorFor(e.name) }} />
                     <span className="max-w-24 truncate">{e.name}</span>
-                    <span className={cn("font-num text-xs", e.count > 1 ? "font-bold text-primary-text" : "text-muted-foreground")}>×{e.count}</span>
+                    <span className={cn("font-num text-xs", e.count > 1 ? "font-bold text-primary-text" : "text-muted-foreground")}>×{e.count.toLocaleString("ko-KR")}</span>
                   </button>
                 )
               )}
@@ -274,12 +340,12 @@ export function PinballGame() {
                 disabled={running}
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.nativeEvent.isComposing) addDraft();
+                  if (e.key === "Enter" && !e.nativeEvent.isComposing && !full) addDraft();
                 }}
-                placeholder="이름 추가 (쉼표로 여러 명)"
+                placeholder={full ? `구슬 최대 ${MAX_TOTAL}개` : "이름 추가 (쉼표로 여러 명, 이름*3)"}
                 className="h-10 min-w-0 flex-1 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-ring focus:ring-3 focus:ring-ring/40"
               />
-              <button type="button" onClick={addDraft} disabled={running} className="h-10 rounded-lg border border-border px-4 text-[13px] font-semibold disabled:opacity-50">
+              <button type="button" onClick={addDraft} disabled={running || full} className="h-10 rounded-lg border border-border px-4 text-[13px] font-semibold disabled:opacity-50">
                 추가
               </button>
             </div>

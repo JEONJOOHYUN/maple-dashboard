@@ -39,6 +39,12 @@ const REST_AFTER_MS = 2000;
  * about a tenth of a CPU core).
  */
 const IDLE_REST_MS = 15000;
+/**
+ * Physics allowed in one frame (real ms). Many marbles at 5x on a slow phone cannot step five times as fast as the
+ * clock, and trying (more steps, longer frames, still more steps owed) fell to a few frames a second (2026-11-20). What
+ * does not fit is let go: there the race runs as fast as the device can, and the board keeps moving smoothly.
+ */
+const STEP_BUDGET_MS = 10;
 
 export type PinballMember = { name: string; count: number; color: string; /** Picture URL for this person's marbles. */ skin?: string };
 
@@ -144,6 +150,7 @@ export class Roulette extends EventTarget {
     const timeScale = this._timeScale;
     const interval = (this._updateInterval / 1000) * timeScale;
     let simSeconds = 0;
+    const stepsUntil = performance.now() + STEP_BUDGET_MS;
     while (this._elapsed >= this._updateInterval) {
       simSeconds += interval;
       this.physics.step(interval);
@@ -152,6 +159,11 @@ export class Roulette extends EventTarget {
       this._updateEffects(this._updateInterval);
       this._elapsed -= this._updateInterval;
       this._uiObjects.forEach((obj) => obj.update(this._updateInterval));
+      // Out of this frame's physics time: let the rest go instead of owing it to the next frame.
+      if (this._elapsed >= this._updateInterval && performance.now() > stepsUntil) {
+        this._elapsed %= this._updateInterval;
+        break;
+      }
     }
 
     if (this._marbles.length > 1) this._sortMarbles(simSeconds);
@@ -221,7 +233,8 @@ export class Roulette extends EventTarget {
     const alpha = 1 - Math.exp(-dt / RANK_EMA_SEC);
     const keys = new Map<Marble, number>();
     for (const m of this._marbles) {
-      const raw = map.distanceAt(m.x, m.y);
+      const { x, y } = m.lastPositionOrRead();
+      const raw = map.distanceAt(x, y);
       const prev = this._rankKeys.get(m);
       if (prev !== undefined) known++;
       keys.set(m, prev !== undefined ? prev + (raw - prev) * alpha : raw);
@@ -245,6 +258,7 @@ export class Roulette extends EventTarget {
   }
 
   private _updateMarbles(deltaTime: number, timeScale: number) {
+    let finished = false;
     for (let i = 0; i < this._marbles.length; i++) {
       const marble = this._marbles[i];
       marble.update(deltaTime, timeScale);
@@ -252,7 +266,9 @@ export class Roulette extends EventTarget {
         this._effects.push(new SkillEffect(marble.x, marble.y));
         this.physics.impact(marble.id);
       }
-      if (marble.y > this._stage.goalY) {
+      // Where update() just found it: nothing moves in between, and each fresh read asks the physics engine again.
+      if (marble.lastPosition.y > this._stage.goalY) {
+        finished = true;
         this._winners.push(marble);
         this.dispatchEvent(new CustomEvent('finish', { detail: { name: marble.name, rank: this._winners.length } }));
         if (this._isRunning && this._isWinningRank(this._winners.length - 1)) {
@@ -273,7 +289,7 @@ export class Roulette extends EventTarget {
     this._goalDist = Math.abs(stage.zoomY - (focus ? focus.y : 0));
     this._zoomIntensity = zones ? (focus ? intensityOf(focus) : 0) : null;
     this._timeScale = this._calcTimeScale();
-    this._marbles = this._marbles.filter((marble) => marble.y <= this._stage.goalY);
+    if (finished) this._marbles = this._marbles.filter((marble) => marble.lastPosition.y <= this._stage.goalY);
     this._checkFinish();
   }
 
