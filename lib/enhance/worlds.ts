@@ -9,8 +9,11 @@ export type WorldGroup = "regular" | "challengers" | "event";
 export const WORLD_GROUPS: WorldGroup[] = ["regular", "challengers", "event"];
 export const GROUP_LABEL: Record<WorldGroup, string> = { regular: "일반", challengers: "챌린저스 · 버닝", event: "이벤트" };
 
-/** The regular worlds (에오스 · 헬리오스 = the former 리부트 worlds). A name that is not here and not seasonal is an event world. */
-const REGULAR = new Set(["스카니아", "베라", "루나", "제니스", "크로아", "유니온", "엘리시움", "이노시스", "레드", "오로라", "아케인", "노바", "에오스", "헬리오스"]);
+/**
+ * The regular worlds (에오스 · 핼리오스 = the former 리부트 worlds; NEXON spells it 핼리오스 — its ranking page and the API,
+ * which refuses 헬리오스, 2026-11-20). A name that is not here and not seasonal is an event world.
+ */
+const REGULAR = new Set(["스카니아", "베라", "루나", "제니스", "크로아", "유니온", "엘리시움", "이노시스", "레드", "오로라", "아케인", "노바", "에오스", "핼리오스"]);
 
 /** An unknown world ("") counts as regular: nothing says the character is a seasonal or event one. */
 export function worldGroup(world: string): WorldGroup {

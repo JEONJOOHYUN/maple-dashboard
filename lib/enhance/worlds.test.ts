@@ -4,7 +4,7 @@ import { characterIdsOf, characterWorldsOf } from "./client.ts";
 import { groupTallies, worldAt, worldGroup, worldRuns } from "./worlds.ts";
 
 test("worlds fall into three groups", () => {
-  assert.deepEqual(["엘리시움", "스카니아", "에오스", ""].map(worldGroup), ["regular", "regular", "regular", "regular"]);
+  assert.deepEqual(["엘리시움", "스카니아", "에오스", "핼리오스", ""].map(worldGroup), ["regular", "regular", "regular", "regular", "regular"]);
   // 챌린저스 and 버닝 together (user, 2026-11-12), whatever the season number.
   assert.deepEqual(["챌린저스", "챌린저스3", "버닝", "버닝2"].map(worldGroup), ["challengers", "challengers", "challengers", "challengers"]);
   // Anything else is an event world.
