@@ -6,8 +6,8 @@ import { SPEC_DATA, checkSpec, type SpecRaw, type SpecResult } from "@/lib/spec/
 import { eventSkillNames, type EventNotice } from "@/lib/spec/event-skill";
 
 export const SPEC_CACHE_SECONDS = 3 * 60 * 60;
-// Bump when check.ts rules change so cached results from older rules are not served.
-const RULES_VERSION = "16";
+// Bump when check.ts rules change so cached results from older rules are not served (the guild view's too).
+export const RULES_VERSION = "16";
 
 /** One tag per nickname, so "다시 조회" drops only that character's saved result. */
 export const specTag = (name: string) => `spec-check:${name.trim()}`;
@@ -57,11 +57,15 @@ const eventNotices = unstable_cache(
   { revalidate: 60 * 60 }
 );
 
+/** The running event's skills ("보약"). Without the notices the event skill is simply not asked for. */
+export async function currentEventSkills(): Promise<string[]> {
+  return eventSkillNames(await eventNotices().catch(() => []), Date.now());
+}
+
 /** Errors (quota, network) are thrown, so they are not cached; "not found" is cached like a result. */
 export async function getSpec(name: string): Promise<Loaded> {
   const key = name.trim();
-  // Without the notices the event skill is simply not asked for: the rest of the check does not wait on them.
-  const eventSkills = eventSkillNames(await eventNotices().catch(() => []), Date.now());
+  const eventSkills = await currentEventSkills();
   return unstable_cache(() => load(key, eventSkills), ["spec-check", RULES_VERSION, SPEC_DATA.updated, eventSkills.join("|"), key], {
     revalidate: SPEC_CACHE_SECONDS,
     tags: ["spec-check", specTag(key)],

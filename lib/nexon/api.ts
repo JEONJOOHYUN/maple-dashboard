@@ -2,13 +2,20 @@
 // this module is imported only from server code (app/spec/page.tsx → lib/spec/load.ts).
 //
 // The key is a service-stage one (user, 2026-11-13): 500 calls a second, so request starts are not spaced.
-// A development-stage key (5 a second, 1,000 a day — what a local .env.local may still hold) refuses a burst: the
-// first refusal drops this server instance to the spaced pace for as long as it lives (2026-11-09 measured: seven
-// calls at once made some fail).
+// A development-stage key (5 a second, 1,000 a day) refuses a burst: a refusal drops this server instance to the
+// spaced pace for a minute (2026-11-09 measured: seven calls at once made some fail). It used to last for the
+// instance's whole life, which one busy second (a guild search) could set off for good (2026-11-19).
+//
+// Guild searches fire hundreds of calls (four a member, lib/spec/guild.ts): those go through nexonGetBulk, which keeps
+// this instance to BULK_PER_SEC starts a second so two searches at once stay under the key's 500, and waits out a
+// refusal on its own instead of slowing every other caller.
 
 const BASE = "https://open.api.nexon.com/maplestory/v1";
 const SLOW_GAP_MS = 220;
-let slow = false;
+const SLOW_FOR_MS = 60_000;
+let slowUntil = 0;
+const BULK_PER_SEC = 250;
+const BULK_RETRIES = 4;
 
 export type NexonErrorKind = "noKey" | "notFound" | "quota" | "failed";
 
@@ -33,7 +40,7 @@ let lastStart = 0;
 let queue: Promise<void> = Promise.resolve();
 function waitTurn(): Promise<void> {
   const turn = queue.then(async () => {
-    if (slow) {
+    if (Date.now() < slowUntil) {
       const wait = lastStart + SLOW_GAP_MS - Date.now();
       if (wait > 0) await sleep(wait);
     }
@@ -43,21 +50,50 @@ function waitTurn(): Promise<void> {
   return turn;
 }
 
-/** GET one endpoint, e.g. nexonGet("character/basic", { ocid }). A refusal (429) is retried twice, spaced, before giving up. */
-export async function nexonGet<T>(path: string, params: Record<string, string>): Promise<T> {
+// Bulk starts, one line of turns over a token bucket: BULK_PER_SEC a second on average, and at most BULK_BURST (a
+// tenth of a second's worth) together — so coarse timers (Windows ticks every ~15 ms) still reach the rate, and
+// timers that fire late (a busy server) cannot let a pile of starts out at once: any second holds at most
+// BULK_PER_SEC + BULK_BURST starts.
+const BULK_BURST = 25;
+let bulkTokens = BULK_BURST;
+let bulkRefilled = 0;
+let bulkQueue: Promise<void> = Promise.resolve();
+function bulkTurn(): Promise<void> {
+  const turn = bulkQueue.then(async () => {
+    for (;;) {
+      const now = Date.now();
+      bulkTokens = Math.min(BULK_BURST, bulkTokens + ((now - bulkRefilled) * BULK_PER_SEC) / 1000);
+      bulkRefilled = now;
+      if (bulkTokens >= 1) {
+        bulkTokens -= 1;
+        return;
+      }
+      await sleep(Math.ceil(((1 - bulkTokens) * 1000) / BULK_PER_SEC));
+    }
+  });
+  bulkQueue = turn;
+  return turn;
+}
+
+type Pace = { turn: () => Promise<void>; retries: number; refused: () => void };
+const NORMAL: Pace = { turn: waitTurn, retries: 2, refused: () => (slowUntil = Date.now() + SLOW_FOR_MS) };
+const BULK: Pace = { turn: bulkTurn, retries: BULK_RETRIES, refused: () => {} };
+
+async function request<T>(path: string, params: Record<string, string>, pace: Pace): Promise<T> {
   const key = process.env.NEXON_API_KEY;
   if (!key) throw new NexonError("noKey", "NEXON_API_KEY is not set");
   const url = `${BASE}/${path}?${new URLSearchParams(params)}`;
   for (let attempt = 0; ; attempt++) {
-    await waitTurn();
+    await pace.turn();
     const res = await fetch(url, { headers: { "x-nxopen-api-key": key }, cache: "no-store" });
     if (res.ok) return (await res.json()) as T;
     const body = (await res.json().catch(() => null)) as { error?: { name?: string; message?: string } } | null;
     const code = body?.error?.name ?? "";
     if (res.status === 429 || code === "OPENAPI00007") {
-      slow = true;
-      if (attempt < 2) {
-        await sleep(1100);
+      pace.refused();
+      if (attempt < pace.retries) {
+        // A little spread so the calls refused together do not all come back in the same millisecond.
+        await sleep(1100 + Math.random() * 400);
         continue;
       }
       throw new NexonError("quota", `${path}: ${code || res.status}`, code);
@@ -66,10 +102,20 @@ export async function nexonGet<T>(path: string, params: Record<string, string>):
   }
 }
 
+/** GET one endpoint, e.g. nexonGet("character/basic", { ocid }). A refusal (429) is retried twice, spaced, before giving up. */
+export function nexonGet<T>(path: string, params: Record<string, string>): Promise<T> {
+  return request<T>(path, params, NORMAL);
+}
+
+/** nexonGet for the many calls of one guild search: paced to BULK_PER_SEC, a refusal waited out and retried. */
+export function nexonGetBulk<T>(path: string, params: Record<string, string>): Promise<T> {
+  return request<T>(path, params, BULK);
+}
+
 /** Character name → ocid. Only an unknown name (400 OPENAPI00004) becomes "notFound"; outages stay "failed" (not cached). */
-export async function nexonOcid(name: string): Promise<string> {
+export async function nexonOcid(name: string, get: typeof nexonGet = nexonGet): Promise<string> {
   try {
-    const { ocid } = await nexonGet<{ ocid: string }>("id", { character_name: name });
+    const { ocid } = await get<{ ocid: string }>("id", { character_name: name });
     if (!ocid) throw new NexonError("notFound", name);
     return ocid;
   } catch (e) {

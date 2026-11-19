@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { guildView } from "@/app/spec/guild-view";
+import { GuildCheck } from "@/components/spec/guild-check";
 import { SpecCheck, type SpecView } from "@/components/spec/spec-check";
 import { NexonError } from "@/lib/nexon/api";
 import { getSpec } from "@/lib/spec/load";
@@ -23,7 +25,10 @@ function optimizerLink(name: string): string | null {
   }
 }
 
-type Props = { searchParams: Promise<{ name?: string | string[] }> };
+type Param = string | string[] | undefined;
+type Props = { searchParams: Promise<{ name?: Param; guild?: Param; world?: Param; tab?: Param }> };
+
+const one = (v: Param) => (Array.isArray(v) ? v[0] : v ?? "").trim();
 
 async function view(name: string): Promise<SpecView> {
   if (!name) return { kind: "empty" };
@@ -40,7 +45,13 @@ async function view(name: string): Promise<SpecView> {
 }
 
 export default async function SpecPage({ searchParams }: Props) {
-  const raw = (await searchParams).name;
-  const name = (Array.isArray(raw) ? raw[0] : raw ?? "").trim();
+  const q = await searchParams;
+  // 길드 tab (user, 2026-11-19): ?tab=guild, or a guild name with its world once picked.
+  const guild = one(q.guild);
+  if (guild || one(q.tab) === "guild") {
+    const world = one(q.world);
+    return <GuildCheck key={`${guild}@${world}`} name={guild} view={await guildView(guild, world)} />;
+  }
+  const name = one(q.name);
   return <SpecCheck key={name} name={name} view={await view(name)} />;
 }

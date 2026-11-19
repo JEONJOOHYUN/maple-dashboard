@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Check, ExternalLink, Loader2, RotateCw, Search, ShieldAlert, ShieldCheck, X } from "lucide-react";
 import { refreshSpec } from "@/app/spec/actions";
 import { PageHeader } from "@/components/page-header";
+import { SpecTabs } from "@/components/spec/spec-tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import type { Miss, SpecResult, Tier, Tile } from "@/lib/spec/check";
 import { periodGroups } from "@/lib/spec/period-rows";
@@ -26,6 +27,9 @@ export type SpecView =
   | { kind: "empty" }
   | { kind: "result"; result: SpecResult; at: number; optimizer: string | null }
   | { kind: "notFound" | "quota" | "failed"; name: string };
+
+/** One line for both tabs, so switching tabs never moves the tab row. */
+export const SPEC_DESCRIPTION = "닉네임 · 길드 → 돈 거의 안 들이고 채울 수 있는데 놓친 스펙 찾기";
 
 // Recent characters (this browser only): people come back to check a fix (user, 2026-11-16).
 const RECENT_KEY = "spec-recent";
@@ -543,7 +547,7 @@ function Result({ result, at, optimizer, refreshing, refreshNote, onRefresh }: R
   );
 }
 
-function Message({ title, sub }: { title: string; sub: string }) {
+export function Message({ title, sub }: { title: string; sub: string }) {
   return (
     <section className="flex flex-col items-center gap-1.5 rounded-lg border border-dashed border-border bg-card px-5 py-10 text-center">
       <b className="text-[15px]">{title}</b>
@@ -590,7 +594,7 @@ export function SpecCheck({ name, view }: { name: string; view: SpecView }) {
 
   return (
     <div className="flex flex-col gap-4 lg:gap-5">
-      <PageHeader title="숨은 스펙업" description="닉네임 → 돈 거의 안 들이고 채울 수 있는데 놓친 스펙 찾기" />
+      <PageHeader title="숨은 스펙업" description={SPEC_DESCRIPTION} aside={<SpecTabs on="person" />} />
 
       <form onSubmit={submit} className="flex gap-2" role="search">
         <label className="flex h-[50px] min-w-0 flex-1 items-center gap-2.5 rounded-lg border border-border bg-card px-4 focus-within:border-primary">

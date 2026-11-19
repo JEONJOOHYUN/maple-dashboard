@@ -3,6 +3,7 @@
 // Wording on screen: short noun phrases + arrows, no "~해요" (user, 2026-11-09).
 import classesJson from "./data/classes.json" with { type: "json" };
 import iconsJson from "./data/icons.json" with { type: "json" };
+import { SKILL_KEY } from "./guild-table.ts";
 import { PERIOD_WARN_DAYS } from "./period-rows.ts";
 import { koreanMeso, symbolGaps, type SymbolIn } from "./symbol.ts";
 
@@ -220,9 +221,18 @@ export type Tile = { name: string; sub?: string; icon: string | null; icon2?: st
 /**
  * detail = lines under the subtitle (" · " separated items never break inside); rows = aligned table (symbols),
  * rowIcons = its picture per row; icon = the one picture of a single-thing miss; tiles = the things as icon tiles.
+ * key = what a skill line is about (SKILL_KEY in guild-table.ts, or a common skill's own name): its guild table column.
  */
-export type Miss = { cat: string; what: string; detail: string[]; tier: Tier; icon?: string | null; tiles?: Tile[]; rows?: string[][]; rowIcons?: (string | null)[] };
+export type Miss = { cat: string; what: string; detail: string[]; tier: Tier; icon?: string | null; tiles?: Tile[]; rows?: string[][]; rowIcons?: (string | null)[]; key?: string };
 const TIER_ORDER: Record<Tier, number> = { urgent: 0, now: 1, quest: 2, long: 3 };
+/** Easiest first; inside one tier the check order stays (sort is stable). */
+const byTier = (a: Miss, b: Miss) => TIER_ORDER[a.tier] - TIER_ORDER[b.tier];
+const miss = (tier: Tier, cat: string, what: string, ...detail: (string | false | undefined)[]): Miss => ({
+  cat,
+  what,
+  detail: detail.filter((d): d is string => !!d),
+  tier,
+});
 /**
  * Something that runs out (user, 2026-11-17): stat cash items and pets. days = whole days left, rounded up like
  * titles (−1 = over); at = the end, "YYYY-MM-DD" in KST.
@@ -368,6 +378,82 @@ export function bossPresets(raw: SpecRaw, rule: ClassRule | undefined) {
   return { eq: pickBest(eqScores), hyper: pickBest(hyperScores), link: pickBest(linkScores), ability: pickBest(abilityScores) };
 }
 
+// ---------- skills (the character check and the guild view share these) ----------
+/** What the skill checks read: the guild view fetches only these for each member (lib/spec/guild.ts). */
+export type SkillRaw = Pick<SpecRaw, "basic" | "skill0" | "hyperPassive">;
+/** Categories of the skill lines: what the guild view shows of a member. */
+export const SKILL_CATS = ["직업 0차 스킬", "공용 스킬", "보약", "하이퍼 패시브"] as const;
+
+// How to fill each one (user, 2026-11-17). 여제의 축복 goes to 24 by raising Cygnus / Mihile characters and from
+// there to 30 only through their 고귀한 정신 (NEXON's skill text), so the hint changes at 24.
+const EMPRESS_BY_LEVEL = 24;
+const commonHint = (name: string, lv: number | undefined): string | undefined => {
+  if (name === "연합의 의지") return lv === undefined ? "[연합] 퀘스트 미완료" : undefined;
+  if (name === "정령의 축복") return "같은 월드 다른 캐릭터 육성";
+  if (name === "여제의 축복") return (lv ?? 0) >= EMPRESS_BY_LEVEL ? "고귀한 정신 퀘스트 미완료" : "시그너스 · 미하일 캐릭터 육성";
+  return undefined;
+};
+
+/** 0th-job skills: 공용 (여제 · 정령 · 연합), 보약, the class's attack buff, the class's own 0th-job skills. */
+function zeroSkillMisses(raw: SkillRaw, rule: ClassRule | undefined, data: Data, eventSkills: readonly string[]): Miss[] {
+  const out: Miss[] = [];
+  const add = (key: string, tier: Tier, cat: string, what: string, ...detail: (string | false | undefined)[]) => {
+    const m = miss(tier, cat, what, ...detail);
+    m.key = key;
+    out.push(m);
+    return m;
+  };
+  const skills = raw.skill0.character_skill ?? [];
+  const skillLv = (name: string) => skills.find((s) => s.skill_name === name)?.skill_level;
+  const skillIcon = (name: string) => apiIcon(skills.find((s) => s.skill_name === name)?.skill_icon) ?? tableIcon(name);
+  for (const s of data.common.skills0) {
+    const lv = skillLv(s.name);
+    if (lv !== undefined && lv >= s.max) continue;
+    // A quest: 연합의 의지, and 여제의 축복 once it sits at 24. The rest is raising other characters.
+    const quest = s.name === "연합의 의지" || (s.name === "여제의 축복" && (lv ?? 0) >= EMPRESS_BY_LEVEL);
+    add(s.name, quest ? "quest" : "long", "공용 스킬", lv === undefined ? `${s.name} 안 배움` : `${s.name} ${lv} / ${s.max}`, commonHint(s.name, lv)).icon = skillIcon(s.name);
+  }
+  // 보약: only whether it was taken (the API does not say how its points were spent).
+  for (const name of eventSkills) if (!skillLv(name)) add(SKILL_KEY.event, "quest", "보약", `${name} 안 배움`).icon = tableIcon(name);
+  if (rule) {
+    if (rule.atkBuff.length && !rule.atkBuff.some((n) => skillLv(n) !== undefined))
+      add(SKILL_KEY.atkBuff, "quest", "공용 스킬", `${rule.atkBuff.join(" / ")} 안 배움`, "공격력 · 마력 4%").icon = tableIcon(rule.atkBuff[0]);
+    for (const s of rule.skills0) {
+      const lv = skillLv(s.name);
+      if (lv === undefined) add(SKILL_KEY.skill0, "quest", "직업 0차 스킬", `${s.name} 안 배움`, s.effect).icon = skillIcon(s.name);
+      else if (lv < s.max) add(SKILL_KEY.skill0, "quest", "직업 0차 스킬", `${s.name} ${lv} / ${s.max}`, s.effect).icon = skillIcon(s.name);
+    }
+  }
+  return out;
+}
+
+/** Hyper passives the class's top characters nearly all take (80%) that this one did not. */
+function hyperPassiveMiss(raw: SkillRaw, rule: ClassRule): Miss | null {
+  const picked = new Set((raw.hyperPassive.character_skill ?? []).filter((s) => s.skill_level > 0).map((s) => s.skill_name));
+  const hpMiss = rule.hyperPassive.filter((n) => !picked.has(n));
+  if (!hpMiss.length) return null;
+  // The API lists a hyper passive (with its icon) even at level 0.
+  const hpIcon = (n: string) => apiIcon((raw.hyperPassive.character_skill ?? []).find((s) => s.skill_name === n)?.skill_icon) ?? tableIcon(n);
+  // Opened, the line shows the five most taken with what this character has (user, 2026-11-18), not only the misses.
+  const hpShown = [...rule.hyperPassiveTop, ...hpMiss.filter((n) => !rule.hyperPassiveTop.includes(n))];
+  const m = miss("now", "하이퍼 패시브", `대부분 찍는 것 ${hpMiss.length}개 안 찍음`, list(hpMiss));
+  m.key = SKILL_KEY.hyperPassive;
+  m.tiles = hpShown.map((n) => (picked.has(n) ? { name: n, sub: "찍음", icon: hpIcon(n), done: true } : { name: n, sub: "안 찍음", icon: hpIcon(n) }));
+  return m;
+}
+
+/**
+ * A guild member's check (user, 2026-11-19: "중요한 스킬들"): the skill lines of checkSpec — the same lines, from the
+ * same functions, so a member reads the same here and in the character view — easiest first.
+ */
+export function checkSkills(raw: SkillRaw, data: Data = SPEC_DATA, eventSkills: readonly string[] = []): Miss[] {
+  const rule = data.classes[raw.basic.character_class];
+  const out = zeroSkillMisses(raw, rule, data, eventSkills);
+  const hp = rule ? hyperPassiveMiss(raw, rule) : null;
+  if (hp) out.push(hp);
+  return out.sort(byTier);
+}
+
 // ---------- the check ----------
 // Wording (user, 2026-11-09): title = category, subtitle = what is missing, detail lines only when they add something
 // (no obvious "how": core shards, spend points, ...).
@@ -379,43 +465,15 @@ export function checkSpec(raw: SpecRaw, now: Date = new Date(), data: Data = SPE
   const tips: Miss[] = [];
   const presets = bossPresets(raw, rule);
   const add = (tier: Tier, cat: string, what: string, ...detail: (string | false | undefined)[]) => {
-    const miss: Miss = { cat, what, detail: detail.filter((d): d is string => !!d), tier };
-    misses.push(miss);
-    return miss;
+    const m = miss(tier, cat, what, ...detail);
+    misses.push(m);
+    return m;
   };
 
   // 0th-job skills
-  const skills = raw.skill0.character_skill ?? [];
-  const skillLv = (name: string) => skills.find((s) => s.skill_name === name)?.skill_level;
-  const skillIcon = (name: string) => apiIcon(skills.find((s) => s.skill_name === name)?.skill_icon) ?? tableIcon(name);
-  // How to fill each one (user, 2026-11-17). 여제의 축복 goes to 24 by raising Cygnus / Mihile characters and from
-  // there to 30 only through their 고귀한 정신 (NEXON's skill text), so the hint changes at 24.
-  const EMPRESS_BY_LEVEL = 24;
-  const commonHint = (name: string, lv: number | undefined): string | undefined => {
-    if (name === "연합의 의지") return lv === undefined ? "[연합] 퀘스트 미완료" : undefined;
-    if (name === "정령의 축복") return "같은 월드 다른 캐릭터 육성";
-    if (name === "여제의 축복") return (lv ?? 0) >= EMPRESS_BY_LEVEL ? "고귀한 정신 퀘스트 미완료" : "시그너스 · 미하일 캐릭터 육성";
-    return undefined;
-  };
-  for (const s of data.common.skills0) {
-    const lv = skillLv(s.name);
-    if (lv !== undefined && lv >= s.max) continue;
-    // A quest: 연합의 의지, and 여제의 축복 once it sits at 24. The rest is raising other characters.
-    const quest = s.name === "연합의 의지" || (s.name === "여제의 축복" && (lv ?? 0) >= EMPRESS_BY_LEVEL);
-    add(quest ? "quest" : "long", "공용 스킬", lv === undefined ? `${s.name} 안 배움` : `${s.name} ${lv} / ${s.max}`, commonHint(s.name, lv)).icon = skillIcon(s.name);
-  }
-  // 보약: only whether it was taken (the API does not say how its points were spent).
-  for (const name of eventSkills) if (!skillLv(name)) add("quest", "보약", `${name} 안 배움`).icon = tableIcon(name);
-  if (rule) {
-    if (rule.atkBuff.length && !rule.atkBuff.some((n) => skillLv(n) !== undefined))
-      add("quest", "공용 스킬", `${rule.atkBuff.join(" / ")} 안 배움`, "공격력 · 마력 4%").icon = tableIcon(rule.atkBuff[0]);
-    for (const s of rule.skills0) {
-      const lv = skillLv(s.name);
-      if (lv === undefined) add("quest", "직업 0차 스킬", `${s.name} 안 배움`, s.effect).icon = skillIcon(s.name);
-      else if (lv < s.max) add("quest", "직업 0차 스킬", `${s.name} ${lv} / ${s.max}`, s.effect).icon = skillIcon(s.name);
-    }
-  }
-  if (skillLv("고급 무기 제련") === undefined) tips.push({ cat: "고급 무기 제련", what: "안 배움", detail: ["전문기술 → 장비제작 명장"], tier: "long", icon: tableIcon("고급 무기 제련") });
+  misses.push(...zeroSkillMisses(raw, rule, data, eventSkills));
+  if (!(raw.skill0.character_skill ?? []).some((s) => s.skill_name === "고급 무기 제련"))
+    tips.push({ cat: "고급 무기 제련", what: "안 배움", detail: ["전문기술 → 장비제작 명장"], tier: "long", icon: tableIcon("고급 무기 제련") });
 
   // propensity
   const p = raw.propensity;
@@ -635,16 +693,8 @@ export function checkSpec(raw: SpecRaw, now: Date = new Date(), data: Data = SPE
   }
 
   if (rule) {
-    const picked = new Set((raw.hyperPassive.character_skill ?? []).filter((s) => s.skill_level > 0).map((s) => s.skill_name));
-    const hpMiss = rule.hyperPassive.filter((n) => !picked.has(n));
-    // The API lists a hyper passive (with its icon) even at level 0.
-    const hpIcon = (n: string) => apiIcon((raw.hyperPassive.character_skill ?? []).find((s) => s.skill_name === n)?.skill_icon) ?? tableIcon(n);
-    // Opened, the line shows the five most taken with what this character has (user, 2026-11-18), not only the misses.
-    const hpShown = [...rule.hyperPassiveTop, ...hpMiss.filter((n) => !rule.hyperPassiveTop.includes(n))];
-    if (hpMiss.length)
-      add("now", "하이퍼 패시브", `대부분 찍는 것 ${hpMiss.length}개 안 찍음`, list(hpMiss)).tiles = hpShown.map((n) =>
-        picked.has(n) ? { name: n, sub: "찍음", icon: hpIcon(n), done: true } : { name: n, sub: "안 찍음", icon: hpIcon(n) },
-      );
+    const hp = hyperPassiveMiss(raw, rule);
+    if (hp) misses.push(hp);
 
     // pet buffs (own pets + world shared pets)
     const auto = [1, 2, 3].flatMap((i) =>
@@ -725,8 +775,7 @@ export function checkSpec(raw: SpecRaw, now: Date = new Date(), data: Data = SPE
     });
   }
 
-  // Easiest first; inside one tier the check order stays (sort is stable).
-  misses.sort((a, b) => TIER_ORDER[a.tier] - TIER_ORDER[b.tier]);
+  misses.sort(byTier);
 
   return {
     name: raw.basic.character_name,

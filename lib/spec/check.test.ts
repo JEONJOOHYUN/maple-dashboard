@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { koreanMeso, symbolGaps } from "./symbol.ts";
-import { SPEC_DATA, abilityComplete, abilityLetter, artifactSpendable, bossPresets, checkSpec, labelPieces, labelPlusOf, periodsOf, type SpecRaw } from "./check.ts";
+import { SKILL_CATS, SPEC_DATA, abilityComplete, abilityLetter, artifactSpendable, bossPresets, checkSkills, checkSpec, labelPieces, labelPlusOf, periodsOf, type SpecRaw } from "./check.ts";
 
 const L = (v: string) => ({ ability_grade: "레전드리", ability_value: v });
 const U = (v: string) => ({ ability_grade: "유니크", ability_value: v });
@@ -794,4 +794,38 @@ test("pets are counted by place: own + world-shared copies of a place are one pe
   // periods: same-named pets in three places are three rows
   const periods = periodsOf({ ...base(), pet: same } as SpecRaw, now).filter((p) => p.kind === "pet");
   assert.equal(periods.length, 3);
+});
+
+test("guild view: a member's skill lines are exactly the character check's skill lines (user, 2026-11-19)", () => {
+  const now = new Date("2026-11-19T12:00:00+09:00");
+  const skillLines = (raw: SpecRaw, ev: string[] = []) =>
+    checkSpec(raw, now, SPEC_DATA, ev).misses.filter((m) => (SKILL_CATS as readonly string[]).includes(m.cat));
+  const cases: { raw: SpecRaw; ev?: string[] }[] = [];
+  // complete Night Lord: nothing on either side
+  cases.push({ raw: base() });
+  // common skills short + attack buff missing + hyper passive missing + the event skill not taken
+  const nl = base();
+  nl.skill0.character_skill = nl.skill0.character_skill!.filter((s) => !["연합의 의지", "영웅의 메아리"].includes(s.skill_name));
+  nl.skill0.character_skill.find((s) => s.skill_name === "여제의 축복")!.skill_level = 24;
+  nl.skill0.character_skill.find((s) => s.skill_name === "정령의 축복")!.skill_level = 14;
+  nl.hyperPassive.character_skill![0].skill_level = 0;
+  cases.push({ raw: nl, ev: ["아르고 호의 가호"] });
+  // Evan without 계승된 의지 (가몽 길드, 2026-11-19 — the other site missed it), Hoyoung with 괴이봉인 half done
+  for (const [cls, skills] of [
+    ["에반", [{ skill_name: "여제의 축복", skill_level: 30 }, { skill_name: "정령의 축복", skill_level: 20 }, { skill_name: "연합의 의지", skill_level: 1 }, { skill_name: "영웅의 메아리", skill_level: 1 }]],
+    ["호영", [{ skill_name: "여제의 축복", skill_level: 18 }, { skill_name: "괴이봉인", skill_level: 4 }, { skill_name: "익스클루시브 스펠", skill_level: 1 }]],
+  ] as const) {
+    const raw = base();
+    raw.basic = { ...raw.basic, character_class: cls };
+    raw.skill0 = { character_skill: skills.map((s) => ({ ...s })) };
+    raw.hyperPassive = { character_skill: SPEC_DATA.classes[cls].hyperPassive.map((n) => ({ skill_name: n, skill_level: 1 })) };
+    cases.push({ raw });
+  }
+  for (const { raw, ev = [] } of cases) assert.deepEqual(checkSkills(raw, SPEC_DATA, ev), skillLines(raw, ev));
+  // the guild check needs only basic + 0th-job + hyper passive, and finds the Evan's missing skill
+  const evan = cases[2].raw;
+  const only = checkSkills({ basic: evan.basic, skill0: evan.skill0, hyperPassive: evan.hyperPassive });
+  assert.deepEqual(only.map((m) => m.what), ["계승된 의지 안 배움"]);
+  // easiest first: hyper passive (바로 됨) → quests → raising other characters
+  assert.deepEqual(checkSkills(nl, SPEC_DATA, ["아르고 호의 가호"]).map((m) => m.tier), ["now", "quest", "quest", "quest", "quest", "long"]);
 });
