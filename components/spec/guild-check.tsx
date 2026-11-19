@@ -2,10 +2,12 @@
 
 // 숨은 스펙업 · 길드 (시안 C, user 2026-11-20): guild name → its members in a table, one column a skill, the members
 // who missed the most first; the order can be changed (레벨 · 이름 · 직업, or a column = who missed that skill).
+// One line a player (시안 A, user 2026-11-20 night): the main, its other characters folded under it, opened at the
+// line's right end.
 import Link from "next/link";
-import { useEffect, useMemo, useState, useTransition, type FormEvent, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useState, useTransition, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Search, X } from "lucide-react";
+import { ChevronDown, ChevronUp, CornerDownRight, Loader2, Search, X } from "lucide-react";
 import { Chip } from "@/components/ev/ui";
 import { PageHeader } from "@/components/page-header";
 import { Message, Pieces, SPEC_DESCRIPTION, whatText } from "@/components/spec/spec-check";
@@ -18,16 +20,20 @@ import {
   MAX_GUILD_NAME,
   SORTS,
   columnCounts,
-  matchName,
-  sortRows,
+  groupPeople,
+  matchPeople,
+  sortPeople,
+  subMatches,
   type Cell,
   type MemberRow,
+  type Person,
   type SortBy,
 } from "@/lib/spec/guild-table";
 import { useStored } from "@/lib/use-stored";
 import { cn } from "@/lib/utils";
 
-export type GuildInfo = { world: string; name: string; level: number; master: string; count: number };
+/** count = characters; users = accounts (the in-game member count), null when NEXON gives none. */
+export type GuildInfo = { world: string; name: string; level: number; master: string; count: number; users: number | null };
 
 export type GuildView =
   | { kind: "empty" }
@@ -98,7 +104,7 @@ function WorldPick({ name, guilds }: { name: string; guilds: GuildInfo[] }) {
         <b className="text-[15px] break-keep">
           &quot;{name}&quot; 길드 {guilds.length}곳 → 월드 고르기
         </b>
-        <span className="text-xs text-muted-foreground">길드원 많은 순</span>
+        <span className="text-xs text-muted-foreground">캐릭터 많은 순</span>
       </div>
       <ul className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-2">
         {guilds.map((g) => (
@@ -113,7 +119,7 @@ function WorldPick({ name, guilds }: { name: string; guilds: GuildInfo[] }) {
                 <span className="text-xs text-muted-foreground">Lv.{g.level}</span>
               </span>
               <span className="text-[13px] text-muted-foreground">
-                길드원 <b className="text-foreground">{n(g.count)}명</b>
+                {g.users ? `계정 ${n(g.users)} · ` : ""}캐릭터 <b className="text-foreground">{n(g.count)}</b>
               </span>
             </Link>
           </li>
@@ -143,16 +149,71 @@ function CellView({ row, col }: { row: Extract<MemberRow, { ok: true }>; col: st
   );
 }
 
-function MemberLine({ row, cols }: { row: MemberRow; cols: readonly string[] }) {
+/**
+ * The button at the end of a player's line (user, 2026-11-20: "열고 닫는건 오른쪽에"): how many other characters it
+ * has here, and how many of them missed something (orange then).
+ */
+function SubsToggle({ person, open, onToggle }: { person: Person; open: boolean; onToggle: () => void }) {
+  const count = person.subs.length;
+  if (!count)
+    return (
+      <span className="text-muted-foreground">
+        <span aria-hidden="true">-</span>
+        <span className="sr-only">부캐 없음</span>
+      </span>
+    );
+  const missed = person.subs.filter((r) => r.ok && r.cells.length > 0).length;
+  const Icon = open ? ChevronUp : ChevronDown;
   return (
-    <tr className="border-t border-border">
-      <th scope="row" className="sticky left-0 z-[1] bg-card px-3.5 py-2 text-left font-normal">
-        {/* Not prefetched: a guild has hundreds of these, and opening one asks NEXON for the whole character. */}
-        <Link href={`/spec?name=${encodeURIComponent(row.name)}`} prefetch={false} className="font-bold whitespace-nowrap hover:text-primary-text hover:underline">
-          {row.name}
-        </Link>
-        <span className="block text-[11px] whitespace-nowrap text-muted-foreground">
-          {row.ok ? `Lv.${row.level} ${row.cls}` : row.reason === "notFound" ? "넥슨 정보 없음" : "확인 실패"}
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={open}
+      aria-label={`부캐 ${count}명${missed ? ` 중 ${missed}명 놓침` : " 다 챙김"} ${open ? "접기" : "펼치기"}`}
+      // One width down the column (user, 2026-11-20: "부캐 글자가 정렬이 안되어있어"), the count and the arrow together in
+      // its middle ("너무 쏠려있다" when they sat at the two ends).
+      className={cn(
+        "inline-flex h-8 items-center justify-center gap-1 rounded-full border pr-2 pl-2.5 text-xs font-bold whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary min-w-[3.25rem] sm:min-w-[7.5rem]",
+        missed ? "border-primary/45 bg-primary-soft text-primary-text" : "border-border text-muted-foreground hover:text-foreground",
+      )}
+    >
+      {/* A phone keeps this column narrow: the count only, the colour still telling whether one missed. */}
+      <span className="sm:hidden">{count}</span>
+      <span className="hidden sm:inline">
+        {count}명{missed ? ` · 놓침 ${missed}` : " ✓"}
+      </span>
+      <Icon className="size-3.5" aria-hidden="true" />
+    </button>
+  );
+}
+
+/**
+ * One character's line. A player's main heads it, the open / close button at its end (end); the player's other
+ * characters (sub) come under it, set in, on the page's own ground. Both ends stay put while the columns scroll.
+ */
+function MemberLine({ row, cols, sub = false, away = null, end = null }: { row: MemberRow; cols: readonly string[]; sub?: boolean; away?: string | null; end?: ReactNode }) {
+  const ground = sub ? "bg-background" : "bg-card";
+  return (
+    <tr className={cn("border-t border-border", sub && "border-dashed", ground)}>
+      <th scope="row" className={cn("sticky left-0 z-[1] py-2 pr-3.5 text-left font-normal", sub ? "pl-4" : "pl-3.5", ground)}>
+        <span className="flex items-center gap-1.5">
+          {sub && <CornerDownRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />}
+          <span className="flex flex-col">
+            {/* Not prefetched: a guild has hundreds of these, and opening one asks NEXON for the whole character. The
+                name alone is the way in (user, 2026-11-20: a › beside it was "굳이 — 클릭하면 들어가지니까"). */}
+            <Link
+              href={`/spec?name=${encodeURIComponent(row.name)}`}
+              prefetch={false}
+              className={cn("self-start whitespace-nowrap hover:text-primary-text hover:underline", sub ? "text-[12.5px] font-semibold" : "font-bold")}
+            >
+              {row.name}
+              <span className="sr-only"> 자세히 보기</span>
+            </Link>
+            <span className="text-[11px] whitespace-nowrap text-muted-foreground">
+              {row.ok ? `Lv.${row.level} ${row.cls}` : row.reason === "notFound" ? "넥슨 정보 없음" : "확인 실패"}
+            </span>
+            {away && <span className="text-[11px] whitespace-nowrap text-muted-foreground">본캐 {away} · 길드 밖</span>}
+          </span>
         </span>
       </th>
       {row.ok ? (
@@ -166,21 +227,57 @@ function MemberLine({ row, cols }: { row: MemberRow; cols: readonly string[] }) 
           {row.reason === "notFound" ? "2023년 12월 이후 접속 기록이 없어 조회 안 됨" : "넥슨 응답 오류"}
         </td>
       )}
+      <td className={cn("sticky right-0 z-[1] px-2 py-2 text-center shadow-[inset_1px_0_0_var(--border)] sm:px-3", ground)}>{end}</td>
     </tr>
   );
+}
+
+/** A player counts as recent when any of its characters logged in within 7 days (NEXON's flag). */
+const recentPlayer = (p: Person) => [p.head, ...p.subs].some((r) => r.ok && r.recent);
+
+/**
+ * What the table showed, kept for this browser tab (user, 2026-11-20: a member's whole check, then back to the guild):
+ * the order, the filter, the search, the lines opened and how far "더 보기" went. Another tab starts fresh.
+ * Players' lines start closed and "부캐 모두 펼치기" opens them all; flipped = the players (by key) opened or closed by
+ * hand against that, and against a search that opens a line to show another character's name.
+ */
+type View = { sortBy: SortBy; recentOnly: boolean; query: string; limit: number; openAll: boolean; flipped: string[] };
+const NEW_VIEW: View = { sortBy: "miss", recentOnly: false, query: "", limit: PAGE, openAll: false, flipped: [] };
+const viewKey = (g: GuildInfo) => `spec-guild-view:${g.world}:${g.name}`;
+const isSort = (v: unknown): v is SortBy =>
+  typeof v === "string" && (SORTS.some((s) => s.id === v) || (v.startsWith("col:") && GUILD_COLUMNS.includes(v.slice(4))));
+
+/** A stored view as far as it can be trusted (an older or edited one falls back field by field). */
+function viewOf(stored: unknown): View {
+  if (!stored || typeof stored !== "object") return NEW_VIEW;
+  const v = stored as Partial<Record<keyof View, unknown>>;
+  return {
+    sortBy: isSort(v.sortBy) ? v.sortBy : NEW_VIEW.sortBy,
+    recentOnly: v.recentOnly === true,
+    query: typeof v.query === "string" ? v.query : "",
+    limit: typeof v.limit === "number" && Number.isFinite(v.limit) && v.limit > PAGE ? Math.floor(v.limit) : PAGE,
+    openAll: v.openAll === true,
+    flipped: Array.isArray(v.flipped) ? v.flipped.filter((k): k is string => typeof k === "string") : [],
+  };
 }
 
 function GuildResult({ guild, pieces, others }: { guild: GuildInfo; pieces: Promise<MemberRow[]>[]; others: number }) {
   const cols = GUILD_COLUMNS;
   const router = useRouter();
   const [retrying, startRetry] = useTransition();
-  const [query, setQuery] = useState("");
   // Rows as the pieces arrive. A new set of pieces (다시 확인) starts over: state is set aside per set.
   const [got, setGot] = useState<{ from: Promise<MemberRow[]>[]; rows: MemberRow[]; eta: number | null }>({ from: pieces, rows: [], eta: null });
   if (got.from !== pieces) setGot({ from: pieces, rows: [], eta: null });
-  const [sortBy, setSortBy] = useState<SortBy>("miss");
-  const [recentOnly, setRecentOnly] = useState(false);
-  const [limit, setLimit] = useState(PAGE);
+  // The view (order, filter, search, lines open, rows shown) lives in this tab's storage: the server renders it new,
+  // the browser brings back what this tab last had of the guild.
+  const [stored, setStored] = useStored<unknown>(viewKey(guild), NEW_VIEW, "session");
+  const { sortBy, recentOnly, query, limit, openAll, flipped: flippedKeys } = useMemo(() => viewOf(stored), [stored]);
+  const flipped = useMemo(() => new Set(flippedKeys), [flippedKeys]);
+  const change = (next: (v: View) => Partial<View>) =>
+    setStored((prev: unknown) => {
+      const v = viewOf(prev);
+      return { ...v, ...next(v) };
+    });
 
   useEffect(() => {
     let live = true;
@@ -203,24 +300,37 @@ function GuildResult({ guild, pieces, others }: { guild: GuildInfo; pieces: Prom
   const rows = got.rows;
   const done = rows.length;
   const loading = done < guild.count;
-  const counts = useMemo(() => columnCounts(rows, cols), [rows, cols]);
-  const missing = rows.filter((r) => r.ok && r.cells.length > 0).length;
+  const people = useMemo(() => groupPeople(rows), [rows]);
+  // The columns, the counts and "많이 놓친 순" go by the mains; the other characters are under them.
+  const mains = useMemo(() => people.map((p) => p.head), [people]);
+  const counts = useMemo(() => columnCounts(mains, cols), [mains, cols]);
+  const missingMains = mains.filter((r) => r.ok && r.cells.length > 0).length;
+  const missingAll = rows.filter((r) => r.ok && r.cells.length > 0).length;
   const top = cols.filter((c) => counts[c] > 0).sort((a, b) => counts[b] - counts[a]).slice(0, 2);
   const unchecked = rows.filter((r) => !r.ok);
   const failed = unchecked.filter((r) => !r.ok && r.reason === "failed").length;
-  const recentCount = rows.filter((r) => r.ok && r.recent).length;
+  const recentCount = people.filter(recentPlayer).length;
   const visible = useMemo(
-    () => sortRows(matchName(recentOnly ? rows.filter((r) => r.ok && r.recent) : rows, query), sortBy),
-    [rows, sortBy, recentOnly, query],
+    () => sortPeople(matchPeople(recentOnly ? people.filter(recentPlayer) : people, query), sortBy),
+    [people, sortBy, recentOnly, query],
   );
   const shown = visible.slice(0, limit);
+  const isOpen = (p: Person) => (openAll || subMatches(p, query)) !== flipped.has(p.key);
+  const flip = (key: string) => change((v) => ({ flipped: v.flipped.includes(key) ? v.flipped.filter((k) => k !== key) : [...v.flipped, key] }));
+  const search = (q: string) => change(() => ({ query: q, flipped: [] }));
 
   return (
     <section className="flex flex-col gap-3">
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
         <Stat label={`${guild.name} · ${guild.world} Lv.${guild.level}`} className="col-span-2 sm:col-span-1">
           <span className="flex items-baseline justify-between gap-2">
-            <b className="text-[22px] leading-tight">{n(guild.count)}명</b>
+            {/* Players; the in-game member count is accounts, and one player can hold several (가몽: 122 · 137 · 366). */}
+            <span className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+              <b className="text-[22px] leading-tight">{n(people.length)}명</b>
+              <span className="text-[13px] text-muted-foreground">
+                {guild.users ? `계정 ${n(guild.users)} · ` : ""}캐릭터 {n(guild.count)}
+              </span>
+            </span>
             {others > 0 && (
               <Link href={guildHref(guild.name)} prefetch={false} className="text-xs font-semibold whitespace-nowrap text-primary-text hover:underline">
                 다른 월드 {others}곳
@@ -228,10 +338,13 @@ function GuildResult({ guild, pieces, others }: { guild: GuildInfo; pieces: Prom
             )}
           </span>
         </Stat>
-        <Stat label="놓친 스킬 있음">
-          <b className="text-[22px] leading-tight text-primary-text">{n(missing)}명</b>
+        <Stat label="놓친 스킬 있는 본캐">
+          <span className="flex flex-wrap items-baseline gap-x-2">
+            <b className="text-[22px] leading-tight text-primary-text">{n(missingMains)}명</b>
+            <span className="text-[13px] text-muted-foreground">부캐 포함 {n(missingAll)}캐릭</span>
+          </span>
         </Stat>
-        <Stat label="가장 많이 놓침">
+        <Stat label="본캐가 가장 많이 놓침">
           <b className="text-[15px] leading-snug break-keep">{top.length ? top.map((c) => `${c} ${n(counts[c])}`).join(" · ") : "없음"}</b>
         </Stat>
       </div>
@@ -259,14 +372,21 @@ function GuildResult({ guild, pieces, others }: { guild: GuildInfo; pieces: Prom
 
       <div className="flex flex-wrap items-center gap-1.5">
         {SORTS.map((s) => (
-          <Chip key={s.id} on={sortBy === s.id} onClick={() => setSortBy(s.id)}>
+          <Chip key={s.id} on={sortBy === s.id} onClick={() => change(() => ({ sortBy: s.id }))}>
             {s.label}
           </Chip>
         ))}
         {/* On a phone the filter goes to the next line, where a divider would hang at the end of the first. */}
         <span className="mx-0.5 hidden h-5 w-px bg-border sm:block" aria-hidden="true" />
-        <Chip on={recentOnly} soft onClick={() => setRecentOnly((v) => !v)}>
+        <Chip on={recentOnly} soft onClick={() => change((v) => ({ recentOnly: !v.recentOnly }))}>
           최근 7일 접속만{recentOnly ? ` ${n(recentCount)}명` : ""}
+        </Chip>
+        <Chip
+          on={openAll}
+          soft
+          onClick={() => change((v) => ({ openAll: !v.openAll, flipped: [] }))}
+        >
+          부캐 모두 펼치기
         </Chip>
         {/* A member by name (user, 2026-11-20): its own line on a phone, the right end on a wider screen. */}
         <label className="order-first flex h-9 w-full items-center gap-2 rounded-lg border border-border bg-card pr-1 pl-3 focus-within:border-primary sm:order-none sm:ml-auto sm:w-56">
@@ -274,14 +394,14 @@ function GuildResult({ guild, pieces, others }: { guild: GuildInfo; pieces: Prom
           <span className="sr-only">길드원 이름으로 찾기</span>
           <input
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => search(e.target.value)}
             placeholder="길드원 찾기"
             autoComplete="off"
             spellCheck={false}
             className="h-8 min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground sm:text-[13px]"
           />
           {query && (
-            <button type="button" onClick={() => setQuery("")} aria-label="길드원 찾기 지우기" className="flex size-7 shrink-0 items-center justify-center rounded-md opacity-60 hover:opacity-100">
+            <button type="button" onClick={() => search("")} aria-label="길드원 찾기 지우기" className="flex size-7 shrink-0 items-center justify-center rounded-md opacity-60 hover:opacity-100">
               <X className="size-3.5" aria-hidden="true" />
             </button>
           )}
@@ -294,7 +414,7 @@ function GuildResult({ guild, pieces, others }: { guild: GuildInfo; pieces: Prom
           <thead>
             <tr className="bg-secondary">
               <th scope="col" className="sticky left-0 z-[1] bg-secondary px-3.5 py-2.5 text-left font-bold whitespace-nowrap">
-                길드원
+                본캐
               </th>
               {cols.map((c) => {
                 const on = sortBy === `col:${c}`;
@@ -302,7 +422,7 @@ function GuildResult({ guild, pieces, others }: { guild: GuildInfo; pieces: Prom
                   <th key={c} scope="col" aria-sort={on ? "descending" : undefined} className="px-1.5 py-1.5 text-center whitespace-nowrap">
                     <button
                       type="button"
-                      onClick={() => setSortBy(on ? "miss" : `col:${c}`)}
+                      onClick={() => change(() => ({ sortBy: on ? "miss" : `col:${c}` }))}
                       aria-pressed={on}
                       className={cn(
                         "inline-flex flex-col items-center gap-0.5 rounded-md px-2 py-1 font-bold transition-colors hover:bg-card",
@@ -315,12 +435,22 @@ function GuildResult({ guild, pieces, others }: { guild: GuildInfo; pieces: Prom
                   </th>
                 );
               })}
+              {/* w-px: as narrow as its buttons, the room left to the skill columns */}
+              <th scope="col" className="sticky right-0 z-[1] w-px bg-secondary px-2 py-2.5 text-center font-bold whitespace-nowrap shadow-[inset_1px_0_0_var(--border)] sm:px-3">
+                부캐
+              </th>
             </tr>
           </thead>
           <tbody>
-            {shown.map((r) => (
-              <MemberLine key={r.name} row={r} cols={cols} />
-            ))}
+            {shown.map((p) => {
+              const open = isOpen(p);
+              return (
+                <Fragment key={p.key}>
+                  <MemberLine row={p.head} cols={cols} away={p.away} end={<SubsToggle person={p} open={open} onToggle={() => flip(p.key)} />} />
+                  {open && p.subs.map((r) => <MemberLine key={r.name} row={r} cols={cols} sub />)}
+                </Fragment>
+              );
+            })}
           </tbody>
         </table>
         {!shown.length && (
@@ -331,7 +461,7 @@ function GuildResult({ guild, pieces, others }: { guild: GuildInfo; pieces: Prom
       {visible.length > limit && (
         <button
           type="button"
-          onClick={() => setLimit((l) => l + PAGE)}
+          onClick={() => change((v) => ({ limit: v.limit + PAGE }))}
           className="h-11 rounded-lg border border-border text-sm font-bold transition-colors hover:bg-secondary"
         >
           더 보기 · {n(visible.length - limit)}명 남음
@@ -459,6 +589,7 @@ export function GuildCheck({ name, view }: { name: string; view: GuildView }) {
 
       <div className="flex flex-col gap-1 text-xs leading-relaxed text-muted-foreground">
         <span className="break-keep">확인하는 것: 0차 스킬(이벤트 중엔 보약도) · 연합의 의지 · 여제의 축복 · 하이퍼 패시브 · 링크 · 펫 버프 → 나머지는 이름을 누르면 개인 탭에서</span>
+        <span className="break-keep">본캐 · 부캐는 넥슨 유니온 랭킹(어제 기준)으로 묶음</span>
         <span>Data based on NEXON Open API</span>
       </div>
     </div>

@@ -1,12 +1,13 @@
 // 숨은 스펙업 · 길드 (user, 2026-11-19: "길드로도 검색되게" · "중요한 스킬들"). Server only.
 // Guild name → the guild of that name in every world → each member's skill lines (checkSkills: the very lines the
-// character view shows). Six calls a member (id · basic · 0th-grade skills · hyper passives · links · pets, the last
-// two since 2026-11-20) through nexonGetBulk, which keeps a search to 250 a second; a member's lines are cached 3 hours
-// like a character, so a guild looked at again costs nothing. Measured 2026-11-19 with four calls a member: 1,078
-// members = 4,346 calls (the biggest guild seen), 366 = 1,468.
+// character view shows) and the main of its account group. Seven calls a member (id · basic · 0th-grade skills ·
+// hyper passives · links · pets · union ranking — links and pets since 2026-11-20, the ranking since the same night)
+// through nexonGetBulk, which keeps a search to 250 a second; a member's row is cached 3 hours like a character, so a
+// guild looked at again costs nothing. Measured 2026-11-19 with four calls a member: 1,078 members = 4,346 calls (the
+// biggest guild seen), 366 = 1,468.
 import "server-only";
 import { unstable_cache } from "next/cache";
-import { NexonError, nexonGet, nexonGetBulk, nexonOcid } from "@/lib/nexon/api";
+import { NexonError, nexonGet, nexonGetBulk, nexonOcid, nexonUnionMain } from "@/lib/nexon/api";
 import { SPEC_DATA, checkSkills, type SkillRaw } from "@/lib/spec/check";
 import { cellOf, type Cell, type MemberRow } from "@/lib/spec/guild-table";
 import { RULES_VERSION, SPEC_CACHE_SECONDS, specTag } from "@/lib/spec/load";
@@ -20,7 +21,8 @@ const MEMBERS_AT_ONCE = 25;
 /** Members per streamed piece of the result. */
 export const CHUNK = 10;
 
-export type GuildHit = { world: string; name: string; level: number; master: string; count: number; members: string[] };
+/** count = characters; users = accounts, the in-game member count (가몽 2026-11-20: 366 · 137), null for some guilds. */
+export type GuildHit = { world: string; name: string; level: number; master: string; count: number; users: number | null; members: string[] };
 
 type GuildBasic = {
   world_name?: string;
@@ -28,6 +30,7 @@ type GuildBasic = {
   guild_level?: number;
   guild_master_name?: string;
   guild_member_count?: number;
+  guild_user_count?: number | null;
   guild_member?: string[];
 };
 
@@ -42,7 +45,8 @@ async function lookUp(name: string): Promise<GuildHit[]> {
       const g = await nexonGet<GuildBasic>("guild/basic", { oguild_id: id });
       // Each name once: a name is a row (and its key) on the page.
       const members = [...new Set((g.guild_member ?? []).filter((m): m is string => typeof m === "string" && !!m))];
-      return { world: g.world_name ?? world, name: g.guild_name ?? name, level: g.guild_level ?? 0, master: g.guild_master_name ?? "", count: members.length, members };
+      const users = typeof g.guild_user_count === "number" && g.guild_user_count > 0 ? g.guild_user_count : null;
+      return { world: g.world_name ?? world, name: g.guild_name ?? name, level: g.guild_level ?? 0, master: g.guild_master_name ?? "", count: members.length, users, members };
     }),
   );
   return hits.sort((a, b) => b.count - a.count || WORLDS.indexOf(a.world) - WORLDS.indexOf(b.world));
@@ -51,11 +55,11 @@ async function lookUp(name: string): Promise<GuildHit[]> {
 /** Guilds of this name (names are case-sensitive in the API), cached half an hour. */
 export function findGuilds(name: string): Promise<GuildHit[]> {
   const key = name.trim();
-  return unstable_cache(() => lookUp(key), ["spec-guild", key], { revalidate: GUILD_CACHE_SECONDS })();
+  return unstable_cache(() => lookUp(key), ["spec-guild", "2", key], { revalidate: GUILD_CACHE_SECONDS })();
 }
 
 // Bump when a member's row changes shape, so rows cached in the old shape are not served.
-const ROW_VERSION = "4";
+const ROW_VERSION = "5";
 
 async function loadMember(name: string, eventSkills: string[]): Promise<MemberRow> {
   let ocid: string;
@@ -66,12 +70,13 @@ async function loadMember(name: string, eventSkills: string[]): Promise<MemberRo
     throw e;
   }
   const q = { ocid };
-  const [basic, skill0, hyperPassive, link, pet] = await Promise.all([
+  const [basic, skill0, hyperPassive, link, pet, main] = await Promise.all([
     nexonGetBulk<SkillRaw["basic"] & { access_flag?: string }>("character/basic", q),
     nexonGetBulk<SkillRaw["skill0"]>("character/skill", { ...q, character_skill_grade: "0" }),
     nexonGetBulk<SkillRaw["hyperPassive"]>("character/skill", { ...q, character_skill_grade: "hyperpassive" }),
     nexonGetBulk<SkillRaw["link"]>("character/link-skill", q),
     nexonGetBulk<SkillRaw["pet"]>("character/pet-equipment", q),
+    nexonUnionMain(ocid, nexonGetBulk),
   ]);
   // Never logged in since the API began (2023-12): empty fields, like the character view's "not found".
   if (!basic?.character_class) return { ok: false, name, reason: "notFound" };
@@ -86,6 +91,7 @@ async function loadMember(name: string, eventSkills: string[]): Promise<MemberRo
     known: Object.hasOwn(SPEC_DATA.classes, basic.character_class),
     // NEXON's flag: logged in within the last 7 days.
     recent: basic.access_flag === "true",
+    main,
     cells,
   };
 }

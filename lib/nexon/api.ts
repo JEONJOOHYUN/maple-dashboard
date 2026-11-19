@@ -6,9 +6,10 @@
 // spaced pace for a minute (2026-11-09 measured: seven calls at once made some fail). It used to last for the
 // instance's whole life, which one busy second (a guild search) could set off for good (2026-11-19).
 //
-// Guild searches fire hundreds of calls (four a member, lib/spec/guild.ts): those go through nexonGetBulk, which keeps
+// Guild searches fire hundreds of calls (seven a member, lib/spec/guild.ts): those go through nexonGetBulk, which keeps
 // this instance to BULK_PER_SEC starts a second so two searches at once stay under the key's 500, and waits out a
 // refusal on its own instead of slowing every other caller.
+import { DAY, kstDate } from "../enhance/kst.ts";
 
 const BASE = "https://open.api.nexon.com/maplestory/v1";
 const SLOW_GAP_MS = 220;
@@ -122,4 +123,26 @@ export async function nexonOcid(name: string, get: typeof nexonGet = nexonGet): 
     if (e instanceof NexonError && e.kind === "failed" && e.code === "OPENAPI00004") throw new NexonError("notFound", name, e.code);
     throw e;
   }
+}
+
+/**
+ * The main of the character's account group: NEXON's union ranking gives every character of one union the same row,
+ * named by that union's representative (2026-11-20, 가몽: all 366 members had a row, 122 unions, every representative
+ * in the guild the highest level of its union). The ranking is a day behind: yesterday's (KST), or the day before's
+ * while yesterday's is still being made (OPENAPI00009, right after midnight). null = no row (no union yet).
+ */
+export async function nexonUnionMain(ocid: string, get: typeof nexonGet = nexonGet, now = Date.now()): Promise<string | null> {
+  for (const date of [kstDate(now - DAY), kstDate(now - 2 * DAY)]) {
+    try {
+      const r = await get<{ ranking?: { character_name?: string }[] }>("ranking/union", { ocid, date });
+      return r.ranking?.[0]?.character_name || null;
+    } catch (e) {
+      if (!(e instanceof NexonError) || e.kind !== "failed") throw e;
+      if (e.code === "OPENAPI00009") continue;
+      // No ranking for this character on that day (newer than the ranking): not a failure of the member.
+      if (e.code === "OPENAPI00004") return null;
+      throw e;
+    }
+  }
+  return null;
 }

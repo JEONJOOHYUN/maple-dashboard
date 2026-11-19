@@ -2,29 +2,34 @@
 
 import { useCallback, useMemo, useSyncExternalStore } from "react";
 
-// Per-browser state in localStorage (guests' own numbers). Server render and private windows fall back
-// to the initial value; every read and write is wrapped because storage can throw.
+// Per-browser state in localStorage (guests' own numbers), or per tab in sessionStorage (what a screen was showing,
+// to come back to). Server render and private windows fall back to the initial value; every read and write is
+// wrapped because storage can throw.
 const EVENT = "maple-stored-change";
+export type StoreArea = "local" | "session";
 const memory = new Map<string, string>();
 /** Keys whose last write went to memory (storage full or blocked); reads must use memory too. */
 const inMemory = new Set<string>();
+const storage = (area: StoreArea) => (area === "session" ? window.sessionStorage : window.localStorage);
 
-function read(key: string): string | null {
-  if (inMemory.has(key)) return memory.get(key) ?? null;
+function read(key: string, area: StoreArea): string | null {
+  const slot = `${area}:${key}`;
+  if (inMemory.has(slot)) return memory.get(slot) ?? null;
   try {
-    return window.localStorage.getItem(key);
+    return storage(area).getItem(key);
   } catch {
-    return memory.get(key) ?? null;
+    return memory.get(slot) ?? null;
   }
 }
 
-function write(key: string, value: string) {
+function write(key: string, value: string, area: StoreArea) {
+  const slot = `${area}:${key}`;
   try {
-    window.localStorage.setItem(key, value);
-    inMemory.delete(key);
+    storage(area).setItem(key, value);
+    inMemory.delete(slot);
   } catch {
-    memory.set(key, value);
-    inMemory.add(key);
+    memory.set(slot, value);
+    inMemory.add(slot);
   }
   window.dispatchEvent(new CustomEvent(EVENT, { detail: key }));
 }
@@ -38,11 +43,11 @@ function subscribe(onChange: () => void) {
   };
 }
 
-/** [value, set] backed by localStorage under `key` (JSON). */
-export function useStored<T>(key: string, initial: T): [T, (next: T | ((prev: T) => T)) => void] {
+/** [value, set] backed by localStorage (or this tab's sessionStorage) under `key` (JSON). */
+export function useStored<T>(key: string, initial: T, area: StoreArea = "local"): [T, (next: T | ((prev: T) => T)) => void] {
   const raw = useSyncExternalStore(
     subscribe,
-    () => read(key),
+    () => read(key, area),
     () => null
   );
   const value = useMemo<T>(() => {
@@ -57,7 +62,7 @@ export function useStored<T>(key: string, initial: T): [T, (next: T | ((prev: T)
   }, [raw]);
   const set = useCallback(
     (next: T | ((prev: T) => T)) => {
-      const prevRaw = read(key);
+      const prevRaw = read(key, area);
       let prev = initial;
       if (prevRaw !== null) {
         try {
@@ -67,10 +72,10 @@ export function useStored<T>(key: string, initial: T): [T, (next: T | ((prev: T)
         }
       }
       const resolved = typeof next === "function" ? (next as (p: T) => T)(prev) : next;
-      write(key, JSON.stringify(resolved));
+      write(key, JSON.stringify(resolved), area);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [key]
+    [key, area]
   );
   return [value, set];
 }

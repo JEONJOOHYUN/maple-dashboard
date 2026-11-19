@@ -9,14 +9,14 @@ import { currentEventSkills } from "@/lib/spec/load";
 
 // A visitor's guild searches (a world list or a guild, cached or not), counted per address.
 const SEARCHES_PER_HOUR = 30;
-// The whole site's guild checks a day, in NEXON calls (6 a member, counted even when the members come from the
+// The whole site's guild checks a day, in NEXON calls (7 a member, counted even when the members come from the
 // cache): half of what NEXON allows our key a day (20,000,000, official guide 2026-11-20), so a run of guild
 // searches can never take the 개인 tab and the other tools down with it.
-const CALLS_PER_MEMBER = 6;
+const CALLS_PER_MEMBER = 7;
 const GUILD_CALLS_PER_DAY = 10_000_000;
 
 /** What the page gets of a guild: everything but the member list (sent as checked rows instead). */
-const info = (h: GuildHit): GuildInfo => ({ world: h.world, name: h.name, level: h.level, master: h.master, count: h.count });
+const info = (h: GuildHit): GuildInfo => ({ world: h.world, name: h.name, level: h.level, master: h.master, count: h.count, users: h.users });
 
 export async function guildView(name: string, world: string): Promise<GuildView> {
   if (!name) return { kind: "empty" };

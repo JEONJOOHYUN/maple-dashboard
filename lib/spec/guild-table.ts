@@ -33,9 +33,12 @@ export const CLASS_COLUMNS: readonly string[] = [SKILL_KEY.skill0, SKILL_KEY.hyp
  */
 export type Cell = { key: string; text: string; tier: Tier; what: string; detail: string[]; n: number };
 
-/** known = the class is in the data file; a new class gets only the common checks (its own columns show "-"). */
+/**
+ * known = the class is in the data file; a new class gets only the common checks (its own columns show "-").
+ * main = the main of the character's account group (lib/nexon/api.ts nexonUnionMain), null when NEXON has none.
+ */
 export type MemberRow =
-  | { ok: true; name: string; level: number; cls: string; known: boolean; recent: boolean; cells: Cell[] }
+  | { ok: true; name: string; level: number; cls: string; known: boolean; recent: boolean; main: string | null; cells: Cell[] }
   | { ok: false; name: string; reason: "notFound" | "failed" };
 
 /** Lines of several things, shown as their count: "대부분 찍는 것 2개 안 찍음" → "2개". */
@@ -89,15 +92,18 @@ const missed = (r: Ok, key: string) => (r.cells.some((c) => c.key === key) ? 1 :
 export function sortRows(rows: readonly MemberRow[], by: SortBy): MemberRow[] {
   const ok = rows.filter((r): r is Ok => r.ok);
   const rest = rows.filter((r) => !r.ok).sort((a, b) => ko(a.name, b.name));
-  let cmp: (a: Ok, b: Ok) => number;
-  if (by === "level") cmp = byLevel;
-  else if (by === "name") cmp = (a, b) => ko(a.name, b.name);
-  else if (by === "class") cmp = (a, b) => ko(a.cls, b.cls) || byLevel(a, b);
-  else if (by.startsWith("col:")) {
+  return [...ok.sort(order(by)), ...rest];
+}
+
+function order(by: SortBy): (a: Ok, b: Ok) => number {
+  if (by === "level") return byLevel;
+  if (by === "name") return (a, b) => ko(a.name, b.name);
+  if (by === "class") return (a, b) => ko(a.cls, b.cls) || byLevel(a, b);
+  if (by.startsWith("col:")) {
     const key = by.slice(4);
-    cmp = (a, b) => missed(b, key) - missed(a, key) || byMisses(a, b) || byLevel(a, b);
-  } else cmp = (a, b) => byMisses(a, b) || byLevel(a, b);
-  return [...ok.sort(cmp), ...rest];
+    return (a, b) => missed(b, key) - missed(a, key) || byMisses(a, b) || byLevel(a, b);
+  }
+  return (a, b) => byMisses(a, b) || byLevel(a, b);
 }
 
 /** Members whose name holds the words typed (user, 2026-11-20: "길드 내에서도 특정 인원을 검색"); case is ignored. */
@@ -105,6 +111,70 @@ export function matchName(rows: readonly MemberRow[], query: string): MemberRow[
   const q = query.trim().toLowerCase();
   return q ? rows.filter((r) => r.name.toLowerCase().includes(q)) : [...rows];
 }
+
+/**
+ * One player (user, 2026-11-20: "계정 그룹 캐릭들은 따로 묶어서 · 메인캐릭이 있고 서브 캐릭이 있는거잖아"): the
+ * guild's characters of one account group as one line, its main on the line and the others folded under it. The
+ * in-game member count counts accounts, and one player can hold several accounts of one union: 가몽 2026-11-20 =
+ * 366 characters, 137 accounts, 122 players.
+ */
+export type Person = {
+  /** Stays the same while members stream in: the main's name, or a member's own name when NEXON gave no main. */
+  key: string;
+  /** The row on the line: the main, or the highest of the others when the main is not in this guild. */
+  head: MemberRow;
+  subs: MemberRow[];
+  /** The main's name when the main is not in this guild (the head is then one of the others). */
+  away: string | null;
+};
+
+/** Members → players, by the main NEXON gave each one; a member with none (or not checked) is a player of its own. */
+export function groupPeople(rows: readonly MemberRow[]): Person[] {
+  const byMain = new Map<string, MemberRow[]>();
+  for (const r of rows) if (r.ok && r.main) byMain.set(r.main, [...(byMain.get(r.main) ?? []), r]);
+  const people: Person[] = [];
+  for (const r of rows) {
+    if (r.ok && r.main) continue;
+    // The main itself could not be checked (or got no row) while its other characters name it: it heads them.
+    const group = byMain.get(r.name);
+    if (group) group.push(r);
+    else people.push({ key: r.name, head: r, subs: [], away: null });
+  }
+  for (const [main, group] of byMain) {
+    const head = group.find((r) => r.name === main) ?? [...group].sort((a, b) => (a.ok && b.ok ? byLevel(a, b) : 0))[0];
+    people.push({ key: main, head, subs: group.filter((r) => r !== head), away: head.name === main ? null : main });
+  }
+  return people;
+}
+
+/**
+ * Players in the order asked, by their mains as sortRows orders members. Under "많이 놓친 순" and a column, mains that
+ * missed as much go by their other characters (who missed more there first); each player's others are in the same
+ * order. Players whose main could not be checked come last, by name.
+ */
+export function sortPeople(people: readonly Person[], by: SortBy): Person[] {
+  const col = by.startsWith("col:") ? by.slice(4) : null;
+  const others = new Map(people.map((p) => [p, p.subs.filter((r) => r.ok && (col ? missed(r, col) : r.cells.length > 0)).length]));
+  const tie = (a: Person, b: Person) => others.get(b)! - others.get(a)!;
+  const head = (p: Person) => p.head as Ok;
+  let cmp: (a: Person, b: Person) => number;
+  if (by === "level" || by === "name" || by === "class") {
+    const rows = order(by);
+    cmp = (a, b) => rows(head(a), head(b));
+  } else if (col) cmp = (a, b) => missed(head(b), col) - missed(head(a), col) || tie(a, b) || byMisses(head(a), head(b)) || byLevel(head(a), head(b));
+  else cmp = (a, b) => byMisses(head(a), head(b)) || tie(a, b) || byLevel(head(a), head(b));
+  const ok = people.filter((p) => p.head.ok).sort(cmp);
+  const rest = people.filter((p) => !p.head.ok).sort((a, b) => ko(a.head.name, b.head.name));
+  return [...ok, ...rest].map((p) => ({ ...p, subs: sortRows(p.subs, by) }));
+}
+
+/** Players with a character whose name holds the words typed (the main's or another's). */
+export function matchPeople(people: readonly Person[], query: string): Person[] {
+  return query.trim() ? people.filter((p) => matchName([p.head, ...p.subs], query).length > 0) : [...people];
+}
+
+/** Whether one of the player's other characters holds the words typed: the line opens to show it. */
+export const subMatches = (p: Person, query: string) => !!query.trim() && matchName(p.subs, query).length > 0;
 
 /** How many checked members missed each column. */
 export function columnCounts(rows: readonly MemberRow[], cols: readonly string[]): Record<string, number> {
