@@ -133,10 +133,22 @@ function daysTo(at: string, now: Date): number {
 }
 
 /**
- * Stat cash items and pets that run out. Stats come from the cash items worn (base; presets only change the look —
- * 귤민 shows its 마스터라벨 stats from base while wearing preset 3) and, when the character uses it, the world's shared
- * 마스터라벨 set. Pets = own + the world's shared pets, the same pet once.
+ * The cash item lists that count: the character's own (base — presets only change the look: 귤민 shows its 마스터라벨
+ * stats from base while wearing preset 3 — and the second look's), then, when the character uses it, the world's shared
+ * 마스터라벨 set (shared = true).
  */
+function cashLists(raw: SpecRaw): { items: CashItem[]; shared: boolean }[] {
+  const cash = raw.cash;
+  const listOf = (v: unknown) => (Array.isArray(v) ? (v as CashItem[]) : []);
+  const out = [
+    { items: listOf(cash?.cash_item_equipment_base), shared: false },
+    { items: listOf(cash?.additional_cash_item_equipment_base), shared: false },
+  ];
+  if (cash?.world_share_master_label_activate_flag === "1") out.push({ items: listOf(cash.world_share_master_label_base), shared: true });
+  return out;
+}
+
+/** Stat cash items (cashLists) and pets that run out. Pets = own + the world's shared pets, the same pet once. */
 export function periodsOf(raw: SpecRaw, now: Date): Period[] {
   const out: Period[] = [];
   const seen = new Set<string>();
@@ -146,18 +158,14 @@ export function periodsOf(raw: SpecRaw, now: Date): Period[] {
     seen.add(key);
     out.push(p);
   };
-  const cash = raw.cash;
-  const lists = [cash?.cash_item_equipment_base, cash?.additional_cash_item_equipment_base];
-  if (cash?.world_share_master_label_activate_flag === "1") lists.push(cash.world_share_master_label_base);
-  for (const list of lists) {
-    for (const it of (Array.isArray(list) ? list : []) as CashItem[]) {
+  for (const { items } of cashLists(raw))
+    for (const it of items) {
       if (!it.cash_item_option?.length) continue;
       const base = { name: it.cash_item_name ?? "", slot: it.cash_item_equipment_slot ?? "" };
       if (it.date_option_expire)
         push({ ...base, kind: it.cash_item_label === "마스터라벨" ? "label" : "cashStat", days: daysTo(it.date_option_expire, now), at: it.date_option_expire.slice(0, 10) });
       if (it.date_expire) push({ ...base, kind: "cashItem", days: daysTo(it.date_expire, now), at: it.date_expire.slice(0, 10) });
     }
-  }
   // The same place (1 ~ 3) as own and as the world's shared pet is one pet; two pets of one name in two places are two.
   for (const prefix of ["pet", "world_share_pet"])
     for (const i of [1, 2, 3]) {
@@ -173,26 +181,31 @@ export function periodsOf(raw: SpecRaw, now: Date): Period[] {
 const LABEL_SET = ["모자", "상의", "신발", "망토", "무기"];
 
 /**
- * Master labels in effect, one per place: those worn (base) and, when the world's shared set is on, that set. days =
- * days of stats left, null = none (run out — the API drops them). A place with stats in either list counts as having them.
+ * Master labels in effect, one per place. days = days of stats left, null = none (run out — the API drops them).
+ * Stats decide a place (the label with stats, the most days left). With stats on neither side the shared set is the
+ * one shown, since that is what the character wears (user, 2026-11-20: 빙주 wears the 청몽 set, but its own run-out
+ * 메르헨 프린세스 · 로스트 미드나잇 were shown in two of its places).
  */
 export function labelPieces(raw: SpecRaw, now: Date): { slot: string; name: string; icon: string | null; days: number | null }[] {
-  const cash = raw.cash;
-  const lists = [cash?.cash_item_equipment_base, cash?.additional_cash_item_equipment_base];
-  if (cash?.world_share_master_label_activate_flag === "1") lists.push(cash.world_share_master_label_base);
-  const bySlot = new Map<string, { slot: string; name: string; icon: string | null; days: number | null }>();
-  for (const list of lists)
-    for (const it of (Array.isArray(list) ? list : []) as CashItem[]) {
+  const bySlot = new Map<string, { slot: string; name: string; icon: string | null; days: number | null; shared: boolean }>();
+  for (const { items, shared } of cashLists(raw))
+    for (const it of items) {
       if (it.cash_item_label !== "마스터라벨") continue;
       const slot = it.cash_item_equipment_slot ?? "";
       // Stats past their date (or "expired") count as none, like stats the API already dropped.
       const left = it.cash_item_option?.length && it.date_option_expire ? daysTo(it.date_option_expire, now) : -1;
       const days = left >= 0 ? left : null;
       const had = bySlot.get(slot);
-      if (!had || (had.days === null && days !== null) || (had.days !== null && days !== null && days > had.days))
-        bySlot.set(slot, { slot, name: it.cash_item_name ?? "", icon: apiIcon(it.cash_item_icon), days });
+      const better =
+        !had ||
+        (had.days === null && days !== null) ||
+        (had.days !== null && days !== null && days > had.days) ||
+        (had.days === null && days === null && shared && !had.shared);
+      if (better) bySlot.set(slot, { slot, name: it.cash_item_name ?? "", icon: apiIcon(it.cash_item_icon), days, shared });
     }
-  return [...bySlot.values()].sort((a, b) => LABEL_SET.indexOf(a.slot) - LABEL_SET.indexOf(b.slot));
+  return [...bySlot.values()]
+    .sort((a, b) => LABEL_SET.indexOf(a.slot) - LABEL_SET.indexOf(b.slot))
+    .map((p) => ({ slot: p.slot, name: p.name, icon: p.icon, days: p.days }));
 }
 
 /** "전투 플러스 · 마라벨 5개" for each 마스터라벨 플러스 running now. */

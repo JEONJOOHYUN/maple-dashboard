@@ -752,6 +752,38 @@ test("master labels: only a set with stats on some places is called out (user, 2
   // the shared set when it is off does not count (귤민 wears its own)
   shared.cash!.world_share_master_label_activate_flag = "0";
   assert.equal(labelPieces(shared, now).length, 0);
+  // 빙주 (NEXON, 2026-11-20): the shared set on over a set of its own, no stats on either side in two places → the
+  // shared names there (its own 메르헨 프린세스 · 로스트 미드나잇 were mixed into the 청몽 set)
+  const bj = base();
+  bj.cash = {
+    world_share_master_label_activate_flag: "1",
+    cash_item_equipment_base: [gone("모자", "메르헨 프린세스"), gone("상의", "진실의 사과"), gone("신발", "로스트 미드나잇"), gone("망토", "메르헨 캐슬"), gone("무기", "페어리 래빗")],
+    world_share_master_label_base: [
+      gone("모자", "청몽잠"),
+      ML("상의", "청몽선율", "2026-12-18T02:00+09:00"),
+      gone("신발", "청몽운"),
+      ML("망토", "환영지화", "2026-12-18T01:00+09:00"),
+      ML("무기", "환호지선", "2026-12-18T02:00+09:00"),
+    ],
+  } as SpecRaw["cash"];
+  assert.deepEqual(labelPieces(bj, now).map((l) => l.name), ["청몽잠", "청몽선율", "청몽운", "환영지화", "환호지선"]);
+  assert.equal(line(bj)!.detail[0], "능력치 없음: 모자 청몽잠 · 신발 청몽운");
+  assert.deepEqual(periodsOf(bj, now).map((p) => p.name), ["청몽선율", "환영지화", "환호지선"]);
+  // stats still decide a place: an own label with stats beside a shared one without counts as the one with stats
+  const hs = base();
+  hs.cash = {
+    world_share_master_label_activate_flag: "1",
+    cash_item_equipment_base: [ML("망토", "달빛 눈물", "2027-05-20T19:00+09:00")],
+    world_share_master_label_base: [
+      ML("모자", "청몽잠", "2027-08-20T01:00+09:00"),
+      ML("상의", "청몽선율", "2027-05-14T17:00+09:00"),
+      ML("신발", "청몽운", "2027-05-14T17:00+09:00"),
+      gone("망토", "환영지화"),
+      ML("무기", "환호지선", "2027-05-14T23:00+09:00"),
+    ],
+  } as SpecRaw["cash"];
+  assert.deepEqual(labelPieces(hs, now).map((l) => l.name), ["청몽잠", "청몽선율", "청몽운", "달빛 눈물", "환호지선"]);
+  assert.equal(line(hs), undefined);
 });
 
 test("master labels: stats past their date count as none; a partial set keeps the places without one (review, 2026-11-18)", () => {
