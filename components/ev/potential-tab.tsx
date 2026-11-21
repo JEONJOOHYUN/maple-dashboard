@@ -40,6 +40,7 @@ import { type MainStat,
   type SumGoal,
   type WeaponGoal,
 } from "@/lib/ev/potential";
+import { Reveal } from "@/components/ui/reveal";
 import { cn } from "@/lib/utils";
 import { koreanUnits } from "@/lib/format";
 
@@ -395,7 +396,7 @@ export function PotentialTab() {
               }}
               className={cn(
                 "flex min-w-0 flex-col items-start gap-0.5 rounded-lg border px-2.5 py-2 text-left",
-                s.id === slotId ? "border-primary bg-primary-soft" : "border-border hover:border-primary/60"
+                s.id === slotId ? "border-primary bg-primary-soft" : "tile-edge hover:border-primary/60"
               )}
             >
               <b className={cn("text-[13px]", s.id === slotId && "text-primary-text")}>{s.label}</b>
@@ -441,7 +442,7 @@ export function PotentialTab() {
                 type="button"
                 aria-pressed={g === grade}
                 onClick={() => setGrade(g)}
-                className={cn("h-9 rounded-lg border text-[13px]", g === grade ? cn("border-[1.5px] font-bold", GRADE_COLOR[g]) : "border-border text-muted-foreground")}
+                className={cn("h-9 rounded-lg border text-[13px]", g === grade ? cn("border-[1.5px] font-bold", GRADE_COLOR[g]) : "tile-edge text-muted-foreground")}
               >
                 {GRADE_LABEL[g]}
               </button>
@@ -488,7 +489,7 @@ export function PotentialTab() {
         )}
 
         {goal === "opt" && weaponLike && optGrade && mode === "preset" && (
-          <div className="@container flex flex-col gap-2.5 rounded-lg border border-border bg-muted/40 p-3">
+          <div className="@container flex flex-col gap-2.5 rounded-lg tile-edge bg-muted/40 p-3">
             <Label>
               노리는 줄
             </Label>
@@ -516,7 +517,7 @@ export function PotentialTab() {
                       className={cn(
                         "col-span-2 flex flex-col items-start rounded-lg border px-2.5 py-1.5 text-left @min-[27rem]:col-span-1",
                         i === 3 && "col-start-2 @min-[27rem]:col-start-auto",
-                        on ? "border-primary bg-primary-soft text-primary-text" : "border-border"
+                        on ? "border-primary bg-primary-soft text-primary-text" : "tile-edge"
                       )}
                     >
                       <b className="text-[13px]">{t.label}</b>
@@ -547,7 +548,7 @@ export function PotentialTab() {
                         onClick={() => setAddGoal(g.id)}
                         className={cn(
                           "flex flex-col items-start rounded-lg border px-2.5 py-1.5 text-left",
-                          addGoal === g.id ? "border-primary bg-primary-soft text-primary-text" : "border-border"
+                          addGoal === g.id ? "border-primary bg-primary-soft text-primary-text" : "tile-edge"
                         )}
                       >
                         <b className="text-[13px]">{g.label(need, "공/마")}</b>
@@ -588,7 +589,7 @@ export function PotentialTab() {
                     type="button"
                     aria-label={`${label} 줄이기`}
                     onClick={() => setMin({ ...min, [k]: Math.max(0, min[k] - 1) })}
-                    className="flex size-8 items-center justify-center rounded-md border border-border"
+                    className="flex size-8 items-center justify-center rounded-md tile-edge"
                   >
                     <Minus className="size-3.5" aria-hidden="true" />
                   </button>
@@ -597,7 +598,7 @@ export function PotentialTab() {
                     type="button"
                     aria-label={`${label} 늘리기`}
                     onClick={() => setMin({ ...min, [k]: Math.min(3, min[k] + 1) })}
-                    className="flex size-8 items-center justify-center rounded-md border border-border"
+                    className="flex size-8 items-center justify-center rounded-md tile-edge"
                   >
                     <Plus className="size-3.5" aria-hidden="true" />
                   </button>
@@ -625,7 +626,7 @@ export function PotentialTab() {
         )}
 
         {goal === "opt" && !weaponLike && !soul && optGrade && mode === "preset" && (
-          <div className="flex flex-col gap-2.5 rounded-lg border border-border bg-muted/40 p-3">
+          <div className="flex flex-col gap-2.5 rounded-lg tile-edge bg-muted/40 p-3">
             <Label
               aside={
                 extraOptions.length > 1 ? (
@@ -694,7 +695,7 @@ export function PotentialTab() {
                         type="button"
                         aria-label={`${label} 줄이기`}
                         onClick={() => setComboPart(k, (k === "lines" ? special : combo.stat) - 1)}
-                        className="flex size-8 items-center justify-center rounded-md border border-border"
+                        className="flex size-8 items-center justify-center rounded-md tile-edge"
                       >
                         <Minus className="size-3.5" aria-hidden="true" />
                       </button>
@@ -703,7 +704,7 @@ export function PotentialTab() {
                         type="button"
                         aria-label={`${label} 늘리기`}
                         onClick={() => setComboPart(k, (k === "lines" ? special : combo.stat) + 1)}
-                        className="flex size-8 items-center justify-center rounded-md border border-border"
+                        className="flex size-8 items-center justify-center rounded-md tile-edge"
                       >
                         <Plus className="size-3.5" aria-hidden="true" />
                       </button>
@@ -722,7 +723,7 @@ export function PotentialTab() {
                     type="button"
                     aria-pressed={i === tIdx}
                     onClick={() => setTargetIdx(i)}
-                    className={cn("flex flex-col items-start rounded-lg border px-2.5 py-1.5", i === tIdx ? "border-primary bg-primary-soft text-primary-text" : "border-border")}
+                    className={cn("flex flex-col items-start rounded-lg border px-2.5 py-1.5", i === tIdx ? "border-primary bg-primary-soft text-primary-text" : "tile-edge")}
                   >
                     <b className="font-num text-[13px]">{t.label}</b>
                     <span className="text-[11px] text-muted-foreground">{t.sub}</span>
@@ -762,8 +763,7 @@ export function PotentialTab() {
                     {!convOpen && <span className="font-normal text-muted-foreground">· {convChanged ? "바꾼 값 사용 중" : "기본값"}</span>}
                   </button>
                 </div>
-                {convOpen && (
-                <>
+                <Reveal open={convOpen} className="flex flex-col gap-2">
                 <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
                   {(
                     [
@@ -808,19 +808,18 @@ export function PotentialTab() {
                   ))}
                 </div>
                 <span className="flex flex-wrap items-center justify-end gap-2 text-[11px] text-muted-foreground">
-                  <button type="button" onClick={() => setConvText(CONV_TEXT_DEFAULT)} className="rounded border border-border px-2 py-0.5">
+                  <button type="button" onClick={() => setConvText(CONV_TEXT_DEFAULT)} className="rounded tile-edge px-2 py-0.5">
                     기본값으로
                   </button>
                 </span>
-                </>
-                )}
+                </Reveal>
               </div>
             )}
           </div>
         )}
 
         {goal === "opt" && soul && (
-          <div className="flex flex-col gap-2.5 rounded-lg border border-border bg-muted/40 p-3">
+          <div className="flex flex-col gap-2.5 rounded-lg tile-edge bg-muted/40 p-3">
             <Label>
               소울 증폭 단계
             </Label>
@@ -842,7 +841,7 @@ export function PotentialTab() {
                     onClick={() => setAddGoal(g.id)}
                     className={cn(
                       "flex flex-col items-start rounded-lg border px-2.5 py-1.5 text-left",
-                      addGoal === g.id ? "border-primary bg-primary-soft text-primary-text" : "border-border"
+                      addGoal === g.id ? "border-primary bg-primary-soft text-primary-text" : "tile-edge"
                     )}
                   >
                     <b className="text-[13px]">{g.label(soulNeed, "공/마")}</b>
@@ -865,7 +864,7 @@ export function PotentialTab() {
                   type="button"
                   aria-pressed={on}
                   onClick={() => setChosen(on ? picked.filter((x) => x !== c.id) : [...picked, c.id])}
-                  className={cn("flex flex-col items-start rounded-lg border px-3 py-2 text-left", on ? "border-primary bg-primary-soft" : "border-border")}
+                  className={cn("flex flex-col items-start rounded-lg border px-3 py-2 text-left", on ? "border-primary bg-primary-soft" : "tile-edge")}
                 >
                   <b className={cn("text-[13px]", on && "text-primary-text")}>{c.name}</b>
                   <span className="text-[11px] text-muted-foreground">{c.alias}</span>
@@ -894,7 +893,7 @@ export function PotentialTab() {
         {results.map((r, i) => {
           const avg = r.p ? averageTries(r.p, r.cap) : Infinity;
           return (
-            <div key={r.cube.id} className={cn("flex flex-col gap-3 tile p-4", i === 0 && r.p ? "border-primary" : "border-border", !r.p && "opacity-70")}>
+            <div key={r.cube.id} className={cn("flex flex-col gap-3 tile p-4", i === 0 && r.p ? "border-primary" : "", !r.p && "opacity-70")}>
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <span className="flex flex-wrap items-baseline gap-2">
                   <b className="text-[15px]">{r.cube.name}</b>

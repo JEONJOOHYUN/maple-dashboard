@@ -9,9 +9,12 @@ import { PageHeader } from "@/components/page-header";
 import { SpecTabs } from "@/components/spec/spec-tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Spinner } from "@/components/ui/spinner";
+import { SwapIcon } from "@/components/ui/swap-icon";
 import type { Miss, SpecResult, Tier, Tile } from "@/lib/spec/check";
 import { periodGroups } from "@/lib/spec/period-rows";
 import { useStored } from "@/lib/use-stored";
+import { useReveal } from "@/components/ui/reveal";
+import { Digits } from "@/components/ui/digits";
 import { cn } from "@/lib/utils";
 // Static imports, like the menu icons: each address carries a content hash.
 import artAbility from "@/public/icons/spec/ability.svg";
@@ -120,7 +123,7 @@ const TIER: Record<Tier, { label: string; className: string }> = {
   urgent: { label: "기간 임박", className: "bg-[oklch(0.63_0.182_24.3_/_0.14)] text-[oklch(0.63_0.182_24.3)]" },
   now: { label: "바로 됨", className: "bg-primary-soft text-primary-text" },
   quest: { label: "조금만", className: "bg-secondary text-foreground" },
-  long: { label: "시간 · 메소", className: "border border-border text-muted-foreground" },
+  long: { label: "시간 · 메소", className: "tile-edge text-muted-foreground" },
 };
 
 function TierChip({ tier, className }: { tier: Tier; className?: string }) {
@@ -180,7 +183,7 @@ function GamePic({ pic, size }: { pic: Pic; size: string }) {
 /** A game picture in a rounded box; without one, our picture of the category. */
 function PicBox({ pic, cat, large }: { pic?: Pic; cat?: string; large?: boolean }) {
   return (
-    <span className={cn("flex shrink-0 items-center justify-center rounded-[10px] border border-border bg-secondary", large ? "size-12" : "size-11")}>
+    <span className={cn("flex shrink-0 items-center justify-center rounded-[10px] tile-edge bg-secondary", large ? "size-12" : "size-11")}>
       <GamePic pic={pic ?? { a: catArt(cat) }} size="size-8" />
     </span>
   );
@@ -384,7 +387,7 @@ function Periods({ result }: { result: SpecResult }) {
   const groups = periodGroups(result.periods ?? [], result.labelPlus ?? null);
   if (!groups.length) return null;
   return (
-    <div className="flex flex-col divide-y divide-border rounded-lg border border-border">
+    <div className="flex flex-col divide-y divide-border rounded-lg tile-edge">
       <b className="px-3.5 py-2.5 text-[13px]">남은 기간</b>
       {groups.map((g) => (
         <div key={g.title} className="flex flex-col gap-1.5 px-3.5 py-2.5">
@@ -395,8 +398,8 @@ function Periods({ result }: { result: SpecResult }) {
           {g.rows.map((r) => (
             <div key={`${r.what}-${r.date}`} className="grid grid-cols-[minmax(0,1fr)_auto_3.25rem] items-baseline gap-x-3">
               <DetailLine text={r.what} />
-              <span className="font-num text-[13px] text-muted-foreground tabular-nums">{r.date}</span>
-              <b className={cn("text-right font-num text-[13px] tabular-nums", r.warn && "text-[oklch(0.63_0.182_24.3)]")}>{r.days}</b>
+              <span className="font-num text-[13px] text-muted-foreground tabular-nums"><Digits>{r.date}</Digits></span>
+              <b className={cn("text-right font-num text-[13px] tabular-nums", r.warn && "text-[oklch(0.63_0.182_24.3)]")}><Digits>{r.days}</Digits></b>
             </div>
           ))}
           {g.notes.map((n) => (
@@ -416,16 +419,18 @@ function Result({ result, at, asOf, optimizer, refreshing, refreshNote, onRefres
   const top = result.misses.filter(fitsCard).slice(0, CARD_MAX);
   const rest = result.misses.filter((m) => !top.includes(m));
   const under = cardsUnderCharacter(result, top.length, rest.length, !!optimizer);
+  // The lists fade out before the "open it" note comes in, so the two are never on the page together.
+  const list = useReveal(n > 0 && open);
   const cards =
-    n > 0 && open && top.length > 0 ? (
-      <>
+    list.shown && top.length > 0 ? (
+      <div {...list.attrs} className="reveal flex flex-col gap-3">
         <ListTitle title="먼저 채울 것" note="보스 프리셋 기준" />
         <ul className="grid grid-cols-[minmax(0,1fr)] gap-2.5 @xl:grid-cols-3">
           {top.map((m, i) => (
             <TopCard key={i} miss={m} />
           ))}
         </ul>
-      </>
+      </div>
     ) : null;
   const p = result.presets;
   const presetText = [
@@ -465,9 +470,9 @@ function Result({ result, at, asOf, optimizer, refreshing, refreshNote, onRefres
               disabled={refreshing}
               aria-label="다시 조회"
               title={`${fetchedAt(at)} 조회`}
-              className="absolute top-4 right-4 inline-flex h-8 items-center gap-1 rounded-md border border-border px-2 text-xs font-semibold whitespace-nowrap hover:bg-secondary disabled:opacity-60 sm:top-5 sm:right-5"
+              className="absolute top-4 right-4 inline-flex h-8 items-center gap-1 rounded-md tile-edge px-2 text-xs font-semibold whitespace-nowrap hover:bg-secondary disabled:opacity-60 sm:top-5 sm:right-5"
             >
-              <RotateCw className={cn("size-3.5", refreshing && "animate-spin")} aria-hidden="true" />
+              <SwapIcon on={refreshing} from={<RotateCw className="size-3.5" aria-hidden="true" />} to={<Spinner size={14} />} />
               <span className="hidden @sm:inline">다시 조회</span>
             </button>
           </div>
@@ -504,7 +509,7 @@ function Result({ result, at, asOf, optimizer, refreshing, refreshNote, onRefres
               href={optimizer}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-2 rounded-lg border border-border px-3.5 py-2.5 text-[13px] font-semibold hover:bg-secondary"
+              className="flex items-center gap-2 rounded-lg tile-edge px-3.5 py-2.5 text-[13px] font-semibold hover:bg-secondary"
             >
               하이퍼 스탯 효율 배분 보기
               <span className="text-xs font-normal text-muted-foreground">외부 사이트</span>
@@ -517,13 +522,13 @@ function Result({ result, at, asOf, optimizer, refreshing, refreshNote, onRefres
 
       <div className="@container flex min-w-0 flex-col gap-3">
         {!under && cards}
-        {n > 0 && open && rest.length > 0 && (
-          <>
+        {list.shown && rest.length > 0 && (
+          <div {...list.attrs} className="reveal flex flex-col gap-3">
             <div className={cn(!under && top.length > 0 && "mt-2")}>
               <ListTitle title={top.length ? `나머지 ${rest.length}개` : "놓친 스펙"} note={top.length ? "줄을 누르면 펼쳐짐" : "보스 프리셋 기준"} />
             </div>
             <Lines items={rest} chip />
-          </>
+          </div>
         )}
         {n === 0 && (
           <div className="flex flex-col items-center gap-2 tile px-4 py-9 text-center">
@@ -534,8 +539,8 @@ function Result({ result, at, asOf, optimizer, refreshing, refreshNote, onRefres
             <span className="text-[13px] text-muted-foreground">확인하는 항목 모두 채움</span>
           </div>
         )}
-        {n > 0 && !open && (
-          <div className="tile px-4 py-9 text-center text-[13px] text-muted-foreground">왼쪽 배지 → 목록 열기</div>
+        {n > 0 && !list.shown && (
+          <div className="reveal tile px-4 py-9 text-center text-[13px] text-muted-foreground">왼쪽 배지 → 목록 열기</div>
         )}
         {result.tips.length > 0 && (
           <>
@@ -631,7 +636,7 @@ export function SpecCheck({ name, view }: { name: string; view: SpecView }) {
               key={n}
               className={cn(
                 "inline-flex items-center rounded-full border text-[13px]",
-                n === found ? "border-primary bg-primary-soft text-primary-text" : "border-border bg-card",
+                n === found ? "border-primary bg-primary-soft text-primary-text" : "tile-edge bg-card",
               )}
             >
               <button type="button" onClick={() => pick(n)} disabled={pending} className="py-1.5 pr-1 pl-3 font-semibold">

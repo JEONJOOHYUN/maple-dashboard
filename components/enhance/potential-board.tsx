@@ -19,6 +19,7 @@ import { groupTallies, worldGroup } from "@/lib/enhance/worlds";
 import { STAT_CONV_DEFAULT } from "@/lib/ev/defaults";
 import { GRADE_LABEL, NEXT_GRADE, convFromText, type ConvText, type Grade } from "@/lib/ev/potential";
 import { useStored } from "@/lib/use-stored";
+import { Digits } from "@/components/ui/digits";
 import { cn } from "@/lib/utils";
 
 type View = "insight" | "log" | "items";
@@ -91,12 +92,12 @@ function RollRow({ entry, found, showItem }: { entry: PotEntry; found: Icons; sh
             {row.up && <span className={cn(BADGE, "border-primary/50 bg-primary-soft text-primary-text")}>등급 상승</span>}
             {taken && <span className={cn(BADGE, "border-gain/50 bg-gain/10 text-gain")}>선택</span>}
             {row.mt && <span className={cn(BADGE, "border-primary/50 bg-primary-soft text-primary-text")}>미라클 타임</span>}
-            {!row.meso && <span className={cn(BADGE, "border-border text-muted-foreground")}>{row.type}</span>}
+            {!row.meso && <span className={cn(BADGE, "tile-edge text-muted-foreground")}>{row.type}</span>}
           </span>
         )}
       </span>
       <span className="flex flex-col items-end gap-0.5">
-        <b className="font-num text-sm whitespace-nowrap">{cost > 0 ? eok(cost) : "—"}</b>
+        <b className="font-num text-sm whitespace-nowrap"><Digits>{cost > 0 ? eok(cost) : "—"}</Digits></b>
         <span className="text-[11px] whitespace-nowrap text-muted-foreground">{kstFull(row.t)}</span>
       </span>
     </div>
@@ -295,7 +296,7 @@ function RankCard({ rank, found, onOpen }: { rank: Rank; found: Icons; onOpen: (
           </span>
         </span>
       </span>
-      <b className={cn("font-num text-sm whitespace-nowrap", rank.css)}>{rank.value(p)}</b>
+      <b className={cn("font-num text-sm whitespace-nowrap", rank.css)}><Digits>{rank.value(p)}</Digits></b>
     </button>
   );
   return (

@@ -5,6 +5,8 @@ import { ChevronDown } from "lucide-react";
 import { Chip, Label, NumberField, Panel, Segment, count, eok, parseNum, pct } from "@/components/ev/ui";
 import { FLAMES, armorChance, bestWeaponGrade, goalChips, hpScore, hpTarget, tierValues, weaponChance, DEFAULT_HP_WEIGHTS, DEFAULT_WEIGHTS, DEFAULT_XENON_WEIGHTS, type FlameJob } from "@/lib/ev/flame";
 import { averageTries, triesAt } from "@/lib/ev/luck";
+import { Reveal } from "@/components/ui/reveal";
+import { Digits } from "@/components/ui/digits";
 import { cn } from "@/lib/utils";
 import { koreanUnits } from "@/lib/format";
 
@@ -230,8 +232,7 @@ export function FlameTab() {
                 </button>
                 {convOpen && <b className="font-num text-sm text-primary-text">{Math.round(nowScore).toLocaleString("ko-KR")}{unit}</b>}
               </div>
-              {convOpen && (
-              <>
+              <Reveal open={convOpen} className="flex flex-col gap-2">
               <div className="grid grid-cols-[minmax(0,1fr)_80px_90px] items-center gap-x-2 gap-y-1.5 text-[13px]">
                 <span className="text-[11px] text-muted-foreground">추옵</span>
                 <span className="text-right text-[11px] text-muted-foreground">붙은 값</span>
@@ -288,12 +289,11 @@ export function FlameTab() {
                 )}
               </div>
               <span className="flex flex-wrap items-center justify-end gap-2 text-[11px] text-muted-foreground">
-                <button type="button" onClick={resetConv} className="rounded border border-border px-2 py-0.5">
+                <button type="button" onClick={resetConv} className="rounded tile-edge px-2 py-0.5">
                   기본값으로
                 </button>
               </span>
-              </>
-              )}
+              </Reveal>
             </div>
           </div>
         )}
@@ -370,10 +370,10 @@ export function FlameTab() {
                   </span>
                 )}
               </span>
-              <span className="text-right font-num">{pct(r.p)}</span>
-              <span className="text-right font-num">{r.p ? count(1 / r.p, "개") : "—"}</span>
+              <span className="text-right font-num"><Digits>{pct(r.p)}</Digits></span>
+              <span className="text-right font-num"><Digits>{r.p ? count(1 / r.p, "개") : "—"}</Digits></span>
               <b className={cn("text-right font-num", r === best && Number.isFinite(bestMeso) && "text-primary-text")}>
-                {Number.isFinite(mesoOf(r)) ? eok(mesoOf(r)) : r.p ? "가격 필요" : "—"}
+                <Digits>{Number.isFinite(mesoOf(r)) ? eok(mesoOf(r)) : r.p ? "가격 필요" : "—"}</Digits>
               </b>
             </div>
           ))}

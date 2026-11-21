@@ -949,7 +949,7 @@ function Step({
         <span className="pl-7 text-xs text-muted-foreground">{note}</span>
       )}
       {children && (
-        <div className="flex flex-col divide-y divide-border rounded-md border border-border pl-0">
+        <div className="flex flex-col divide-y divide-border rounded-md tile-edge pl-0">
           {children}
         </div>
       )}
@@ -987,7 +987,7 @@ function SeenChips({
             "h-7 shrink-0 rounded-full border px-2.5 text-xs whitespace-nowrap transition-colors",
             value === k
               ? "border-primary bg-primary font-bold text-primary-foreground"
-              : "border-border hover:border-primary/60",
+              : "tile-edge hover:border-primary/60",
           )}
         >
           {ABILITY_OPTIONS[k].short}

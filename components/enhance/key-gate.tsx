@@ -73,7 +73,7 @@ function CopyButton({ label, text }: { label: string; text: string }) {
           () => {}
         );
       }}
-      className="inline-flex h-7 items-center gap-1 rounded-md border border-border bg-background px-2 text-[11px] font-semibold whitespace-nowrap text-foreground outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
+      className="inline-flex h-7 items-center gap-1 rounded-md tile-edge bg-background pr-2 pl-1.5 text-[11px] font-semibold whitespace-nowrap text-foreground outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
     >
       <SwapIcon on={done} from={<Copy className="size-3" />} to={<Check className="size-3 text-primary-text" />} />
       {done ? "복사됨" : "복사"}
@@ -128,7 +128,7 @@ export function KeyGate({ saved, onConnect, onForgetAll }: { saved: SavedKey[]; 
                   // Not while a new key is being checked: its answer would land after this choice and undo it.
                   disabled={busy}
                   onClick={() => onConnect({ key: k.key, account: k.account }, true)}
-                  className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-border bg-background px-3 text-[13px] font-semibold outline-none hover:border-primary/60 hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
+                  className="inline-flex h-10 items-center gap-1.5 rounded-lg tile-edge bg-background pr-3 pl-2.5 text-[13px] font-semibold outline-none hover:border-primary/60 hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
                 >
                   <KeyRound className="size-3.5 text-primary-text" aria-hidden="true" />
                   {keyLabel(k, i)}

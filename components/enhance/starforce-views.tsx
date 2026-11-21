@@ -14,6 +14,7 @@ import { eventGroups, roundsPerCard, splitGroup, starEventKind, type EventGroup,
 import { buildStats, entryKey, reachedFloor, type Entry, type ItemStat, type Stats, type Tally } from "@/lib/enhance/stats";
 import { FLOOR_STAR } from "@/lib/ev/starforce";
 import { Reveal } from "@/components/ui/reveal";
+import { Digits } from "@/components/ui/digits";
 import { cn } from "@/lib/utils";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
@@ -102,7 +103,7 @@ function RankCard({
           </span>
         </span>
       </span>
-      <b className={cn("font-num text-sm whitespace-nowrap", color)}>{value(it)}</b>
+      <b className={cn("font-num text-sm whitespace-nowrap", color)}><Digits>{value(it)}</Digits></b>
     </button>
   );
   return (

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { eok, Label, LuckBox, NumberField, Panel, parseNum, ResultCard, Segment } from "@/components/ev/ui";
 import { LUCK_LEVELS, percentileOf } from "@/lib/ev/luck";
 import { DEFAULT_ETHER_EOK, SOUL_STAGES, soulPlan } from "@/lib/ev/soul";
+import { Digits } from "@/components/ui/digits";
 import { cn } from "@/lib/utils";
 
 const stageLabel = (i: number) => (i === 0 ? "강화 전" : `${i}단계`);
@@ -108,9 +109,9 @@ export function SoulTab() {
                   실패마다 +{Math.round(s.step * 1000) / 10}%p · 강화비 {s.feeEok}억
                 </span>
               </span>
-              <span className="text-right font-num">{Math.round(s.first * 1000) / 10}%</span>
-              <span className="text-right font-num text-muted-foreground">{s.cap}번 실패 후</span>
-              <b className="text-right font-num">{plan.stages[i].avgTries.toFixed(1)}번</b>
+              <span className="text-right font-num"><Digits>{Math.round(s.first * 1000) / 10}</Digits>%</span>
+              <span className="text-right font-num text-muted-foreground"><Digits>{s.cap}</Digits>번 실패 후</span>
+              <b className="text-right font-num"><Digits>{plan.stages[i].avgTries.toFixed(1)}</Digits>번</b>
             </div>
           ))}
         </div>

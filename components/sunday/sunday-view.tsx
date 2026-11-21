@@ -5,6 +5,7 @@ import { THEMES, type ThemeId } from "@/lib/sunday/bundles";
 import { dateLabel } from "@/lib/sunday/history";
 import { hitChange, hitChangeLabel, hitRate, type HitKey, type WeekHit } from "@/lib/sunday/hits";
 import type { OddsView, SundayPageData, WeekView } from "@/lib/sunday/view";
+import { Digits } from "@/components/ui/digits";
 import { cn } from "@/lib/utils";
 
 const THEME_ICON: Record<ThemeId, LucideIcon> = { starforce: Star, enhance: Sparkles, hunt: Swords };
@@ -14,7 +15,7 @@ const EVENT_LIST = "https://maplestory.nexon.com/News/Event";
 export function ThemeChip({ id, className }: { id: ThemeId; className?: string }) {
   const Icon = THEME_ICON[id];
   return (
-    <span className={cn("inline-flex items-center gap-1 rounded-md bg-primary-soft px-2 py-0.5 text-xs font-semibold text-primary-text", className)}>
+    <span className={cn("inline-flex items-center gap-1 rounded-md bg-primary-soft pr-2 pl-1.5 py-0.5 text-xs font-semibold text-primary-text", className)}>
       <Icon className="size-3.5" aria-hidden="true" />
       {THEMES.find((t) => t.id === id)?.day}
     </span>
@@ -55,7 +56,7 @@ export function SundayView({ data }: { data: SundayPageData }) {
       </div>
 
       {prediction.missingWeeks > 0 && (
-        <p className="flex items-start gap-2 rounded-lg border border-border bg-muted px-4 py-3 text-[13px] leading-relaxed">
+        <p className="flex items-start gap-2 rounded-lg tile-edge bg-muted px-4 py-3 text-[13px] leading-relaxed">
           <TriangleAlert className="mt-0.5 size-4 shrink-0 text-primary-text" aria-hidden="true" />
           기록이 {prediction.missingWeeks}주 밀려 있음({data.dataEnd} 까지) → 예측이 덜 정확함
         </p>
@@ -88,7 +89,7 @@ export function SundayView({ data }: { data: SundayPageData }) {
                       <span className="text-xs text-muted-foreground">{ago(o)}</span>
                     </span>
                     <span className="flex flex-col items-end gap-1">
-                      <b className="font-num">{pct(o.p)}</b>
+                      <b className="font-num"><Digits>{pct(o.p)}</Digits></b>
                       <span className="h-1.5 w-[84px] overflow-hidden rounded-full bg-muted" aria-hidden="true">
                         <span className="block h-full rounded-full bg-primary" style={{ width: `${Math.min(100, Math.round(o.p * 200))}%` }} />
                       </span>
@@ -177,7 +178,7 @@ function ThemeBand({ week, prediction }: { week: SundayPageData["thisWeek"]; pre
     <section
       className={cn(
         "grid grid-cols-1 gap-4 tile p-[18px] lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:gap-6 lg:p-6",
-        recorded ? "border-border" : "border-primary",
+        recorded ? "" : "border-primary",
       )}
     >
       <div className="flex flex-col gap-2.5">
@@ -201,7 +202,7 @@ function ThemeBand({ week, prediction }: { week: SundayPageData["thisWeek"]; pre
           const Icon = THEME_ICON[t.id];
           const top = t.p === maxP;
           return (
-            <li key={t.id} className={cn("flex flex-col gap-2 rounded-lg border p-2.5 lg:p-4", top ? "border-primary bg-primary-soft" : "border-border bg-muted")}>
+            <li key={t.id} className={cn("flex flex-col gap-2 rounded-lg border p-2.5 lg:p-4", top ? "border-primary bg-primary-soft" : "tile-edge bg-muted")}>
               <span className="inline-flex items-center gap-1 text-xs font-semibold whitespace-nowrap lg:gap-1.5 lg:text-[13px]">
                 <Icon className={cn("size-3.5 shrink-0 lg:size-4", top ? "text-primary-text" : "text-muted-foreground")} aria-hidden="true" />
                 {t.label}
@@ -259,14 +260,14 @@ function PicksBand({ picks, hits }: { picks: OddsView[]; hits: Hits }) {
               </span>
               <span className="flex items-baseline justify-between gap-2.5">
                 <b className="min-w-0 text-[15px]">{o.label}</b>
-                <b className="font-num shrink-0 text-[22px]">{pct(o.p)}</b>
+                <b className="font-num shrink-0 text-[22px]"><Digits>{pct(o.p)}</Digits></b>
               </span>
             </span>
           </li>
         ))}
       </ol>
       {rest.length > 0 && (
-        <div className="flex flex-col gap-2 rounded-lg border border-border px-3.5 py-3">
+        <div className="flex flex-col gap-2 rounded-lg tile-edge px-3.5 py-3">
           <h3 className="text-xs font-bold text-muted-foreground">그 밖에 유력</h3>
           <ol className="grid grid-cols-1 gap-2 lg:grid-cols-2 lg:gap-x-6">
             {rest.map((o, i) => (
@@ -278,7 +279,7 @@ function PicksBand({ picks, hits }: { picks: OddsView[]; hits: Hits }) {
                     <span className="block h-1 rounded-full bg-muted-foreground" style={{ width: pct(o.p) }} />
                   </span>
                 </span>
-                <span className="font-num text-right text-[13px] font-bold">{pct(o.p)}</span>
+                <span className="font-num text-right text-[13px] font-bold"><Digits>{pct(o.p)}</Digits></span>
               </li>
             ))}
           </ol>
@@ -410,7 +411,7 @@ function RecentRow({ week, current, wideOnly }: { week: WeekView; current: boole
       <span className="flex min-w-0 flex-col gap-1">
         <span className="flex flex-wrap items-center gap-1.5">
           <b>{week.title}</b>
-          {week.special && <span className="rounded-md border border-border px-1.5 text-[11px] text-muted-foreground">스페셜</span>}
+          {week.special && <span className="rounded-md tile-edge px-1.5 text-[11px] text-muted-foreground">스페셜</span>}
         </span>
         <span className="text-xs leading-normal text-muted-foreground">{week.detail || "이벤트 연계 혜택만"}</span>
       </span>

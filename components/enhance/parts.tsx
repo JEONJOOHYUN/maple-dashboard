@@ -101,7 +101,7 @@ export function PickedTotal({ spent, delta }: { spent: number; delta: number | n
 }
 
 /** Small label on a card (a count, a streak). */
-export const CHIP = "rounded border border-border px-1.5 text-[11px] leading-[18px] font-semibold whitespace-nowrap";
+export const CHIP = "rounded tile-edge px-1.5 text-[11px] leading-[18px] font-semibold whitespace-nowrap";
 
 /** One small box of a card: a label and a number on one line (the number drops under the label when it does not fit). */
 export function Tile({ label, className, children }: { label: string; className?: string; children: ReactNode }) {
@@ -335,7 +335,7 @@ export function Select({ className, children, ...props }: ComponentProps<"select
 
 const BADGE = {
   event: "border-primary/50 bg-primary-soft text-primary-text",
-  plain: "border-border text-muted-foreground",
+  plain: "tile-edge text-muted-foreground",
 };
 
 /** What was on for one try. 샤타포스 = the discount and the destroy cut together, so it gets one badge of its own. */

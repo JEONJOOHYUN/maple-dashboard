@@ -43,7 +43,7 @@ import { ZEBRA_HEAD, ZEBRA_ROW, ZEBRA_SCROLL, ZEBRA_TABLE } from "@/components/u
 import { cn } from "@/lib/utils";
 import { koreanUnits } from "@/lib/format";
 import { copyImage, type ImageCopyResult } from "@/lib/canvas-image";
-import { renderQuoteImage } from "@/lib/ev/quote-image";
+import type { QuoteImageData } from "@/lib/ev/quote-image";
 
 const EVENTS: { id: StarEvent; label: string }[] = [
   { id: "none", label: "기본" },
@@ -255,9 +255,9 @@ export function StarforceTab() {
   async function copyPicture() {
     if (cart.length === 0 || imageBusy) return;
     setImageBusy(true);
-    // No await before copyImage: the clipboard item has to be made inside the click (Safari).
-    const result = await copyImage(
-      renderQuoteImage({
+    // No await before copyImage: the clipboard item has to be made inside the click (Safari). The drawing code is
+    // fetched here, on the first picture, rather than with the page.
+    const data: QuoteImageData = {
         multLabel: `×${mult}`,
         rows: cartRows.map((c) => ({
           item: c.item,
@@ -281,7 +281,9 @@ export function StarforceTab() {
           won: won(sum.meso * mult),
           before: `배율 전 ${eok(sum.meso)} 메소 · ${won(sum.meso)}`,
         },
-      }),
+    };
+    const result = await copyImage(
+      import("@/lib/ev/quote-image").then((m) => m.renderQuoteImage(data)),
       "스타포스-견적서.png",
     );
     setImageResult(result);
@@ -326,7 +328,7 @@ export function StarforceTab() {
                           "flex h-11 min-w-0 items-center justify-around rounded-lg border transition-colors",
                           item === it.id
                             ? "border-primary bg-primary-soft ring-1 ring-primary"
-                            : "border-border bg-card hover:border-primary/60",
+                            : "tile-edge bg-card hover:border-primary/60",
                         )}
                       >
                         {it.icons.length ? (
@@ -699,7 +701,7 @@ export function StarforceTab() {
                               type="button"
                               onClick={() => setCart((prev) => prev.filter((x) => x.id !== c.id))}
                               aria-label={`${c.item} ${c.from} → ${c.to}성 빼기`}
-                              className="h-7 shrink-0 rounded-md border border-border px-2.5 text-xs whitespace-nowrap text-muted-foreground transition-[color,scale] hover:text-destructive active:scale-[0.96]"
+                              className="relative h-7 shrink-0 rounded-md tile-edge px-2.5 text-xs whitespace-nowrap text-muted-foreground transition-[color,scale] after:absolute after:-inset-1.5 hover:text-destructive active:scale-[0.96]"
                             >
                               빼기
                             </button>

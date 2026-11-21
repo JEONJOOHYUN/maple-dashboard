@@ -324,7 +324,7 @@ export function PinballGame() {
                       setNameDraft(e.name);
                       setCountDraft(String(e.count));
                     }}
-                    className="inline-flex h-9 items-center gap-1.5 rounded-full border border-border px-3 text-[13px] hover:border-primary/60"
+                    className="inline-flex h-9 items-center gap-1.5 rounded-full tile-edge px-3 text-[13px] hover:border-primary/60"
                   >
                     <span aria-hidden="true" className="size-3.5 shrink-0 rounded-full" style={{ background: colorFor(e.name) }} />
                     <span className="max-w-24 truncate">{e.name}</span>
@@ -345,7 +345,7 @@ export function PinballGame() {
                 placeholder={full ? `구슬 최대 ${MAX_TOTAL}개` : "이름 추가 (쉼표로 여러 명, 이름*3)"}
                 className="h-10 min-w-0 flex-1 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-ring focus:ring-3 focus:ring-ring/40"
               />
-              <button type="button" onClick={addDraft} disabled={running || full} className="h-10 rounded-lg border border-border px-4 text-[13px] font-semibold disabled:opacity-50">
+              <button type="button" onClick={addDraft} disabled={running || full} className="h-10 rounded-lg tile-edge px-4 text-[13px] font-semibold disabled:opacity-50">
                 추가
               </button>
             </div>
@@ -373,7 +373,7 @@ export function PinballGame() {
                 type="button"
                 onClick={reset}
                 disabled={status !== "running" && status !== "done"}
-                className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-border px-3 text-[13px] font-semibold disabled:opacity-50"
+                className="inline-flex h-11 items-center gap-1.5 rounded-lg tile-edge pr-3 pl-2.5 text-[13px] font-semibold disabled:opacity-50"
               >
                 <RotateCcw className="size-3.5" aria-hidden="true" />
                 기본으로 돌리기
@@ -429,7 +429,7 @@ export function PinballGame() {
             type="button"
             aria-pressed={mapOpen}
             onClick={() => setMapOpen(!mapOpen)}
-            className="absolute top-2 left-2 inline-flex h-8 items-center gap-1.5 tile-sm/90 px-2.5 text-xs font-semibold outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
+            className="absolute top-2 left-2 inline-flex h-8 items-center gap-1.5 tile-sm/90 pr-2.5 pl-2 text-xs font-semibold outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
           >
             <MapIcon className="size-3.5" aria-hidden="true" />
             {mapOpen ? "맵 닫기" : "맵 열기"}

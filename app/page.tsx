@@ -23,7 +23,7 @@ export default async function Home() {
   const recorded = sunday.thisWeek.recorded;
   const topThemes = [...sunday.prediction.themes].sort((a, b) => b.p - a.p).slice(0, 2);
   return (
-    <div className="flex flex-col gap-2 rise-in">
+    <div className="flex flex-col gap-2">
       <h1 className="sr-only">메이플 대시보드</h1>
 
       {recorded ? (

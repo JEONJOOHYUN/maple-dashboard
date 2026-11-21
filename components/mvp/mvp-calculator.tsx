@@ -26,7 +26,8 @@ import {
 import { useNow } from "@/lib/use-now";
 import { useStored } from "@/lib/use-stored";
 import { ZEBRA_HEAD, ZEBRA_ROW, ZEBRA_TABLE } from "@/components/ui/zebra";
-import { Reveal } from "@/components/ui/reveal";
+import { Reveal, useReveal } from "@/components/ui/reveal";
+import { Digits } from "@/components/ui/digits";
 import { cn } from "@/lib/utils";
 import { koreanUnits } from "@/lib/format";
 
@@ -114,7 +115,7 @@ function TierDot({ tier }: { tier: MvpTier | null }) {
 
 function Stat({ label, big, sub, accent }: { label: string; big: ReactNode; sub: ReactNode; accent?: boolean }) {
   return (
-    <div className={cn("flex min-w-0 flex-col gap-1 rounded-lg border px-4 py-3.5", accent ? "border-primary bg-primary-soft" : "border-border bg-card")}>
+    <div className={cn("flex min-w-0 flex-col gap-1 rounded-lg border px-4 py-3.5", accent ? "border-primary bg-primary-soft" : "tile-edge bg-card")}>
       <span className={cn("text-xs", accent ? "font-semibold text-primary-text" : "text-muted-foreground")}>{label}</span>
       <b className="flex items-center gap-2 text-[22px] leading-tight">{big}</b>
       <span className="text-xs text-muted-foreground">{sub}</span>
@@ -173,6 +174,7 @@ export function MvpCalculator() {
   const [shopDraft, setShopDraft] = useState({ name: "", credit: "", price: "" });
 
   const s = upgrade(settings);
+  const boutique = useReveal(s.boutiqueShow);
   const update = (patch: Partial<Settings>) => setSettings((prev) => ({ ...upgrade(prev), ...patch }));
 
   if (now === 0) {
@@ -350,7 +352,7 @@ export function MvpCalculator() {
                 </span>
               </Chip>
             ))}
-            <span className={cn("inline-flex h-10 items-center gap-2 rounded-lg border pr-1 pl-3 text-[13px]", target === "custom" ? "border-primary bg-primary-soft" : "border-border")}>
+            <span className={cn("inline-flex h-10 items-center gap-2 rounded-lg border pr-1 pl-3 text-[13px]", target === "custom" ? "border-primary bg-primary-soft" : "tile-edge")}>
               직접
               <NumberField label="결제할 금액 직접 입력 (원)" value={s.custom} onChange={(t) => update({ custom: t, target: "custom" })} suffix="원" inputClassName="h-8 w-28" />
             </span>
@@ -388,7 +390,7 @@ export function MvpCalculator() {
                 type="button"
                 aria-expanded={chargeOpen}
                 onClick={() => setChargeOpen(!chargeOpen)}
-                className="inline-flex h-10 items-center rounded-lg border border-border px-3 text-[13px] hover:border-primary/60"
+                className="inline-flex h-10 items-center rounded-lg tile-edge px-3 text-[13px] hover:border-primary/60"
               >
                 할인율 {chargeOpen ? "접기" : "고치기"}
               </button>
@@ -493,10 +495,10 @@ export function MvpCalculator() {
                       <span className="h-2.5 min-w-[120px] flex-1 overflow-hidden rounded-full bg-muted">
                         <span className={cn("block h-full rounded-full", i === 0 ? "bg-primary" : "bg-primary/55")} style={{ width: `${Math.round((r.total / top) * 100)}%` }} />
                       </span>
-                      <b className="w-20 text-right font-num">{r.total > 0 ? won(r.total) : "가격 필요"}</b>
+                      <b className="w-20 text-right font-num"><Digits>{r.total > 0 ? won(r.total) : "가격 필요"}</Digits></b>
                     </span>
                   </td>
-                  <td className="px-2 py-2.5 text-right font-num">{ratio(r.total)}</td>
+                  <td className="px-2 py-2.5 text-right font-num"><Digits>{ratio(r.total)}</Digits></td>
                   <td className="px-2 py-2.5 text-right">
                     <span className="inline-flex flex-col items-end gap-1">
                       {r.kind === "item" && (
@@ -525,8 +527,8 @@ export function MvpCalculator() {
                     </span>
                   </td>
                 </tr>
-                {r.id === panelRowId && s.boutiqueShow && (
-                  <tr className="bg-muted/40">
+                {r.id === panelRowId && boutique.shown && (
+                  <tr {...boutique.attrs} className="reveal-row bg-muted/40">
                     <td colSpan={7} className="p-0">
                       {/* As wide as the visible box and pinned left: on a phone the table scrolls sideways, the panel does not. */}
                       <div className="@container sticky left-0 w-[100cqw] px-4 py-3.5">
@@ -633,7 +635,7 @@ export function MvpCalculator() {
                         <td className="px-2 py-2 text-right">
                           <NumberField label={`${it.name} 경매장 가격 (억)`} value={it.price} onChange={(t) => setShop(it.id, { price: t })} decimal suffix="억" className="justify-end" inputClassName="h-8 w-16 text-xs" />
                         </td>
-                        <td className="px-2 py-2 text-right font-num">{per > 0 ? won(per) : "—"}</td>
+                        <td className="px-2 py-2 text-right font-num"><Digits>{per > 0 ? won(per) : "—"}</Digits></td>
                         <td className="py-2 text-right">
                           <button
                             type="button"
@@ -695,7 +697,7 @@ export function MvpCalculator() {
               const isBest = r.mode === "best";
               const diff = net(r) - net(best);
               return (
-                <div key={r.mode} className={cn("flex min-w-0 flex-col gap-2.5 tile p-4", isBest ? "border-primary" : "border-border")}>
+                <div key={r.mode} className={cn("flex min-w-0 flex-col gap-2.5 tile p-4", isBest ? "border-primary" : "")}>
                   <span className={cn("text-xs font-semibold", isBest ? "text-primary-text" : "text-muted-foreground")}>{ROUTE_LABEL[r.mode]}</span>
                   <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                     <b className="font-num text-[28px] leading-none">{won(net(r))}</b>

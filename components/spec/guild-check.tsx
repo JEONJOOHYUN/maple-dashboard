@@ -8,7 +8,7 @@ import { asOfLabel } from "@/lib/spec/as-of";
 import Link from "next/link";
 import { Fragment, useEffect, useMemo, useState, useTransition, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, ChevronUp, CornerDownRight, Search, X } from "lucide-react";
+import { ChevronDown, CornerDownRight, Search, X } from "lucide-react";
 import { Chip } from "@/components/ev/ui";
 import { PageHeader } from "@/components/page-header";
 import { Message, Pieces, SPEC_DESCRIPTION, whatText } from "@/components/spec/spec-check";
@@ -32,6 +32,7 @@ import {
   type SortBy,
 } from "@/lib/spec/guild-table";
 import { useStored } from "@/lib/use-stored";
+import { useReveal } from "@/components/ui/reveal";
 import { cn } from "@/lib/utils";
 
 /** count = characters; users = accounts (the in-game member count), null when NEXON gives none. */
@@ -65,7 +66,7 @@ const TONE: Record<Tier, string> = {
   urgent: "bg-primary-soft text-primary-text",
   now: "bg-primary-soft text-primary-text",
   quest: "bg-primary-soft text-primary-text",
-  long: "border border-border text-muted-foreground",
+  long: "tile-edge text-muted-foreground",
 };
 
 /**
@@ -115,7 +116,7 @@ function WorldPick({ name, guilds }: { name: string; guilds: GuildInfo[] }) {
             <Link
               href={guildHref(g.name, g.world)}
               prefetch={false}
-              className="flex flex-col gap-1 rounded-lg border border-border bg-background px-3.5 py-3 transition-colors hover:border-primary/60"
+              className="flex flex-col gap-1 rounded-lg tile-edge bg-background px-3.5 py-3 transition-colors hover:border-primary/60"
             >
               <span className="flex items-baseline justify-between gap-2">
                 <b className="text-[15px]">{g.world}</b>
@@ -166,7 +167,6 @@ function SubsToggle({ person, open, onToggle }: { person: Person; open: boolean;
       </span>
     );
   const missed = person.subs.filter((r) => r.ok && r.cells.length > 0).length;
-  const Icon = open ? ChevronUp : ChevronDown;
   return (
     <button
       type="button"
@@ -177,7 +177,7 @@ function SubsToggle({ person, open, onToggle }: { person: Person; open: boolean;
       // its middle ("너무 쏠려있다" when they sat at the two ends).
       className={cn(
         "inline-flex h-8 items-center justify-center gap-1 rounded-full border pr-2 pl-2.5 text-xs font-bold whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary min-w-[3.25rem] sm:min-w-[7.5rem]",
-        missed ? "border-primary/45 bg-primary-soft text-primary-text" : "border-border text-muted-foreground hover:text-foreground",
+        missed ? "border-primary/45 bg-primary-soft text-primary-text" : "tile-edge text-muted-foreground hover:text-foreground",
       )}
     >
       {/* A phone keeps this column narrow: the count only, the colour still telling whether one missed. */}
@@ -185,7 +185,7 @@ function SubsToggle({ person, open, onToggle }: { person: Person; open: boolean;
       <span className="hidden sm:inline">
         {count}명{missed ? ` · 놓침 ${missed}` : " ✓"}
       </span>
-      <Icon className="size-3.5" aria-hidden="true" />
+      <ChevronDown className={cn("size-3.5 transition-transform", open && "rotate-180")} aria-hidden="true" />
     </button>
   );
 }
@@ -194,10 +194,33 @@ function SubsToggle({ person, open, onToggle }: { person: Person; open: boolean;
  * One character's line. A player's main heads it, the open / close button at its end (end); the player's other
  * characters (sub) come under it, set in, on the page's own ground. Both ends stay put while the columns scroll.
  */
-function MemberLine({ row, cols, sub = false, away = null, end = null }: { row: MemberRow; cols: readonly string[]; sub?: boolean; away?: string | null; end?: ReactNode }) {
+type RevealAttrs = ReturnType<typeof useReveal>["attrs"];
+
+/** The other characters of a player: they fade out before they leave when the line is folded. */
+function SubLines({ open, subs, cols }: { open: boolean; subs: MemberRow[]; cols: readonly string[] }) {
+  const { shown, attrs } = useReveal(open);
+  if (!shown) return null;
+  return subs.map((r) => <MemberLine key={r.name} row={r} cols={cols} sub reveal={attrs} />);
+}
+
+function MemberLine({
+  row,
+  cols,
+  sub = false,
+  away = null,
+  end = null,
+  reveal,
+}: {
+  row: MemberRow;
+  cols: readonly string[];
+  sub?: boolean;
+  away?: string | null;
+  end?: ReactNode;
+  reveal?: RevealAttrs;
+}) {
   const ground = sub ? "bg-background" : "bg-card";
   return (
-    <tr className={cn("border-t border-border", sub && "border-dashed", ground)}>
+    <tr {...reveal} className={cn("border-t border-border", sub && "border-dashed", ground, reveal && "reveal-row")}>
       <th scope="row" className={cn("sticky left-0 z-[1] py-2 pr-3.5 text-left font-normal", sub ? "pl-4" : "pl-3.5", ground)}>
         <span className="flex items-center gap-1.5">
           {sub && <CornerDownRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />}
@@ -455,7 +478,7 @@ function GuildResult({ guild, pieces, others }: { guild: GuildInfo; pieces: Prom
               return (
                 <Fragment key={p.key}>
                   <MemberLine row={p.head} cols={cols} away={p.away} end={<SubsToggle person={p} open={open} onToggle={() => flip(p.key)} />} />
-                  {open && p.subs.map((r) => <MemberLine key={r.name} row={r} cols={cols} sub />)}
+                  <SubLines open={open} subs={p.subs} cols={cols} />
                 </Fragment>
               );
             })}
@@ -470,7 +493,7 @@ function GuildResult({ guild, pieces, others }: { guild: GuildInfo; pieces: Prom
         <button
           type="button"
           onClick={() => change((v) => ({ limit: v.limit + PAGE }))}
-          className="h-11 rounded-lg border border-border text-sm font-bold transition-colors hover:bg-secondary"
+          className="h-11 rounded-lg tile-edge text-sm font-bold transition-colors hover:bg-secondary"
         >
           더 보기 · {n(visible.length - limit)}명 남음
         </button>
@@ -482,7 +505,8 @@ function GuildResult({ guild, pieces, others }: { guild: GuildInfo; pieces: Prom
           {failed > 0 && (
             <>
               {" · "}
-              <button type="button" onClick={() => startRetry(() => router.refresh())} disabled={retrying} className="font-semibold text-primary-text hover:underline disabled:opacity-60">
+              <button type="button" onClick={() => startRetry(() => router.refresh())} disabled={retrying} className="inline-flex items-center gap-1 font-semibold text-primary-text hover:underline disabled:opacity-60">
+                {retrying && <Spinner size={12} />}
                 {retrying ? "다시 확인 중" : "다시 확인"}
               </button>
             </>
@@ -556,7 +580,7 @@ export function GuildCheck({ name, view }: { name: string; view: GuildView }) {
             return (
               <span
                 key={`${g.name}@${g.world}`}
-                className={cn("inline-flex items-center rounded-full border text-[13px]", on ? "border-primary bg-primary-soft text-primary-text" : "border-border bg-card")}
+                className={cn("inline-flex items-center rounded-full border text-[13px]", on ? "border-primary bg-primary-soft text-primary-text" : "tile-edge bg-card")}
               >
                 <button
                   type="button"

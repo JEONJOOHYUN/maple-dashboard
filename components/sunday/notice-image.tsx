@@ -33,7 +33,7 @@ export function NoticeImage({ images, label, className }: { images: string[]; la
           <div className="overflow-y-auto bg-muted">
             {images.map((src) => (
               // eslint-disable-next-line @next/next/no-img-element -- NEXON's notice picture, shown as is (never stored or resized by us)
-              <img key={src} src={src} alt={`${label} 썬데이 메이플 공지 그림`} className="block w-full" />
+              <img key={src} src={src} alt={`${label} 썬데이 메이플 공지 그림`} className="block w-full image-line" />
             ))}
           </div>
         </DialogContent>

@@ -2,12 +2,12 @@
 
 import { useMemo, useState } from "react";
 import { Check, Copy, ImageIcon, Info, Plus, X } from "lucide-react";
-import { SwapLabel } from "@/components/ui/swap-icon";
+import { Spinner } from "@/components/ui/spinner";
+import { SwapIcon, SwapLabel } from "@/components/ui/swap-icon";
 import { PageHeader } from "@/components/page-header";
 import { MESO_MARKET_FEE_RATE, computeBossSplit, wholeMeso } from "@/lib/boss-split/boss-split-math";
 import { formatKoreanMeso, formatNumber } from "@/lib/format";
 import { handleMesoInput } from "@/lib/meso-input";
-import { renderSplitImage } from "@/lib/boss-split/split-image";
 import { copyImage as copyImageBlob } from "@/lib/canvas-image";
 import { cn } from "@/lib/utils";
 
@@ -170,7 +170,8 @@ export function BossSplitCalculator() {
       })),
     };
     // The blob promise must go into ClipboardItem synchronously (Safari requirement): no await before this call.
-    setImageState(await copyImageBlob(renderSplitImage(data), "분배금-결과.png"));
+    // The drawing code is fetched here, on the first picture, rather than with the page.
+    setImageState(await copyImageBlob(import("@/lib/boss-split/split-image").then((m) => m.renderSplitImage(data)), "분배금-결과.png"));
     setTimeout(() => setImageState("idle"), 2000);
   }
 
@@ -192,7 +193,7 @@ export function BossSplitCalculator() {
           <button
             type="button"
             onClick={() => setItems((prev) => [...prev, createItem()])}
-            className="inline-flex h-[34px] items-center gap-1.5 rounded-lg border border-dashed border-border px-3 text-[13px] text-muted-foreground transition-colors hover:border-primary hover:text-primary-text"
+            className="inline-flex h-[34px] items-center gap-1.5 rounded-lg border border-dashed border-border pr-3 pl-2.5 text-[13px] text-muted-foreground transition-colors hover:border-primary hover:text-primary-text"
           >
             <Plus className="size-3.5" aria-hidden="true" />
             아이템 추가
@@ -267,7 +268,7 @@ export function BossSplitCalculator() {
                 {Array.from({ length: count }, (_, i) => (
                   <label
                     key={i}
-                    className="flex min-w-0 flex-col items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 py-3"
+                    className="flex min-w-0 flex-col items-center gap-1.5 rounded-lg tile-edge bg-background px-2.5 py-3"
                   >
                     <span className="w-full truncate text-center text-[13px] font-semibold">
                       {names[i] || DEFAULT_NAMES[i]}
@@ -328,7 +329,7 @@ export function BossSplitCalculator() {
                   "row-span-7 grid grid-rows-subgrid justify-items-center gap-y-1.5 rounded-lg border px-4 pt-5 pb-4 text-center",
                   count === 5 && "sm:col-span-2",
                   count === 5 && FIVE_CARD[card.index],
-                  highlight ? "border-primary bg-primary-soft" : "border-border bg-background"
+                  highlight ? "border-primary bg-primary-soft" : "tile-edge bg-background"
                 )}
               >
                 <span className="inline-flex max-w-full items-center gap-1.5">
@@ -370,7 +371,7 @@ export function BossSplitCalculator() {
                 ) : (
                   <>
                     {/* The leader's two rows of the same height: a label where the members have their switch. */}
-                    <span className="self-center rounded-full border border-border px-2.5 py-0.5 text-xs font-semibold text-muted-foreground">내가 갖는 몫</span>
+                    <span className="self-center rounded-full tile-edge px-2.5 py-0.5 text-xs font-semibold text-muted-foreground">내가 갖는 몫</span>
                     <span className="text-xs text-muted-foreground">실수령에서 파티원 몫을 뺀 나머지</span>
                   </>
                 )}
@@ -446,9 +447,9 @@ export function BossSplitCalculator() {
             onClick={copyImage}
             disabled={!hasResult || imageState === "working"}
             aria-live="polite"
-            className="inline-flex h-[46px] items-center gap-2 rounded-lg bg-primary px-7 text-[15px] font-bold text-primary-foreground transition-colors hover:bg-primary/85 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex h-[46px] items-center gap-2 rounded-lg bg-primary pr-7 pl-6 text-[15px] font-bold text-primary-foreground transition-colors hover:bg-primary/85 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <ImageIcon className="size-4" aria-hidden="true" />
+            <SwapIcon on={imageState === "working"} from={<ImageIcon className="size-4" aria-hidden="true" />} to={<Spinner />} />
             {imageLabel}
           </button>
           <span className="text-xs text-muted-foreground">결과를 그림으로 복사 → 디스코드 · 카톡에 붙여 넣기</span>

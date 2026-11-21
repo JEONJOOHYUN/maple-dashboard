@@ -9,6 +9,7 @@ import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, 
 import { InputGroupAddon, InputGroupButton } from "@/components/ui/input-group";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Spinner } from "@/components/ui/spinner";
+import { SwapIcon } from "@/components/ui/swap-icon";
 import type { ApiErrorKind } from "@/lib/enhance/client";
 import { addDays, kstDate } from "@/lib/enhance/kst";
 import type { HistorySync, SyncSnap } from "@/lib/enhance/sync";
@@ -103,7 +104,7 @@ export function PeriodBar({
         <div className="ml-auto flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           {!loading && status}
           <button type="button" onClick={onRefresh} disabled={loading} className={cn(plainButton, "inline-flex items-center gap-1.5 disabled:opacity-50")}>
-            <RefreshCw className={cn("size-3.5", loading && "animate-spin")} aria-hidden="true" />
+            <SwapIcon on={loading} from={<RefreshCw className="size-3.5" aria-hidden="true" />} to={<Spinner size={14} />} />
             새로 고침
           </button>
         </div>

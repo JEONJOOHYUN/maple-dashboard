@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ChevronDown, Minus, Plus, X } from "lucide-react";
 import { pct } from "@/components/ev/ui";
 import { OPTION_GROUPS, type CustomCond, type SlotOption } from "@/lib/ev/potential";
+import { Reveal } from "@/components/ui/reveal";
 import { cn } from "@/lib/utils";
 
 const MAX_SETS = 4;
@@ -111,11 +112,11 @@ export function CustomGoal({
                       onClick={() => setPicking(replacing ? null : { set: si, row: ri })}
                       className={cn(
                         "flex h-10 min-w-0 flex-1 basis-[150px] items-center justify-between gap-2 tile px-3 text-left text-sm font-bold outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-                        replacing ? "border-primary text-primary-text" : "border-border hover:border-primary/60"
+                        replacing ? "border-primary text-primary-text" : "tile-edge hover:border-primary/60"
                       )}
                     >
                       <span className="truncate">{option.label}</span>
-                      <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground", replacing && "rotate-180")} aria-hidden="true" />
+                      <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground transition-transform", replacing && "rotate-180")} aria-hidden="true" />
                     </button>
                     <div className="ml-auto flex items-center gap-1.5">
                       <button type="button" aria-label={`${option.label} 낮추기`} disabled={at <= 0} onClick={() => step(-1)} className={stepButton}>
@@ -156,9 +157,10 @@ export function CustomGoal({
                     )}
                   >
                     + 옵션 추가
-                    <ChevronDown className={cn("size-4 shrink-0", open?.row === conds.length && "rotate-180")} aria-hidden="true" />
+                    <ChevronDown className={cn("size-4 shrink-0 transition-transform", open?.row === conds.length && "rotate-180")} aria-hidden="true" />
                   </button>
                 )}
+                <Reveal open={!!open} className="flex flex-col gap-2.5">
                 {open &&
                   OPTION_GROUPS.map((group) => {
                     const list = options.filter((o) => o.group === group.id);
@@ -184,8 +186,8 @@ export function CustomGoal({
                                   current
                                     ? "border-primary bg-primary-soft font-bold text-primary-text"
                                     : used
-                                      ? "border-border bg-muted text-muted-foreground"
-                                      : "border-border bg-card hover:border-primary/60"
+                                      ? "tile-edge bg-muted text-muted-foreground"
+                                      : "tile-edge bg-card hover:border-primary/60"
                                 )}
                               >
                                 {o.label}
@@ -196,6 +198,7 @@ export function CustomGoal({
                       </div>
                     );
                   })}
+                </Reveal>
                 {conds.length === 0 && <span className="text-[11px] text-muted-foreground">{slotLabel}에 뜨는 옵션만 · 한 세트에 3개까지</span>}
                 {conds.some((c) => STAT_CATS.has(c.cat)) && <span className="text-[11px] text-muted-foreground">STR · DEX · INT · LUK % 는 올스탯 % 줄도 더해서 셈</span>}
                 {conds.length >= MAX_CONDS && !open && <span className="text-[11px] text-muted-foreground">옵션을 누르면 다른 옵션으로 바꿈</span>}
