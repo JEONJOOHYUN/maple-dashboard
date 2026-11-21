@@ -18,7 +18,16 @@ let slowUntil = 0;
 const BULK_PER_SEC = 250;
 const BULK_RETRIES = 4;
 
-export type NexonErrorKind = "noKey" | "notFound" | "quota" | "failed";
+/** "maintenance" = NEXON is not giving live data now (see MAINTENANCE_CODES): the same call with a date may still answer. */
+export type NexonErrorKind = "noKey" | "notFound" | "quota" | "maintenance" | "failed";
+
+// NEXON's "not now" answers (official guide): OPENAPI00009 the data is being prepared, OPENAPI00010 the game is under
+// maintenance. OPENAPI00011 (the API itself under maintenance) is not among them: then nothing answers, dated or not.
+const MAINTENANCE_CODES = ["OPENAPI00009", "OPENAPI00010"];
+// An endpoint that said so for live data is not asked for live data again for this long: one guild search under
+// maintenance would otherwise send hundreds of calls only to be told the same. A call with a date is always sent.
+const DOWN_FOR_MS = 30_000;
+const down = new Map<string, { until: number; code: string }>();
 
 export class NexonError extends Error {
   readonly kind: NexonErrorKind;
@@ -83,6 +92,9 @@ const BULK: Pace = { turn: bulkTurn, retries: BULK_RETRIES, refused: () => {} };
 async function request<T>(path: string, params: Record<string, string>, pace: Pace): Promise<T> {
   const key = process.env.NEXON_API_KEY;
   if (!key) throw new NexonError("noKey", "NEXON_API_KEY is not set");
+  const live = !params.date;
+  const closed = live ? down.get(path) : undefined;
+  if (closed && Date.now() < closed.until) throw new NexonError("maintenance", `${path}: ${closed.code} (not asked again yet)`, closed.code);
   const url = `${BASE}/${path}?${new URLSearchParams(params)}`;
   for (let attempt = 0; ; attempt++) {
     await pace.turn();
@@ -98,6 +110,10 @@ async function request<T>(path: string, params: Record<string, string>, pace: Pa
         continue;
       }
       throw new NexonError("quota", `${path}: ${code || res.status}`, code);
+    }
+    if (MAINTENANCE_CODES.includes(code)) {
+      if (live) down.set(path, { until: Date.now() + DOWN_FOR_MS, code });
+      throw new NexonError("maintenance", `${path}: ${code} ${body?.error?.message ?? ""}`.trim(), code);
     }
     throw new NexonError("failed", `${path}: ${code || res.status} ${body?.error?.message ?? ""}`.trim(), code);
   }
@@ -137,7 +153,7 @@ export async function nexonUnionMain(ocid: string, get: typeof nexonGet = nexonG
       const r = await get<{ ranking?: { character_name?: string }[] }>("ranking/union", { ocid, date });
       return r.ranking?.[0]?.character_name || null;
     } catch (e) {
-      if (!(e instanceof NexonError) || e.kind !== "failed") throw e;
+      if (!(e instanceof NexonError) || (e.kind !== "failed" && e.kind !== "maintenance")) throw e;
       if (e.code === "OPENAPI00009") continue;
       // No ranking for this character on that day (newer than the ranking): not a failure of the member.
       if (e.code === "OPENAPI00004") return null;
@@ -145,4 +161,24 @@ export async function nexonUnionMain(ocid: string, get: typeof nexonGet = nexonG
     }
   }
   return null;
+}
+
+/**
+ * `live()`, or while NEXON is not giving live data (maintenance), `dated(date)` for the last day it has: every
+ * character endpoint also takes a date, and yesterday's data (KST) is there while today's is not — the day before's
+ * right after midnight, while yesterday's is still being made. Other failures are thrown as they are.
+ */
+export async function liveOrYesterday<T>(live: () => Promise<T>, dated: (date: string) => Promise<T>, now = Date.now()): Promise<T> {
+  const notNow = (e: unknown) => e instanceof NexonError && e.kind === "maintenance";
+  try {
+    return await live();
+  } catch (e) {
+    if (!notNow(e)) throw e;
+  }
+  try {
+    return await dated(kstDate(now - DAY));
+  } catch (e) {
+    if (!notNow(e)) throw e;
+  }
+  return dated(kstDate(now - 2 * DAY));
 }

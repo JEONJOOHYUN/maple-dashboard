@@ -16,7 +16,7 @@ const CALLS_PER_MEMBER = 7;
 const GUILD_CALLS_PER_DAY = 10_000_000;
 
 /** What the page gets of a guild: everything but the member list (sent as checked rows instead). */
-const info = (h: GuildHit): GuildInfo => ({ world: h.world, name: h.name, level: h.level, master: h.master, count: h.count, users: h.users });
+const info = (h: GuildHit): GuildInfo => ({ world: h.world, name: h.name, level: h.level, master: h.master, count: h.count, users: h.users, asOf: h.asOf });
 
 export async function guildView(name: string, world: string): Promise<GuildView> {
   if (!name) return { kind: "empty" };
@@ -40,6 +40,7 @@ export async function guildView(name: string, world: string): Promise<GuildView>
     };
   } catch (e) {
     if (e instanceof NexonError && e.kind === "quota") return { kind: "quota", name };
+    if (e instanceof NexonError && e.kind === "maintenance") return { kind: "maintenance", name };
     console.error("spec-guild failed", e);
     return { kind: "failed", name };
   }

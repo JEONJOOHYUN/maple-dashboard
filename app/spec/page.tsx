@@ -36,9 +36,11 @@ async function view(name: string): Promise<SpecView> {
   try {
     const got = await getSpec(name);
     if (!got.ok) return { kind: "notFound", name };
-    return { kind: "result", result: got.result, at: got.at, optimizer: optimizerLink(got.result.name) };
+    return { kind: "result", result: got.result, at: got.at, asOf: got.asOf, optimizer: optimizerLink(got.result.name) };
   } catch (e) {
     if (e instanceof NexonError && e.kind === "quota") return { kind: "quota", name };
+    // Maintenance with not even yesterday's data to show (the name lookup has no dated form).
+    if (e instanceof NexonError && e.kind === "maintenance") return { kind: "maintenance", name };
     console.error("spec-check failed", e);
     return { kind: "failed", name };
   }

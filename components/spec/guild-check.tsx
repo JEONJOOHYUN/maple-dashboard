@@ -4,6 +4,7 @@
 // who missed the most first; the order can be changed (레벨 · 이름 · 직업, or a column = who missed that skill).
 // One line a player (시안 A, user 2026-11-20 night): the main, its other characters folded under it, opened at the
 // line's right end.
+import { asOfLabel } from "@/lib/spec/as-of";
 import Link from "next/link";
 import { Fragment, useEffect, useMemo, useState, useTransition, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
@@ -34,11 +35,12 @@ import { useStored } from "@/lib/use-stored";
 import { cn } from "@/lib/utils";
 
 /** count = characters; users = accounts (the in-game member count), null when NEXON gives none. */
-export type GuildInfo = { world: string; name: string; level: number; master: string; count: number; users: number | null };
+/** asOf = the day the member list is of, when NEXON was under maintenance. */
+export type GuildInfo = { world: string; name: string; level: number; master: string; count: number; users: number | null; asOf?: string };
 
 export type GuildView =
   | { kind: "empty" }
-  | { kind: "notFound" | "limit" | "busy" | "quota" | "failed"; name: string }
+  | { kind: "notFound" | "limit" | "busy" | "quota" | "maintenance" | "failed"; name: string }
   | { kind: "pick"; name: string; guilds: GuildInfo[] }
   /** pieces = the members, a few at a time, as the server finishes them; others = guilds of the name in other worlds. */
   | { kind: "guild"; guild: GuildInfo; pieces: Promise<MemberRow[]>[]; others: number };
@@ -310,6 +312,9 @@ function GuildResult({ guild, pieces, others }: { guild: GuildInfo; pieces: Prom
   const top = cols.filter((c) => counts[c] > 0).sort((a, b) => counts[b] - counts[a]).slice(0, 2);
   const unchecked = rows.filter((r) => !r.ok);
   const failed = unchecked.filter((r) => !r.ok && r.reason === "failed").length;
+  // A member list or rows made from a past day's data: NEXON under maintenance. (Either can be dated alone: the
+  // rows may come from the live cache while the list does not, and the other way round.)
+  const asOf = guild.asOf ?? rows.flatMap((r) => (r.ok && r.asOf ? [r.asOf] : []))[0];
   const recentCount = people.filter(recentPlayer).length;
   const visible = useMemo(
     () => sortPeople(matchPeople(recentOnly ? people.filter(recentPlayer) : people, query), sortBy),
@@ -349,6 +354,8 @@ function GuildResult({ guild, pieces, others }: { guild: GuildInfo; pieces: Prom
           <b className="text-[15px] leading-snug break-keep">{top.length ? top.map((c) => `${c} ${n(counts[c])}`).join(" · ") : "없음"}</b>
         </Stat>
       </div>
+
+      {asOf && <p className="px-0.5 text-xs font-semibold text-primary-text">{asOfLabel(asOf)}</p>}
 
       {loading && (
         <div className="flex flex-col gap-2 tile px-4 py-3.5">
@@ -585,6 +592,7 @@ export function GuildCheck({ name, view }: { name: string; view: GuildView }) {
         {view.kind === "limit" && <Message title="길드 검색 잠시 멈춤" sub="짧은 시간에 너무 많이 검색 → 1시간 안에 다시 됨" />}
         {view.kind === "busy" && <Message title="오늘 길드 검색 한도 다 씀" sub="넥슨 API 하루 한도 보호 → 내일 다시 · 개인 검색은 그대로 됨" />}
         {view.kind === "quota" && <Message title="오늘 조회 한도 다 씀" sub="넥슨 API 하루 한도 → 내일 다시" />}
+        {view.kind === "maintenance" && <Message title="넥슨 점검 중" sub="점검이 끝나면 다시 검색" />}
         {view.kind === "failed" && <Message title="조회 실패" sub="넥슨 API 응답 오류 → 잠시 뒤 다시" />}
       </div>
 

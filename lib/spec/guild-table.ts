@@ -38,7 +38,7 @@ export type Cell = { key: string; text: string; tier: Tier; what: string; detail
  * main = the main of the character's account group (lib/nexon/api.ts nexonUnionMain), null when NEXON has none.
  */
 export type MemberRow =
-  | { ok: true; name: string; level: number; cls: string; known: boolean; recent: boolean; main: string | null; cells: Cell[] }
+  | { ok: true; name: string; level: number; cls: string; known: boolean; recent: boolean; main: string | null; cells: Cell[]; /** The day the data is of ("2026-11-19") when it is not live: NEXON under maintenance. */ asOf?: string }
   | { ok: false; name: string; reason: "notFound" | "failed" };
 
 /** Lines of several things, shown as their count: "대부분 찍는 것 2개 안 찍음" → "2개". */

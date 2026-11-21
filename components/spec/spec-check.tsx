@@ -1,5 +1,6 @@
 "use client";
 
+import { asOfLabel } from "@/lib/spec/as-of";
 import { useEffect, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Check, ExternalLink, RotateCw, Search, ShieldAlert, ShieldCheck, X } from "lucide-react";
@@ -26,8 +27,8 @@ import artTitle from "@/public/icons/spec/title.svg";
 
 export type SpecView =
   | { kind: "empty" }
-  | { kind: "result"; result: SpecResult; at: number; optimizer: string | null }
-  | { kind: "notFound" | "quota" | "failed"; name: string };
+  | { kind: "result"; result: SpecResult; at: number; /** The day the data is of, when NEXON was under maintenance. */ asOf?: string; optimizer: string | null }
+  | { kind: "notFound" | "quota" | "maintenance" | "failed"; name: string };
 
 /** One line for both tabs, so switching tabs never moves the tab row. */
 export const SPEC_DESCRIPTION = "닉네임 · 길드 → 돈 거의 안 들이고 채울 수 있는데 놓친 스펙 찾기";
@@ -407,9 +408,9 @@ function Periods({ result }: { result: SpecResult }) {
   );
 }
 
-type ResultProps = { result: SpecResult; at: number; optimizer: string | null; refreshing: boolean; refreshNote: string; onRefresh: () => void };
+type ResultProps = { result: SpecResult; at: number; asOf?: string; optimizer: string | null; refreshing: boolean; refreshNote: string; onRefresh: () => void };
 
-function Result({ result, at, optimizer, refreshing, refreshNote, onRefresh }: ResultProps) {
+function Result({ result, at, asOf, optimizer, refreshing, refreshNote, onRefresh }: ResultProps) {
   const [open, setOpen] = useState(true);
   const n = result.misses.length;
   const top = result.misses.filter(fitsCard).slice(0, CARD_MAX);
@@ -456,6 +457,7 @@ function Result({ result, at, optimizer, refreshing, refreshNote, onRefresh }: R
               <span className="text-[13px] break-keep text-muted-foreground">
                 Lv.{result.level} · {result.cls} · {result.world}
               </span>
+              {asOf && <span className="text-xs font-semibold text-primary-text">{asOfLabel(asOf)}</span>}
             </div>
             <button
               type="button"
@@ -654,6 +656,7 @@ export function SpecCheck({ name, view }: { name: string; view: SpecView }) {
             key={`${view.result.name}-${view.at}`}
             result={view.result}
             at={view.at}
+            asOf={view.asOf}
             optimizer={view.optimizer}
             refreshing={pending}
             refreshNote={refreshNote}
@@ -663,6 +666,7 @@ export function SpecCheck({ name, view }: { name: string; view: SpecView }) {
         {view.kind === "empty" && <Message title="닉네임 검색" sub="보스 프리셋 기준으로 공용 스킬 · 아티팩트 · 5차 · 링크 · 어빌리티 등 확인" />}
         {view.kind === "notFound" && <Message title={`"${view.name}" 캐릭터 없음`} sub="닉네임 확인 · 2023년 12월 이후 접속 기록이 있어야 조회됨" />}
         {view.kind === "quota" && <Message title="오늘 조회 한도 다 씀" sub="넥슨 API 하루 한도 → 내일 다시 · 이미 조회한 캐릭터는 3시간 동안 바로 보임" />}
+        {view.kind === "maintenance" && <Message title="넥슨 점검 중" sub="점검이 끝나면 다시 조회" />}
         {view.kind === "failed" && <Message title="조회 실패" sub="넥슨 API 응답 오류 → 잠시 뒤 다시" />}
       </div>
 
