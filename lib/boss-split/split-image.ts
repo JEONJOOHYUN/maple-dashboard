@@ -76,15 +76,15 @@ export async function renderSplitImage(data: SplitImageData): Promise<Blob> {
   ]).catch(() => undefined);
 
   const color = {
-    bg: cssVar("--card", "#1d1c19"),
-    inner: cssVar("--background", "#121210"),
-    text: cssVar("--foreground", "#f4f0e8"),
-    muted: cssVar("--muted-foreground", "#aba498"),
-    line: cssVar("--border", "#34312b"),
-    chip: cssVar("--muted", "#272520"),
-    primary: cssVar("--primary", "#ff7429"),
-    primaryText: cssVar("--primary-text", "#ff8a4c"),
-    primarySoft: cssVar("--primary-soft", "rgba(255,116,41,0.14)"),
+    bg: cssVar("--card", "oklch(0.226 0.006 91.6)"),
+    inner: cssVar("--background", "oklch(0.181 0.004 106.8)"),
+    text: cssVar("--foreground", "oklch(0.956 0.011 84.6)"),
+    muted: cssVar("--muted-foreground", "oklch(0.721 0.019 81.3)"),
+    line: cssVar("--border", "oklch(0.314 0.011 84.6)"),
+    chip: cssVar("--muted", "oklch(0.265 0.01 88.8)"),
+    primary: cssVar("--primary", "oklch(0.716 0.188 44.7)"),
+    primaryText: cssVar("--primary-text", "oklch(0.751 0.161 46.8)"),
+    primarySoft: cssVar("--primary-soft", "oklch(0.716 0.188 44.7 / 0.14)"),
   };
 
   const cols = data.cards.length === 4 ? 2 : Math.min(data.cards.length, 3);

@@ -3,12 +3,12 @@
 // thresholds below. Amounts are in won (1 cash = 1 won).
 
 export const MVP_TIERS = [
-  { name: "브론즈", min: 150_000, color: "#B9805A" },
-  { name: "실버", min: 300_000, color: "#A9B2BC" },
-  { name: "골드", min: 600_000, color: "#E2B23C" },
-  { name: "다이아", min: 900_000, color: "#6FC7E8" },
-  { name: "레드", min: 1_500_000, color: "#E2504F" },
-  { name: "블랙", min: 2_500_000, color: "#3A3836" },
+  { name: "브론즈", min: 150_000, color: "oklch(0.649 0.088 54.2)" },
+  { name: "실버", min: 300_000, color: "oklch(0.76 0.018 250.9)" },
+  { name: "골드", min: 600_000, color: "oklch(0.787 0.141 85.7)" },
+  { name: "다이아", min: 900_000, color: "oklch(0.787 0.097 224.6)" },
+  { name: "레드", min: 1_500_000, color: "oklch(0.63 0.182 24.3)" },
+  { name: "블랙", min: 2_500_000, color: "oklch(0.342 0.004 67.7)" },
 ] as const;
 export type MvpTier = (typeof MVP_TIERS)[number];
 

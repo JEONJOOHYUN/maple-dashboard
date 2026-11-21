@@ -115,7 +115,7 @@ export const whatText = (what: string) =>
 
 // How much a line takes to fill (user, 2026-11-17): the chip on every line. The list comes already in this order.
 const TIER: Record<Tier, { label: string; className: string }> = {
-  urgent: { label: "기간 임박", className: "bg-[rgba(226,80,79,0.14)] text-[#E2504F]" },
+  urgent: { label: "기간 임박", className: "bg-[oklch(0.63_0.182_24.3_/_0.14)] text-[oklch(0.63_0.182_24.3)]" },
   now: { label: "바로 됨", className: "bg-primary-soft text-primary-text" },
   quest: { label: "조금만", className: "bg-secondary text-foreground" },
   long: { label: "시간 · 메소", className: "border border-border text-muted-foreground" },
@@ -388,13 +388,13 @@ function Periods({ result }: { result: SpecResult }) {
         <div key={g.title} className="flex flex-col gap-1.5 px-3.5 py-2.5">
           <div className="flex items-baseline justify-between gap-3">
             <b className="text-[13px]">{g.title}</b>
-            {g.value && <b className={cn("text-[13px]", g.warn ? "text-[#E2504F]" : "text-foreground")}>{g.value}</b>}
+            {g.value && <b className={cn("text-[13px]", g.warn ? "text-[oklch(0.63_0.182_24.3)]" : "text-foreground")}>{g.value}</b>}
           </div>
           {g.rows.map((r) => (
             <div key={`${r.what}-${r.date}`} className="grid grid-cols-[minmax(0,1fr)_auto_3.25rem] items-baseline gap-x-3">
               <DetailLine text={r.what} />
               <span className="font-num text-[13px] text-muted-foreground tabular-nums">{r.date}</span>
-              <b className={cn("text-right font-num text-[13px] tabular-nums", r.warn && "text-[#E2504F]")}>{r.days}</b>
+              <b className={cn("text-right font-num text-[13px] tabular-nums", r.warn && "text-[oklch(0.63_0.182_24.3)]")}>{r.days}</b>
             </div>
           ))}
           {g.notes.map((n) => (
@@ -476,8 +476,8 @@ function Result({ result, at, optimizer, refreshing, refreshNote, onRefresh }: R
             className={cn(
               "flex w-full items-center gap-2.5 rounded-lg border px-3.5 py-3 text-left",
               n
-                ? "cursor-pointer border-[rgba(226,80,79,0.5)] bg-[rgba(226,80,79,0.12)] text-[#E2504F]"
-                : "cursor-default border-[rgba(76,175,110,0.5)] bg-[rgba(76,175,110,0.12)] text-[#3FA765]",
+                ? "cursor-pointer border-[oklch(0.63_0.182_24.3_/_0.5)] bg-[oklch(0.63_0.182_24.3_/_0.12)] text-[oklch(0.63_0.182_24.3)]"
+                : "cursor-default border-[oklch(0.678_0.134_152.4_/_0.5)] bg-[oklch(0.678_0.134_152.4_/_0.12)] text-[oklch(0.651_0.137_152.5)]",
             )}
           >
             {n ? <ShieldAlert className="size-[22px] shrink-0" aria-hidden="true" /> : <ShieldCheck className="size-[22px] shrink-0" aria-hidden="true" />}
@@ -492,7 +492,7 @@ function Result({ result, at, optimizer, refreshing, refreshNote, onRefresh }: R
 
           <div className="flex flex-col gap-1 text-xs text-muted-foreground">
             {presetText && <span>보스 프리셋: {presetText}</span>}
-            {refreshNote && <span className="text-[#E2504F]">{refreshNote}</span>}
+            {refreshNote && <span className="text-[oklch(0.63_0.182_24.3)]">{refreshNote}</span>}
             {!result.known && <span>새 직업 → 직업별 기준 없음, 공용 항목만 확인</span>}
           </div>
 
@@ -524,7 +524,7 @@ function Result({ result, at, optimizer, refreshing, refreshNote, onRefresh }: R
         )}
         {n === 0 && (
           <div className="flex flex-col items-center gap-2 rounded-lg border border-border bg-card px-4 py-9 text-center">
-            <span className="flex size-12 items-center justify-center rounded-full bg-[rgba(76,175,110,0.16)] text-[#3FA765]">
+            <span className="flex size-12 items-center justify-center rounded-full bg-[oklch(0.678_0.134_152.4_/_0.16)] text-[oklch(0.651_0.137_152.5)]">
               <Check className="size-6" aria-hidden="true" />
             </span>
             <b className="text-base">빠진 것 없음</b>

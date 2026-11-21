@@ -29,10 +29,10 @@ const VIEWS: { id: View; label: string }[] = [
 ];
 
 const GRADE_CSS: Record<Grade, string> = {
-  rare: "text-[#2b67cf] dark:text-[#78aeff]",
-  epic: "text-[#6b3fd1] dark:text-[#b98cff]",
-  unique: "text-[#7d5800] dark:text-[#f5c451]",
-  legendary: "text-[#11663a] dark:text-[#7be0a0]",
+  rare: "text-[oklch(0.534_0.173_260.6)] dark:text-[oklch(0.747_0.131_258.3)]",
+  epic: "text-[oklch(0.506_0.211_290.7)] dark:text-[oklch(0.73_0.166_300.4)]",
+  unique: "text-[oklch(0.487_0.101_80.2)] dark:text-[oklch(0.843_0.141_85.5)]",
+  legendary: "text-[oklch(0.451_0.105_154.6)] dark:text-[oklch(0.828_0.132_154.5)]",
 };
 const BADGE = "rounded border px-1.5 text-[11px] leading-[18px] font-semibold whitespace-nowrap";
 const CUBE_NAME: Record<PricedCube, string> = { prime: "프라임 큐브", primeAddi: "프라임 에디셔널 큐브" };
@@ -49,8 +49,8 @@ const KINDS: PotKind[] = ["main", "add", "soul"];
  * miss). Colours by the user: 잠재능력 black as the black cube, 에디셔널 green, 소울 our orange.
  */
 const KIND_CSS: Record<PotKind, string> = {
-  main: "border-[#1c1a16] bg-[#1c1a16] text-white dark:border-white/30 dark:bg-black",
-  add: "border-[#11663a]/45 bg-[#11663a]/10 text-[#11663a] dark:border-[#7be0a0]/45 dark:bg-[#7be0a0]/12 dark:text-[#7be0a0]",
+  main: "border-[oklch(0.219_0.008_84.6)] bg-[oklch(0.219_0.008_84.6)] text-white dark:border-white/30 dark:bg-black",
+  add: "border-[oklch(0.451_0.105_154.6)]/45 bg-[oklch(0.451_0.105_154.6)]/10 text-[oklch(0.451_0.105_154.6)] dark:border-[oklch(0.828_0.132_154.5)]/45 dark:bg-[oklch(0.828_0.132_154.5)]/12 dark:text-[oklch(0.828_0.132_154.5)]",
   soul: "border-primary/50 bg-primary-soft text-primary-text",
 };
 const kindLabel = (x: { add: boolean; soul?: boolean }) => KIND_LABEL[kindOf(x)];
