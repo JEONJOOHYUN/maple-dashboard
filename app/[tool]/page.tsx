@@ -31,9 +31,9 @@ export default async function PlaceholderPage({ params }: Props) {
   if (!page) notFound();
 
   return (
-    <div className="flex flex-col gap-4 lg:gap-[22px]">
+    <div className="flex flex-col gap-2">
       <PageHeader title={page.title} description={page.description} />
-      <section className="flex flex-col items-center gap-4 rounded-lg border border-dashed border-border bg-card px-5 py-12 text-center">
+      <section className="flex flex-col items-center gap-4 rounded-[1rem] border border-dashed border-border bg-card px-5 py-12 text-center">
         {hasArt(page.slug) ? (
           <NavIcon slug={page.slug} className="size-16" />
         ) : (

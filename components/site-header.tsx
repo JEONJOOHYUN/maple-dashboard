@@ -21,9 +21,9 @@ export function SiteHeader() {
         : "";
 
   return (
-    <header className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3 lg:px-8 lg:py-3.5">
+    <header className="flex flex-wrap items-center gap-3 px-4 py-3 lg:py-2 lg:pr-2 lg:pl-[26px]">
       <Brand compact className="lg:hidden" />
-      <span className="hidden text-[13px] text-muted-foreground lg:inline">{crumb}</span>
+      <span className="hidden text-[13px] font-medium text-muted-foreground lg:inline">{crumb}</span>
 
       {/* Login button stays hidden until member features ship (kept on the `members` branch). */}
       <div className="ml-auto flex items-center gap-2">
@@ -59,7 +59,7 @@ export function SiteHeader() {
                 >
                   {item.short}
                   {!item.ready && (
-                    <Badge variant="outline" className="h-[18px] px-1.5 text-[10px] font-medium text-muted-foreground">
+                    <Badge variant="secondary" className="h-[18px] px-1.5 text-[10px] font-medium text-muted-foreground">
                       준비 중
                     </Badge>
                   )}
@@ -79,10 +79,8 @@ function GroupTab({ href, label, active }: { href: string; label: string; active
       href={href}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "flex h-[34px] shrink-0 items-center rounded-lg border px-3.5 text-[13px] font-semibold outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-        active
-          ? "border-primary bg-primary text-primary-foreground"
-          : "border-border bg-card text-muted-foreground"
+        "flex h-9 shrink-0 items-center rounded-full px-3.5 text-[13px] font-semibold whitespace-nowrap transition-[background-color,color,scale] outline-none focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.96]",
+        active ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground shadow-tile"
       )}
     >
       {label}

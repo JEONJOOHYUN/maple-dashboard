@@ -23,7 +23,7 @@ export default async function Home() {
   const recorded = sunday.thisWeek.recorded;
   const topThemes = [...sunday.prediction.themes].sort((a, b) => b.p - a.p).slice(0, 2);
   return (
-    <div className="flex flex-col gap-4 lg:gap-[18px]">
+    <div className="flex flex-col gap-2 rise-in">
       <h1 className="sr-only">메이플 대시보드</h1>
 
       {recorded ? (
@@ -31,7 +31,7 @@ export default async function Home() {
       ) : (
         <Link
           href="/sunday"
-          className="flex flex-wrap items-center gap-3.5 rounded-lg border border-border bg-card px-[18px] py-3.5 transition-colors outline-none hover:bg-muted/40 focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="flex flex-wrap items-center gap-3.5 tile px-[18px] py-3.5 transition-shadow outline-none hover:shadow-tile-hover focus-visible:ring-3 focus-visible:ring-ring/50"
         >
           <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary-text">
             <Sun className="size-[18px]" aria-hidden="true" />
@@ -61,25 +61,35 @@ export default async function Home() {
       )}
 
       {/* One line until the member features exist (`members` branch): then this is the login button and the week itself. */}
-      <section aria-label="이번 주 내 메이플" className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-lg border border-border bg-card px-[18px] py-3.5">
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <h2 className="text-[15px] font-bold">이번 주 내 메이플</h2>
-          <span className="text-[13px] text-muted-foreground">로그인하면 이번 주 수익 · 숙제 · 보스 수익을 한눈에</span>
+      <section aria-label="이번 주 내 메이플" className="flex flex-wrap items-center gap-x-6 gap-y-3 tile px-[18px] py-4">
+        <div className="flex min-w-[220px] flex-1 flex-col gap-1">
+          <span className="flex items-center gap-2">
+            <h2 className="text-[15px] font-bold">이번 주 내 메이플</h2>
+            <Badge variant="secondary" className="text-muted-foreground">
+              준비 중
+            </Badge>
+          </span>
+          <p className="text-[13px] text-muted-foreground">로그인하면 이번 주 수익 · 숙제 · 보스 수익을 한눈에</p>
         </div>
-        <Badge variant="outline" className="text-muted-foreground">
-          준비 중
-        </Badge>
+        {/* Where the three numbers will sit once the member features ship: the card keeps this shape then. */}
+        <ul aria-hidden="true" className="flex min-w-[240px] flex-1 gap-2">
+          {["수익", "숙제", "보스 수익"].map((slot) => (
+            <li key={slot} className="h-14 min-w-0 flex-1 rounded-lg px-3 py-2 text-xs font-semibold whitespace-nowrap text-muted-foreground outline-1 -outline-offset-1 outline-border outline-dashed">
+              {slot}
+            </li>
+          ))}
+        </ul>
       </section>
 
       {news ? (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-[18px]">
+        <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
           <ThumbCarousel title="진행 중 이벤트" more={`${NEXON_NEWS}/Event`} slides={news.events} empty="진행 중인 이벤트 없음" />
           <ThumbCarousel title="캐시샵" more={`${NEXON_NEWS}/CashShop`} slides={news.cashshop} empty="새 캐시샵 소식 없음" />
           <NewsList title="업데이트" more={`${NEXON_NEWS}/Update`} lines={news.updates} />
           <NewsList title="공지사항" more={`${NEXON_NEWS}/Notice`} lines={news.notices} />
         </div>
       ) : (
-        <section className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card px-[18px] py-3.5 text-[13px]">
+        <section className="flex flex-wrap items-center justify-between gap-3 tile px-[18px] py-3.5 text-[13px]">
           <span className="text-muted-foreground">넥슨 소식을 불러오지 못함</span>
           <a
             href={`${NEXON_NEWS}/Notice`}

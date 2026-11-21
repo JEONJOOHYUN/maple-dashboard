@@ -108,7 +108,7 @@ export function EnhanceApp() {
   );
 
   return (
-    <div className="flex flex-col gap-4 lg:gap-[22px]">
+    <div className="flex flex-col gap-2">
       <PageHeader
         title="강화 기록"
         pinAside
@@ -118,7 +118,7 @@ export function EnhanceApp() {
             <DropdownMenu>
               <DropdownMenuTrigger
                 aria-label="키 관리"
-                className="flex h-8 w-9 shrink-0 items-center justify-center rounded-md border border-border bg-card text-foreground outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
+                className="flex h-8 w-9 shrink-0 items-center justify-center tile-sm text-foreground outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
               >
                 <Ellipsis className="size-4" aria-hidden="true" />
               </DropdownMenuTrigger>

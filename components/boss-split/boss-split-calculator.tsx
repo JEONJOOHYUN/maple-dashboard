@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Copy, ImageIcon, Info, Plus, X } from "lucide-react";
+import { Check, Copy, ImageIcon, Info, Plus, X } from "lucide-react";
+import { SwapLabel } from "@/components/ui/swap-icon";
 import { PageHeader } from "@/components/page-header";
 import { MESO_MARKET_FEE_RATE, computeBossSplit, wholeMeso } from "@/lib/boss-split/boss-split-math";
 import { formatKoreanMeso, formatNumber } from "@/lib/format";
@@ -203,10 +204,10 @@ export function BossSplitCalculator() {
   }[imageState];
 
   return (
-    <div className="flex flex-col gap-4 lg:gap-5">
+    <div className="flex flex-col gap-2">
       <PageHeader title="분배금 계산기" description="판매가 · 수수료 · 인원만 고르면 바로 계산" />
 
-      <section className="flex flex-col gap-[18px] rounded-lg border border-border bg-card p-5">
+      <section className="flex flex-col gap-[18px] tile p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-base font-bold">판매가</h2>
           <button
@@ -272,7 +273,7 @@ export function BossSplitCalculator() {
         <div className="flex flex-col gap-2.5 border-t border-dashed border-border pt-3.5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-[13px] font-semibold text-muted-foreground">분배 비율</span>
-            <div className="inline-flex gap-0.5 rounded-lg bg-muted p-[3px]" role="group" aria-label="분배 비율">
+            <div className="inline-flex gap-0.5 rounded-xl bg-muted p-1" role="group" aria-label="분배 비율">
               <SegmentButton on={mode === "equal"} onClick={() => chooseMode("equal")}>
                 균등
               </SegmentButton>
@@ -327,7 +328,7 @@ export function BossSplitCalculator() {
         </div>
       </section>
 
-      <section aria-label="계산 결과" className="flex flex-col gap-4 rounded-lg border border-border bg-card px-5 py-6">
+      <section aria-label="계산 결과" className="flex flex-col gap-4 tile px-5 py-6">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-xl font-bold">계산 결과</h2>
           <span className="text-[13px] text-muted-foreground">
@@ -369,7 +370,7 @@ export function BossSplitCalculator() {
                   <>
                     {/* Same or other server as a choice of two (user, 2026-11-14: the "타 서버" pill read as a
                         label, not as something to press). */}
-                    <div role="group" aria-label={`${card.name} 서버`} className="grid w-full max-w-60 grid-cols-2 gap-0.5 rounded-lg bg-muted p-[3px]">
+                    <div role="group" aria-label={`${card.name} 서버`} className="grid w-full max-w-60 grid-cols-2 gap-0.5 rounded-xl bg-muted p-1">
                       {[false, true].map((other) => (
                         <button
                           key={String(other)}
@@ -377,7 +378,7 @@ export function BossSplitCalculator() {
                           aria-pressed={card.cross === other}
                           onClick={() => setOtherServer((prev) => prev.map((v, j) => (j === card.index ? other : v)))}
                           className={cn(
-                            "h-8 rounded-md text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                            "h-8 rounded-lg text-xs transition-[background-color,color,scale] outline-none focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.96]",
                             card.cross === other ? "bg-primary font-bold text-primary-foreground" : "text-muted-foreground hover:text-foreground"
                           )}
                         >
@@ -426,8 +427,21 @@ export function BossSplitCalculator() {
                     disabled={!hasResult}
                     className="inline-flex h-[38px] items-center gap-1.5 rounded-lg border border-input bg-muted px-3.5 text-[13px] font-semibold transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    <Copy className="size-3.5" aria-hidden="true" />
-                    {copied ? `복사됨 · ${Math.round(card.amount)}` : "금액 복사"}
+                    <SwapLabel
+                      on={copied}
+                      from={
+                        <>
+                          <Copy className="size-3.5" aria-hidden="true" />
+                          금액 복사
+                        </>
+                      }
+                      to={
+                        <>
+                          <Check className="size-3.5" aria-hidden="true" />
+                          복사됨
+                        </>
+                      }
+                    />
                   </button>
                 </div>
               </div>
@@ -477,7 +491,8 @@ function ChoiceRow({
   return (
     <div className="flex flex-col gap-2" role="group" aria-label={label}>
       <span className="text-[13px] font-semibold text-muted-foreground">{label}</span>
-      <div className={cn("grid gap-1 rounded-[10px] border border-border bg-background p-1", columns)}>{children}</div>
+      {/* Track radius 14 = button radius 10 + the 4px between them. */}
+      <div className={cn("grid gap-1 rounded-xl bg-background p-1 shadow-tile", columns)}>{children}</div>
     </div>
   );
 }
@@ -500,7 +515,7 @@ function ChoiceButton({
       aria-pressed={on}
       aria-label={ariaLabel}
       className={cn(
-        "h-[42px] rounded-[7px] text-[15px] transition-colors",
+        "h-[42px] rounded-lg text-[15px] transition-[background-color,color,scale] active:scale-[0.96]",
         on ? "bg-primary font-bold text-primary-foreground" : "font-medium text-muted-foreground hover:text-foreground"
       )}
     >
@@ -516,8 +531,8 @@ function SegmentButton({ on, onClick, children }: { on: boolean; onClick: () => 
       onClick={onClick}
       aria-pressed={on}
       className={cn(
-        "h-[34px] rounded-md px-3.5 text-[13px] transition-colors",
-        on ? "bg-card font-bold text-primary-text shadow-sm" : "text-muted-foreground"
+        "h-[34px] rounded-lg px-3.5 text-[13px] transition-[background-color,color,scale] active:scale-[0.96]",
+        on ? "bg-card font-bold text-primary-text shadow-tile" : "text-muted-foreground"
       )}
     >
       {children}

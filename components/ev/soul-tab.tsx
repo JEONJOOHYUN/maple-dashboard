@@ -23,7 +23,7 @@ export function SoulTab() {
   const stage = SOUL_STAGES[now];
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+    <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       <Panel>
         <div className="flex flex-col gap-0.5">
           <b className="text-[15px]">소울 증폭</b>
@@ -91,7 +91,7 @@ export function SoulTab() {
             return <LuckBox key={l.q} label={l.label} value={eok(plan.costAt(l.q))} sub={`${n}번`} />;
           })}
         </div>
-        <div className="overflow-hidden rounded-lg border border-border bg-card">
+        <div className="overflow-hidden tile">
           <div className="grid grid-cols-[minmax(0,1fr)_64px_84px_56px] gap-2 px-4 py-2.5 text-[11px] text-muted-foreground">
             <span>단계</span>
             <span className="text-right">처음 확률</span>

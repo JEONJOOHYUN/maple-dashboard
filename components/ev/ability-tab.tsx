@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Spinner } from "@/components/ui/spinner";
 import {
   Chip,
   Label,
@@ -456,10 +457,10 @@ export function AbilityTab({ classes }: { classes: ClassAbility[] }) {
   );
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+    <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       {/* Its own height, not stretched to the long result column (user, 2026-11-14: the two sides looked unbalanced);
           the class table fills the space under it (user, 2026-11-15). */}
-      <div className="flex min-w-0 flex-col gap-4 lg:self-start">
+      <div className="flex min-w-0 flex-col gap-2 lg:self-start">
         <Panel>
           <Label>자주 노리는 조합</Label>
           <div className="flex flex-wrap gap-1.5">
@@ -629,7 +630,7 @@ export function AbilityTab({ classes }: { classes: ClassAbility[] }) {
             waiting === "later" && "opacity-100 transition-opacity delay-150 duration-150",
           )}
         >
-          <span className="size-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+          <Spinner size={12} />
           계산 중
         </span>
         <div
@@ -723,7 +724,7 @@ export function AbilityTab({ classes }: { classes: ClassAbility[] }) {
               }
             />
           </div>
-          <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4">
+          <div className="flex flex-col gap-3 tile p-4">
             <b className="text-sm">가장 싼 순서</b>
             <Step
               n={1}
@@ -1082,7 +1083,7 @@ function GoalLine({ legend, label, value }: { legend: boolean; label: string; va
 
 function Box({ k, v, sub }: { k: string; v: string; sub: string }) {
   return (
-    <div className="flex min-w-0 flex-col gap-0.5 rounded-lg border border-border bg-card p-3">
+    <div className="flex min-w-0 flex-col gap-0.5 tile p-3">
       <span className="text-[11px] text-muted-foreground">{k}</span>
       <b className="truncate font-num text-base">{v}</b>
       <span className="truncate text-[11px] text-muted-foreground">{sub}</span>

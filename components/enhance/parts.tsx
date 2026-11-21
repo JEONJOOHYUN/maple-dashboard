@@ -34,7 +34,7 @@ export const SKIP_LABEL: Record<SkipReason, string> = {
 };
 
 export function Card({ className, children }: { className?: string; children: ReactNode }) {
-  return <section className={cn("min-w-0 rounded-lg border border-border bg-card", className)}>{children}</section>;
+  return <section className={cn("min-w-0 tile", className)}>{children}</section>;
 }
 
 /** How many rows a ranking card shows; the rest are in its window. */
@@ -275,7 +275,7 @@ export function RoundsIn({ group, n }: { group: EventGroup; n: number }) {
 
 /** A menu button that reads like the fields next to it. */
 const MENU_TRIGGER =
-  "relative inline-flex h-8 min-w-0 items-center rounded-md border border-border bg-card pr-8 pl-2.5 text-left text-[13px] text-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50";
+  "relative inline-flex h-8 min-w-0 items-center tile-sm pr-8 pl-2.5 text-left text-[13px] text-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50";
 
 export type Sort = "spent" | "delta" | "recent";
 const SORT_LABEL: Record<Sort, string> = { spent: "많이 쓴 순", delta: "이득 큰 순", recent: "최근 순" };
@@ -366,5 +366,5 @@ export function TryBadges({ row, restored }: { row: SfRow; restored: boolean }) 
 }
 
 export function Empty({ children }: { children: ReactNode }) {
-  return <p className="rounded-lg border border-dashed border-border bg-card px-5 py-10 text-center text-sm text-muted-foreground">{children}</p>;
+  return <p className="rounded-[1rem] border border-dashed border-border bg-card px-5 py-10 text-center text-sm text-muted-foreground">{children}</p>;
 }

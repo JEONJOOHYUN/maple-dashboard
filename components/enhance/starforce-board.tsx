@@ -106,7 +106,7 @@ export function StarforceBoard({ apiKey, account, onForget, switcher }: { apiKey
   ];
 
   return (
-    <div className="flex flex-col gap-4 lg:gap-[22px]" data-clarity-mask="true">
+    <div className="flex flex-col gap-2" data-clarity-mask="true">
       <PeriodBar
         state={period}
         loading={loading}

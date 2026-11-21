@@ -36,6 +36,9 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Digits } from "@/components/ui/digits";
+import { SwapLabel } from "@/components/ui/swap-icon";
+import { ZEBRA_HEAD, ZEBRA_ROW, ZEBRA_SCROLL, ZEBRA_TABLE } from "@/components/ui/zebra";
 import { cn } from "@/lib/utils";
 import { koreanUnits } from "@/lib/format";
 
@@ -271,8 +274,8 @@ export function StarforceTab() {
     );
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="grid gap-4 lg:grid-cols-[360px_minmax(0,1fr)]">
+    <div className="flex flex-col gap-2">
+      <div className="grid gap-2 lg:grid-cols-[360px_minmax(0,1fr)]">
         <Panel>
           <Label>장비</Label>
           <div className="flex flex-col gap-2.5">
@@ -495,7 +498,7 @@ export function StarforceTab() {
                     key={s}
                     on={startStar === s}
                     onClick={() => setStart(s)}
-                    className="px-0"
+                    className="px-0 font-num text-sm"
                   >
                     {s}
                   </Chip>
@@ -503,46 +506,46 @@ export function StarforceTab() {
             </div>
           </div>
           {/* 520px: at a 1280px window the panel is 551px wide (560 scrolled by 9px and cut "담기"); phones still scroll. */}
-          <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-            <table className="w-full min-w-[520px] text-[13px]">
+          <div className={ZEBRA_SCROLL}>
+            <table className={cn(ZEBRA_TABLE, "min-w-[520px] text-[13px]")}>
               <thead>
-                <tr className="border-b border-border text-left text-[11px] text-muted-foreground">
+                <tr className={ZEBRA_HEAD}>
                   <th className="py-2 font-medium">구간</th>
                   <th className="py-2 text-right font-medium">기댓값</th>
                   <th className="py-2 text-right font-medium">×{mult}</th>
                   <th className="py-2 text-right font-medium">평균 파괴</th>
                   <th className="py-2 text-right font-medium">평균 시도</th>
-                  <th className="w-16" />
+                  <th className="w-[5.5rem]" />
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r) => (
                   <tr
                     key={`${r.from}-${r.to}`}
-                    className={cn("border-b border-border/60 last:border-0", ROW_CSS)}
+                    className={cn(ZEBRA_ROW, ROW_CSS)}
                   >
-                    <td className="py-2 font-num whitespace-nowrap">
+                    <td className="py-2 font-num text-[15px] font-bold whitespace-nowrap">
                       {r.from} <span className="font-sans">→</span> {r.to}성
                     </td>
-                    <td className="py-2 text-right font-num whitespace-nowrap">
-                      {money(r.meso)}
+                    <td className="py-2 text-right font-num text-[15px] font-bold whitespace-nowrap">
+                      <Digits>{money(r.meso)}</Digits>
                     </td>
-                    <td className="py-2 text-right font-num font-bold whitespace-nowrap text-primary-text">
-                      {money(r.meso * mult)}
+                    <td className="py-2 text-right font-num text-[15px] font-bold whitespace-nowrap text-primary-text">
+                      <Digits>{money(r.meso * mult)}</Digits>
                     </td>
-                    <td className="py-2 text-right font-num">
-                      {avg(r.destroys, 2)}
+                    <td className="py-2 text-right font-num text-[15px] font-bold whitespace-nowrap">
+                      <Digits>{avg(r.destroys, 2)}</Digits>
                     </td>
-                    <td className="py-2 text-right font-num">
-                      {avg(r.tries, 1)}
+                    <td className="py-2 text-right font-num text-[15px] font-bold whitespace-nowrap">
+                      <Digits>{avg(r.tries, 1)}</Digits>
                     </td>
                     <td className="py-1 text-right">
                       <button
                         type="button"
                         onClick={() => add(r.from, r.to)}
-                        className="inline-flex h-7 items-center gap-0.5 rounded-md border border-border px-2 text-xs text-muted-foreground hover:border-primary hover:text-primary-text"
+                        className="relative inline-flex h-7 items-center gap-1 rounded-full bg-background pr-2.5 pl-2 text-xs whitespace-nowrap text-muted-foreground shadow-tile transition-[box-shadow,color,scale] after:absolute after:inset-x-0 after:-inset-y-1.5 hover:text-primary-text hover:shadow-tile-hover active:scale-[0.96]"
                       >
-                        <Plus className="size-3" aria-hidden="true" />
+                        <Plus className="size-3" strokeWidth={1.5} aria-hidden="true" />
                         담기
                       </button>
                     </td>
@@ -556,7 +559,7 @@ export function StarforceTab() {
               type="button"
               onClick={() => setMore(!more)}
               aria-expanded={more}
-              className="h-9 rounded-lg border border-dashed border-border text-[13px] text-muted-foreground hover:text-foreground"
+              className="h-9 rounded-lg border border-dashed border-border text-[13px] text-muted-foreground transition-[color,scale] hover:text-foreground active:scale-[0.96]"
             >
               {more
                 ? `접기 (${fold}성까지만)`
@@ -566,7 +569,7 @@ export function StarforceTab() {
         </Panel>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
+      <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_300px]">
         <Panel>
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <b className="text-[15px]">
@@ -582,42 +585,42 @@ export function StarforceTab() {
               담은 구간 없음
             </p>
           ) : (
-            <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-              <table className="w-full min-w-[620px] text-[13px]">
+            <div className={ZEBRA_SCROLL}>
+              <table className={cn(ZEBRA_TABLE, "min-w-[620px] text-[13px]")}>
                 <thead>
-                  <tr className="border-b border-border text-left text-[11px] text-muted-foreground">
+                  <tr className={ZEBRA_HEAD}>
                     <th className="py-2 font-medium">장비 · 조건</th>
                     <th className="py-2 font-medium">구간</th>
                     <th className="py-2 text-right font-medium">기댓값</th>
                     <th className="py-2 text-right font-medium">×{mult}</th>
                     <th className="py-2 text-right font-medium">파괴</th>
                     <th className="py-2 text-right font-medium">시도</th>
-                    <th className="w-8" />
+                    <th className="w-[3.25rem]" />
                   </tr>
                 </thead>
                 <tbody>
                   {cartRows.map((c) => (
-                    <tr key={c.id} className="border-b border-border/60">
+                    <tr key={c.id} className={ZEBRA_ROW}>
                       <td className="py-2">
                         <b className="block">{c.item}</b>
                         <span className="text-[11px] text-muted-foreground">
                           Lv.{c.level} · {c.cond}
                         </span>
                       </td>
-                      <td className="py-2 font-num whitespace-nowrap">
+                      <td className="py-2 font-num text-[15px] font-bold whitespace-nowrap">
                         {c.from} <span className="font-sans">→</span> {c.to}성
                       </td>
-                      <td className="py-2 text-right font-num whitespace-nowrap">
-                        {money(c.meso)}
+                      <td className="py-2 text-right font-num text-[15px] font-bold whitespace-nowrap">
+                        <Digits>{money(c.meso)}</Digits>
                       </td>
-                      <td className="py-2 text-right font-num font-bold whitespace-nowrap">
-                        {money(c.meso * mult)}
+                      <td className="py-2 text-right font-num text-[15px] font-bold whitespace-nowrap">
+                        <Digits>{money(c.meso * mult)}</Digits>
                       </td>
-                      <td className="py-2 text-right font-num">
-                        {avg(c.destroys, 2)}
+                      <td className="py-2 text-right font-num text-[15px] font-bold whitespace-nowrap">
+                        <Digits>{avg(c.destroys, 2)}</Digits>
                       </td>
-                      <td className="py-2 text-right font-num">
-                        {avg(c.tries, 1)}
+                      <td className="py-2 text-right font-num text-[15px] font-bold whitespace-nowrap">
+                        <Digits>{avg(c.tries, 1)}</Digits>
                       </td>
                       <td className="py-1 text-right">
                         <button
@@ -633,20 +636,20 @@ export function StarforceTab() {
                       </td>
                     </tr>
                   ))}
-                  <tr className="font-bold">
+                  <tr className={cn(ZEBRA_ROW, "font-bold")}>
                     <td className="py-2">합계 {cart.length}개</td>
                     <td />
-                    <td className="py-2 text-right font-num">
-                      {money(sum.meso)}
+                    <td className="py-2 text-right font-num text-[15px] font-bold whitespace-nowrap">
+                      <Digits>{money(sum.meso)}</Digits>
                     </td>
-                    <td className="py-2 text-right font-num text-primary-text">
-                      {money(sum.meso * mult)}
+                    <td className="py-2 text-right font-num text-[15px] font-bold text-primary-text">
+                      <Digits>{money(sum.meso * mult)}</Digits>
                     </td>
-                    <td className="py-2 text-right font-num">
-                      {avg(sum.destroys, 2)}
+                    <td className="py-2 text-right font-num text-[15px] font-bold whitespace-nowrap">
+                      <Digits>{avg(sum.destroys, 2)}</Digits>
                     </td>
-                    <td className="py-2 text-right font-num">
-                      {avg(sum.tries, 1)}
+                    <td className="py-2 text-right font-num text-[15px] font-bold whitespace-nowrap">
+                      <Digits>{avg(sum.tries, 1)}</Digits>
                     </td>
                     <td />
                   </tr>
@@ -668,7 +671,7 @@ export function StarforceTab() {
                     setMult(m);
                     setMultText(m.toFixed(2));
                   }}
-                  className="px-0"
+                  className="px-0 font-num text-sm"
                 >
                   ×{m.toFixed(2)}
                 </Chip>
@@ -708,27 +711,45 @@ export function StarforceTab() {
               type="button"
               disabled={cart.length === 0}
               onClick={() => copy("sum")}
-              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-border bg-card text-[13px] font-semibold disabled:opacity-50"
+              className="inline-flex h-10 items-center justify-center gap-1.5 tile text-[13px] font-semibold disabled:opacity-50"
             >
-              {copied === "sum" ? (
-                <Check className="size-4" aria-hidden="true" />
-              ) : (
-                <Copy className="size-4" aria-hidden="true" />
-              )}
-              {copied === "sum" ? "복사됨" : "금액 복사"}
+              <SwapLabel
+                on={copied === "sum"}
+                from={
+                  <>
+                    <Copy className="size-4" aria-hidden="true" />
+                    금액 복사
+                  </>
+                }
+                to={
+                  <>
+                    <Check className="size-4" aria-hidden="true" />
+                    복사됨
+                  </>
+                }
+              />
             </button>
             <button
               type="button"
               disabled={cart.length === 0}
               onClick={() => copy("tsv")}
-              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-border bg-card text-[13px] font-semibold disabled:opacity-50"
+              className="inline-flex h-10 items-center justify-center gap-1.5 tile text-[13px] font-semibold disabled:opacity-50"
             >
-              {copied === "tsv" ? (
-                <Check className="size-4" aria-hidden="true" />
-              ) : (
-                <Copy className="size-4" aria-hidden="true" />
-              )}
-              {copied === "tsv" ? "복사됨" : "엑셀 복사"}
+              <SwapLabel
+                on={copied === "tsv"}
+                from={
+                  <>
+                    <Copy className="size-4" aria-hidden="true" />
+                    엑셀 복사
+                  </>
+                }
+                to={
+                  <>
+                    <Check className="size-4" aria-hidden="true" />
+                    복사됨
+                  </>
+                }
+              />
             </button>
           </div>
         </div>

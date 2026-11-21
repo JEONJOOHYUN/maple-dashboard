@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 
 /** Card section used by every calculator tab. */
 export function Panel({ className, children }: { className?: string; children: ReactNode }) {
-  return <section className={cn("flex min-w-0 flex-col gap-3.5 rounded-lg border border-border bg-card p-4 sm:p-5", className)}>{children}</section>;
+  return <section className={cn("flex min-w-0 flex-col gap-3.5 tile p-4 sm:p-5", className)}>{children}</section>;
 }
 
 export function Label({ children, aside }: { children: ReactNode; aside?: ReactNode }) {
@@ -46,11 +46,11 @@ export function Chip({
       aria-pressed={on}
       title={title}
       className={cn(
-        "h-9 min-w-0 rounded-lg border px-3 text-[13px] whitespace-nowrap transition-colors disabled:cursor-default",
-        on && !soft && "border-primary bg-primary font-bold text-primary-foreground",
+        "h-9 min-w-0 rounded-lg border px-3 text-[13px] whitespace-nowrap transition-[background-color,border-color,color,box-shadow,scale] enabled:active:scale-[0.96] disabled:cursor-default",
+        on && !soft && "border-transparent bg-primary font-bold text-primary-foreground",
         on && soft && "border-primary bg-primary-soft font-bold text-primary-text",
         !on && soft && "border-dashed border-border bg-transparent text-muted-foreground",
-        !on && !soft && "border-border bg-card text-foreground hover:border-primary/60",
+        !on && !soft && "border-transparent bg-background text-foreground shadow-tile hover:shadow-tile-hover",
         className
       )}
     >
@@ -77,7 +77,7 @@ export function Segment<T extends string>({
   className?: string;
 }) {
   return (
-    <div role="radiogroup" aria-label={label} className={cn("grid gap-0.5 rounded-lg bg-muted p-[3px]", className)} style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}>
+    <div role="radiogroup" aria-label={label} className={cn("grid gap-0.5 rounded-xl bg-muted p-1", className)} style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}>
       {options.map((o, i) => {
         const button = (
           <button
@@ -87,9 +87,9 @@ export function Segment<T extends string>({
             aria-checked={value === o.id}
             onClick={() => onChange(o.id)}
             className={cn(
-              "h-[34px] min-w-0 truncate rounded-md px-2 text-[13px] transition-colors",
+              "h-[34px] min-w-0 truncate rounded-lg px-2 text-[13px] transition-[background-color,color,scale] active:scale-[0.96]",
               o.hint && "flex-1",
-              value === o.id ? "bg-card font-bold text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+              value === o.id ? "bg-card font-bold text-foreground shadow-tile" : "text-muted-foreground hover:text-foreground"
             )}
           >
             {o.label}
@@ -124,10 +124,10 @@ export function Switch({ on, onChange, label, note }: { on: boolean; onChange: (
       role="switch"
       aria-checked={on}
       onClick={() => onChange(!on)}
-      className="flex w-full items-center gap-3 rounded-lg border border-border bg-muted/50 px-3 py-2.5 text-left"
+      className="flex w-full items-center gap-3 rounded-lg bg-background px-3 py-2.5 text-left shadow-tile"
     >
-      <span className={cn("flex h-6 w-10 shrink-0 rounded-full p-0.5 transition-colors", on ? "justify-end bg-primary" : "justify-start bg-border")}>
-        <span className="size-5 rounded-full bg-white shadow-sm" />
+      <span className={cn("flex h-6 w-10 shrink-0 rounded-full p-0.5 transition-colors", on ? "bg-primary" : "bg-border")}>
+        <span className={cn("size-5 rounded-full bg-white shadow-sm transition-transform", on && "translate-x-4")} />
       </span>
       <span className="flex min-w-0 flex-col gap-0.5">
         <b className="text-[13px]">{label}</b>
@@ -195,7 +195,7 @@ export function NumberField({
           requestAnimationFrame(putCaret);
         }}
         className={cn(
-          "h-9 w-20 min-w-0 rounded-lg border border-input bg-background px-2 text-right font-num text-sm text-foreground outline-none focus:border-ring focus:ring-3 focus:ring-ring/40",
+          "h-9 w-20 min-w-0 rounded-lg border border-input bg-background px-2 text-right font-num text-[15px] font-bold text-foreground outline-none focus:border-ring focus:ring-3 focus:ring-ring/40",
           inputClassName
         )}
       />
@@ -213,7 +213,7 @@ export const parseNum = (text: string, fallback = 0) => {
 /** Big orange result card. */
 export function ResultCard({ label, big, unit, side, foot }: { label: ReactNode; big: ReactNode; unit?: string; side?: ReactNode; foot?: ReactNode }) {
   return (
-    <div className="flex flex-col gap-1.5 rounded-lg bg-primary px-5 py-4 text-primary-foreground shadow-[0_10px_30px_var(--primary-soft)]">
+    <div className="flex flex-col gap-1.5 rounded-[1rem] bg-primary px-5 py-4 text-primary-foreground shadow-[0_10px_30px_var(--primary-soft)]">
       <span className="text-[13px] font-semibold">{label}</span>
       <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <span className="font-num text-[36px] leading-none font-bold sm:text-[44px]">
@@ -243,7 +243,7 @@ export function LuckRow({ p, cap = 0, cost, unit = "번" }: { p: number; cap?: n
 
 export function LuckBox({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="flex min-w-0 flex-col gap-0.5 rounded-lg border border-border bg-card p-3">
+    <div className="flex min-w-0 flex-col gap-0.5 rounded-lg bg-background p-3">
       <span className="text-[11px] text-muted-foreground">{label}</span>
       <b className="font-num text-lg">{value}</b>
       {sub && <span className="truncate font-num text-xs text-muted-foreground">{sub}</span>}

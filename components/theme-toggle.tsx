@@ -24,7 +24,7 @@ export function ThemeToggle() {
       type="button"
       onClick={() => setTheme(isDark ? "light" : "dark")}
       aria-label={isDark ? "라이트 모드로 전환" : "다크 모드로 전환"}
-      className="flex size-10 items-center justify-center rounded-lg border border-border bg-card text-foreground transition-colors outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
+      className="flex size-10 items-center justify-center rounded-xl bg-card text-foreground transition-[background-color,scale] outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.96]"
     >
       {isDark ? (
         <Sun className="size-[17px]" aria-hidden="true" />

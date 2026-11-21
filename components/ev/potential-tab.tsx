@@ -360,7 +360,7 @@ export function PotentialTab() {
   ).filter(([k]) => !(k === "b" && !best.boss));
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+    <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       <Panel>
         <Label aside={<span className="text-xs font-semibold text-primary-text">{slot.label}</span>}>장비</Label>
         <Segment
@@ -749,7 +749,7 @@ export function PotentialTab() {
               </span>
             )}
             {target === "stat" && (statMain === "str" || saleOn) && (
-              <div className="flex flex-col gap-2 rounded-md border border-border bg-card p-2.5">
+              <div className="flex flex-col gap-2 tile-sm p-2.5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <button
                     type="button"
@@ -886,7 +886,7 @@ export function PotentialTab() {
       </Panel>
 
       <section className="flex min-w-0 flex-col gap-3">
-        <div className="rounded-lg border border-border bg-card px-4 py-3 text-[13px]">
+        <div className="tile px-4 py-3 text-[13px]">
           <span className="text-muted-foreground">목표 </span>
           <b>{goalText}</b>
         </div>
@@ -894,7 +894,7 @@ export function PotentialTab() {
         {results.map((r, i) => {
           const avg = r.p ? averageTries(r.p, r.cap) : Infinity;
           return (
-            <div key={r.cube.id} className={cn("flex flex-col gap-3 rounded-lg border bg-card p-4", i === 0 && r.p ? "border-primary" : "border-border", !r.p && "opacity-70")}>
+            <div key={r.cube.id} className={cn("flex flex-col gap-3 tile p-4", i === 0 && r.p ? "border-primary" : "border-border", !r.p && "opacity-70")}>
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <span className="flex flex-wrap items-baseline gap-2">
                   <b className="text-[15px]">{r.cube.name}</b>

@@ -2,12 +2,13 @@
 
 // What the star force board and the potential board share: the period, the sync wiring and its banners, the tab row.
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { AlertCircle, Loader2, RefreshCw, Search, SlidersHorizontal, X } from "lucide-react";
+import { AlertCircle, RefreshCw, Search, SlidersHorizontal, X } from "lucide-react";
 import { eok } from "@/components/ev/ui";
 import { BELOW } from "@/components/enhance/parts";
 import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from "@/components/ui/combobox";
 import { InputGroupAddon, InputGroupButton } from "@/components/ui/input-group";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Spinner } from "@/components/ui/spinner";
 import type { ApiErrorKind } from "@/lib/enhance/client";
 import { addDays, kstDate } from "@/lib/enhance/kst";
 import type { HistorySync, SyncSnap } from "@/lib/enhance/sync";
@@ -37,7 +38,7 @@ const ERRORS: Record<ApiErrorKind, string> = {
 };
 
 const dateInput = "h-8 rounded-md border border-border bg-background px-2 text-[13px] text-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50";
-const plainButton = "h-8 rounded-md border border-border bg-card px-2.5 text-[13px] text-foreground outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50";
+const plainButton = "h-8 tile-sm px-2.5 text-[13px] text-foreground outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50";
 
 export type PeriodState = ReturnType<typeof usePeriod>;
 
@@ -109,7 +110,7 @@ export function PeriodBar({
       </div>
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <div className="flex flex-wrap items-center gap-2">
-          <div role="group" aria-label="기간" className="flex flex-wrap gap-[3px] rounded-lg border border-border p-[3px]">
+          <div role="group" aria-label="기간" className="flex flex-wrap gap-0.5 rounded-xl bg-muted p-1">
             {PERIODS.map((p) => (
               <button
                 key={p.id}
@@ -118,8 +119,8 @@ export function PeriodBar({
                 aria-pressed={period === p.id}
                 onClick={() => setPeriod(p.id)}
                 className={cn(
-                  "h-8 rounded-md px-2.5 text-[13px] outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-                  period === p.id ? "bg-primary-soft font-bold text-primary-text" : "text-muted-foreground hover:text-foreground"
+                  "h-8 rounded-lg px-2.5 text-[13px] transition-[background-color,color,scale] outline-none focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.96]",
+                  period === p.id ? "bg-card font-bold text-primary-text shadow-tile" : "text-muted-foreground hover:text-foreground"
                 )}
               >
                 {p.short}
@@ -263,9 +264,9 @@ export function SyncBanners({ snap, unit, onRetry, onForget }: { snap: Pick<Sync
   return (
     <>
       {loading && (
-        <div role="status" className="flex flex-col gap-2 rounded-lg border border-border bg-card px-4 py-3">
+        <div role="status" className="flex flex-col gap-2 tile px-4 py-3">
           <span className="flex items-center gap-2 text-[13px]">
-            <Loader2 className="size-4 animate-spin text-primary-text" aria-hidden="true" />
+            <Spinner className="text-primary-text" />
             기록 받는 중
             {snap.total > 0 && (
               <b className="font-num">

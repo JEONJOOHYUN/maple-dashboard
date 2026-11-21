@@ -2,11 +2,12 @@
 
 import { useEffect, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Check, ExternalLink, Loader2, RotateCw, Search, ShieldAlert, ShieldCheck, X } from "lucide-react";
+import { Check, ExternalLink, RotateCw, Search, ShieldAlert, ShieldCheck, X } from "lucide-react";
 import { refreshSpec } from "@/app/spec/actions";
 import { PageHeader } from "@/components/page-header";
 import { SpecTabs } from "@/components/spec/spec-tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Spinner } from "@/components/ui/spinner";
 import type { Miss, SpecResult, Tier, Tile } from "@/lib/spec/check";
 import { periodGroups } from "@/lib/spec/period-rows";
 import { useStored } from "@/lib/use-stored";
@@ -330,7 +331,7 @@ function LineBody({ miss }: { miss: Miss }) {
 /** The list: lines with more to show open on a press, the others are plain lines. */
 function Lines({ items, chip }: { items: Miss[]; chip: boolean }) {
   return (
-    <Accordion multiple className="overflow-hidden rounded-lg border border-border bg-card">
+    <Accordion multiple className="overflow-hidden tile">
       {items.map((m, i) =>
         opens(m) ? (
           <AccordionItem key={i} value={`${i}`}>
@@ -436,10 +437,10 @@ function Result({ result, at, optimizer, refreshing, refreshNote, onRefresh }: R
     .join(" · ");
 
   return (
-    <section className="grid items-start gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+    <section className="grid items-start gap-2 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
       {/* The character alone stays in view on a desktop while the list beside it grows as lines open. */}
       <div className={cn("@container flex min-w-0 flex-col gap-3", !under && "lg:sticky lg:top-4")}>
-        <div className="relative flex flex-col gap-3.5 rounded-lg border border-border bg-card p-4 sm:p-5">
+        <div className="relative flex flex-col gap-3.5 tile p-4 sm:p-5">
           <div className="flex items-start gap-3.5">
             <span className="flex size-[84px] shrink-0 items-center justify-center overflow-hidden rounded-lg bg-secondary">
               {result.image ? (
@@ -523,7 +524,7 @@ function Result({ result, at, optimizer, refreshing, refreshNote, onRefresh }: R
           </>
         )}
         {n === 0 && (
-          <div className="flex flex-col items-center gap-2 rounded-lg border border-border bg-card px-4 py-9 text-center">
+          <div className="flex flex-col items-center gap-2 tile px-4 py-9 text-center">
             <span className="flex size-12 items-center justify-center rounded-full bg-[oklch(0.678_0.134_152.4_/_0.16)] text-[oklch(0.651_0.137_152.5)]">
               <Check className="size-6" aria-hidden="true" />
             </span>
@@ -532,7 +533,7 @@ function Result({ result, at, optimizer, refreshing, refreshNote, onRefresh }: R
           </div>
         )}
         {n > 0 && !open && (
-          <div className="rounded-lg border border-border bg-card px-4 py-9 text-center text-[13px] text-muted-foreground">왼쪽 배지 → 목록 열기</div>
+          <div className="tile px-4 py-9 text-center text-[13px] text-muted-foreground">왼쪽 배지 → 목록 열기</div>
         )}
         {result.tips.length > 0 && (
           <>
@@ -549,7 +550,7 @@ function Result({ result, at, optimizer, refreshing, refreshNote, onRefresh }: R
 
 export function Message({ title, sub }: { title: string; sub: string }) {
   return (
-    <section className="flex flex-col items-center gap-1.5 rounded-lg border border-dashed border-border bg-card px-5 py-10 text-center">
+    <section className="flex flex-col items-center gap-1.5 rounded-[1rem] border border-dashed border-border bg-card px-5 py-10 text-center">
       <b className="text-[15px]">{title}</b>
       <span className="text-[13px] text-muted-foreground">{sub}</span>
     </section>
@@ -593,11 +594,11 @@ export function SpecCheck({ name, view }: { name: string; view: SpecView }) {
   };
 
   return (
-    <div className="flex flex-col gap-4 lg:gap-5">
+    <div className="flex flex-col gap-2">
       <PageHeader title="숨은 스펙업" description={SPEC_DESCRIPTION} aside={<SpecTabs on="person" />} />
 
       <form onSubmit={submit} className="flex gap-2" role="search">
-        <label className="flex h-[50px] min-w-0 flex-1 items-center gap-2.5 rounded-lg border border-border bg-card px-4 focus-within:border-primary">
+        <label className="flex h-[50px] min-w-0 flex-1 items-center gap-2.5 tile px-4 focus-within:border-primary">
           <Search className="size-[18px] shrink-0 text-muted-foreground" aria-hidden="true" />
           <span className="sr-only">캐릭터 닉네임</span>
           <input
@@ -615,7 +616,7 @@ export function SpecCheck({ name, view }: { name: string; view: SpecView }) {
           disabled={pending || !text.trim()}
           className="flex h-[50px] shrink-0 items-center gap-1.5 rounded-lg bg-primary px-[22px] text-[15px] font-bold text-primary-foreground disabled:opacity-60"
         >
-          {pending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+          {pending && <Spinner />}
           {pending ? "조회 중" : "검색"}
         </button>
       </form>

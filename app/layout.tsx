@@ -46,14 +46,18 @@ export default function RootLayout({
       <body>
         {/* Dark unless the visitor picked light with the toggle (user, 2026-11-12). The system setting is not followed. */}
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
-          <div className="flex min-h-dvh">
+          {/* Desktop: the side menu sits on the page and the content on one rounded sheet beside it. Phones: the
+              sheet is the whole screen. */}
+          {/* The width stops where the sheet holds the content column exactly (1152 + the sheet's 8px sides + the
+              menu), so on a wide monitor the menu and the sheet stay together in the middle. */}
+          <div className="mx-auto flex min-h-dvh w-full max-w-[1412px] lg:gap-1 lg:p-3">
             <SideNav />
-            <div className="flex min-w-0 flex-1 flex-col">
+            <div className="flex min-w-0 flex-1 flex-col bg-background lg:rounded-[1.5rem] lg:shadow-tile">
               <SiteHeader />
               {/* Column, so the footer sits at the bottom of the screen even when the page is short. */}
-              <main className="flex flex-1 flex-col px-4 pt-[18px] pb-7 lg:px-8 lg:pt-7 lg:pb-9">
+              <main className="flex flex-1 flex-col px-4 pt-[18px] pb-7 lg:px-2 lg:pt-2 lg:pb-2">
                 <div className="mx-auto w-full max-w-6xl pb-10">{children}</div>
-                <footer className="mx-auto mt-auto flex w-full max-w-6xl flex-wrap items-center gap-x-4 gap-y-1 border-t border-border pt-4 text-[11px] text-muted-foreground">
+                <footer className="mx-auto mt-auto flex w-full max-w-6xl flex-wrap items-center gap-x-4 gap-y-1 px-0 pt-4 text-[11px] text-muted-foreground lg:px-[18px] lg:pb-3">
                   <Link
                     href="/privacy"
                     className="py-1 text-xs font-semibold text-foreground underline-offset-2 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"

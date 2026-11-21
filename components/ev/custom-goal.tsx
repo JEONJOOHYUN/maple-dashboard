@@ -18,7 +18,7 @@ export function condText(option: SlotOption | undefined, min: number): string {
 }
 
 const stepButton =
-  "flex size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-card outline-none hover:border-primary/60 focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-40 disabled:hover:border-border";
+  "flex size-10 shrink-0 items-center justify-center tile outline-none hover:border-primary/60 focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-40 disabled:hover:border-border";
 
 /**
  * "직접" goal builder: each set looks like the in-game potential box. A row is one option with the total it must
@@ -110,7 +110,7 @@ export function CustomGoal({
                       aria-label={`${option.label} · 다른 옵션으로 바꾸기`}
                       onClick={() => setPicking(replacing ? null : { set: si, row: ri })}
                       className={cn(
-                        "flex h-10 min-w-0 flex-1 basis-[150px] items-center justify-between gap-2 rounded-lg border bg-card px-3 text-left text-sm font-bold outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                        "flex h-10 min-w-0 flex-1 basis-[150px] items-center justify-between gap-2 tile px-3 text-left text-sm font-bold outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
                         replacing ? "border-primary text-primary-text" : "border-border hover:border-primary/60"
                       )}
                     >

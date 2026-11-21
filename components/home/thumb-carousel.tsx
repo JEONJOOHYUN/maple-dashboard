@@ -42,18 +42,18 @@ export function ThumbCarousel({ title, more, slides, empty }: { title: string; m
     return () => window.clearInterval(id);
   }, [held, slides.length, step]);
 
-  const arrow = "flex size-8 items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50";
+  const arrow = "flex size-8 items-center justify-center rounded-full text-muted-foreground transition-[background-color,color,scale] outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.96]";
   return (
     <section
       aria-label={title}
-      className="flex min-w-0 flex-col gap-2.5 rounded-lg border border-border bg-card px-4 pt-2.5 pb-4 lg:px-[18px]"
+      className="flex min-w-0 flex-col gap-2.5 tile px-4 pt-3 pb-4 lg:px-[18px]"
       onPointerEnter={() => setHover(true)}
       onPointerLeave={() => setHover(false)}
       onFocusCapture={() => setFocus(true)}
       onBlurCapture={() => setFocus(false)}
     >
       <div className="flex items-center justify-between gap-2">
-        <h2 className="text-[15px] font-bold">{title}</h2>
+        <h2 className="text-[15px] font-bold whitespace-nowrap">{title}</h2>
         <span className="flex items-center gap-0.5">
           {slides.length > 1 && (
             <>
@@ -65,7 +65,7 @@ export function ThumbCarousel({ title, more, slides, empty }: { title: string; m
               </button>
             </>
           )}
-          <a href={more} target="_blank" rel="noreferrer" className="ml-1.5 rounded-sm py-2 text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50">
+          <a href={more} target="_blank" rel="noreferrer" className="ml-1.5 inline-flex h-7 shrink-0 items-center rounded-full bg-background px-2.5 text-xs font-semibold whitespace-nowrap shadow-tile transition-[box-shadow,scale] outline-none hover:shadow-tile-hover focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.96]">
             더 보기 →
           </a>
         </span>
@@ -78,10 +78,10 @@ export function ThumbCarousel({ title, more, slides, empty }: { title: string; m
             <li key={slide.id} className="min-w-0 shrink-0 basis-full snap-start sm:basis-[calc((100%-12px)/2)]">
               <a href={slide.url} target="_blank" rel="noreferrer" className="group flex flex-col gap-1.5 rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
                 {/* eslint-disable-next-line @next/next/no-img-element -- NEXON's notice picture, shown as is (never stored or resized by us) */}
-                <img src={slide.img} alt="" loading="lazy" className="aspect-[14/5] w-full rounded-md bg-muted object-cover" />
+                <img src={slide.img} alt="" loading="lazy" className="aspect-[14/5] w-full rounded-md bg-muted object-cover image-line" />
                 <span className="flex items-center justify-between gap-2">
                   <b className="min-w-0 truncate text-[13.5px] group-hover:text-primary-text">{slide.title}</b>
-                  {slide.badge && <span className="shrink-0 rounded bg-primary-soft px-1.5 text-[11px] leading-[18px] font-bold whitespace-nowrap text-primary-text">{slide.badge}</span>}
+                  {slide.badge && <span className="shrink-0 rounded-full bg-primary-soft px-2 text-[11px] leading-5 font-bold whitespace-nowrap text-primary-text">{slide.badge}</span>}
                 </span>
                 {slide.meta && <span className="-mt-1 text-xs text-muted-foreground">{slide.meta}</span>}
               </a>

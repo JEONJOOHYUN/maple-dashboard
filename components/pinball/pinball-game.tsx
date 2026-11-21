@@ -241,16 +241,16 @@ export function PinballGame() {
   const full = entries.reduce((s, e) => s + e.count, 0) >= MAX_TOTAL;
 
   return (
-    <div className="flex flex-col gap-4 lg:gap-5">
+    <div className="flex flex-col gap-2">
       <PageHeader title="핀볼 추첨" description="보스 드롭 주인 · 파티 순서 정하기" />
       {/* Wide screens (user, 2026-11-13): the left side (people · settings · ranks) is exactly as tall as the board —
           the ranks take the room that is left — and when the window is shorter than the board (the page zoomed in)
           it is pinned next to it and scrolls on its own, so the ranks stay in view while the page follows the
           marbles down. On a phone the wrapper is not a box: people, board, ranks stack in that order. */}
-      <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[340px_minmax(0,1fr)]">
+      <div className="flex flex-col gap-2 lg:grid lg:grid-cols-[340px_minmax(0,1fr)]">
         <div className="contents lg:sticky lg:top-4 lg:-m-1 lg:flex lg:max-h-[calc(100dvh-1.5rem)] lg:flex-col lg:gap-4 lg:overflow-y-auto lg:overscroll-contain lg:p-1 lg:[scrollbar-width:thin]">
         <div className="order-1 flex min-w-0 flex-col gap-3 lg:order-none lg:shrink-0">
-          <section className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4">
+          <section className="flex flex-col gap-3 tile p-4">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <b className="text-[15px]">
                 참가자 {people.length}명 · 구슬 {totalMarbles.toLocaleString("ko-KR")}개
@@ -351,7 +351,7 @@ export function PinballGame() {
             </div>
           </section>
 
-          <section className="flex flex-col gap-2.5 rounded-lg border border-border bg-card p-4">
+          <section className="flex flex-col gap-2.5 tile p-4">
             <div className="grid grid-cols-2 gap-1.5" role="group" aria-label="당첨">
               <Chip on={rule === "first"} disabled={running} onClick={() => setRule("first")}>
                 1등이 당첨
@@ -392,7 +392,7 @@ export function PinballGame() {
         </div>
           {/* The card takes the room left under the settings; a longer list scrolls inside it instead of spilling out
               below the card when the window is short (user, 2026-11-14). */}
-          <section className="order-3 flex min-w-0 flex-col gap-2 rounded-lg border border-border bg-card p-4 lg:order-none lg:min-h-44 lg:flex-1 lg:gap-3 lg:overflow-hidden">
+          <section className="order-3 flex min-w-0 flex-col gap-2 tile p-4 lg:order-none lg:min-h-44 lg:flex-1 lg:gap-3 lg:overflow-hidden">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <b className="text-[15px]">순위</b>
               <span className="text-xs text-muted-foreground">한 사람은 한 번만 · {rule === "first" ? "가장 먼저 들어온 구슬로" : "가장 늦게 들어온 구슬로"}</span>
@@ -421,7 +421,7 @@ export function PinballGame() {
           </section>
         </div>
 
-        <section className="relative order-2 min-w-0 overflow-hidden rounded-lg border border-border bg-card lg:order-none lg:col-start-2">
+        <section className="relative order-2 min-w-0 overflow-hidden tile lg:order-none lg:col-start-2">
           <div ref={boardRef} className="h-[480px] w-full sm:h-[600px] lg:h-[720px]" aria-label="핀볼 판" role="img" />
           {status === "loading" && <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">판 준비 중…</div>}
           {/* The map is at the right edge of the board (drawn by the engine); this opens and closes it. */}
@@ -429,7 +429,7 @@ export function PinballGame() {
             type="button"
             aria-pressed={mapOpen}
             onClick={() => setMapOpen(!mapOpen)}
-            className="absolute top-2 left-2 inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-card/90 px-2.5 text-xs font-semibold outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
+            className="absolute top-2 left-2 inline-flex h-8 items-center gap-1.5 tile-sm/90 px-2.5 text-xs font-semibold outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
           >
             <MapIcon className="size-3.5" aria-hidden="true" />
             {mapOpen ? "맵 닫기" : "맵 열기"}

@@ -30,7 +30,7 @@ export default function PrivacyPage() {
     <div className="flex flex-wrap items-start gap-5 lg:gap-7">
       <nav
         aria-label="목차"
-        className="flex w-full flex-col gap-1 rounded-lg border border-border bg-card p-4 text-[13px] lg:sticky lg:top-6 lg:w-56"
+        className="flex w-full flex-col gap-1 tile p-4 text-[13px] lg:sticky lg:top-6 lg:w-56"
       >
         <b className="mb-1.5 text-xs text-muted-foreground">목차</b>
         {sections.map((s, i) => (
@@ -44,7 +44,7 @@ export default function PrivacyPage() {
         ))}
       </nav>
 
-      <article className="flex min-w-0 flex-1 basis-[480px] flex-col gap-6 rounded-lg border border-border bg-card p-5 lg:p-7">
+      <article className="flex min-w-0 flex-1 basis-[480px] flex-col gap-6 tile p-5 lg:p-7">
         <header className="flex flex-col gap-1.5 border-b border-border pb-4">
           <h1 className="font-heading text-[22px] leading-tight font-bold lg:text-[26px]">개인정보처리방침</h1>
           <p className="text-[13px] text-muted-foreground">시행 {EFFECTIVE_DATE} · 메이플 대시보드 (비공식 팬 사이트)</p>

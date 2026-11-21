@@ -7,12 +7,13 @@
 import Link from "next/link";
 import { Fragment, useEffect, useMemo, useState, useTransition, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, ChevronUp, CornerDownRight, Loader2, Search, X } from "lucide-react";
+import { ChevronDown, ChevronUp, CornerDownRight, Search, X } from "lucide-react";
 import { Chip } from "@/components/ev/ui";
 import { PageHeader } from "@/components/page-header";
 import { Message, Pieces, SPEC_DESCRIPTION, whatText } from "@/components/spec/spec-check";
 import { SpecTabs } from "@/components/spec/spec-tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Spinner } from "@/components/ui/spinner";
 import type { Tier } from "@/lib/spec/check";
 import {
   CLASS_COLUMNS,
@@ -90,7 +91,7 @@ function Pill({ cell }: { cell: Cell }) {
 
 function Stat({ label, children, className }: { label: string; children: ReactNode; className?: string }) {
   return (
-    <div className={cn("flex min-w-0 flex-col gap-1 rounded-lg border border-border bg-card px-4 py-3.5", className)}>
+    <div className={cn("flex min-w-0 flex-col gap-1 tile px-4 py-3.5", className)}>
       <span className="text-xs break-keep text-muted-foreground">{label}</span>
       {children}
     </div>
@@ -99,7 +100,7 @@ function Stat({ label, children, className }: { label: string; children: ReactNo
 
 function WorldPick({ name, guilds }: { name: string; guilds: GuildInfo[] }) {
   return (
-    <section className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 sm:p-5">
+    <section className="flex flex-col gap-3 tile p-4 sm:p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
         <b className="text-[15px] break-keep">
           &quot;{name}&quot; 길드 {guilds.length}곳 → 월드 고르기
@@ -350,7 +351,7 @@ function GuildResult({ guild, pieces, others }: { guild: GuildInfo; pieces: Prom
       </div>
 
       {loading && (
-        <div className="flex flex-col gap-2 rounded-lg border border-border bg-card px-4 py-3.5">
+        <div className="flex flex-col gap-2 tile px-4 py-3.5">
           <div className="flex items-baseline justify-between gap-2 text-sm">
             <b>
               길드원 확인 중 · {n(done)} / {n(guild.count)}명
@@ -389,7 +390,7 @@ function GuildResult({ guild, pieces, others }: { guild: GuildInfo; pieces: Prom
           부캐 모두 펼치기
         </Chip>
         {/* A member by name (user, 2026-11-20): its own line on a phone, the right end on a wider screen. */}
-        <label className="order-first flex h-9 w-full items-center gap-2 rounded-lg border border-border bg-card pr-1 pl-3 focus-within:border-primary sm:order-none sm:ml-auto sm:w-56">
+        <label className="order-first flex h-9 w-full items-center gap-2 tile pr-1 pl-3 focus-within:border-primary sm:order-none sm:ml-auto sm:w-56">
           <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <span className="sr-only">길드원 이름으로 찾기</span>
           <input
@@ -409,7 +410,7 @@ function GuildResult({ guild, pieces, others }: { guild: GuildInfo; pieces: Prom
       </div>
 
       {/* relative: the hidden "다 배움" labels (absolute) stay inside the scroll box instead of widening the page on a phone */}
-      <div className="relative overflow-x-auto rounded-lg border border-border bg-card">
+      <div className="relative overflow-x-auto tile">
         <table className="w-full border-collapse text-[13px]">
           <thead>
             <tr className="bg-secondary">
@@ -513,11 +514,11 @@ export function GuildCheck({ name, view }: { name: string; view: GuildView }) {
   };
 
   return (
-    <div className="flex flex-col gap-4 lg:gap-5">
+    <div className="flex flex-col gap-2">
       <PageHeader title="숨은 스펙업" description={SPEC_DESCRIPTION} aside={<SpecTabs on="guild" />} />
 
       <form onSubmit={submit} className="flex gap-2" role="search">
-        <label className="flex h-[50px] min-w-0 flex-1 items-center gap-2.5 rounded-lg border border-border bg-card px-4 focus-within:border-primary">
+        <label className="flex h-[50px] min-w-0 flex-1 items-center gap-2.5 tile px-4 focus-within:border-primary">
           <Search className="size-[18px] shrink-0 text-muted-foreground" aria-hidden="true" />
           <span className="sr-only">길드 이름</span>
           <input
@@ -535,7 +536,7 @@ export function GuildCheck({ name, view }: { name: string; view: GuildView }) {
           disabled={pending || !text.trim()}
           className="flex h-[50px] shrink-0 items-center gap-1.5 rounded-lg bg-primary px-[22px] text-[15px] font-bold text-primary-foreground disabled:opacity-60"
         >
-          {pending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+          {pending && <Spinner />}
           {pending ? "조회 중" : "검색"}
         </button>
       </form>

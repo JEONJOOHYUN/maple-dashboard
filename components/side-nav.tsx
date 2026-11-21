@@ -14,16 +14,17 @@ function SideLink({ item, active }: { item: NavItem; active: boolean }) {
       href={item.href}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "flex w-full items-center gap-2.5 rounded-lg px-3 py-[7px] text-sm transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+        "flex h-10 w-full shrink-0 items-center gap-2.5 rounded-xl px-2.5 text-sm whitespace-nowrap transition-[background-color,color,scale] outline-none focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.96]",
+        // The page you are on is a piece of the sheet lifted onto the menu: the sheet colour and its ring.
         active
-          ? "bg-sidebar-accent font-semibold text-sidebar-accent-foreground"
-          : "font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+          ? "bg-sidebar-accent font-bold text-sidebar-accent-foreground shadow-tile"
+          : "font-medium text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground"
       )}
     >
       <NavIcon slug={item.slug} icon={item.icon} className="size-[22px]" />
       {item.label}
       {!item.ready && (
-        <Badge variant="outline" className="ml-auto h-[18px] px-1.5 text-[10px] font-medium text-muted-foreground">
+        <Badge variant="secondary" className="ml-auto h-[18px] px-1.5 text-[10px] font-medium text-muted-foreground">
           준비 중
         </Badge>
       )}
@@ -40,13 +41,13 @@ export function SideNav() {
   return (
     <nav
       aria-label="메뉴"
-      className="sticky top-0 hidden h-dvh w-58 shrink-0 flex-col gap-1 overflow-y-auto border-r border-sidebar-border bg-sidebar px-3.5 py-[22px] text-sidebar-foreground lg:flex"
+      className="sticky top-3 hidden h-[calc(100dvh-1.5rem)] w-54 shrink-0 flex-col gap-0.5 overflow-y-auto px-2 py-2.5 text-sidebar-foreground [scrollbar-color:var(--border)_transparent] [scrollbar-width:thin] lg:flex"
     >
-      <Brand className="mb-[18px] px-2" />
+      <Brand className="mb-2.5 h-10 shrink-0 px-2.5" />
       <SideLink item={homeItem} active={isActive("/")} />
       {navGroups.map((group) => (
-        <div key={group.id} className="flex flex-col gap-1">
-          <p className="mx-2.5 mt-[18px] mb-1 text-xs font-semibold text-muted-foreground">
+        <div key={group.id} className="flex shrink-0 flex-col gap-0.5">
+          <p className="mx-2.5 mt-3.5 mb-1 text-xs font-semibold text-muted-foreground">
             {group.label}
           </p>
           {group.items.map((item) => (

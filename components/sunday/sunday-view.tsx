@@ -43,7 +43,7 @@ export function SundayView({ data }: { data: SundayPageData }) {
   const { thisWeek, prediction, recent } = data;
   const picked = new Set(prediction.picks.map((p) => p.id));
   return (
-    <div className="flex flex-col gap-4 break-keep lg:gap-[22px]">
+    <div className="flex flex-col gap-2 break-keep">
       <PageHeader title="썬데이 메이플" description="이번 주 혜택 · 다음 썬데이 테마와 혜택 예측(참고용)" />
 
       {/* Full-width bands, so neither side runs empty before the notice (Mon 00:00 ~ Fri) or after it. */}
@@ -64,8 +64,8 @@ export function SundayView({ data }: { data: SundayPageData }) {
       {/* Side by side the two cards end on one line (user 2026-11-15): the recent list fills the odds card's height and
           scrolls inside. It is positioned absolute in a flex-1 box, so it never makes the row taller (h-0 + flex-1 did:
           a % flex-basis turns into the content height while the row is sized). */}
-      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2 lg:items-stretch">
-        <section className="overflow-hidden rounded-lg border border-border bg-card" aria-labelledby="sunday-ranked">
+      <div className="grid grid-cols-1 items-start gap-2 lg:grid-cols-2 lg:items-stretch">
+        <section className="overflow-hidden tile" aria-labelledby="sunday-ranked">
           <h2 id="sunday-ranked" className="px-[18px] py-3.5 text-[15px] font-bold">
             {prediction.label} 혜택별 나올 확률
           </h2>
@@ -100,7 +100,7 @@ export function SundayView({ data }: { data: SundayPageData }) {
           ))}
         </section>
 
-        <section className="flex flex-col overflow-hidden rounded-lg border border-border bg-card" aria-labelledby="sunday-recent">
+        <section className="flex flex-col overflow-hidden tile" aria-labelledby="sunday-recent">
           <div className="flex flex-wrap items-baseline justify-between gap-2 px-[18px] py-3.5">
             <h2 id="sunday-recent" className="text-[15px] font-bold">
               최근 썬데이
@@ -137,7 +137,7 @@ const EYEBROW = "inline-flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] 
 /** This Sunday's recorded benefits (shown once the notice is recorded). */
 function ThisWeekBand({ week, recorded: r }: { week: SundayPageData["thisWeek"]; recorded: WeekView }) {
   return (
-    <section className="grid grid-cols-1 gap-4 rounded-lg border border-primary bg-card p-[18px] lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] lg:items-center lg:gap-6 lg:p-6">
+    <section className="grid grid-cols-1 gap-4 rounded-[1rem] border border-primary bg-card p-[18px] lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] lg:items-center lg:gap-6 lg:p-6">
       <div className="flex flex-col gap-2.5">
         <span className={EYEBROW}>
           <Sun className="size-4" aria-hidden="true" />
@@ -176,7 +176,7 @@ function ThemeBand({ week, prediction }: { week: SundayPageData["thisWeek"]; pre
   return (
     <section
       className={cn(
-        "grid grid-cols-1 gap-4 rounded-lg border bg-card p-[18px] lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:gap-6 lg:p-6",
+        "grid grid-cols-1 gap-4 tile p-[18px] lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:gap-6 lg:p-6",
         recorded ? "border-border" : "border-primary",
       )}
     >
@@ -235,7 +235,7 @@ function PicksBand({ picks, hits }: { picks: OddsView[]; hits: Hits }) {
   // once (summer / winter patch big days).
   const period = hits.weeks === 52 ? "최근 1년 적중률" : `최근 ${hits.weeks}주 적중률`;
   return (
-    <section className="flex flex-col gap-3 rounded-lg border border-border bg-card p-[18px] lg:px-6 lg:py-5" aria-labelledby="sunday-picks">
+    <section className="flex flex-col gap-3 tile p-[18px] lg:px-6 lg:py-5" aria-labelledby="sunday-picks">
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-baseline justify-between gap-2 lg:max-w-md">
           <h2 id="sunday-picks" className="text-[15px] font-bold">
@@ -355,7 +355,7 @@ function HitDots({ marks, pick }: { marks: WeekHit[]; pick: HitKey }) {
   );
 }
 
-const OUTLOOK_CARD = "flex flex-col gap-1.5 rounded-lg border border-border bg-card px-[18px] py-4";
+const OUTLOOK_CARD = "flex flex-col gap-1.5 tile px-[18px] py-4";
 
 /** When shining / miracle are due, plus last Sunday while this week's notice is not recorded yet. */
 function Outlook({ bigDays, last }: { bigDays: SundayPageData["prediction"]["bigDays"]; last?: WeekView }) {

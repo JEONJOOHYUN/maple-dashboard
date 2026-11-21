@@ -25,6 +25,8 @@ import {
 } from "@/lib/mvp/mvp";
 import { useNow } from "@/lib/use-now";
 import { useStored } from "@/lib/use-stored";
+import { ZEBRA_HEAD, ZEBRA_ROW, ZEBRA_TABLE } from "@/components/ui/zebra";
+import { Reveal } from "@/components/ui/reveal";
 import { cn } from "@/lib/utils";
 import { koreanUnits } from "@/lib/format";
 
@@ -304,11 +306,11 @@ export function MvpCalculator() {
   }
 
   return (
-    <div className="flex flex-col gap-4 lg:gap-5">
+    <div className="flex flex-col gap-2">
       <PageHeader title="MVP 계산기" description="등급 = 최근 13주 결제 합계 · 수요일 23:59 마감, 목요일 반영" />
 
       <section className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="flex min-w-0 flex-col gap-1.5 rounded-lg border border-border bg-card px-4 py-3.5">
+        <div className="flex min-w-0 flex-col gap-1.5 tile px-4 py-3.5">
           <span className="text-xs text-muted-foreground">지금 등급</span>
           <b className="flex items-center gap-2 text-[22px] leading-tight">
             <TierDot tier={base.now} />
@@ -337,7 +339,7 @@ export function MvpCalculator() {
         />
       </section>
 
-      <section className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4">
+      <section className="flex flex-col gap-3 tile p-4">
         <Row label="결제 금액">
           <div className="flex flex-wrap gap-2">
             {above.map((t) => (
@@ -391,8 +393,7 @@ export function MvpCalculator() {
                 할인율 {chargeOpen ? "접기" : "고치기"}
               </button>
             </div>
-            {chargeOpen && (
-              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            <Reveal open={chargeOpen} className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                 {methods.map((m) => (
                   <Field key={m.id} label={m.name}>
                     <NumberField
@@ -405,13 +406,12 @@ export function MvpCalculator() {
                     />
                   </Field>
                 ))}
-              </div>
-            )}
+            </Reveal>
           </div>
         </Row>
       </section>
 
-      <section className="overflow-hidden rounded-lg border border-border bg-card">
+      <section className="overflow-hidden tile">
         <div className="flex flex-wrap items-baseline justify-between gap-2 px-4 pt-4 pb-2">
           <b className="text-[15px]">효율 순위 · 1만원당 돌려받는 돈</b>
           {market.useCredit && <span className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">크레딧 포함</span>}
@@ -432,7 +432,7 @@ export function MvpCalculator() {
             <tbody>
               {rows.map((r, i) => (
                 <Fragment key={r.id}>
-                <tr className={cn("border-t border-border", i === 0 && r.total > 0 && "bg-primary-soft")}>
+                <tr className={cn(i % 2 === 1 && "bg-background", i === 0 && r.total > 0 && "bg-primary-soft")}>
                   <td className="px-4 py-2.5">
                     <b className={cn("font-num text-lg", i === 0 ? "text-primary-text" : "text-muted-foreground")}>{i + 1}</b>
                   </td>
@@ -526,7 +526,7 @@ export function MvpCalculator() {
                   </td>
                 </tr>
                 {r.id === panelRowId && s.boutiqueShow && (
-                  <tr className="border-t border-border bg-muted/40">
+                  <tr className="bg-muted/40">
                     <td colSpan={7} className="p-0">
                       {/* As wide as the visible box and pinned left: on a phone the table scrolls sideways, the panel does not. */}
                       <div className="@container sticky left-0 w-[100cqw] px-4 py-3.5">
@@ -584,7 +584,7 @@ export function MvpCalculator() {
         </div>
       </section>
 
-      <section className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4">
+      <section className="flex flex-col gap-3 tile p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <b className="text-[15px]">메이플 크레딧</b>
           <Segment
@@ -605,10 +605,10 @@ export function MvpCalculator() {
                 <NumberField label="지금 남은 크레딧" value={s.creditNow} onChange={(t) => update({ creditNow: t })} inputClassName="h-8 w-24" />
               </Field>
             </div>
-            <div className="relative overflow-x-auto">
-              <table className="w-full min-w-[560px] border-collapse text-[13px]">
+            <div className="relative overflow-x-auto sm:-mx-3">
+              <table className={cn(ZEBRA_TABLE, "min-w-[560px] text-[13px]")}>
                 <thead>
-                  <tr className="text-xs text-muted-foreground">
+                  <tr className={ZEBRA_HEAD}>
                     <th scope="col" className="py-2 text-left font-normal">크레딧샵 물건</th>
                     <th scope="col" className="px-2 py-2 text-right font-normal">크레딧</th>
                     <th scope="col" className="px-2 py-2 text-right font-normal">경매장 가격</th>
@@ -622,7 +622,7 @@ export function MvpCalculator() {
                     const per = c.credit > 0 ? (auctionWon(c.eok, market) / c.credit) * 10_000 : 0;
                     const isTop = per > 0 && per >= cw * 10_000 - 1e-6;
                     return (
-                      <tr key={it.id} className="border-t border-border">
+                      <tr key={it.id} className={ZEBRA_ROW}>
                         <td className="py-2">
                           <b>{it.name}</b>
                           {isTop && <span className="ml-1.5 rounded bg-primary px-1.5 py-0.5 text-[10px] font-bold text-primary-foreground">가장 효율</span>}
@@ -695,7 +695,7 @@ export function MvpCalculator() {
               const isBest = r.mode === "best";
               const diff = net(r) - net(best);
               return (
-                <div key={r.mode} className={cn("flex min-w-0 flex-col gap-2.5 rounded-lg border bg-card p-4", isBest ? "border-primary" : "border-border")}>
+                <div key={r.mode} className={cn("flex min-w-0 flex-col gap-2.5 tile p-4", isBest ? "border-primary" : "border-border")}>
                   <span className={cn("text-xs font-semibold", isBest ? "text-primary-text" : "text-muted-foreground")}>{ROUTE_LABEL[r.mode]}</span>
                   <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                     <b className="font-num text-[28px] leading-none">{won(net(r))}</b>

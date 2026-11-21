@@ -96,7 +96,7 @@ export function FlameTab() {
   const goalText = equip === "weapon" ? `${grade}추 + ${extra}%급 이상` : job === "hp" ? `${hpGoal} 이상` : `${target}급 이상`;
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+    <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       <Panel>
         <Segment
           label="장비 종류"
@@ -221,7 +221,7 @@ export function FlameTab() {
             )}
 
             {/* At the foot of the panel: the same place for the three jobs, whichever has more chips (user, 2026-11-13). */}
-            <div className="mt-auto flex flex-col gap-2 rounded-md border border-border bg-card p-2.5">
+            <div className="mt-auto flex flex-col gap-2 tile-sm p-2.5">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <button type="button" onClick={() => setConvOpen((o) => !o)} aria-expanded={convOpen} className="flex items-center gap-1 text-[12px] font-bold">
                   <ChevronDown className={cn("size-3.5 transition-transform", !convOpen && "-rotate-90")} aria-hidden="true" />
@@ -334,7 +334,7 @@ export function FlameTab() {
             <span className="text-lg font-bold">불꽃으로 불가 · 목표 낮추기</span>
           )}
         </div>
-        <div className="overflow-hidden rounded-lg border border-border bg-card">
+        <div className="overflow-hidden tile">
           <div className="grid grid-cols-[minmax(0,1fr)_72px_64px_84px] gap-2 px-4 py-2.5 text-[11px] text-muted-foreground">
             <span>불꽃</span>
             <span className="text-right">1개로 될 확률</span>

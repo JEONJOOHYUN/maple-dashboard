@@ -13,6 +13,7 @@ import { dayStart, kstFull, kstShort, kstWeekday } from "@/lib/enhance/kst";
 import { eventGroups, roundsPerCard, splitGroup, starEventKind, type EventGroup, type EventScope } from "@/lib/enhance/events";
 import { buildStats, entryKey, reachedFloor, type Entry, type ItemStat, type Stats, type Tally } from "@/lib/enhance/stats";
 import { FLOOR_STAR } from "@/lib/ev/starforce";
+import { Reveal } from "@/components/ui/reveal";
 import { cn } from "@/lib/utils";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
@@ -431,11 +432,9 @@ export function ItemsView({
               )}
               {group && ev && !round && group.rounds.length > 1 && <RoundsIn group={group} n={ev.cards.get(it.key) ?? 0} />}
               {/* Typing a level makes the item "known": keep its row open while the user is in it. */}
-              {open && (
-                <div className="relative z-10 -mx-3.5 mt-3 self-stretch text-left" onFocus={() => setEditing(it.key)}>
-                  <ItemEdit it={it} overrides={overrides} onOverrides={onOverrides} />
-                </div>
-              )}
+              <Reveal open={open} className="relative z-10 -mx-3.5 mt-3 self-stretch text-left" onFocus={() => setEditing(it.key)}>
+                <ItemEdit it={it} overrides={overrides} onOverrides={onOverrides} />
+              </Reveal>
             </Card>
           );
         })}
@@ -556,7 +555,7 @@ function Step({ label, disabled, onClick, children }: { label: string; disabled:
       aria-label={label}
       disabled={disabled}
       onClick={onClick}
-      className="flex size-8 items-center justify-center rounded-md border border-border bg-card outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-40"
+      className="flex size-8 items-center justify-center tile-sm outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-40"
     >
       {children}
     </button>

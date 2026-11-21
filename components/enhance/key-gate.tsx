@@ -1,8 +1,10 @@
 "use client";
 
 import { Fragment, useEffect, useState, type FormEvent } from "react";
+import { Spinner } from "@/components/ui/spinner";
+import { SwapIcon } from "@/components/ui/swap-icon";
 import Link from "next/link";
-import { Check, Copy, ExternalLink, KeyRound, Loader2 } from "lucide-react";
+import { Check, Copy, ExternalLink, KeyRound } from "lucide-react";
 import { ApiError, accountId, createApi, type ApiErrorKind } from "@/lib/enhance/client";
 import { keyLabel, type SavedKey } from "@/lib/enhance/keys";
 import { kstDate } from "@/lib/enhance/kst";
@@ -73,7 +75,7 @@ function CopyButton({ label, text }: { label: string; text: string }) {
       }}
       className="inline-flex h-7 items-center gap-1 rounded-md border border-border bg-background px-2 text-[11px] font-semibold whitespace-nowrap text-foreground outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
     >
-      {done ? <Check className="size-3 text-primary-text" aria-hidden="true" /> : <Copy className="size-3" aria-hidden="true" />}
+      <SwapIcon on={done} from={<Copy className="size-3" />} to={<Check className="size-3 text-primary-text" />} />
       {done ? "복사됨" : "복사"}
     </button>
   );
@@ -113,8 +115,8 @@ export function KeyGate({ saved, onConnect, onForgetAll }: { saved: SavedKey[]; 
   };
 
   return (
-    <div className="grid items-start gap-4 lg:grid-cols-2">
-      <form onSubmit={submit} className="flex flex-col gap-3.5 rounded-lg border border-border bg-card p-5 lg:p-7">
+    <div className="grid items-start gap-2 lg:grid-cols-2">
+      <form onSubmit={submit} className="flex flex-col gap-3.5 tile p-5 lg:p-7">
         {saved.length > 0 && (
           <div className="flex flex-col gap-2 border-b border-border pb-4" data-clarity-mask="true">
             <span className="text-[13px] text-muted-foreground">저장된 키 → 기록 그대로</span>
@@ -161,7 +163,7 @@ export function KeyGate({ saved, onConnect, onForgetAll }: { saved: SavedKey[]; 
           disabled={!text.trim() || busy}
           className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-primary text-[15px] font-bold text-primary-foreground outline-none hover:bg-primary/85 focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
         >
-          {busy && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+          {busy && <Spinner />}
           강화 기록 보기
         </button>
         {error && (
@@ -219,7 +221,7 @@ export function KeyGate({ saved, onConnect, onForgetAll }: { saved: SavedKey[]; 
                 MapleStory service works too (user, 2026-11-15; other games' keys do not). */}
             {i === 0 && (
               // Same left edge and width as step 03's box (user, 2026-11-17: the boxes of one list line up).
-              <div className="flex flex-col gap-1 rounded-md border border-border bg-card px-3 py-2.5 text-[13px] leading-relaxed">
+              <div className="flex flex-col gap-1 tile-sm px-3 py-2.5 text-[13px] leading-relaxed">
                 <span>
                   <b>이미 키가 있으면</b> → 새로 안 받아도 됨 · 다른 메이플 서비스 키도 가능
                 </span>
@@ -235,7 +237,7 @@ export function KeyGate({ saved, onConnect, onForgetAll }: { saved: SavedKey[]; 
               </div>
             )}
             {i === FILL_STEP && (
-              <dl className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2.5 gap-y-2 rounded-md border border-border bg-card px-3 py-2.5 text-xs">
+              <dl className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2.5 gap-y-2 tile-sm px-3 py-2.5 text-xs">
                 {FILL.map((f) => (
                   <Fragment key={f.label}>
                     <dt className="whitespace-nowrap text-muted-foreground">{f.label}</dt>

@@ -11,8 +11,9 @@ import type { BigDayView, SundayPageData, WeekView } from "@/lib/sunday/view";
 export function SundayHomeCard({ week, recorded, bigDays }: { week: SundayPageData["thisWeek"]; recorded: WeekView; bigDays: BigDayView[] }) {
   const dday = week.daysLeft <= 0 ? "오늘" : `D-${week.daysLeft}`;
   return (
-    <section aria-label="이번 주 썬데이 메이플" className="relative flex flex-col gap-2.5 rounded-lg border border-border bg-card p-3 transition-colors hover:border-primary/60 sm:flex-row sm:items-stretch sm:gap-3.5 sm:p-3.5">
-      <Link href="/sunday" aria-label="썬데이 메이플 자세히" className="absolute inset-0 rounded-lg outline-none focus-visible:ring-3 focus-visible:ring-ring/50" />
+    <section aria-label="이번 주 썬데이 메이플" className="relative flex flex-col gap-2 tile p-2 transition-shadow hover:shadow-tile-hover sm:flex-row sm:items-stretch sm:gap-3">
+      <Link href="/sunday" aria-label="썬데이 메이플 자세히" className="absolute inset-0 rounded-2xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50" />
+      {/* Tile radius 16 = this block's 8 + the 8 of padding between them. */}
       <div className="flex items-center gap-3.5 rounded-md bg-primary-soft px-4 py-3 sm:w-[220px] sm:shrink-0 sm:flex-col sm:items-start sm:justify-center sm:gap-2 sm:px-5 sm:py-[18px]">
         <b className="font-num text-[38px] leading-none whitespace-nowrap text-primary-text sm:order-2 sm:text-[50px]">{dday}</b>
         <span className="flex flex-wrap gap-x-1.5 text-[13px] sm:contents">
@@ -20,7 +21,7 @@ export function SundayHomeCard({ week, recorded, bigDays }: { week: SundayPageDa
           <span className="sm:order-3">{week.label}</span>
         </span>
       </div>
-      <div className="flex min-w-0 flex-1 flex-col px-1 sm:px-0 sm:pr-1.5">
+      <div className="flex min-w-0 flex-1 flex-col px-2 pb-1 sm:py-1 sm:pr-3 sm:pl-1">
         <ul className="flex flex-col">
           {recorded.rows.map((row) => (
             <li key={row.name + row.amount} className="flex items-baseline justify-between gap-3 border-b border-border py-[9px] text-[13.5px] leading-5 last:border-b-0 sm:text-sm">

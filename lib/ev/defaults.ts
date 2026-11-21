@@ -61,8 +61,8 @@ export const itemImage = (code: string) => `https://open.api.nexon.com/static/ma
 /** Level for "목록에 없는 장비" when the page opens. */
 export const CUSTOM_LEVEL = 130;
 
-/** 1억 메소 = n원 (used to show won next to meso). 1,500 = user, 2026-11-12 (the same as the MVP page). */
-export const MESO_RATE_WON = 1500;
+/** 1억 메소 = n원 (used to show won next to meso). 1,400 = user, 2026-11-21 (was 1,500). The MVP page starts from the same number. */
+export const MESO_RATE_WON = 1400;
 /** Spare item price for star force (억 메소). */
 export const SPARE_EOK = 10;
 /** Multipliers offered for "expected value × n". */
@@ -91,7 +91,7 @@ export const MVP_METHODS = [
   { id: "plain", name: "일반 충전", note: "할인 없음 · 한도 없음", discountPct: 0, monthlyCap: Infinity, unit: 1 },
 ];
 /** MVP: meso sale price (1억당 원, design Version 64) and meso market (maple points per 1억, user 2026-11-09), editable. */
-export const MVP_MESO_WON = 1500;
+export const MVP_MESO_WON = MESO_RATE_WON;
 export const MESO_MARKET_MP = 2100;
 
 /**
