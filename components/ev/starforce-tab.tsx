@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Copy, Plus, X } from "lucide-react";
+import { Check, ChevronDown, Copy, ImageIcon, Plus, X } from "lucide-react";
 import {
   Chip,
   Label,
@@ -37,10 +37,13 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Digits } from "@/components/ui/digits";
+import { Reveal } from "@/components/ui/reveal";
 import { SwapLabel } from "@/components/ui/swap-icon";
 import { ZEBRA_HEAD, ZEBRA_ROW, ZEBRA_SCROLL, ZEBRA_TABLE } from "@/components/ui/zebra";
 import { cn } from "@/lib/utils";
 import { koreanUnits } from "@/lib/format";
+import { copyImage, type ImageCopyResult } from "@/lib/canvas-image";
+import { renderQuoteImage } from "@/lib/ev/quote-image";
 
 const EVENTS: { id: StarEvent; label: string }[] = [
   { id: "none", label: "기본" },
@@ -87,6 +90,20 @@ const findItem = (id: string) => {
   return null;
 };
 
+/** "담기": a 28px pill whose press area reaches 6px above and below it (rows are 40px and up, so they never overlap). */
+function AddButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="relative inline-flex h-7 shrink-0 items-center gap-1 rounded-full bg-background pr-2.5 pl-2 text-xs whitespace-nowrap text-muted-foreground shadow-tile transition-[box-shadow,color,scale] after:absolute after:inset-x-0 after:-inset-y-1.5 hover:text-primary-text hover:shadow-tile-hover active:scale-[0.96]"
+    >
+      <Plus className="size-3" strokeWidth={1.5} aria-hidden="true" />
+      담기
+    </button>
+  );
+}
+
 type CartItem = {
   id: string;
   item: string;
@@ -122,7 +139,12 @@ export function StarforceTab() {
   const [mult, setMult] = useState(1.07);
   const [multText, setMultText] = useState("1.07");
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [copied, setCopied] = useState<"" | "sum" | "tsv">("");
+  // Quote rows opened in the narrow list (ids).
+  const [openRows, setOpenRows] = useState<string[]>([]);
+  const [copied, setCopied] = useState<"" | "sum" | "image">("");
+  // How the last picture copy ended; kept after the label swaps back so the words do not change mid-fade.
+  const [imageResult, setImageResult] = useState<ImageCopyResult>("copied");
+  const [imageBusy, setImageBusy] = useState(false);
 
   const level =
     item === CUSTOM
@@ -219,51 +241,53 @@ export function StarforceTab() {
       },
     ]);
 
-  async function copy(kind: "sum" | "tsv") {
-    const text =
-      kind === "sum"
-        ? String(Math.round(sum.meso * mult))
-        : [
-            [
-              "장비",
-              "레벨",
-              "구간",
-              "조건",
-              "기댓값(메소)",
-              `×${mult}`,
-              "평균 파괴",
-              "평균 시도",
-            ].join("\t"),
-            ...cartRows.map((c) =>
-              [
-                c.item,
-                c.level,
-                `${c.from}→${c.to}`,
-                c.cond,
-                Math.round(c.meso),
-                Math.round(c.meso * mult),
-                c.destroys.toFixed(2),
-                c.tries.toFixed(1),
-              ].join("\t"),
-            ),
-            [
-              "합계",
-              "",
-              "",
-              "",
-              Math.round(sum.meso),
-              Math.round(sum.meso * mult),
-              sum.destroys.toFixed(2),
-              sum.tries.toFixed(1),
-            ].join("\t"),
-          ].join("\n");
+  async function copySum() {
     try {
-      await navigator.clipboard.writeText(text);
-      setCopied(kind);
+      await navigator.clipboard.writeText(String(Math.round(sum.meso * mult)));
+      setCopied("sum");
       setTimeout(() => setCopied(""), 1600);
     } catch {
       // Clipboard can be blocked; nothing to recover.
     }
+  }
+
+  /** The quote as a picture, with the same words and numbers the page shows (unit switch included). */
+  async function copyPicture() {
+    if (cart.length === 0 || imageBusy) return;
+    setImageBusy(true);
+    // No await before copyImage: the clipboard item has to be made inside the click (Safari).
+    const result = await copyImage(
+      renderQuoteImage({
+        multLabel: `×${mult}`,
+        rows: cartRows.map((c) => ({
+          item: c.item,
+          sub: `Lv.${c.level} · ${c.cond}`,
+          range: `${c.from} → ${c.to}성`,
+          cost: money(c.meso),
+          quote: money(c.meso * mult),
+          destroys: avg(c.destroys, 2),
+          tries: avg(c.tries, 1),
+        })),
+        total: {
+          label: `합계 ${cart.length}개`,
+          cost: money(sum.meso),
+          quote: money(sum.meso * mult),
+          destroys: avg(sum.destroys, 2),
+          tries: avg(sum.tries, 1),
+        },
+        final: {
+          title: `최종 견적 (×${mult})`,
+          meso: `${eok(sum.meso * mult)} 메소`,
+          won: won(sum.meso * mult),
+          before: `배율 전 ${eok(sum.meso)} 메소 · ${won(sum.meso)}`,
+        },
+      }),
+      "스타포스-견적서.png",
+    );
+    setImageResult(result);
+    setImageBusy(false);
+    setCopied("image");
+    setTimeout(() => setCopied(""), 1600);
   }
 
   const toggle = (list: number[], set: (v: number[]) => void, s: number) =>
@@ -505,8 +529,48 @@ export function StarforceTab() {
                 ))}
             </div>
           </div>
-          {/* 520px: at a 1280px window the panel is 551px wide (560 scrolled by 9px and cut "담기"); phones still scroll. */}
-          <div className={ZEBRA_SCROLL}>
+          <div className="@container">
+            {/*
+              Narrower than the table (phones, a narrow window) each range takes two lines (user, 2026-11-22): the range,
+              the quoted price and "담기" on the first, the other three numbers small on the second. Everything stays on
+              show, since this table is for comparing the ranges, and nothing scrolls sideways. One price a line is what
+              fits: 구간 70 + a price up to 120 (30성) + 담기 55 in a 311px panel.
+            */}
+            <div className="flex flex-col @min-[32.5rem]:hidden">
+              <div className="flex justify-between pr-[63px] pb-1.5 text-[11px] font-medium text-muted-foreground">
+                <span>구간</span>
+                <span>×{mult}</span>
+              </div>
+              {rows.map((r, i) => (
+                <div
+                  key={`${r.from}-${r.to}`}
+                  className={cn("-mx-3 flex flex-col gap-0.5 rounded-[10px] px-3 py-2", i % 2 === 1 && "bg-background")}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="flex-1 font-num text-[15px] font-bold whitespace-nowrap">
+                      {r.from} <span className="font-sans">→</span> {r.to}성
+                    </span>
+                    <span className="font-num text-[15px] font-bold whitespace-nowrap text-primary-text">
+                      <Digits>{money(r.meso * mult)}</Digits>
+                    </span>
+                    <AddButton onClick={() => add(r.from, r.to)} />
+                  </div>
+                  <div className="flex flex-wrap gap-x-1 text-xs text-muted-foreground">
+                    <span className="whitespace-nowrap">
+                      기댓값 <b className="font-num text-foreground">{money(r.meso)}</b>
+                    </span>
+                    <span className="whitespace-nowrap">
+                      · 파괴 <b className="font-num text-foreground">{avg(r.destroys, 2)}</b>
+                    </span>
+                    <span className="whitespace-nowrap">
+                      · 시도 <b className="font-num text-foreground">{avg(r.tries, 1)}</b>
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          {/* 520px: at a 1280px window the panel is 551px wide (560 scrolled by 9px and cut "담기"). */}
+          <div className={cn(ZEBRA_SCROLL, "hidden @min-[32.5rem]:block")}>
             <table className={cn(ZEBRA_TABLE, "min-w-[520px] text-[13px]")}>
               <thead>
                 <tr className={ZEBRA_HEAD}>
@@ -540,19 +604,13 @@ export function StarforceTab() {
                       <Digits>{avg(r.tries, 1)}</Digits>
                     </td>
                     <td className="py-1 text-right">
-                      <button
-                        type="button"
-                        onClick={() => add(r.from, r.to)}
-                        className="relative inline-flex h-7 items-center gap-1 rounded-full bg-background pr-2.5 pl-2 text-xs whitespace-nowrap text-muted-foreground shadow-tile transition-[box-shadow,color,scale] after:absolute after:inset-x-0 after:-inset-y-1.5 hover:text-primary-text hover:shadow-tile-hover active:scale-[0.96]"
-                      >
-                        <Plus className="size-3" strokeWidth={1.5} aria-hidden="true" />
-                        담기
-                      </button>
+                      <AddButton onClick={() => add(r.from, r.to)} />
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
           </div>
           {fold < maxStar && (
             <button
@@ -585,7 +643,84 @@ export function StarforceTab() {
               담은 구간 없음
             </p>
           ) : (
-            <div className={ZEBRA_SCROLL}>
+            <div className="@container">
+              {/*
+                Where the table does not fit (phones, a narrow column) the quote is a list (user, 2026-11-22): the range
+                and the quoted price on show, the rest one tap away, and nothing to scroll sideways.
+              */}
+              <div className="flex flex-col @min-[39rem]:hidden">
+                <div className="flex justify-between pr-7 pb-1.5 text-[11px] font-medium text-muted-foreground">
+                  <span>구간 · 장비</span>
+                  <span>×{mult}</span>
+                </div>
+                {cartRows.map((c, i) => {
+                  const open = openRows.includes(c.id);
+                  return (
+                    <div key={c.id} className={cn("-mx-3 rounded-[10px]", i % 2 === 1 && "bg-background")}>
+                      <button
+                        type="button"
+                        aria-expanded={open}
+                        aria-controls={`quote-${c.id}`}
+                        onClick={() => setOpenRows((prev) => (open ? prev.filter((x) => x !== c.id) : [...prev, c.id]))}
+                        className="flex min-h-14 w-full items-center gap-2 rounded-[10px] px-3 py-2.5 text-left"
+                      >
+                        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                          <span className="font-num text-[15px] font-bold whitespace-nowrap">
+                            {c.from} <span className="font-sans">→</span> {c.to}성
+                          </span>
+                          {/* Two rows of one item and range differ by their settings: the hand-set one says so. */}
+                          <span className="truncate text-[11px] text-muted-foreground">
+                            {c.item}
+                            {c.opt.protect !== "auto" && ` · 방지 ${starList(c.opt.protect)}`}
+                          </span>
+                        </span>
+                        <span className="font-num text-[17px] font-bold whitespace-nowrap">
+                          <Digits>{money(c.meso * mult)}</Digits>
+                        </span>
+                        <ChevronDown
+                          className={cn(
+                            "ml-1 size-4 shrink-0 transition-[rotate,color] duration-200 motion-reduce:transition-none",
+                            open ? "rotate-180 text-foreground" : "text-muted-foreground",
+                          )}
+                          aria-hidden="true"
+                        />
+                      </button>
+                      <Reveal open={open} id={`quote-${c.id}`} className="flex flex-col gap-2 px-3 pb-3">
+                          <span className="text-[11px] text-muted-foreground">
+                            Lv.{c.level} · {c.cond}
+                          </span>
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="text-xs text-muted-foreground">
+                              기댓값 <b className="font-num text-foreground">{money(c.meso)}</b> · 파괴{" "}
+                              <b className="font-num text-foreground">{avg(c.destroys, 2)}</b> · 시도{" "}
+                              <b className="font-num text-foreground">{avg(c.tries, 1)}</b>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setCart((prev) => prev.filter((x) => x.id !== c.id))}
+                              aria-label={`${c.item} ${c.from} → ${c.to}성 빼기`}
+                              className="h-7 shrink-0 rounded-md border border-border px-2.5 text-xs whitespace-nowrap text-muted-foreground transition-[color,scale] hover:text-destructive active:scale-[0.96]"
+                            >
+                              빼기
+                            </button>
+                          </div>
+                      </Reveal>
+                    </div>
+                  );
+                })}
+                <div
+                  className={cn(
+                    "-mx-3 flex items-baseline justify-between gap-2 rounded-[10px] py-3 pr-10 pl-3",
+                    cart.length % 2 === 1 && "bg-background",
+                  )}
+                >
+                  <b className="text-[13px]">합계 {cart.length}개</b>
+                  <span className="font-num text-[17px] font-bold whitespace-nowrap text-primary-text">
+                    <Digits>{money(sum.meso * mult)}</Digits>
+                  </span>
+                </div>
+              </div>
+              <div className={cn(ZEBRA_SCROLL, "hidden @min-[39rem]:block")}>
               <table className={cn(ZEBRA_TABLE, "min-w-[620px] text-[13px]")}>
                 <thead>
                   <tr className={ZEBRA_HEAD}>
@@ -655,6 +790,7 @@ export function StarforceTab() {
                   </tr>
                 </tbody>
               </table>
+              </div>
             </div>
           )}
         </Panel>
@@ -710,7 +846,7 @@ export function StarforceTab() {
             <button
               type="button"
               disabled={cart.length === 0}
-              onClick={() => copy("sum")}
+              onClick={copySum}
               className="inline-flex h-10 items-center justify-center gap-1.5 tile text-[13px] font-semibold disabled:opacity-50"
             >
               <SwapLabel
@@ -731,23 +867,30 @@ export function StarforceTab() {
             </button>
             <button
               type="button"
-              disabled={cart.length === 0}
-              onClick={() => copy("tsv")}
+              disabled={cart.length === 0 || imageBusy}
+              onClick={copyPicture}
               className="inline-flex h-10 items-center justify-center gap-1.5 tile text-[13px] font-semibold disabled:opacity-50"
             >
               <SwapLabel
-                on={copied === "tsv"}
+                on={copied === "image"}
                 from={
                   <>
-                    <Copy className="size-4" aria-hidden="true" />
-                    엑셀 복사
+                    <ImageIcon className="size-4" aria-hidden="true" />
+                    사진 복사
                   </>
                 }
                 to={
-                  <>
-                    <Check className="size-4" aria-hidden="true" />
-                    복사됨
-                  </>
+                  imageResult === "error" ? (
+                    <>
+                      <X className="size-4" aria-hidden="true" />
+                      복사 실패
+                    </>
+                  ) : (
+                    <>
+                      <Check className="size-4" aria-hidden="true" />
+                      {imageResult === "saved" ? "파일로 저장" : "복사됨"}
+                    </>
+                  )
                 }
               />
             </button>

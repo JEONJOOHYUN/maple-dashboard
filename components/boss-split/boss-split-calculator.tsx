@@ -8,6 +8,7 @@ import { MESO_MARKET_FEE_RATE, computeBossSplit, wholeMeso } from "@/lib/boss-sp
 import { formatKoreanMeso, formatNumber } from "@/lib/format";
 import { handleMesoInput } from "@/lib/meso-input";
 import { renderSplitImage } from "@/lib/boss-split/split-image";
+import { copyImage as copyImageBlob } from "@/lib/canvas-image";
 import { cn } from "@/lib/utils";
 
 const FEE_OPTIONS = [3, 5] as const;
@@ -51,15 +52,6 @@ function createItem(): Item {
 function evenPercents(count: number): number[] {
   const base = Math.floor(100 / count);
   return Array.from({ length: count }, (_, i) => base + (i < 100 - base * count ? 1 : 0));
-}
-
-function downloadBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export function BossSplitCalculator() {
@@ -177,21 +169,8 @@ export function BossSplitCalculator() {
         highlight: c.index > 0,
       })),
     };
-    // The blob promise must go into ClipboardItem synchronously (Safari requirement).
-    const blobPromise = renderSplitImage(data);
-    let next: ImageState = "copied";
-    try {
-      if (typeof ClipboardItem === "undefined" || !navigator.clipboard?.write) throw new Error("no image clipboard");
-      await navigator.clipboard.write([new ClipboardItem({ "image/png": blobPromise })]);
-    } catch {
-      try {
-        downloadBlob(await blobPromise, "분배금-결과.png");
-        next = "saved";
-      } catch {
-        next = "error";
-      }
-    }
-    setImageState(next);
+    // The blob promise must go into ClipboardItem synchronously (Safari requirement): no await before this call.
+    setImageState(await copyImageBlob(renderSplitImage(data), "분배금-결과.png"));
     setTimeout(() => setImageState("idle"), 2000);
   }
 

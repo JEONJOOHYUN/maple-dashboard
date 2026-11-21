@@ -1,6 +1,8 @@
 // Draws the boss-split result as a PNG on a canvas (no extra dependency), using
 // the page's current theme colors and fonts, for "이미지 복사".
 
+import { canvasBlob, cssVar, roundRect, wrapParts } from "@/lib/canvas-image";
+
 export type SplitImageCard = {
   name: string;
   pctLabel: string;
@@ -22,35 +24,6 @@ const GAP = 12;
 const CARD_BASE_H = 132; // card height with a one-line role
 const ROLE_LINE_H = 16;
 const SCALE = 2;
-
-function cssVar(name: string, fallback: string) {
-  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-  return v || fallback;
-}
-
-function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
-}
-
-/** Packs " · "-separated parts into lines no wider than maxWidth (canvas text never wraps). */
-function wrapParts(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
-  const lines: string[] = [];
-  for (const part of text.split(" · ")) {
-    const last = lines[lines.length - 1];
-    if (last !== undefined && ctx.measureText(`${last} · ${part}`).width <= maxWidth) {
-      lines[lines.length - 1] = `${last} · ${part}`;
-    } else {
-      lines.push(part);
-    }
-  }
-  return lines;
-}
 
 /** Shrinks the font size until `text` fits in `maxWidth`. */
 function fitFont(ctx: CanvasRenderingContext2D, text: string, family: string, size: number, maxWidth: number) {
@@ -188,7 +161,5 @@ export async function renderSplitImage(data: SplitImageData): Promise<Blob> {
   ctx.font = `700 12px ${body}`;
   ctx.fillText("메이플 대시보드", WIDTH - PAD, noteY + 40);
 
-  return new Promise((resolve, reject) =>
-    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("toBlob failed"))), "image/png")
-  );
+  return canvasBlob(canvas);
 }
