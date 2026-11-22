@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useRef, type ReactNode } from "react";
+import { useLayoutEffect, useRef, type ReactNode, type Ref } from "react";
 import { LUCK_LEVELS, triesAt } from "@/lib/ev/luck";
 import { koreanUnits } from "@/lib/format";
 import { caretAfter, cleanNumberText, forwardDeleteText, groupDigits, keptBefore } from "@/lib/number-text";
@@ -9,8 +9,12 @@ import { cn } from "@/lib/utils";
 import { SteadyText } from "@/components/ui/steady-text";
 
 /** Card section used by every calculator tab. */
-export function Panel({ className, children }: { className?: string; children: ReactNode }) {
-  return <section className={cn("flex min-w-0 flex-col gap-3.5 tile p-4 sm:p-5", className)}>{children}</section>;
+export function Panel({ className, children, ref }: { className?: string; children: ReactNode; ref?: Ref<HTMLElement> }) {
+  return (
+    <section ref={ref} className={cn("flex min-w-0 flex-col gap-3.5 tile p-4 sm:p-5", className)}>
+      {children}
+    </section>
+  );
 }
 
 export function Label({ children, aside }: { children: ReactNode; aside?: ReactNode }) {

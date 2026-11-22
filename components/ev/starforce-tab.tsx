@@ -39,7 +39,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Digits } from "@/components/ui/digits";
-import { Reveal, useReveal } from "@/components/ui/reveal";
+import { useGlide } from "@/components/ui/glide";
+import { Reveal } from "@/components/ui/reveal";
 import { Spinner } from "@/components/ui/spinner";
 import { SwapIcon, SwapLabel } from "@/components/ui/swap-icon";
 import { ZEBRA_HEAD, ZEBRA_ROW, ZEBRA_SCROLL, ZEBRA_TABLE } from "@/components/ui/zebra";
@@ -165,8 +166,9 @@ export function StarforceTab() {
   );
   const [start, setStart] = useState(12);
   const [more, setMore] = useState(false);
-  // The opened rows stay a moment after "접기" so they can fade out (user, 2026-11-22: opening moved, closing did not).
-  const moreRows = useReveal(more);
+  // The opened rows stay a moment after "접기" so they can fade out (user, 2026-11-22: opening moved, closing did not),
+  // and the table's height follows them, so the button under it glides instead of jumping.
+  const { shown: moreShown, attrs: moreAttrs, boxRef: moreBoxRef, frameRef: moreFrameRef, mark: markMore } = useGlide(more);
   // 520px = the container query the two layouts of the range table switch at (@min-[32.5rem]).
   const [rangeBox, rangeSteps] = useBoxSteps(RANGE_STEPS);
   const rangeWide = rangeSteps === null ? null : rangeSteps >= 1;
@@ -229,7 +231,7 @@ export function StarforceTab() {
   const startStar = Math.min(start, maxStar - 1);
   const startChoices = Array.from({ length: 18 }, (_, i) => i + 12).filter((s) => s < maxStar);
   const fold = Math.max(22, startStar + 3);
-  const lastRow = moreRows.shown ? maxStar : Math.min(maxStar, fold);
+  const lastRow = moreShown ? maxStar : Math.min(maxStar, fold);
   const allRows = [];
   for (let to = startStar + 1; to <= maxStar; to++) {
     const from = view === "cum" ? startStar : to - 1;
@@ -358,7 +360,7 @@ export function StarforceTab() {
   // `ghost` = the unseen copy that only holds the room: no motion state on it (with reduced motion a closed
   // reveal-row takes no room at all).
   const opened = (r: RangeRow, ghost: boolean) => !ghost && r.to > fold && "reveal-row";
-  const openedAttrs = (r: RangeRow, ghost: boolean) => (!ghost && r.to > fold ? moreRows.attrs : undefined);
+  const openedAttrs = (r: RangeRow, ghost: boolean) => (!ghost && r.to > fold ? moreAttrs : undefined);
   // The table sizes its columns by what is in them, and the folded rows hold the biggest numbers: opening them
   // moved every column up to 45px (user, 2026-11-22). A zero-height row with the widest value of each column over
   // all rows, folded or not, keeps the columns where they are. Widest by a rough width: a digit is 0.68em, a comma or
@@ -602,7 +604,7 @@ export function StarforceTab() {
           </div>
         </Panel>
 
-        <Panel>
+        <Panel ref={moreFrameRef}>
           {/* What goes in on one line (user, 2026-11-22: the spare price sat alone on a second line). */}
           <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2.5">
             <b className="text-[15px]">조건</b>
@@ -673,6 +675,7 @@ export function StarforceTab() {
             />
           </div>
           <div ref={rangeBox} className="@container">
+          <div ref={moreBoxRef}>
             {/*
               Narrower than the table (phones, a narrow window) each range takes two lines (user, 2026-11-22): the range,
               the quoted price and "담기" on the first, the other three numbers small on the second. Everything stays on
@@ -722,10 +725,15 @@ export function StarforceTab() {
           </div>
           )}
           </div>
+          </div>
           {fold < maxStar && (
             <button
               type="button"
-              onClick={() => setMore(!more)}
+              onClick={() => {
+                // Side by side (lg) the panel keeps the folded rows' room, so it holds its height while they move.
+                markMore(window.matchMedia("(min-width: 64rem)").matches);
+                setMore(!more);
+              }}
               aria-expanded={more}
               // 36px to look at, 40px to press: the area reaches 2px above and below.
               className={cn(
