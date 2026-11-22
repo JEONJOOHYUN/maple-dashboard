@@ -5,7 +5,7 @@ import { Check, Copy, ImageIcon, Info, Plus, X } from "lucide-react";
 import { Digits } from "@/components/ui/digits";
 import { Reveal } from "@/components/ui/reveal";
 import { Spinner } from "@/components/ui/spinner";
-import { SwapLabel } from "@/components/ui/swap-icon";
+import { SwapLabel, UNSEEN_STILL } from "@/components/ui/swap-icon";
 import { PageHeader } from "@/components/page-header";
 import { MESO_MARKET_FEE_RATE, computeBossSplit, wholeMeso } from "@/lib/boss-split/boss-split-math";
 import { formatKoreanMeso, formatNumber } from "@/lib/format";
@@ -472,7 +472,7 @@ export function BossSplitCalculator() {
                   key={state}
                   className={cn(
                     "col-start-1 row-start-1 inline-flex items-center justify-center gap-2 whitespace-nowrap transition-[opacity,filter] duration-300 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none",
-                    state === imageState ? "opacity-100 blur-none" : "opacity-0 blur-xs"
+                    state === imageState ? "opacity-100 blur-none" : cn("opacity-0 blur-xs", UNSEEN_STILL)
                   )}
                 >
                   {state === "working" ? <Spinner /> : <ImageIcon className="size-4" />}

@@ -2,6 +2,11 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 const EASE = "duration-300 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none";
+/**
+ * The state not on show stays in the page: a waiting mark inside it must not keep turning unseen (it re-styled the page
+ * eight times a second while nothing was happening). Important, since the mark's own stylesheet is outside the layers.
+ */
+export const UNSEEN_STILL = "**:[animation-play-state:paused]!";
 
 /**
  * Two icons in one spot (copy → check): when `on` flips, one fades out as the other fades in, each with a little
@@ -11,7 +16,7 @@ const EASE = "duration-300 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transiti
 export function SwapIcon({ on, from, to, className }: { on: boolean; from: ReactNode; to: ReactNode; className?: string }) {
   const layer = cn("col-start-1 row-start-1 flex transition-[opacity,scale,filter]", EASE);
   const shown = "scale-100 opacity-100 blur-none";
-  const hidden = "scale-25 opacity-0 blur-xs";
+  const hidden = cn("scale-25 opacity-0 blur-xs", UNSEEN_STILL);
   return (
     <span aria-hidden="true" className={cn("inline-grid shrink-0", className)}>
       <span className={cn(layer, on ? hidden : shown)}>{from}</span>
@@ -33,7 +38,7 @@ export function SwapLabel({ on, from, to, className }: { on: boolean; from: Reac
     "[&_svg]:duration-300 [&_svg]:ease-[cubic-bezier(0.2,0,0,1)]"
   );
   const shown = "opacity-100 blur-none [&_svg]:scale-100";
-  const hidden = "opacity-0 blur-xs [&_svg]:scale-25";
+  const hidden = cn("opacity-0 blur-xs [&_svg]:scale-25", UNSEEN_STILL);
   return (
     <span className={cn("inline-grid", className)}>
       <span aria-hidden={on} className={cn(layer, on ? hidden : shown)}>
