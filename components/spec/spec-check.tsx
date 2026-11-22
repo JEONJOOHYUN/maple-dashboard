@@ -14,7 +14,7 @@ import { SwapIcon, SwapLabel } from "@/components/ui/swap-icon";
 import type { Miss, SpecResult, Tier, Tile } from "@/lib/spec/check";
 import { periodGroups } from "@/lib/spec/period-rows";
 import { useStored } from "@/lib/use-stored";
-import { Reveal, useReveal } from "@/components/ui/reveal";
+import { useReveal } from "@/components/ui/reveal";
 import { Digits } from "@/components/ui/digits";
 import { cn } from "@/lib/utils";
 // Static imports, like the menu icons: each address carries a content hash.
@@ -518,9 +518,11 @@ function Result({ result, at, asOf, optimizer, refreshing, refreshNote, onRefres
 
           <div className="flex flex-col gap-1 text-xs text-muted-foreground">
             {presetText && <span>보스 프리셋: {presetText}</span>}
-            <Reveal open={!!refreshNote} className="text-[oklch(0.63_0.182_24.3)]">
+            {!!refreshNote && (
+              <div className="text-[oklch(0.63_0.182_24.3)]">
               {refreshNote}
-            </Reveal>
+            </div>
+            )}
             {!result.known && <span>새 직업 → 직업별 기준 없음, 공용 항목만 확인</span>}
           </div>
 
@@ -560,7 +562,7 @@ function Result({ result, at, asOf, optimizer, refreshing, refreshNote, onRefres
           </div>
         )}
         {n > 0 && !list.shown && (
-          <div className="reveal tile px-4 py-9 text-center text-[13px] text-pretty text-muted-foreground">왼쪽 배지 → 목록 열기</div>
+          <div className="tile px-4 py-9 text-center text-[13px] text-pretty text-muted-foreground">왼쪽 배지 → 목록 열기</div>
         )}
         {result.tips.length > 0 && (
           <>
@@ -649,25 +651,28 @@ export function SpecCheck({ name, view }: { name: string; view: SpecView }) {
         </button>
       </form>
 
-      {/* The browser's list is not known to the server: the row comes in softly after the page, and leaves the same way. */}
-      <Reveal open={recentList.length > 0} className="mt-1 flex flex-wrap items-center gap-1.5">
-        <span className="mr-0.5 text-xs text-muted-foreground">최근 검색</span>
-        {recentList.map((n) => (
-          <span key={n} className={cn(RECENT_PILL, n === found ? RECENT_PILL_ON : RECENT_PILL_OFF)}>
-            <button type="button" onClick={() => pick(n)} disabled={pending} className={RECENT_NAME}>
-              {n}
-            </button>
-            <button
-              type="button"
-              onClick={() => setRecent((prev) => (Array.isArray(prev) ? prev : []).filter((x) => x !== n))}
-              aria-label={`${n} 최근 검색에서 지우기`}
-              className={RECENT_DROP}
-            >
-              <X className="size-3.5" aria-hidden="true" />
-            </button>
-          </span>
-        ))}
-      </Reveal>
+      {/* The browser's list is not known to the server, so the row is there only after the page loads. It just shows:
+          an entrance on something the visitor did not ask for was noise (user, 2026-11-22). */}
+      {recentList.length > 0 && (
+        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+          <span className="mr-0.5 text-xs text-muted-foreground">최근 검색</span>
+          {recentList.map((n) => (
+            <span key={n} className={cn(RECENT_PILL, n === found ? RECENT_PILL_ON : RECENT_PILL_OFF)}>
+              <button type="button" onClick={() => pick(n)} disabled={pending} className={RECENT_NAME}>
+                {n}
+              </button>
+              <button
+                type="button"
+                onClick={() => setRecent((prev) => (Array.isArray(prev) ? prev : []).filter((x) => x !== n))}
+                aria-label={`${n} 최근 검색에서 지우기`}
+                className={RECENT_DROP}
+              >
+                <X className="size-3.5" aria-hidden="true" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
 
       <div className={cn("transition-opacity", pending && "opacity-50")} aria-busy={pending}>
         {view.kind === "result" && (

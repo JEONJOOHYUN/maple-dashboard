@@ -20,7 +20,6 @@ import { STAT_CONV_DEFAULT } from "@/lib/ev/defaults";
 import { GRADE_LABEL, NEXT_GRADE, convFromText, type ConvText, type Grade } from "@/lib/ev/potential";
 import { useStored } from "@/lib/use-stored";
 import { Digits } from "@/components/ui/digits";
-import { Reveal } from "@/components/ui/reveal";
 import { cn } from "@/lib/utils";
 
 type View = "insight" | "log" | "items";
@@ -480,12 +479,16 @@ function PiecesView({
           <SortMenu value={sort} onChange={setSort} className="ml-auto" />
         </div>
       </div>
-      <Reveal open={!!(group && ev)}>{group && ev && <EventStrip group={group} round={round} tally={ev.tallies[round ? group.rounds.indexOf(round) + 1 : 0]} unit="횟수" deltaLabel="손익" />}</Reveal>
-      <Reveal open={!!filter.picked && list.length > 0}>
+      {!!(group && ev) && (
+        <div>{group && ev && <EventStrip group={group} round={round} tally={ev.tallies[round ? group.rounds.indexOf(round) + 1 : 0]} unit="횟수" deltaLabel="손익" />}</div>
+      )}
+      {!!filter.picked && list.length > 0 && (
+        <div>
         {filter.picked && list.length > 0 && (
           <PickedTotal spent={list.reduce((sum, p) => sum + p.spent, 0)} delta={list.some((p) => p.delta !== null) ? list.reduce((sum, p) => sum + (p.delta ?? 0), 0) : null} />
         )}
-      </Reveal>
+      </div>
+      )}
       {list.length === 0 && <Empty>해당 아이템 없음</Empty>}
       <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
         {list.slice(pager.from, pager.to).map((piece) => (

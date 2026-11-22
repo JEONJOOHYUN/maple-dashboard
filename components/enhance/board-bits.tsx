@@ -274,7 +274,8 @@ export function SyncBanners({ snap, unit, onRetry, onForget }: { snap: Pick<Sync
   const error = snap.status === "error" ? snap.error : null;
   return (
     <>
-      <Reveal open={loading} role="status" className="flex flex-col gap-2 tile px-4 py-3">
+      {loading && (
+        <div role="status" className="flex flex-col gap-2 tile px-4 py-3">
         <span className="flex items-center gap-2 text-[13px]">
           <Spinner className="text-primary-text" />
           기록 받는 중
@@ -289,9 +290,11 @@ export function SyncBanners({ snap, unit, onRetry, onForget }: { snap: Pick<Sync
         <span className="h-1.5 overflow-hidden rounded-full bg-muted">
           <span className="block h-full rounded-full bg-primary transition-[width]" style={{ width: `${snap.total ? (snap.done / snap.total) * 100 : 0}%` }} />
         </span>
-      </Reveal>
+      </div>
+      )}
       {/* The same corners as the loading tile it takes the place of. */}
-      <Reveal open={!!error} role="alert" className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[1rem] border border-destructive/40 bg-destructive/10 px-4 py-3 text-[13px]">
+      {!!error && (
+        <div role="alert" className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[1rem] border border-destructive/40 bg-destructive/10 px-4 py-3 text-[13px]">
         {error && (
           <>
             <AlertCircle className="size-4 shrink-0 text-destructive" aria-hidden="true" />
@@ -301,7 +304,8 @@ export function SyncBanners({ snap, unit, onRetry, onForget }: { snap: Pick<Sync
             </button>
           </>
         )}
-      </Reveal>
+      </div>
+      )}
     </>
   );
 }

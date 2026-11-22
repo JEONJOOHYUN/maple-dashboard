@@ -792,7 +792,7 @@ export function StarforceTab() {
                 {cartRows.map((c, i) => {
                   const open = openRows.includes(c.id);
                   return (
-                    <div key={c.id} className={cn("-mx-3 rounded-[10px] reveal-row", i % 2 === 1 && "bg-background")}>
+                    <div key={c.id} className={cn("-mx-3 rounded-[10px]", i % 2 === 1 && "bg-background")}>
                       <button
                         type="button"
                         aria-expanded={open}
@@ -888,7 +888,7 @@ export function StarforceTab() {
                 </thead>
                 <tbody>
                   {cartRows.map((c) => (
-                    <tr key={c.id} className={cn(ZEBRA_ROW, "reveal-row")}>
+                    <tr key={c.id} className={ZEBRA_ROW}>
                       <td className="py-2">
                         <b className="block">{c.item}</b>
                         <span className="text-[11px] text-muted-foreground">

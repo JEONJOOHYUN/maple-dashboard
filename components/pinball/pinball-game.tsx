@@ -8,7 +8,6 @@ import { Chip, NumberField, parseNum } from "@/components/ev/ui";
 import type { Roulette } from "@/lib/third-party/roulette/roulette";
 import { useStored } from "@/lib/use-stored";
 import { Digits } from "@/components/ui/digits";
-import { Reveal } from "@/components/ui/reveal";
 import { Spinner } from "@/components/ui/spinner";
 import { SwapLabel } from "@/components/ui/swap-icon";
 import { cn } from "@/lib/utils";
@@ -411,9 +410,11 @@ export function PinballGame() {
                 />
               </button>
             </div>
-            <Reveal open={status === "error"} className="text-xs text-destructive">
+            {(status === "error") && (
+              <div className="text-xs text-destructive">
               물리 엔진 불러오기 실패 · 새로고침
-            </Reveal>
+            </div>
+            )}
           </section>
         </div>
           {/* The card takes the room left under the settings; a longer list scrolls inside it instead of spilling out
@@ -472,9 +473,11 @@ export function PinballGame() {
             <MapIcon className="size-3.5" aria-hidden="true" />
             <SwapLabel on={mapOpen} from="맵 열기" to="맵 닫기" />
           </button>
-          <Reveal open={mapOpen} className="pointer-events-none absolute bottom-2 left-3 text-[11px] text-muted-foreground">
+          {mapOpen && (
+            <div className="pointer-events-none absolute bottom-2 left-3 text-[11px] text-muted-foreground">
             맵에 올리면 그 자리 보기
-          </Reveal>
+          </div>
+          )}
         </section>
 
       </div>

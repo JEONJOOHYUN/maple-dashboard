@@ -908,17 +908,21 @@ export function PotentialTab() {
             })}
           </div>
         </div>
-        <Reveal open={goal === "grade" && potKind === "add"}>
+        {(goal === "grade" && potKind === "add") && (
+          <div>
           <Switch
             on={whiteUp}
             onChange={setWhiteUp}
             label="화이트 에디셔널 큐브로 올리기"
             note="등급 상승 확률 2배 · 천장 31 · 76 · 214번"
           />
-        </Reveal>
-        <Reveal open={goal === "grade"}>
+        </div>
+        )}
+        {(goal === "grade") && (
+          <div>
           <Switch on={miracle} onChange={setMiracle} label="미라클 타임" note="등급 상승 확률 2배" />
-        </Reveal>
+        </div>
+        )}
       </Panel>
 
       <section className="flex min-w-0 flex-col gap-2">

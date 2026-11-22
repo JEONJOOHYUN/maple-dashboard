@@ -222,7 +222,8 @@ export function BossSplitCalculator() {
                   {formatKoreanMeso(item.grossMeso, { spaced: true })}
                 </span>
               </label>
-              <Reveal open={items.length > 1} className="mt-2 shrink-0">
+              {(items.length > 1) && (
+                <div className="mt-2 shrink-0">
                 <button
                   type="button"
                   onClick={() => setItems((prev) => prev.filter((x) => x.id !== item.id))}
@@ -231,7 +232,8 @@ export function BossSplitCalculator() {
                 >
                   <X className="size-4" aria-hidden="true" />
                 </button>
-              </Reveal>
+              </div>
+              )}
             </div>
           ))}
         </div>

@@ -6,7 +6,6 @@ import { eok } from "@/components/ev/ui";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Digits } from "@/components/ui/digits";
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Reveal } from "@/components/ui/reveal";
 import { roundDates, roundName, type EventGroup, type EventRound } from "@/lib/enhance/events";
 import type { ItemInfo } from "@/lib/enhance/items";
 import type { SkipReason } from "@/lib/enhance/judge";
@@ -300,7 +299,8 @@ export function EventFields({
         </DropdownMenuContent>
       </DropdownMenu>
       {/* The widths of the row go on the box that comes and goes; the field fills it. */}
-      <Reveal open={!!group} className={cn("flex min-w-0", className)}>
+      {!!group && (
+        <div className={cn("flex min-w-0", className)}>
         {group && (
           <DropdownMenu>
             <DropdownMenuTrigger aria-label="세부 날짜" title={round ? roundName(group, round) : rows[0].name} className={cn(MENU_TRIGGER, "flex-1")}>
@@ -329,7 +329,8 @@ export function EventFields({
             </DropdownMenuContent>
           </DropdownMenu>
         )}
-      </Reveal>
+      </div>
+      )}
     </>
   );
 }

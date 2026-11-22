@@ -304,16 +304,20 @@ export function ItemsView({
           <SortMenu value={sort} onChange={setSort} hideLow={hideLow} onHideLow={onHideLow} className="ml-auto" />
         </div>
       </div>
-      <Reveal open={!!(group && ev)}>
+      {!!(group && ev) && (
+        <div>
         {group && ev && (
           <EventStrip group={group} round={round} tally={round ? ev.tallies[group.rounds.indexOf(round) + 1] : ev.tallies[0]} unit="강화" deltaLabel="기댓값 대비" destroy={shown.items.reduce((sum, it) => sum + it.destroy, 0)} />
         )}
-      </Reveal>
-      <Reveal open={!!filter.picked && items.length > 0}>
+      </div>
+      )}
+      {!!filter.picked && items.length > 0 && (
+        <div>
         {filter.picked && items.length > 0 && (
           <PickedTotal spent={items.reduce((sum, it) => sum + it.spent, 0)} delta={items.some((it) => it.judged > 0) ? items.reduce((sum, it) => sum + (it.judged > 0 ? it.delta : 0), 0) : null} />
         )}
-      </Reveal>
+      </div>
+      )}
       {items.length === 0 && <Empty>{visible.length === 0 ? "12성 이상 아이템 없음" : "해당 아이템 없음"}</Empty>}
       <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
         {/* The card being typed in stays on screen wherever it sorts to: a level typed into an unknown item makes it

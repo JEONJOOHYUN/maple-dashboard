@@ -34,7 +34,7 @@ import {
   type SortBy,
 } from "@/lib/spec/guild-table";
 import { useStored } from "@/lib/use-stored";
-import { Reveal, useReveal } from "@/components/ui/reveal";
+import { useReveal } from "@/components/ui/reveal";
 import { cn } from "@/lib/utils";
 
 /** count = characters; users = accounts (the in-game member count), null when NEXON gives none. */
@@ -386,7 +386,8 @@ function GuildResult({ guild, pieces, others }: { guild: GuildInfo; pieces: Prom
       {asOf && <p className="px-0.5 text-xs font-semibold text-primary-text">{asOfLabel(asOf)}</p>}
 
       {/* It fades out before it leaves, so the table under it does not jump the moment the last member arrives. */}
-      <Reveal open={loading} className="flex flex-col gap-2 tile px-4 py-3.5">
+      {loading && (
+        <div className="flex flex-col gap-2 tile px-4 py-3.5">
         <div className="flex items-baseline justify-between gap-2 text-sm">
           <b>
             길드원 확인 중 · {n(done)} / {n(guild.count)}명
@@ -403,7 +404,8 @@ function GuildResult({ guild, pieces, others }: { guild: GuildInfo; pieces: Prom
         >
           <div className="h-full rounded-full bg-primary transition-[width] duration-300" style={{ width: `${(done / guild.count) * 100}%` }} />
         </div>
-      </Reveal>
+      </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-1.5">
         {SORTS.map((s) => (
@@ -600,36 +602,38 @@ export function GuildCheck({ name, view }: { name: string; view: GuildView }) {
         </button>
       </form>
 
-      <Reveal open={recentList.length > 0} className="mt-1 flex flex-wrap items-center gap-1.5">
-        <span className="mr-0.5 text-xs text-muted-foreground">최근 길드</span>
-        {recentList.map((g) => {
-          const on = g.name === foundName && g.world === foundWorld;
-          return (
-            <span key={`${g.name}@${g.world}`} className={cn(RECENT_PILL, on ? RECENT_PILL_ON : RECENT_PILL_OFF)}>
-              <button
-                type="button"
-                onClick={() => {
-                  setText(g.name);
-                  go(guildHref(g.name, g.world));
-                }}
-                disabled={pending}
-                className={RECENT_NAME}
-              >
-                {g.name}
-                <span className="font-normal opacity-70"> · {g.world}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setRecent((prev) => (Array.isArray(prev) ? prev.filter(isRecent) : []).filter((x) => x.name !== g.name || x.world !== g.world))}
-                aria-label={`${g.name} ${g.world} 최근 길드에서 지우기`}
-                className={RECENT_DROP}
-              >
-                <X className="size-3.5" aria-hidden="true" />
-              </button>
-            </span>
-          );
-        })}
-      </Reveal>
+      {recentList.length > 0 && (
+        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+          <span className="mr-0.5 text-xs text-muted-foreground">최근 길드</span>
+          {recentList.map((g) => {
+            const on = g.name === foundName && g.world === foundWorld;
+            return (
+              <span key={`${g.name}@${g.world}`} className={cn(RECENT_PILL, on ? RECENT_PILL_ON : RECENT_PILL_OFF)}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setText(g.name);
+                    go(guildHref(g.name, g.world));
+                  }}
+                  disabled={pending}
+                  className={RECENT_NAME}
+                >
+                  {g.name}
+                  <span className="font-normal opacity-70"> · {g.world}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRecent((prev) => (Array.isArray(prev) ? prev.filter(isRecent) : []).filter((x) => x.name !== g.name || x.world !== g.world))}
+                  aria-label={`${g.name} ${g.world} 최근 길드에서 지우기`}
+                  className={RECENT_DROP}
+                >
+                  <X className="size-3.5" aria-hidden="true" />
+                </button>
+              </span>
+            );
+          })}
+        </div>
+      )}
 
       <div className={cn("transition-opacity", pending && "opacity-50")} aria-busy={pending}>
         {view.kind === "guild" && <GuildResult guild={view.guild} pieces={view.pieces} others={view.others} />}

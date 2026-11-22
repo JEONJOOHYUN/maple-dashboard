@@ -77,7 +77,7 @@ export function BoutiquePanel({
       {/* Each side comes in softly (the entrance of `reveal`, on a fresh element). The side it replaces leaves at once:
           two on show together would double the panel's height for a moment. */}
       {tab === "before" ? (
-        <div key="before" className="reveal flex flex-col gap-3">
+        <div key="before" className="flex flex-col gap-3">
           <div className="grid grid-cols-1 gap-2 @sm:grid-cols-3">
             {LUCK.map((l) => (
               <LuckBox key={l.label} label={l.label} value={meso(l.tickets, ticketMan)} sub={`티켓 ${l.tickets}개`} />
@@ -88,7 +88,7 @@ export function BoutiquePanel({
           </span>
         </div>
       ) : (
-        <div key="after" className="reveal flex flex-col gap-3">
+        <div key="after" className="flex flex-col gap-3">
           <div className="grid grid-cols-1 gap-2 @sm:grid-cols-2">
             <Field label="깐 개수">
               <NumberField label="깐 부티크 기프트 개수" value={opened.n} onChange={(v) => onOpened({ ...opened, n: v })} suffix="개" inputClassName="h-8 w-16" />
@@ -98,7 +98,7 @@ export function BoutiquePanel({
             </Field>
           </div>
           {ready ? (
-            <div className="reveal flex flex-col gap-1 rounded-lg border border-primary bg-primary-soft px-4 py-3">
+            <div className="flex flex-col gap-1 rounded-lg border border-primary bg-primary-soft px-4 py-3">
               <span className="text-xs text-muted-foreground">같은 개수 깐 사람 중</span>
               <b className="font-num text-[26px] leading-tight text-primary-text">{top}</b>
               <span className="text-[13px]">
@@ -114,7 +114,7 @@ export function BoutiquePanel({
               </span>
             </div>
           ) : (
-            <p className="reveal rounded-lg border border-dashed border-border px-4 py-4 text-center text-[13px] text-muted-foreground">
+            <p className="rounded-lg border border-dashed border-border px-4 py-4 text-center text-[13px] text-muted-foreground">
               {tooBig
                 ? `${MAX_OPENS.toLocaleString("ko-KR")}개 · 티켓 ${MAX_TICKETS.toLocaleString("ko-KR")}개까지 계산`
                 : n > 0 && t > 0

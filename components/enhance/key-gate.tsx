@@ -2,7 +2,6 @@
 
 import { Fragment, useEffect, useState, type FormEvent } from "react";
 import { Digits } from "@/components/ui/digits";
-import { Reveal } from "@/components/ui/reveal";
 import { Spinner } from "@/components/ui/spinner";
 import { SwapIcon, SwapLabel } from "@/components/ui/swap-icon";
 import Link from "next/link";
@@ -188,11 +187,13 @@ export function KeyGate({ saved, onConnect, onForgetAll }: { saved: SavedKey[]; 
             강화 기록 보기
           </span>
         </button>
-        <Reveal open={!!error}>
+        {!!error && (
+          <div>
           <p role="alert" className="text-[13px] font-semibold text-destructive">
             {error}
           </p>
-        </Reveal>
+        </div>
+        )}
         <ul className="flex list-disc flex-col gap-1 pl-[18px] text-xs leading-relaxed text-muted-foreground">
           <li>키 · 기록 = 이 브라우저에만 저장, 우리 서버로 안 보냄</li>
           <li>키를 발급한 넥슨 계정의 기록만 조회 · 키마다 따로 저장</li>
