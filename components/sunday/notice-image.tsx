@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Image as ImageIcon } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 
 /**
@@ -13,6 +14,9 @@ import { cn } from "@/lib/utils";
  */
 export function NoticeImage({ images, label, className, icon = true }: { images: string[]; label: string; className?: string; icon?: boolean }) {
   const [open, setOpen] = useState(false);
+  // Until the first picture is in (or has failed), the window keeps room for it and shows the waiting mark, so it
+  // does not open as a title bar alone and then grow.
+  const [arrived, setArrived] = useState(false);
   if (images.length === 0) return null;
   return (
     <>
@@ -25,15 +29,27 @@ export function NoticeImage({ images, label, className, icon = true }: { images:
         원본 그림
       </button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="flex max-h-[88vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[640px]">
+        <DialogContent className="flex max-h-[88dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[640px]">
           <div className="flex flex-col gap-0.5 border-b border-border px-4 py-3 pr-12">
             <DialogTitle className="text-base leading-tight font-bold">썬데이 메이플 원본 그림</DialogTitle>
             <DialogDescription className="text-xs">{label} · 넥슨 공지</DialogDescription>
           </div>
-          <div className="overflow-y-auto bg-muted">
+          <div className={cn("relative overflow-y-auto overscroll-contain bg-muted", !arrived && "min-h-[60dvh]")}>
+            {!arrived && (
+              <span className="absolute inset-0 flex items-center justify-center text-muted-foreground">
+                <Spinner size={20} />
+              </span>
+            )}
             {images.map((src) => (
               // eslint-disable-next-line @next/next/no-img-element -- NEXON's notice picture, shown as is (never stored or resized by us)
-              <img key={src} src={src} alt={`${label} 썬데이 메이플 공지 그림`} className="block w-full image-line" />
+              <img
+                key={src}
+                src={src}
+                alt={`${label} 썬데이 메이플 공지 그림`}
+                onLoad={() => setArrived(true)}
+                onError={() => setArrived(true)}
+                className="relative block w-full image-line"
+              />
             ))}
           </div>
         </DialogContent>

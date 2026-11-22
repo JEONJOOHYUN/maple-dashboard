@@ -53,7 +53,8 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 outline-none sm:max-w-sm pop-in",
+          // Never taller than the screen: a long dialog scrolls inside itself, and the page behind stays put.
+          "fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto overscroll-contain rounded-xl bg-popover p-4 text-sm text-popover-foreground shadow-lift outline-none sm:max-w-sm pop-in",
           className
         )}
         {...props}
@@ -65,7 +66,8 @@ function DialogContent({
             render={
               <Button
                 variant="ghost"
-                className="absolute top-2 right-2"
+                // after: the press area reaches 6px past the 28px button, up to the dialog's corner.
+                className="absolute top-2 right-2 after:absolute after:-inset-1.5"
                 size="icon-sm"
               />
             }
@@ -122,7 +124,7 @@ function DialogTitle({ className, ...props }: DialogPrimitive.Title.Props) {
     <DialogPrimitive.Title
       data-slot="dialog-title"
       className={cn(
-        "font-heading text-base leading-none font-medium",
+        "font-heading text-base leading-tight font-medium",
         className
       )}
       {...props}

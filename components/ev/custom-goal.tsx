@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { ChevronDown, Minus, Plus, X } from "lucide-react";
-import { pct } from "@/components/ev/ui";
+import { arrowTurn, dashedHover, pct, stepButton } from "@/components/ev/ui";
 import { OPTION_GROUPS, type CustomCond, type SlotOption } from "@/lib/ev/potential";
 import { Reveal } from "@/components/ui/reveal";
 import { Digits } from "@/components/ui/digits";
@@ -19,8 +19,7 @@ export function condText(option: SlotOption | undefined, min: number): string {
   return `${option.label.replace(/ %$/, "")} ${min}${option.unit}`;
 }
 
-const stepButton =
-  "flex size-10 shrink-0 items-center justify-center tile outline-none hover:border-primary/60 focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-40 disabled:hover:border-border";
+const step = cn(stepButton, "size-10 rounded-lg bg-card");
 
 /**
  * "직접" goal builder: each set looks like the in-game potential box. A row is one option with the total it must
@@ -33,6 +32,7 @@ export function CustomGoal({
   chanceOf,
   slotLabel,
   gradeLabel,
+  gradeClass = "text-emerald-300",
 }: {
   options: SlotOption[];
   sets: CustomCond[][];
@@ -40,6 +40,8 @@ export function CustomGoal({
   chanceOf: (set: CustomCond[]) => number;
   slotLabel: string;
   gradeLabel: string;
+  /** The grade's colour as it reads on the dark head of a set (the head is dark in both themes). */
+  gradeClass?: string;
 }) {
   // Which row is choosing an option: row = index to replace, or the set's length to add one.
   const [picking, setPicking] = useState<{ set: number; row: number } | null>(null);
@@ -71,11 +73,14 @@ export function CustomGoal({
             <div className="flex flex-col overflow-hidden rounded-lg border border-zinc-900 dark:border-zinc-600">
               <div className="flex items-center gap-2 bg-zinc-900 py-1.5 pr-1.5 pl-3 text-white">
                 <b className="text-[13px]">세트 {si + 1}</b>
-                <span className="text-xs font-bold text-emerald-300">{gradeLabel}</span>
+                <span className={cn("text-xs font-bold", gradeClass)}>{gradeLabel}</span>
                 <span className="ml-auto text-xs text-zinc-300">
                   {conds.length ? (
                     <>
-                      1번에 <b className="font-num text-white">{pct(p)}</b>
+                      1번에{" "}
+                      <b className="font-num text-white">
+                        <Digits>{pct(p)}</Digits>
+                      </b>
                     </>
                   ) : (
                     "옵션 고르기"
@@ -89,9 +94,10 @@ export function CustomGoal({
                       onChange(sets.filter((_, i) => i !== si));
                       setPicking(null);
                     }}
-                    className="flex size-8 items-center justify-center rounded-md outline-none hover:bg-white/15 focus-visible:ring-3 focus-visible:ring-white/50"
+                    // 32px to look at, 40px to press (the head keeps 6px round it).
+                    className="relative flex size-8 items-center justify-center rounded-md outline-none after:absolute after:-inset-1 hover:bg-white/15 focus-visible:ring-3 focus-visible:ring-white/50"
                   >
-                    <X className="size-4" aria-hidden="true" />
+                    <X size={16} strokeWidth={2} absoluteStrokeWidth aria-hidden="true" />
                   </button>
                 ) : (
                   <span className="h-8 w-1.5" />
@@ -102,7 +108,7 @@ export function CustomGoal({
                 const option = byCat.get(cond.cat);
                 if (!option) return null;
                 const at = option.sums.indexOf(cond.min);
-                const step = (d: number) => setConds(si, conds.map((c, i) => (i === ri ? { ...c, min: option.sums[at + d] } : c)));
+                const move = (d: number) => setConds(si, conds.map((c, i) => (i === ri ? { ...c, min: option.sums[at + d] } : c)));
                 const replacing = open?.row === ri;
                 return (
                   <div key={cond.cat} className="flex flex-wrap items-center gap-2 border-b border-border bg-card px-3 py-2.5">
@@ -112,23 +118,26 @@ export function CustomGoal({
                       aria-label={`${option.label} · 다른 옵션으로 바꾸기`}
                       onClick={() => setPicking(replacing ? null : { set: si, row: ri })}
                       className={cn(
-                        "flex h-10 min-w-0 flex-1 basis-[150px] items-center justify-between gap-2 tile px-3 text-left text-sm font-bold outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                        // The arrow's ink is 8px in a 16px box: 4px less padding on its side looks even.
+                        "flex h-10 min-w-0 flex-1 basis-[150px] items-center justify-between gap-2 rounded-lg border bg-card pr-2 pl-3 text-left text-sm font-bold outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
                         replacing ? "border-primary text-primary-text" : "tile-edge hover:border-primary/60"
                       )}
                     >
-                      <span className="truncate">{option.label}</span>
-                      <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground transition-transform", replacing && "rotate-180")} aria-hidden="true" />
+                      <span title={option.label} className="truncate">
+                        {option.label}
+                      </span>
+                      <ChevronDown size={16} strokeWidth={2} absoluteStrokeWidth className={cn("shrink-0 text-muted-foreground", arrowTurn, replacing && "rotate-180")} aria-hidden="true" />
                     </button>
                     <div className="ml-auto flex items-center gap-1.5">
-                      <button type="button" aria-label={`${option.label} 낮추기`} disabled={at <= 0} onClick={() => step(-1)} className={stepButton}>
-                        <Minus className="size-4" aria-hidden="true" />
+                      <button type="button" aria-label={`${option.label} 낮추기`} disabled={at <= 0} onClick={() => move(-1)} className={step}>
+                        <Minus size={16} strokeWidth={2} absoluteStrokeWidth aria-hidden="true" />
                       </button>
                       <b className="w-[5.5rem] text-center font-num text-[15px]">
                         <Digits>{cond.min}</Digits>
                         {option.unit} 이상
                       </b>
-                      <button type="button" aria-label={`${option.label} 올리기`} disabled={at >= option.sums.length - 1} onClick={() => step(1)} className={stepButton}>
-                        <Plus className="size-4" aria-hidden="true" />
+                      <button type="button" aria-label={`${option.label} 올리기`} disabled={at >= option.sums.length - 1} onClick={() => move(1)} className={step}>
+                        <Plus size={16} strokeWidth={2} absoluteStrokeWidth aria-hidden="true" />
                       </button>
                       <button
                         type="button"
@@ -139,7 +148,7 @@ export function CustomGoal({
                         }}
                         className="flex size-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
                       >
-                        <X className="size-4" aria-hidden="true" />
+                        <X size={16} strokeWidth={2} absoluteStrokeWidth aria-hidden="true" />
                       </button>
                     </div>
                   </div>
@@ -153,12 +162,12 @@ export function CustomGoal({
                     aria-expanded={open?.row === conds.length}
                     onClick={() => setPicking(open?.row === conds.length ? null : { set: si, row: conds.length })}
                     className={cn(
-                      "flex h-10 items-center justify-between gap-2 rounded-lg border px-3 text-[13px] font-semibold outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-                      open?.row === conds.length ? "border-primary bg-primary-soft text-primary-text" : "border-dashed border-border text-muted-foreground hover:border-primary/60"
+                      "flex h-10 items-center justify-between gap-2 rounded-lg border pr-2 pl-3 text-[13px] font-semibold outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                      open?.row === conds.length ? "border-primary bg-primary-soft text-primary-text" : cn("border-dashed border-border text-muted-foreground", dashedHover)
                     )}
                   >
                     + 옵션 추가
-                    <ChevronDown className={cn("size-4 shrink-0 transition-transform", open?.row === conds.length && "rotate-180")} aria-hidden="true" />
+                    <ChevronDown size={16} strokeWidth={2} absoluteStrokeWidth className={cn("shrink-0", arrowTurn, open?.row === conds.length && "rotate-180")} aria-hidden="true" />
                   </button>
                 )}
                 <Reveal open={!!open} className="flex flex-col gap-2.5">
@@ -200,9 +209,9 @@ export function CustomGoal({
                     );
                   })}
                 </Reveal>
-                {conds.length === 0 && <span className="text-[11px] text-muted-foreground">{slotLabel}에 뜨는 옵션만 · 한 세트에 3개까지</span>}
-                {conds.some((c) => STAT_CATS.has(c.cat)) && <span className="text-[11px] text-muted-foreground">STR · DEX · INT · LUK % 는 올스탯 % 줄도 더해서 셈</span>}
-                {conds.length >= MAX_CONDS && !open && <span className="text-[11px] text-muted-foreground">옵션을 누르면 다른 옵션으로 바꿈</span>}
+                {conds.length === 0 && <span className="text-[11px] text-pretty text-muted-foreground">{slotLabel}에 뜨는 옵션만 · 한 세트에 3개까지</span>}
+                {conds.some((c) => STAT_CATS.has(c.cat)) && <span className="text-[11px] text-pretty text-muted-foreground">STR · DEX · INT · LUK % 는 올스탯 % 줄도 더해서 셈</span>}
+                {conds.length >= MAX_CONDS && !open && <span className="text-[11px] text-pretty text-muted-foreground">옵션을 누르면 다른 옵션으로 바꿈</span>}
               </div>
             </div>
           </div>
@@ -216,7 +225,7 @@ export function CustomGoal({
             onChange([...sets, []]);
             setPicking(null);
           }}
-          className="h-10 rounded-lg border border-dashed border-border text-[13px] font-bold outline-none hover:border-primary/60 focus-visible:ring-3 focus-visible:ring-ring/50"
+          className={cn("h-10 rounded-lg border border-dashed border-border text-[13px] font-bold outline-none focus-visible:ring-3 focus-visible:ring-ring/50", dashedHover)}
         >
           + 세트 추가 (또는)
         </button>

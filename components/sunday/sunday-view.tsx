@@ -48,7 +48,7 @@ export function SundayView({ data }: { data: SundayPageData }) {
       <PageHeader title="썬데이 메이플" description="이번 주 혜택 · 다음 썬데이 테마와 혜택 예측(참고용)" />
 
       {/* Full-width bands, so neither side runs empty before the notice (Mon 00:00 ~ Fri) or after it. */}
-      <div className="flex flex-col gap-3.5">
+      <div className="flex flex-col gap-2">
         {thisWeek.recorded && <ThisWeekBand week={thisWeek} recorded={thisWeek.recorded} />}
         <ThemeBand week={thisWeek} prediction={prediction} />
         <PicksBand picks={prediction.picks} hits={prediction.hits} />
@@ -161,7 +161,9 @@ function ThisWeekBand({ week, recorded: r }: { week: SundayPageData["thisWeek"];
         {r.items.map((text, i) => (
           <li key={text} className="flex items-baseline gap-2.5 rounded-lg bg-muted px-3.5 py-2.5 text-sm leading-normal lg:text-[15px]">
             {/* Never narrower than its two digits: next to a line that wraps, "01" broke into "0" over "1" on a phone. */}
-            <b className="shrink-0 font-num whitespace-nowrap text-primary-text">{String(i + 1).padStart(2, "0")}</b>
+            <b className="shrink-0 font-num whitespace-nowrap text-primary-text">
+              <Digits>{String(i + 1).padStart(2, "0")}</Digits>
+            </b>
             <span>{text}</span>
           </li>
         ))}
@@ -176,9 +178,10 @@ function ThemeBand({ week, prediction }: { week: SundayPageData["thisWeek"]; pre
   const maxP = Math.max(...prediction.themes.map((t) => t.p));
   return (
     <section
+      // This week's band wears the orange line alone, like ThisWeekBand: over the tile's shadow edge the two lines doubled.
       className={cn(
-        "grid grid-cols-1 gap-4 tile p-[18px] lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:gap-6 lg:p-6",
-        recorded ? "" : "border-primary",
+        "grid grid-cols-1 gap-4 p-[18px] lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center lg:gap-6 lg:p-6",
+        recorded ? "tile" : "rounded-[1rem] border border-primary bg-card",
       )}
     >
       <div className="flex flex-col gap-2.5">
@@ -252,7 +255,9 @@ function PicksBand({ picks, hits }: { picks: OddsView[]; hits: Hits }) {
       <ol className="grid grid-cols-1 gap-2 lg:grid-cols-3 lg:gap-2.5">
         {top.map((o, i) => (
           <li key={o.id} className="grid grid-cols-[28px_minmax(0,1fr)] items-start gap-2.5 rounded-lg bg-muted px-3.5 py-3">
-            <b className="font-num text-[22px] leading-tight text-primary-text">{i + 1}</b>
+            <b className="font-num text-[22px] leading-tight text-primary-text">
+              <Digits>{i + 1}</Digits>
+            </b>
             <span className="flex min-w-0 flex-col gap-1.5">
               <span className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
                 <span className="rounded-full bg-primary-soft px-2 py-0.5 text-[11px] font-bold text-primary-text">{KIND_LABEL[o.kind]}</span>
@@ -272,7 +277,9 @@ function PicksBand({ picks, hits }: { picks: OddsView[]; hits: Hits }) {
           <ol className="grid grid-cols-1 gap-2 lg:grid-cols-2 lg:gap-x-6">
             {rest.map((o, i) => (
               <li key={o.id} className="grid grid-cols-[28px_minmax(0,1fr)_44px] items-center gap-2.5">
-                <span className="font-num text-[15px] font-bold text-muted-foreground">{i + 4}</span>
+                <span className="font-num text-[15px] font-bold text-muted-foreground">
+                  <Digits>{i + 4}</Digits>
+                </span>
                 <span className="flex min-w-0 flex-col gap-1">
                   <span className="text-[13px]">{o.label}</span>
                   <span className="h-1 rounded-full bg-muted" aria-hidden="true">
@@ -298,7 +305,9 @@ function HitStat({ label, hits, pick }: { label: string; hits: Hits; pick: HitKe
       <dt className="text-[11px] text-muted-foreground">{label}</dt>
       <dd className="flex flex-col gap-1.5">
         <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <b className="shrink-0 font-num text-xl font-bold whitespace-nowrap text-primary-text">{hitRate(hits[pick], hits.weeks)}%</b>
+          <b className="shrink-0 font-num text-xl font-bold whitespace-nowrap text-primary-text">
+            <Digits>{`${hitRate(hits[pick], hits.weeks)}%`}</Digits>
+          </b>
           <HitChange change={hitChange(hits, pick)} />
         </span>
         {/* "최근 12주" right of the dots (user 2026-11-17); a phone box is too narrow, so there it wraps under them. */}
@@ -313,7 +322,7 @@ function HitStat({ label, hits, pick }: { label: string; hits: Hits; pick: HitKe
   );
 }
 
-const CHANGE_CHIP = "rounded-full bg-card px-2 text-[11px] leading-[18px] font-bold whitespace-nowrap";
+const CHANGE_CHIP = "inline-flex h-[18px] items-center rounded-full bg-card px-2 text-[11px] font-bold whitespace-nowrap";
 const CHANGE_TONE = { none: "text-muted-foreground", same: "text-muted-foreground", up: "text-gain", down: "text-loss" } as const;
 
 /** "-" before there is a last week to compare, "유지" when the same, "▲ 2%" / "▼ 2%" (hits.ts hitChangeLabel). */
@@ -363,12 +372,12 @@ function Outlook({ bigDays, last }: { bigDays: SundayPageData["prediction"]["big
   const count = bigDays.length + (last ? 1 : 0);
   if (!count) return null;
   return (
-    <div className={cn("grid grid-cols-1 gap-3.5", count === 2 && "sm:grid-cols-2", count >= 3 && "md:grid-cols-3")}>
+    <div className={cn("grid grid-cols-1 gap-2", count === 2 && "sm:grid-cols-2", count >= 3 && "md:grid-cols-3")}>
       {bigDays.map((d) => (
         <section key={d.id} className={OUTLOOK_CARD}>
           <h2 className="text-xs font-normal text-muted-foreground">{d.label} 예상</h2>
           <b className="font-num text-2xl leading-tight text-primary-text">{d.overdue ? "나올 때 지남" : d.when}</b>
-          <span className="text-xs leading-normal text-muted-foreground">
+          <span className="text-xs leading-normal text-pretty text-muted-foreground">
             지난번 {d.lastLabel} · {d.gap} ({d.record})
           </span>
         </section>
@@ -377,7 +386,7 @@ function Outlook({ bigDays, last }: { bigDays: SundayPageData["prediction"]["big
         <section className={OUTLOOK_CARD}>
           <h2 className="text-xs font-normal text-muted-foreground">지난 썬데이 · {last.label}</h2>
           <b className="font-num text-2xl leading-tight">{last.title}</b>
-          <span className="text-xs leading-normal text-muted-foreground">{last.detail || "이벤트 연계 혜택만"}</span>
+          <span className="text-xs leading-normal text-pretty text-muted-foreground">{last.detail || "이벤트 연계 혜택만"}</span>
         </section>
       )}
     </div>
@@ -402,18 +411,21 @@ function RecentRow({ week, current, wideOnly }: { week: WeekView; current: boole
   return (
     <li
       className={cn(
-        "grid-cols-[64px_minmax(0,1fr)] items-baseline gap-2.5 border-t border-border px-[18px] py-2.5 text-[13px]",
+        "grid-cols-[68px_minmax(0,1fr)] items-baseline gap-2.5 border-t border-border px-[18px] py-2.5 text-[13px]",
         wideOnly ? "hidden lg:grid" : "grid",
         current && "bg-primary-soft",
       )}
     >
-      <span className="font-num text-muted-foreground">{week.label.replace(/\(.\)$/, "")}</span>
+      {/* Bold: at 13px the number font's other weight (Light) is too thin. The column fits "11월 22일" in even digits. */}
+      <span className="font-num font-bold whitespace-nowrap text-muted-foreground">
+        <Digits>{week.label.replace(/\(.\)$/, "")}</Digits>
+      </span>
       <span className="flex min-w-0 flex-col gap-1">
         <span className="flex flex-wrap items-center gap-1.5">
           <b>{week.title}</b>
           {week.special && <span className="rounded-md tile-edge px-1.5 text-[11px] text-muted-foreground">스페셜</span>}
         </span>
-        <span className="text-xs leading-normal text-muted-foreground">{week.detail || "이벤트 연계 혜택만"}</span>
+        <span className="text-xs leading-normal text-pretty text-muted-foreground">{week.detail || "이벤트 연계 혜택만"}</span>
       </span>
     </li>
   );

@@ -16,7 +16,8 @@ export function SpecTabs({ on }: { on: (typeof TABS)[number]["id"] }) {
           href={t.href}
           aria-current={on === t.id ? "page" : undefined}
           className={cn(
-            "flex h-9 items-center justify-center rounded-lg text-sm transition-[background-color,color,scale] active:scale-[0.96]",
+            // The 1px transparent border is the chosen tab's edge in forced-colors mode, where shadows are removed.
+            "flex h-9 items-center justify-center rounded-lg border border-transparent text-sm transition-[background-color,color,box-shadow,scale] active:scale-[0.96]",
             on === t.id ? "bg-card font-bold text-primary-text shadow-tile" : "text-muted-foreground hover:text-foreground",
           )}
         >

@@ -53,8 +53,8 @@ export function SiteHeader() {
                   href={item.href}
                   aria-current={on ? "page" : undefined}
                   className={cn(
-                    "flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[13px] outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-                    on ? "bg-primary-soft font-bold text-primary-text" : "text-muted-foreground"
+                    "flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[13px] transition-[background-color,color,scale] outline-none focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.96]",
+                    on ? "bg-primary-soft font-bold text-primary-text" : "text-muted-foreground hover:bg-muted hover:text-foreground"
                   )}
                 >
                   {item.short}
@@ -79,8 +79,10 @@ function GroupTab({ href, label, active }: { href: string; label: string; active
       href={href}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "flex h-9 shrink-0 items-center rounded-full px-3.5 text-[13px] font-semibold whitespace-nowrap transition-[background-color,color,scale] outline-none focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.96]",
-        active ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground shadow-tile"
+        // The 1px transparent border is the tab's edge in forced-colors mode (shadows are removed there); the side
+        // padding is 1px less for it.
+        "flex h-9 shrink-0 items-center rounded-full border border-transparent px-[13px] text-[13px] font-semibold whitespace-nowrap transition-[background-color,color,scale] outline-none focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.96]",
+        active ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground shadow-tile hover:bg-muted hover:text-foreground"
       )}
     >
       {label}

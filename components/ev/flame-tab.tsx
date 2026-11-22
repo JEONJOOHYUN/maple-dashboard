@@ -2,13 +2,16 @@
 
 import { Fragment, useMemo, useState } from "react";
 import { ChevronDown } from "lucide-react";
-import { Chip, Label, NumberField, Panel, Segment, count, eok, parseNum, pct } from "@/components/ev/ui";
+import { Chip, Label, NumberField, Panel, Segment, arrowTurn, count, eok, parseNum, pct } from "@/components/ev/ui";
 import { FLAMES, armorChance, bestWeaponGrade, goalChips, hpScore, hpTarget, tierValues, weaponChance, DEFAULT_HP_WEIGHTS, DEFAULT_WEIGHTS, DEFAULT_XENON_WEIGHTS, type FlameJob } from "@/lib/ev/flame";
 import { averageTries, triesAt } from "@/lib/ev/luck";
 import { Reveal } from "@/components/ui/reveal";
 import { Digits } from "@/components/ui/digits";
 import { cn } from "@/lib/utils";
 import { koreanUnits } from "@/lib/format";
+
+/** 평균 개수 is 84px: "3만 8,136개" is about 74px and broke in two in the 64px it had. */
+const FLAME_COLS = "grid-cols-[minmax(0,1fr)_72px_84px_84px]";
 
 export function FlameTab() {
   const [equip, setEquip] = useState<"weapon" | "armor">("weapon");
@@ -109,12 +112,10 @@ export function FlameTab() {
             { id: "armor", label: "방어구 · 장신구" },
           ]}
         />
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold">
-            장비 레벨
-            <NumberField label="장비 레벨" value={levelText} onChange={setLevelText} inputClassName="w-16" />
-          </span>
-        </div>
+        <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold">
+          장비 레벨
+          <NumberField label="장비 레벨" value={levelText} onChange={setLevelText} inputClassName="w-16" />
+        </span>
 
         {equip === "weapon" ? (
           <div className="flex flex-col gap-2.5">
@@ -225,12 +226,33 @@ export function FlameTab() {
             {/* At the foot of the panel: the same place for the three jobs, whichever has more chips (user, 2026-11-13). */}
             <div className="mt-auto flex flex-col gap-2 tile-sm p-2.5">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <button type="button" onClick={() => setConvOpen((o) => !o)} aria-expanded={convOpen} className="flex items-center gap-1 text-[12px] font-bold">
-                  <ChevronDown className={cn("size-3.5 transition-transform", !convOpen && "-rotate-90")} aria-hidden="true" />
+                {/* A line of words to look at; the press area reaches 8px past it (as far as the fields under it). */}
+                <button
+                  type="button"
+                  onClick={() => setConvOpen((o) => !o)}
+                  aria-expanded={convOpen}
+                  className="relative flex items-center gap-1 text-[12px] font-bold after:absolute after:-inset-2 hover:text-primary-text"
+                >
+                  <ChevronDown
+                    size={14}
+                    strokeWidth={2}
+                    absoluteStrokeWidth
+                    className={cn("-ml-0.5 shrink-0", arrowTurn, convOpen && "rotate-180")}
+                    aria-hidden="true"
+                  />
                   지금 내 추옵 환산
-                  {!convOpen && <span className="font-normal text-muted-foreground">· {convChanged ? "바꾼 값 사용 중" : "기본값"}</span>}
+                  {!convOpen && (
+                    <span className="font-normal text-muted-foreground transition-opacity duration-200 ease-out starting:opacity-0">
+                      · {convChanged ? "바꾼 값 사용 중" : "기본값"}
+                    </span>
+                  )}
                 </button>
-                {convOpen && <b className="font-num text-sm text-primary-text">{Math.round(nowScore).toLocaleString("ko-KR")}{unit}</b>}
+                {convOpen && (
+                  <b className="font-num text-sm text-primary-text transition-opacity duration-200 ease-out starting:opacity-0">
+                    <Digits>{Math.round(nowScore).toLocaleString("ko-KR")}</Digits>
+                    {unit}
+                  </b>
+                )}
               </div>
               <Reveal open={convOpen} className="flex flex-col gap-2">
               <div className="grid grid-cols-[minmax(0,1fr)_80px_90px] items-center gap-x-2 gap-y-1.5 text-[13px]">
@@ -289,7 +311,7 @@ export function FlameTab() {
                 )}
               </div>
               <span className="flex flex-wrap items-center justify-end gap-2 text-[11px] text-muted-foreground">
-                <button type="button" onClick={resetConv} className="rounded tile-edge px-2 py-0.5">
+                <button type="button" onClick={resetConv} className="relative rounded tile-edge px-2 py-0.5 whitespace-nowrap after:absolute after:-inset-2">
                   기본값으로
                 </button>
               </span>
@@ -299,8 +321,8 @@ export function FlameTab() {
         )}
       </Panel>
 
-      <section className="flex min-w-0 flex-col gap-3">
-        <div className="flex flex-col gap-1.5 rounded-lg bg-primary px-5 py-4 text-primary-foreground">
+      <section className="flex min-w-0 flex-col gap-2">
+        <div className="flex flex-col gap-1.5 rounded-[1rem] bg-primary px-5 py-4 text-primary-foreground">
           <span className="text-[13px] font-semibold">{goalText} · {Number.isFinite(bestMeso) ? "가장 싸게" : "가장 적게"}</span>
           {best ? (
             <>
@@ -334,8 +356,10 @@ export function FlameTab() {
             <span className="text-lg font-bold">불꽃으로 불가 · 목표 낮추기</span>
           )}
         </div>
-        <div className="overflow-hidden tile">
-          <div className="grid grid-cols-[minmax(0,1fr)_72px_64px_84px] gap-2 px-4 py-2.5 text-[11px] text-muted-foreground">
+        {/* Narrower than 28rem (phones, the lg two-column layout at its narrowest) the flame takes a line of its own and the
+            three numbers go under their headings: beside them the name had about 65px, and the price field with it. */}
+        <div className="@container overflow-hidden tile">
+          <div className={cn("grid gap-2 px-4 py-2.5 text-[11px] text-muted-foreground", FLAME_COLS)}>
             <span>불꽃</span>
             <span className="text-right">1개로 될 확률</span>
             <span className="text-right">평균 개수</span>
@@ -345,13 +369,14 @@ export function FlameTab() {
             <div
               key={r.id}
               className={cn(
-                "grid grid-cols-[minmax(0,1fr)_72px_64px_84px] items-center gap-2 border-t border-border px-4 py-2.5 text-[13px]",
+                "grid items-center gap-x-2 gap-y-1 border-t border-border px-4 py-2.5 text-[13px]",
+                FLAME_COLS,
                 r === best && "bg-primary-soft",
                 !r.p && "opacity-55"
               )}
             >
-              <span className="flex min-w-0 flex-col">
-                <b className="truncate">{r.name}</b>
+              <span className="col-span-full flex min-w-0 flex-col @min-[28rem]:col-span-1">
+                <b title={r.name} className="truncate">{r.name}</b>
                 <span className="text-[11px] text-muted-foreground">
                   {equip === "weapon" ? `최고 ${bestWeaponGrade(r.id)}추까지` : "추옵 재설정"}
                   {r.id === "eternal" && " · 1번 300만 메소"}
@@ -370,9 +395,9 @@ export function FlameTab() {
                   </span>
                 )}
               </span>
-              <span className="text-right font-num"><Digits>{pct(r.p)}</Digits></span>
-              <span className="text-right font-num"><Digits>{r.p ? count(1 / r.p, "개") : "—"}</Digits></span>
-              <b className={cn("text-right font-num", r === best && Number.isFinite(bestMeso) && "text-primary-text")}>
+              <span className="col-start-2 text-right font-num whitespace-nowrap @min-[28rem]:col-start-auto"><Digits>{pct(r.p)}</Digits></span>
+              <span className="text-right font-num whitespace-nowrap"><Digits>{r.p ? count(1 / r.p, "개") : "—"}</Digits></span>
+              <b className={cn("text-right font-num whitespace-nowrap", r === best && Number.isFinite(bestMeso) && "text-primary-text")}>
                 <Digits>{Number.isFinite(mesoOf(r)) ? eok(mesoOf(r)) : r.p ? "가격 필요" : "—"}</Digits>
               </b>
             </div>

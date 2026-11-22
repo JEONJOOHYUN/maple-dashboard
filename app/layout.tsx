@@ -56,7 +56,8 @@ export default function RootLayout({
                 <footer className="mx-auto mt-auto flex w-full max-w-6xl flex-wrap items-center gap-x-4 gap-y-1 border-t border-border pt-4 text-[11px] text-muted-foreground">
                   <Link
                     href="/privacy"
-                    className="py-1 text-xs font-semibold text-foreground underline-offset-2 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
+                    // after: the press area reaches 8px past the 24px link (nothing else to press is near it).
+                    className="relative py-1 text-xs font-semibold text-foreground underline-offset-2 outline-none after:absolute after:-inset-2 hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
                   >
                     개인정보처리방침
                   </Link>

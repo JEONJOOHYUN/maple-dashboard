@@ -1,8 +1,10 @@
 "use client";
 
 import { Fragment, useEffect, useState, type FormEvent } from "react";
+import { Digits } from "@/components/ui/digits";
+import { Reveal } from "@/components/ui/reveal";
 import { Spinner } from "@/components/ui/spinner";
-import { SwapIcon } from "@/components/ui/swap-icon";
+import { SwapIcon, SwapLabel } from "@/components/ui/swap-icon";
 import Link from "next/link";
 import { Check, Copy, ExternalLink, KeyRound } from "lucide-react";
 import { ApiError, accountId, createApi, type ApiErrorKind } from "@/lib/enhance/client";
@@ -73,10 +75,26 @@ function CopyButton({ label, text }: { label: string; text: string }) {
           () => {}
         );
       }}
-      className="inline-flex h-7 items-center gap-1 rounded-md tile-edge bg-background pr-2 pl-1.5 text-[11px] font-semibold whitespace-nowrap text-foreground outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
+      // The `after` box widens the 28px button to the finger without touching the copy button of the next row.
+      className="relative inline-flex h-7 items-center rounded-md tile-edge bg-background pr-2 pl-1.5 text-[11px] font-semibold whitespace-nowrap text-foreground outline-none after:absolute after:-inset-x-2 after:-inset-y-1 hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
     >
-      <SwapIcon on={done} from={<Copy className="size-3" />} to={<Check className="size-3 text-primary-text" />} />
-      {done ? "복사됨" : "복사"}
+      {/* Both states sit on top of each other: the button, and the grid column it is in, keep one width. */}
+      <SwapLabel
+        on={done}
+        className="[&>span]:gap-1"
+        from={
+          <>
+            <Copy className="size-3" aria-hidden="true" />
+            복사
+          </>
+        }
+        to={
+          <>
+            <Check className="size-3 text-primary-text" aria-hidden="true" />
+            복사됨
+          </>
+        }
+      />
     </button>
   );
 }
@@ -128,7 +146,7 @@ export function KeyGate({ saved, onConnect, onForgetAll }: { saved: SavedKey[]; 
                   // Not while a new key is being checked: its answer would land after this choice and undo it.
                   disabled={busy}
                   onClick={() => onConnect({ key: k.key, account: k.account }, true)}
-                  className="inline-flex h-10 items-center gap-1.5 rounded-lg tile-edge bg-background pr-3 pl-2.5 text-[13px] font-semibold outline-none hover:border-primary/60 hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
+                  className="inline-flex h-10 items-center gap-1.5 rounded-lg tile-edge bg-background pr-3 pl-2.5 text-[13px] font-semibold outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
                 >
                   <KeyRound className="size-3.5 text-primary-text" aria-hidden="true" />
                   {keyLabel(k, i)}
@@ -151,26 +169,30 @@ export function KeyGate({ saved, onConnect, onForgetAll }: { saved: SavedKey[]; 
             spellCheck={false}
             placeholder="발급받은 키 붙여 넣기"
             aria-invalid={error ? true : undefined}
-            className="h-[46px] rounded-lg border border-input bg-background px-3.5 text-[15px] text-foreground outline-none focus:border-ring focus:ring-3 focus:ring-ring/40 aria-invalid:border-destructive"
+            // 16px on a phone: iOS zooms the page in on a field with smaller text.
+            className="h-[46px] rounded-lg border border-input bg-background px-3.5 text-base text-foreground outline-none focus:border-ring focus:ring-3 focus:ring-ring/40 aria-invalid:border-destructive sm:text-[15px]"
           />
         </label>
-        <label className="inline-flex items-center gap-2 text-[13px]">
+        <label className="relative inline-flex items-center gap-2 text-[13px] after:absolute after:-inset-2">
           <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="size-4 accent-primary" />
           이 브라우저에 키 기억
         </label>
         <button
           type="submit"
           disabled={!text.trim() || busy}
-          className="inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-primary text-[15px] font-bold text-primary-foreground outline-none hover:bg-primary/85 focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
+          className="inline-flex h-12 items-center justify-center rounded-lg bg-primary text-[15px] font-bold text-primary-foreground outline-none hover:bg-primary/85 focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
         >
-          {busy && <Spinner />}
-          강화 기록 보기
+          {/* The spinner hangs to the left of the words: they stay in the middle whether it shows or not. */}
+          <span className="relative">
+            <SwapIcon className="absolute top-1/2 right-full mr-2 -translate-y-1/2" on={busy} from={<span className="size-4" />} to={<Spinner />} />
+            강화 기록 보기
+          </span>
         </button>
-        {error && (
+        <Reveal open={!!error}>
           <p role="alert" className="text-[13px] font-semibold text-destructive">
             {error}
           </p>
-        )}
+        </Reveal>
         <ul className="flex list-disc flex-col gap-1 pl-[18px] text-xs leading-relaxed text-muted-foreground">
           <li>키 · 기록 = 이 브라우저에만 저장, 우리 서버로 안 보냄</li>
           <li>키를 발급한 넥슨 계정의 기록만 조회 · 키마다 따로 저장</li>
@@ -191,19 +213,23 @@ export function KeyGate({ saved, onConnect, onForgetAll }: { saved: SavedKey[]; 
               setLeft(false);
               setSure(false);
             }}
-            className={`self-start text-xs underline underline-offset-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50 ${sure ? "font-semibold text-destructive" : "text-muted-foreground hover:text-foreground"}`}
+            className={`relative self-start text-xs underline underline-offset-2 outline-none after:absolute after:-inset-2 focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50 ${sure ? "font-semibold text-destructive" : "text-muted-foreground hover:text-foreground"}`}
           >
             {sure ? "한 번 더 누르면 모두 삭제" : "이 브라우저의 키 · 기록 모두 지우기"}
           </button>
         )}
       </form>
 
-      <section className="flex flex-col gap-3 rounded-lg bg-muted p-5 lg:p-7">
+      {/* The corners and the edge of the form next to it; the fill stays the quieter one. */}
+      <section className="flex flex-col gap-3 rounded-[1rem] tile-edge bg-muted p-5 lg:p-7">
         <h2 className="font-heading text-base font-bold">API 키 받는 법</h2>
         {STEPS.map((step, i) => (
           <Fragment key={i}>
             <p className="flex gap-2.5 text-[13px] leading-relaxed">
-              <b className="shrink-0 font-num text-primary-text">0{i + 1}</b>
+              {/* 20px wide whatever the digits: with the 10px gap the words start 30px in, where the link under step 01 starts. */}
+              <b className="w-5 shrink-0 font-num text-primary-text">
+                <Digits>{`0${i + 1}`}</Digits>
+              </b>
               <span>{step}</span>
             </p>
             {i === 0 && (

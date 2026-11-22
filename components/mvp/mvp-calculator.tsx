@@ -25,10 +25,12 @@ import {
 } from "@/lib/mvp/mvp";
 import { useNow } from "@/lib/use-now";
 import { useStored } from "@/lib/use-stored";
-import { ZEBRA_HEAD, ZEBRA_ROW, ZEBRA_TABLE } from "@/components/ui/zebra";
+import { ZEBRA_HEAD, ZEBRA_ROW, ZEBRA_SCROLL, ZEBRA_TABLE } from "@/components/ui/zebra";
 import { Reveal, useReveal } from "@/components/ui/reveal";
 import { Digits } from "@/components/ui/digits";
+import { SwapLabel } from "@/components/ui/swap-icon";
 import { cn } from "@/lib/utils";
+import { SteadyText } from "@/components/ui/steady-text";
 import { koreanUnits } from "@/lib/format";
 
 const man = (won: number) => `${(Math.round(won / 1000) / 10).toLocaleString("ko-KR")}만`;
@@ -108,6 +110,11 @@ const TICKETS_PER_10 = ticketsPer10();
 /** 억 the opened row sells for, from one ticket in 만. */
 const openedEok = (ticketMan: number) => (TICKETS_PER_10 * ticketMan) / 10_000;
 const ROUTE_LABEL: Record<Route["mode"], string> = { best: "최저가 · 추천", mm: "전부 메소마켓", gift: "선물식" };
+/**
+ * ZEBRA_ROW without its every-other-row fill, for the ranking: the panel that opens under one of its rows is a row
+ * too, so a fill by position would flip every stripe below it. The ranking fills by row number instead.
+ */
+const ZEBRA_ROW_SHAPE = "[&>td]:px-3 [&>td:first-child]:rounded-l-[10px] [&>td:last-child]:rounded-r-[10px]";
 
 function TierDot({ tier }: { tier: MvpTier | null }) {
   return <span className="inline-block size-3.5 shrink-0 rounded-full ring-1 ring-border" style={{ background: tier ? tier.color : "var(--border)" }} />;
@@ -115,7 +122,8 @@ function TierDot({ tier }: { tier: MvpTier | null }) {
 
 function Stat({ label, big, sub, accent }: { label: string; big: ReactNode; sub: ReactNode; accent?: boolean }) {
   return (
-    <div className={cn("flex min-w-0 flex-col gap-1 rounded-lg border px-4 py-3.5", accent ? "border-primary bg-primary-soft" : "tile-edge bg-card")}>
+    // The corners and the edge of the tile next to it; the accent one keeps its orange border on the same corners.
+    <div className={cn("flex min-w-0 flex-col gap-1 px-4 py-3.5", accent ? "rounded-[1rem] border border-primary bg-primary-soft" : "tile")}>
       <span className={cn("text-xs", accent ? "font-semibold text-primary-text" : "text-muted-foreground")}>{label}</span>
       <b className="flex items-center gap-2 text-[22px] leading-tight">{big}</b>
       <span className="text-xs text-muted-foreground">{sub}</span>
@@ -126,8 +134,11 @@ function Stat({ label, big, sub, accent }: { label: string; big: ReactNode; sub:
 /** One setting: name on the left, control on the right, always 40 px high. */
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <span className="flex h-10 min-w-0 items-center justify-between gap-2 rounded-lg border border-border bg-background pr-1 pl-3 text-[13px] text-muted-foreground">
-      <span className="truncate">{label}</span>
+    // Corner 14 = the field inside (10) + the 4px between them.
+    <span className="flex h-10 min-w-0 items-center justify-between gap-2 rounded-xl border border-border bg-background pr-1 pl-3 text-[13px] text-muted-foreground">
+      <span className="truncate" title={label}>
+        {label}
+      </span>
       {children}
     </span>
   );
@@ -153,12 +164,13 @@ function Toggle<T extends string>({ value, options, onChange, label }: { value: 
           role="radio"
           aria-checked={value === o.id}
           onClick={() => onChange(o.id)}
+          // The `after` box makes the 32px option as tall as its 40px field to the finger.
           className={cn(
-            "h-8 rounded-md px-3 text-[13px]",
+            "relative h-8 rounded-lg px-3 text-[13px] after:absolute after:inset-x-0 after:-inset-y-1",
             value === o.id ? "bg-primary font-bold text-primary-foreground" : "text-muted-foreground hover:text-foreground"
           )}
         >
-          {o.label}
+          <SteadyText>{o.label}</SteadyText>
         </button>
       ))}
     </span>
@@ -311,7 +323,7 @@ export function MvpCalculator() {
     <div className="flex flex-col gap-2">
       <PageHeader title="MVP 계산기" description="등급 = 최근 13주 결제 합계 · 수요일 23:59 마감, 목요일 반영" />
 
-      <section className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
         <div className="flex min-w-0 flex-col gap-1.5 tile px-4 py-3.5">
           <span className="text-xs text-muted-foreground">지금 등급</span>
           <b className="flex items-center gap-2 text-[22px] leading-tight">
@@ -320,14 +332,24 @@ export function MvpCalculator() {
           </b>
           <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
             13주 합계
-            <NumberField label="지금 13주 합계 (원)" value={s.sum13} onChange={(t) => update({ sum13: t })} suffix="원" inputClassName="h-7 w-24 text-xs" />
+            {/* 16px on a phone (iOS zooms the page in on a field with smaller text), and wider there so eight digits still fit. */}
+            <NumberField label="지금 13주 합계 (원)" value={s.sum13} onChange={(t) => update({ sum13: t })} suffix="원" inputClassName="h-7 w-28 text-base sm:w-24 sm:text-xs" />
           </span>
           <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
             다음 주에 빠짐
-            <NumberField label="다음 목요일에 빠지는 주의 금액 (원)" value={s.drop} onChange={(t) => update({ drop: t })} suffix="원" inputClassName="h-7 w-24 text-xs" />
+            <NumberField label="다음 목요일에 빠지는 주의 금액 (원)" value={s.drop} onChange={(t) => update({ drop: t })} suffix="원" inputClassName="h-7 w-28 text-base sm:w-24 sm:text-xs" />
           </span>
         </div>
-        <Stat label="이번 주 마감까지" big={<span className="font-num">{days > 0 ? `${days}일 ${hours}시간` : `${hours}시간 ${mins}분`}</span>} sub={`${mdw(addDays(current, 6))} 23:59`} />
+        <Stat
+          label="이번 주 마감까지"
+          big={
+            <span className="font-num">
+              {/* It changes by the minute: digits of one width, so the line does not shift. */}
+              <Digits>{days > 0 ? `${days}일 ${hours}시간` : `${hours}시간 ${mins}분`}</Digits>
+            </span>
+          }
+          sub={`${mdw(addDays(current, 6))} 23:59`}
+        />
         <Stat
           label="이번 주 결제"
           big={<span className="font-num">{won(pay)}</span>}
@@ -344,17 +366,22 @@ export function MvpCalculator() {
       <section className="flex flex-col gap-3 tile p-4">
         <Row label="결제 금액">
           <div className="flex flex-wrap gap-2">
-            {above.map((t) => (
-              <Chip key={t.name} on={target === t.name || (target === "next" && base.up?.name === t.name)} onClick={() => update({ target: t.name })} className="h-10">
-                <span className="inline-flex items-center gap-1.5">
-                  <TierDot tier={t} />
-                  {t.name}까지 <span className="font-num text-muted-foreground">{man(t.min - base.sumNext)}</span>
-                </span>
-              </Chip>
-            ))}
+            {above.map((t) => {
+              const on = target === t.name || (target === "next" && base.up?.name === t.name);
+              return (
+                <Chip key={t.name} on={on} onClick={() => update({ target: t.name })} className={cn("h-10", !on && "hover:bg-muted")}>
+                  <span className="inline-flex items-center gap-1.5">
+                    <TierDot tier={t} />
+                    {/* Dimmed from the chip's own text colour: grey did not read on the orange of a picked chip. */}
+                    {t.name}까지 <span className="font-num opacity-70">{man(t.min - base.sumNext)}</span>
+                  </span>
+                </Chip>
+              );
+            })}
+            {/* The box keeps the corner of the chips next to it (10), so the field inside takes a smaller one. */}
             <span className={cn("inline-flex h-10 items-center gap-2 rounded-lg border pr-1 pl-3 text-[13px]", target === "custom" ? "border-primary bg-primary-soft" : "tile-edge")}>
               직접
-              <NumberField label="결제할 금액 직접 입력 (원)" value={s.custom} onChange={(t) => update({ custom: t, target: "custom" })} suffix="원" inputClassName="h-8 w-28" />
+              <NumberField label="결제할 금액 직접 입력 (원)" value={s.custom} onChange={(t) => update({ custom: t, target: "custom" })} suffix="원" inputClassName="h-8 w-28 rounded-md" />
             </span>
           </div>
         </Row>
@@ -390,9 +417,10 @@ export function MvpCalculator() {
                 type="button"
                 aria-expanded={chargeOpen}
                 onClick={() => setChargeOpen(!chargeOpen)}
-                className="inline-flex h-10 items-center rounded-lg tile-edge px-3 text-[13px] hover:border-primary/60"
+                className="inline-flex h-10 items-center gap-1 rounded-lg tile-edge px-3 text-[13px]"
               >
-                할인율 {chargeOpen ? "접기" : "고치기"}
+                할인율
+                <SwapLabel on={chargeOpen} from="고치기" to="접기" />
               </button>
             </div>
             <Reveal open={chargeOpen} className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
@@ -416,29 +444,32 @@ export function MvpCalculator() {
       <section className="overflow-hidden tile">
         <div className="flex flex-wrap items-baseline justify-between gap-2 px-4 pt-4 pb-2">
           <b className="text-[15px]">효율 순위 · 1만원당 돌려받는 돈</b>
-          {market.useCredit && <span className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">크레딧 포함</span>}
+          {market.useCredit && <span className="rounded bg-muted px-2 py-0.5 text-xs whitespace-nowrap text-muted-foreground">크레딧 포함</span>}
         </div>
-        <div className="@container relative overflow-x-auto">
-          <table className="w-full min-w-[720px] border-collapse text-[13px]">
+        {/* The zebra rows reach 12px past their text: 4px of padding here keeps the text on the tile's 16px line. */}
+        <div className="@container relative overflow-x-auto px-1">
+          <table className={cn(ZEBRA_TABLE, "min-w-[720px] text-[13px]")}>
             <thead>
-              <tr className="text-xs text-muted-foreground">
-                <th scope="col" className="w-16 px-4 py-2 text-left font-normal whitespace-nowrap">순위</th>
-                <th scope="col" className="px-2 py-2 text-left font-normal">아이템</th>
-                <th scope="col" className="px-2 py-2 text-right font-normal">캐시가</th>
-                <th scope="col" className="px-2 py-2 text-right font-normal">경매장 가격</th>
-                <th scope="col" className="px-2 py-2 text-left font-normal">1만원당</th>
-                <th scope="col" className="px-2 py-2 text-right font-normal">플가 대비</th>
-                <th scope="col" className="w-10 px-2 py-2"><span className="sr-only">빼기</span></th>
+              <tr className={ZEBRA_HEAD}>
+                <th scope="col" className="w-16 py-2 whitespace-nowrap">순위</th>
+                <th scope="col" className="py-2">아이템</th>
+                <th scope="col" className="py-2 text-right">캐시가</th>
+                <th scope="col" className="py-2 text-right">경매장 가격</th>
+                <th scope="col" className="py-2">1만원당</th>
+                <th scope="col" className="py-2 text-right">플가 대비</th>
+                <th scope="col" className="w-10 py-2"><span className="sr-only">빼기</span></th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r, i) => (
                 <Fragment key={r.id}>
-                <tr className={cn(i % 2 === 1 && "bg-background", i === 0 && r.total > 0 && "bg-primary-soft")}>
-                  <td className="px-4 py-2.5">
-                    <b className={cn("font-num text-lg", i === 0 ? "text-primary-text" : "text-muted-foreground")}>{i + 1}</b>
+                <tr className={cn(ZEBRA_ROW_SHAPE, i % 2 === 1 && "[&>td]:bg-background", i === 0 && r.total > 0 && "[&>td]:bg-primary-soft")}>
+                  <td className="py-2.5">
+                    <b className={cn("font-num text-lg", i === 0 ? "text-primary-text" : "text-muted-foreground")}>
+                      <Digits>{i + 1}</Digits>
+                    </b>
                   </td>
-                  <td className="px-2 py-2.5">
+                  <td className="py-2.5">
                     {r.kind === "item" ? (
                       <span className="flex flex-col gap-0.5">
                         <b>{r.item!.name}</b>
@@ -453,9 +484,9 @@ export function MvpCalculator() {
                             type="button"
                             aria-expanded={s.boutiqueShow}
                             onClick={() => update({ boutiqueShow: !s.boutiqueShow })}
-                            className="mt-0.5 inline-flex items-center gap-1 self-start rounded-md text-xs font-semibold text-primary-text outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50 @min-[720px]:hidden"
+                            className="relative mt-0.5 inline-flex items-center gap-1 self-start rounded-md text-xs font-semibold text-primary-text outline-none after:absolute after:-inset-2 hover:underline focus-visible:ring-3 focus-visible:ring-ring/50 @min-[720px]:hidden"
                           >
-                            {s.boutiqueShow ? "접기" : "펼치기"}
+                            <SwapLabel on={s.boutiqueShow} from="펼치기" to="접기" className="[&>span]:justify-start" />
                             <ChevronDown className={cn("size-3.5 transition-transform", s.boutiqueShow && "rotate-180")} aria-hidden="true" />
                           </button>
                         )}
@@ -466,31 +497,31 @@ export function MvpCalculator() {
                       <b>선물식</b>
                     )}
                   </td>
-                  <td className="px-2 py-2.5 text-right">
+                  <td className="py-2.5 text-right">
                     {r.kind === "item" ? (
-                      <NumberField label={`${r.item!.name} 캐시 가격`} value={r.item!.cash} onChange={(t) => setItem(r.id, { cash: t })} className="justify-end" inputClassName="h-8 w-20 text-xs" />
+                      <NumberField label={`${r.item!.name} 캐시 가격`} value={r.item!.cash} onChange={(t) => setItem(r.id, { cash: t })} className="justify-end" inputClassName="h-8 w-20 text-base sm:text-xs" />
                     ) : (
                       <span className="text-muted-foreground">—</span>
                     )}
                   </td>
-                  <td className="px-2 py-2.5 text-right">
+                  <td className="py-2.5 text-right">
                     {r.kind === "item" && r.id === BOUTIQUE_OPEN_ID ? (
                       <span className="inline-flex flex-col items-end gap-1">
                         <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
                           티켓
-                          <NumberField label="부티크 티켓 1개 가격 (만 메소)" value={r.item!.price} onChange={(t) => setItem(r.id, { price: t })} suffix="만" inputClassName="h-8 w-20 text-xs" />
+                          <NumberField label="부티크 티켓 1개 가격 (만 메소)" value={r.item!.price} onChange={(t) => setItem(r.id, { price: t })} suffix="만" inputClassName="h-8 w-20 text-base sm:text-xs" />
                         </span>
                         <span className="text-[11px] whitespace-nowrap text-muted-foreground">
                           × {TICKETS_PER_10.toFixed(1)}개 = {koreanUnits(openedEok(parseNum(r.item!.price, 0)) * 1e8)}
                         </span>
                       </span>
                     ) : r.kind === "item" ? (
-                      <NumberField label={`${r.item!.name} 경매장 가격 (억)`} value={r.item!.price} onChange={(t) => setItem(r.id, { price: t })} decimal suffix="억" className="justify-end" inputClassName="h-8 w-16 text-xs" />
+                      <NumberField label={`${r.item!.name} 경매장 가격 (억)`} value={r.item!.price} onChange={(t) => setItem(r.id, { price: t })} decimal suffix="억" className="justify-end" inputClassName="h-8 w-16 text-base sm:text-xs" />
                     ) : (
                       <span className="text-xs text-muted-foreground">{r.kind === "mm" ? `1억 = ${num(market.mpPer100m)}메포` : `1만 캐시 = ${num(market.giftWonPer10k)}원`}</span>
                     )}
                   </td>
-                  <td className="px-2 py-2.5">
+                  <td className="py-2.5">
                     <span className="flex items-center gap-2.5">
                       <span className="h-2.5 min-w-[120px] flex-1 overflow-hidden rounded-full bg-muted">
                         <span className={cn("block h-full rounded-full", i === 0 ? "bg-primary" : "bg-primary/55")} style={{ width: `${Math.round((r.total / top) * 100)}%` }} />
@@ -498,15 +529,16 @@ export function MvpCalculator() {
                       <b className="w-20 text-right font-num"><Digits>{r.total > 0 ? won(r.total) : "가격 필요"}</Digits></b>
                     </span>
                   </td>
-                  <td className="px-2 py-2.5 text-right font-num"><Digits>{ratio(r.total)}</Digits></td>
-                  <td className="px-2 py-2.5 text-right">
+                  <td className="py-2.5 text-right font-num"><Digits>{ratio(r.total)}</Digits></td>
+                  <td className="py-2.5 text-right">
                     <span className="inline-flex flex-col items-end gap-1">
                       {r.kind === "item" && (
                         <button
                           type="button"
                           aria-label={`${r.item!.name} 빼기`}
                           onClick={() => update({ items: s.items.filter((x) => x.id !== r.id) })}
-                          className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:text-destructive"
+                          // The `after` box widens it to the finger upwards and sideways: under it may be the fold button.
+                          className="relative inline-flex size-8 items-center justify-center rounded-md text-muted-foreground after:absolute after:-inset-x-2 after:-top-2 after:bottom-0 hover:text-destructive"
                         >
                           <X className="size-3.5" aria-hidden="true" />
                         </button>
@@ -518,9 +550,10 @@ export function MvpCalculator() {
                           aria-expanded={s.boutiqueShow}
                           title="까기 전 · 이미 깐 결과"
                           onClick={() => update({ boutiqueShow: !s.boutiqueShow })}
-                          className="hidden h-7 items-center gap-0.5 rounded-md px-1.5 text-xs font-semibold whitespace-nowrap text-primary-text outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 @min-[720px]:inline-flex"
+                          // The arrow's side has less padding: its glyph has air inside its box.
+                          className="relative hidden h-7 items-center gap-0.5 rounded-md pr-0.5 pl-1.5 text-xs font-semibold whitespace-nowrap text-primary-text outline-none after:absolute after:-inset-x-2 after:top-0 after:-bottom-2 hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 @min-[720px]:inline-flex"
                         >
-                          {s.boutiqueShow ? "접기" : "펼치기"}
+                          <SwapLabel on={s.boutiqueShow} from="펼치기" to="접기" className="[&>span]:justify-end" />
                           <ChevronDown className={cn("size-3.5 transition-transform", s.boutiqueShow && "rotate-180")} aria-hidden="true" />
                         </button>
                       )}
@@ -528,10 +561,11 @@ export function MvpCalculator() {
                   </td>
                 </tr>
                 {r.id === panelRowId && boutique.shown && (
-                  <tr {...boutique.attrs} className="reveal-row bg-muted/40">
-                    <td colSpan={7} className="p-0">
-                      {/* As wide as the visible box and pinned left: on a phone the table scrolls sideways, the panel does not. */}
-                      <div className="@container sticky left-0 w-[100cqw] px-4 py-3.5">
+                  <tr {...boutique.attrs} className="reveal-row">
+                    <td colSpan={7} className="rounded-[10px] bg-muted/40 p-0">
+                      {/* As wide as the visible box and pinned left (4px in, the scroll box's padding): on a phone the
+                          table scrolls sideways, the panel does not. */}
+                      <div className="@container sticky left-1 w-[100cqw] px-3 py-3.5">
                         <BoutiquePanel
                           tab={s.boutiqueTab}
                           onTab={(tab) => update({ boutiqueTab: tab })}
@@ -558,7 +592,8 @@ export function MvpCalculator() {
             value={draft.name}
             onChange={(e) => setDraft({ ...draft, name: e.target.value.slice(0, 30) })}
             placeholder="플래티넘 애플"
-            className="h-9 w-40 rounded-lg border border-input bg-background px-2 text-sm outline-none focus:border-ring"
+            // 16px on a phone: iOS zooms the page in on a field with smaller text.
+            className="h-9 w-40 rounded-lg border border-input bg-background px-2 text-base outline-none focus:border-ring focus:ring-3 focus:ring-ring/50 sm:text-sm"
           />
           <NumberField label="추가할 아이템 캐시 가격" value={draft.cash} onChange={(t) => setDraft({ ...draft, cash: t })} suffix="캐시" inputClassName="w-20" />
           <NumberField label="추가할 아이템 경매장 가격 (억)" value={draft.price} onChange={(t) => setDraft({ ...draft, price: t })} decimal suffix="억" inputClassName="w-16" />
@@ -578,7 +613,7 @@ export function MvpCalculator() {
               key={p.id}
               type="button"
               onClick={() => update({ items: [...s.items, itemOf(p)] })}
-              className="h-8 rounded-full border border-dashed border-border px-3 text-xs text-muted-foreground hover:text-foreground"
+              className="relative h-8 rounded-full border border-dashed border-border px-3 text-xs text-muted-foreground after:absolute after:inset-x-0 after:-inset-y-1 hover:border-primary hover:text-primary-text"
             >
               + {p.chip}
             </button>
@@ -600,21 +635,22 @@ export function MvpCalculator() {
             className="w-52"
           />
         </div>
-        {s.useCredit && (
+        <Reveal open={s.useCredit} className="flex flex-col gap-3">
+          {s.useCredit && (
           <>
             <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
               <Field label="지금 남은 크레딧">
                 <NumberField label="지금 남은 크레딧" value={s.creditNow} onChange={(t) => update({ creditNow: t })} inputClassName="h-8 w-24" />
               </Field>
             </div>
-            <div className="relative overflow-x-auto sm:-mx-3">
+            <div className={cn(ZEBRA_SCROLL, "relative")}>
               <table className={cn(ZEBRA_TABLE, "min-w-[560px] text-[13px]")}>
                 <thead>
                   <tr className={ZEBRA_HEAD}>
-                    <th scope="col" className="py-2 text-left font-normal">크레딧샵 물건</th>
-                    <th scope="col" className="px-2 py-2 text-right font-normal">크레딧</th>
-                    <th scope="col" className="px-2 py-2 text-right font-normal">경매장 가격</th>
-                    <th scope="col" className="px-2 py-2 text-right font-normal">크레딧 1만당</th>
+                    <th scope="col" className="py-2">크레딧샵 물건</th>
+                    <th scope="col" className="py-2 text-right">크레딧</th>
+                    <th scope="col" className="py-2 text-right">경매장 가격</th>
+                    <th scope="col" className="py-2 text-right">크레딧 1만당</th>
                     <th scope="col" className="w-10 py-2"><span className="sr-only">빼기</span></th>
                   </tr>
                 </thead>
@@ -627,21 +663,21 @@ export function MvpCalculator() {
                       <tr key={it.id} className={ZEBRA_ROW}>
                         <td className="py-2">
                           <b>{it.name}</b>
-                          {isTop && <span className="ml-1.5 rounded bg-primary px-1.5 py-0.5 text-[10px] font-bold text-primary-foreground">가장 효율</span>}
+                          {isTop && <span className="ml-1.5 rounded bg-primary px-1.5 py-0.5 text-[11px] font-bold whitespace-nowrap text-primary-foreground">가장 효율</span>}
                         </td>
-                        <td className="px-2 py-2 text-right">
-                          <NumberField label={`${it.name} 크레딧`} value={it.credit} onChange={(t) => setShop(it.id, { credit: t })} className="justify-end" inputClassName="h-8 w-20 text-xs" />
+                        <td className="py-2 text-right">
+                          <NumberField label={`${it.name} 크레딧`} value={it.credit} onChange={(t) => setShop(it.id, { credit: t })} className="justify-end" inputClassName="h-8 w-20 text-base sm:text-xs" />
                         </td>
-                        <td className="px-2 py-2 text-right">
-                          <NumberField label={`${it.name} 경매장 가격 (억)`} value={it.price} onChange={(t) => setShop(it.id, { price: t })} decimal suffix="억" className="justify-end" inputClassName="h-8 w-16 text-xs" />
+                        <td className="py-2 text-right">
+                          <NumberField label={`${it.name} 경매장 가격 (억)`} value={it.price} onChange={(t) => setShop(it.id, { price: t })} decimal suffix="억" className="justify-end" inputClassName="h-8 w-16 text-base sm:text-xs" />
                         </td>
-                        <td className="px-2 py-2 text-right font-num"><Digits>{per > 0 ? won(per) : "—"}</Digits></td>
+                        <td className="py-2 text-right font-num"><Digits>{per > 0 ? won(per) : "—"}</Digits></td>
                         <td className="py-2 text-right">
                           <button
                             type="button"
                             aria-label={`${it.name} 빼기`}
                             onClick={() => update({ shop: s.shop.filter((x) => x.id !== it.id) })}
-                            className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:text-destructive"
+                            className="relative inline-flex size-8 items-center justify-center rounded-md text-muted-foreground after:absolute after:-inset-2 hover:text-destructive"
                           >
                             <X className="size-3.5" aria-hidden="true" />
                           </button>
@@ -659,7 +695,7 @@ export function MvpCalculator() {
                 value={shopDraft.name}
                 onChange={(e) => setShopDraft({ ...shopDraft, name: e.target.value.slice(0, 30) })}
                 placeholder="물건 이름"
-                className="h-9 w-36 rounded-lg border border-input bg-background px-2 text-sm outline-none focus:border-ring"
+                className="h-9 w-36 rounded-lg border border-input bg-background px-2 text-base outline-none focus:border-ring focus:ring-3 focus:ring-ring/50 sm:text-sm"
               />
               <NumberField label="추가할 물건 크레딧" value={shopDraft.credit} onChange={(t) => setShopDraft({ ...shopDraft, credit: t })} suffix="크레딧" inputClassName="w-20" />
               <NumberField label="추가할 물건 경매장 가격 (억)" value={shopDraft.price} onChange={(t) => setShopDraft({ ...shopDraft, price: t })} decimal suffix="억" inputClassName="w-16" />
@@ -676,7 +712,8 @@ export function MvpCalculator() {
               </button>
             </div>
           </>
-        )}
+          )}
+        </Reveal>
       </section>
 
       <section className="flex flex-col gap-3">
@@ -690,30 +727,36 @@ export function MvpCalculator() {
           )}
         </div>
         {pay === 0 ? (
-          <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-[13px] text-muted-foreground">위에서 결제 금액 선택</p>
+          <p className="rounded-[1rem] border border-dashed border-border px-4 py-6 text-center text-[13px] text-muted-foreground">위에서 결제 금액 선택</p>
         ) : (
-          <div className="grid gap-3 md:grid-cols-3">
+          <div className="grid gap-2 md:grid-cols-3">
             {routes.map((r) => {
               const isBest = r.mode === "best";
               const diff = net(r) - net(best);
               return (
-                <div key={r.mode} className={cn("flex min-w-0 flex-col gap-2.5 tile p-4", isBest ? "border-primary" : "")}>
+                // Six rows of one subgrid, like the cards of the split calculator: when "최저가보다 +…" wraps in one
+                // card, the lines under it still start level in all three. The rows keep their own top margin (the
+                // grid's gap is off), so a row a card does not have takes no room.
+                // The cheapest one: the orange border alone (with the shadow edge under it, it had two edges).
+                <div key={r.mode} className={cn("row-span-6 grid min-w-0 grid-rows-subgrid gap-y-0 tile p-4", isBest && "border-primary shadow-none")}>
                   <span className={cn("text-xs font-semibold", isBest ? "text-primary-text" : "text-muted-foreground")}>{ROUTE_LABEL[r.mode]}</span>
-                  <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                  <span className="mt-2.5 flex flex-wrap content-start items-baseline gap-x-2 gap-y-1">
                     <b className="font-num text-[28px] leading-none">{won(net(r))}</b>
                     <span className="text-xs text-muted-foreground">실제 부담</span>
                     {!isBest && diff > 0.5 && <span className="text-xs font-semibold text-destructive">최저가보다 +{won(diff)}</span>}
                   </span>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="mt-2.5 text-xs text-pretty text-muted-foreground">
                     회수 {won(r.won)} ({((r.won / Math.max(1, plan.pay)) * 100).toFixed(1)}%)
                     {r.sales ? ` · 경매장 판매 ${num(r.sales)}회` : ""}
                   </span>
-                  {r.short > 0 && (
-                    <span className="rounded-md bg-destructive/10 px-2.5 py-1.5 text-xs font-semibold text-destructive">
+                  {r.short > 0 ? (
+                    <span className="mt-2.5 self-start rounded-md bg-destructive/10 px-2.5 py-1.5 text-xs font-semibold text-destructive">
                       등급까지 {won(r.short)} 부족 · 캐시 추가 필요
                     </span>
+                  ) : (
+                    <span />
                   )}
-                  <ol className="m-0 flex list-decimal flex-col gap-1 pl-5 text-[13px] leading-relaxed">
+                  <ol className="mt-2.5 flex list-decimal flex-col gap-1 pl-5 text-[13px] leading-relaxed">
                     {steps(r).map((t) => (
                       <li key={t.text}>
                         {t.text}
@@ -721,9 +764,7 @@ export function MvpCalculator() {
                       </li>
                     ))}
                   </ol>
-                  {notes(r).length > 0 && (
-                    <span className="text-xs text-muted-foreground">{notes(r).join(" · ")}</span>
-                  )}
+                  {notes(r).length > 0 ? <span className="mt-2.5 text-xs text-pretty text-muted-foreground">{notes(r).join(" · ")}</span> : <span />}
                 </div>
               );
             })}

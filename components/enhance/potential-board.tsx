@@ -20,6 +20,7 @@ import { STAT_CONV_DEFAULT } from "@/lib/ev/defaults";
 import { GRADE_LABEL, NEXT_GRADE, convFromText, type ConvText, type Grade } from "@/lib/ev/potential";
 import { useStored } from "@/lib/use-stored";
 import { Digits } from "@/components/ui/digits";
+import { Reveal } from "@/components/ui/reveal";
 import { cn } from "@/lib/utils";
 
 type View = "insight" | "log" | "items";
@@ -35,7 +36,7 @@ const GRADE_CSS: Record<Grade, string> = {
   unique: "text-[oklch(0.487_0.101_80.2)] dark:text-[oklch(0.843_0.141_85.5)]",
   legendary: "text-[oklch(0.451_0.105_154.6)] dark:text-[oklch(0.828_0.132_154.5)]",
 };
-const BADGE = "rounded border px-1.5 text-[11px] leading-[18px] font-semibold whitespace-nowrap";
+const BADGE = "rounded border px-1.5 text-[11px] leading-[calc(18/11)] font-semibold whitespace-nowrap";
 const CUBE_NAME: Record<PricedCube, string> = { prime: "프라임 큐브", primeAddi: "프라임 에디셔널 큐브" };
 const CUBE_SHORT: Record<PricedCube, string> = { prime: "프라임", primeAddi: "프라임 에디" };
 const PAGE = 100;
@@ -81,8 +82,12 @@ function RollRow({ entry, found, showItem }: { entry: PotEntry; found: Icons; sh
           <span className="flex min-w-0 items-center gap-2.5">
             <ItemIcon info={iconOf(row.item, row.level, found)} />
             <span className="flex min-w-0 flex-col gap-0.5">
-              <b className="truncate text-sm">{row.item}</b>
-              <span className="truncate text-xs text-muted-foreground">{row.who}</span>
+              <b className="truncate text-sm" title={row.item}>
+                {row.item}
+              </b>
+              <span className="truncate text-xs text-muted-foreground" title={row.who}>
+                {row.who}
+              </span>
             </span>
           </span>
         )}
@@ -107,7 +112,7 @@ function RollRow({ entry, found, showItem }: { entry: PotEntry; found: Icons; sh
 function PieceCard({ piece, found, onOpen, note }: { piece: PieceStat; found: Icons; onOpen: () => void; note?: ReactNode }) {
   const cubes = piece.rolls - piece.resets;
   // Bars: every grade-up together in one (rolls and averages add up), then the option it ended on.
-  const bars: { key: string; label: ReactNode; used: number; mean: number }[] = [];
+  const bars: { key: string; label: ReactNode; title?: string; used: number; mean: number }[] = [];
   const ups = piece.phases.filter((p) => p.up && p.expected !== null);
   if (ups.length > 0) {
     const to = NEXT_GRADE[ups[ups.length - 1].grade];
@@ -119,10 +124,17 @@ function PieceCard({ piece, found, onOpen, note }: { piece: PieceStat; found: Ic
     });
   }
   const tail = piece.phases[piece.phases.length - 1];
-  if (tail && !tail.up && tail.expected !== null) bars.push({ key: "goal", label: <b className="text-primary-text">{piece.goalBy || "옵션"}</b>, used: tail.rolls, mean: tail.expected });
+  if (tail && !tail.up && tail.expected !== null) bars.push({ key: "goal", label: <b className="text-primary-text">{piece.goalBy || "옵션"}</b>, title: piece.goalBy || "옵션", used: tail.rolls, mean: tail.expected });
   return (
-    <Card className="relative flex flex-col items-center p-3.5 text-center hover:border-primary/60">
-      <button type="button" aria-label={`${piece.item} ${kindLabel(piece)} 내역 보기`} onClick={onOpen} className="absolute inset-0 rounded-lg outline-none focus-visible:ring-3 focus-visible:ring-ring/50" />
+    <Card className="relative flex flex-col items-center p-3.5 text-center transition-[box-shadow] hover:shadow-tile-hover">
+      {/* It lies over the name, so the full name (cut to one line below) is its tooltip. Corner = the card's 16 less its 1px border. */}
+      <button
+        type="button"
+        aria-label={`${piece.item} ${kindLabel(piece)} 내역 보기`}
+        title={piece.item}
+        onClick={onOpen}
+        className="absolute inset-0 rounded-[15px] outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+      />
       <span className="absolute top-3.5 left-3.5 text-xs text-muted-foreground">
         {kstShort(piece.first)} ~ {kstShort(piece.last)}
       </span>
@@ -150,7 +162,7 @@ function PieceCard({ piece, found, onOpen, note }: { piece: PieceStat; found: Ic
         </div>
       )}
       {piece.keptRolls !== null && (
-        <span className="mt-1.5 max-w-full text-xs text-muted-foreground">
+        <span className="mt-1.5 max-w-full text-xs text-pretty text-muted-foreground">
           기존 옵션 · {piece.keptBy} = 평균 {rolls(piece.keptRolls)}
           {piece.keptMeso !== null && ` · ${eok(piece.keptMeso)}`}
         </span>
@@ -158,7 +170,7 @@ function PieceCard({ piece, found, onOpen, note }: { piece: PieceStat; found: Ic
       {piece.spent > 0 && (
         <>
           <b className="mt-2.5 font-num text-[28px] leading-[1.1] whitespace-nowrap">{eok(piece.spent)}</b>
-          <span className="mt-[3px] text-xs text-muted-foreground">사용 메소{piece.expected !== null ? ` · 기댓값 ${eok(piece.expected)}` : piece.keptRolls !== null ? "" : " · 기댓값 없음"}</span>
+          <span className="mt-[3px] text-xs text-pretty text-muted-foreground">사용 메소{piece.expected !== null ? ` · 기댓값 ${eok(piece.expected)}` : piece.keptRolls !== null ? "" : " · 기댓값 없음"}</span>
         </>
       )}
       {/* The rolls it took against the average for the same result. Pinned to the bottom with the boxes under it:
@@ -166,7 +178,7 @@ function PieceCard({ piece, found, onOpen, note }: { piece: PieceStat; found: Ic
       {bars.length > 0 && (
         <div className="mt-auto flex flex-col gap-2 self-stretch pt-2.5 text-left">
           {bars.map((bar) => (
-            <Gauge key={bar.key} label={bar.label} used={bar.used} mean={bar.mean}>
+            <Gauge key={bar.key} label={bar.label} title={bar.title} used={bar.used} mean={bar.mean}>
               <b>{rolls(bar.used)}</b> <span className="text-muted-foreground">· 평균 {rolls(bar.mean)}</span>
             </Gauge>
           ))}
@@ -195,8 +207,20 @@ function PieceCard({ piece, found, onOpen, note }: { piece: PieceStat; found: Ic
 }
 
 /** Every roll of one piece, newest first, with how each grade went. */
-function PieceDialog({ piece, entries, found, onClose }: { piece: PieceStat | null; entries: PotEntry[]; found: Icons; onClose: () => void }) {
+function PieceDialog({ piece: live, entries, found, onClose }: { piece: PieceStat | null; entries: PotEntry[]; found: Icons; onClose: () => void }) {
   const [limit, setLimit] = useState(PAGE);
+  // The window stays mounted between pieces (a `key` unmounted it in one frame, before its exit could play). While it
+  // closes there is no piece any more, so it goes on showing the last one it had.
+  const [kept, setKept] = useState(live);
+  if (live && live !== kept) setKept(live);
+  const piece = live ?? kept;
+  // Every opening starts from the first page again, and so does another piece.
+  const liveKey = live?.key ?? "";
+  const [openKey, setOpenKey] = useState(liveKey);
+  if (liveKey !== openKey) {
+    setOpenKey(liveKey);
+    if (liveKey) setLimit(PAGE);
+  }
   // Focus goes to the list: left to the default it lands on "더 보기" at the bottom and the list opens scrolled down.
   const listRef = useRef<HTMLDivElement>(null);
   const list = piece ? entries.filter((e) => potEntryKey(e) === piece.key) : [];
@@ -210,15 +234,16 @@ function PieceDialog({ piece, entries, found, onClose }: { piece: PieceStat | nu
     : [];
 
   return (
-    <Dialog open={piece !== null} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent initialFocus={listRef} className="flex max-h-[86vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl" data-clarity-mask="true">
+    <Dialog open={live !== null} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent initialFocus={listRef} className="flex max-h-[86dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl" data-clarity-mask="true">
         {piece && (
           <>
             <div className="flex flex-col gap-3 border-b border-border p-4">
               <div className="flex items-center gap-3 pr-9">
                 <ItemIcon info={iconOf(piece.item, piece.level, found)} size={44} />
                 <div className="flex min-w-0 flex-col gap-1">
-                  <DialogTitle className="truncate text-base leading-tight font-bold">{piece.item}</DialogTitle>
+                  {/* Not cut: this is where a name that is cut in the lists can be read whole. */}
+                  <DialogTitle className="text-base leading-tight font-bold">{piece.item}</DialogTitle>
                   <DialogDescription className="text-xs">
                     {kindLabel(piece)} · {levelLabel(piece)}
                     {!piece.soul && ` · ${piece.part}`} · {piece.who}
@@ -251,12 +276,12 @@ function PieceDialog({ piece, entries, found, onClose }: { piece: PieceStat | nu
                 ))}
               </div>
             </div>
-            <div ref={listRef} tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto outline-none">
+            <div ref={listRef} tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto overscroll-contain outline-none">
               {shown.map((e) => (
                 <RollRow key={e.row.id} entry={e} found={found} showItem={false} />
               ))}
               {list.length > limit && (
-                <button type="button" onClick={() => setLimit(limit + PAGE)} className="press-static w-full border-t border-border py-3 text-[13px] font-semibold text-primary-text outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50">
+                <button type="button" onClick={() => setLimit(limit + PAGE)} className="press-static w-full border-t border-border py-3 text-[13px] font-semibold text-primary-text outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset">
                   더 보기 ({(list.length - limit).toLocaleString("ko-KR")}건 남음)
                 </button>
               )}
@@ -275,30 +300,37 @@ type Rank = { title: string; empty: string; pieces: PieceStat[]; value: (p: Piec
 function RankCard({ rank, found, onOpen }: { rank: Rank; found: Icons; onOpen: (key: string) => void }) {
   const [all, setAll] = useState(false);
   // The window's list runs past 9: room for two digits there.
-  const row = (p: PieceStat, i: number, wide = false) => (
-    <button
-      key={p.key}
-      type="button"
-      onClick={() => (setAll(false), onOpen(p.key))}
-      className={cn(
-        "press-static grid w-full items-center gap-2.5 border-t border-border px-4 py-2.5 text-left outline-none hover:bg-muted/60 focus-visible:ring-3 focus-visible:ring-ring/50",
-        wide ? "grid-cols-[30px_minmax(0,1fr)_auto]" : "grid-cols-[18px_minmax(0,1fr)_auto]"
-      )}
-    >
-      <b className="font-num text-[15px] text-muted-foreground">{i + 1}</b>
-      <span className="flex min-w-0 items-center gap-2.5">
-        <ItemIcon info={iconOf(p.item, p.level, found)} />
-        <span className="flex min-w-0 flex-col gap-0.5">
-          <b className="truncate text-sm">{p.item}</b>
-          <span className="truncate text-xs text-muted-foreground">
-            {kindLabel(p)}
-            {p.of > 1 && ` ${p.n}번째`} · {rank.sub(p)}
+  const row = (p: PieceStat, i: number, wide = false) => {
+    const sub = `${kindLabel(p)}${p.of > 1 ? ` ${p.n}번째` : ""} · ${rank.sub(p)}`;
+    return (
+      <button
+        key={p.key}
+        type="button"
+        onClick={() => (setAll(false), onOpen(p.key))}
+        className={cn(
+          // The ring is drawn inside: the card and the window's list would cut one drawn outside.
+          "press-static grid w-full items-center gap-2.5 border-t border-border px-4 py-2.5 text-left outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset",
+          wide ? "grid-cols-[30px_minmax(0,1fr)_auto]" : "grid-cols-[18px_minmax(0,1fr)_auto]"
+        )}
+      >
+        <b className="font-num text-[15px] text-muted-foreground">
+          <Digits>{i + 1}</Digits>
+        </b>
+        <span className="flex min-w-0 items-center gap-2.5">
+          <ItemIcon info={iconOf(p.item, p.level, found)} />
+          <span className="flex min-w-0 flex-col gap-0.5">
+            <b className="truncate text-sm" title={p.item}>
+              {p.item}
+            </b>
+            <span className="truncate text-xs text-muted-foreground" title={sub}>
+              {sub}
+            </span>
           </span>
         </span>
-      </span>
-      <b className={cn("font-num text-sm whitespace-nowrap", rank.css)}><Digits>{rank.value(p)}</Digits></b>
-    </button>
-  );
+        <b className={cn("font-num text-sm whitespace-nowrap", rank.css)}><Digits>{rank.value(p)}</Digits></b>
+      </button>
+    );
+  };
   return (
     <Card className="overflow-hidden">
       <RankHead title={rank.title} more={rank.pieces.length > RANK_TOP} onMore={() => setAll(true)} />
@@ -335,10 +367,16 @@ function PotInsight({ stats, found, onOpen }: { stats: ReturnType<typeof buildPo
       type="button"
       disabled={!p}
       onClick={() => p && onOpen(p.key)}
-      className={cn("flex min-w-0 flex-col gap-0.5 rounded-lg px-3 py-2.5 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50", css)}
+      className={cn(
+        "flex min-w-0 flex-col gap-0.5 rounded-lg px-3 py-2.5 text-left outline-none transition-[filter,scale] focus-visible:ring-3 focus-visible:ring-ring/50 enabled:hover:brightness-95 dark:enabled:hover:brightness-125",
+        css
+      )}
     >
       <span className="text-[11px] text-muted-foreground">{label}</span>
-      <b className="text-sm leading-snug">{p ? p.item : "해당 없음"}</b>
+      {/* One line: a name on two lines made this box taller than the boxes of the card next to it. */}
+      <b className="truncate text-sm leading-snug" title={p ? p.item : undefined}>
+        {p ? p.item : "해당 없음"}
+      </b>
       {p ? <Delta v={p.delta!} className="text-lg" /> : <b className="font-num text-lg text-muted-foreground">—</b>}
       <span className="text-[11px] text-muted-foreground">{p ? `${kindLabel(p)} · ${p.goalBy || "등급 상승"} · 사용 ${eok(p.spent)}` : ""}</span>
     </button>
@@ -365,7 +403,7 @@ function PotInsight({ stats, found, onOpen }: { stats: ReturnType<typeof buildPo
 
   return (
     <>
-      <div className="grid gap-3.5 lg:grid-cols-2">
+      <div className="grid gap-2 lg:grid-cols-2">
         {/* The boxes fill their card: a long item name on one side must not leave the other card's boxes shorter. */}
         <Card className="flex flex-col">
           <h2 className="flex items-center gap-2 px-4 pt-3.5 pb-1 text-sm font-bold">
@@ -385,7 +423,7 @@ function PotInsight({ stats, found, onOpen }: { stats: ReturnType<typeof buildPo
           <div className={cn("grid flex-1 gap-2.5 px-4 pt-2 pb-3.5", kinds.length > 2 ? "grid-cols-3" : "grid-cols-2")}>{kinds.map(kind)}</div>
         </Card>
       </div>
-      <div className="grid items-start gap-3.5 lg:grid-cols-2 xl:grid-cols-3">
+      <div className="grid items-start gap-2 lg:grid-cols-2 xl:grid-cols-3">
         {ranks.map((rank) => (
           <RankCard key={rank.title} rank={rank} found={found} onOpen={onOpen} />
         ))}
@@ -476,12 +514,14 @@ function PiecesView({
           <SortMenu value={sort} onChange={setSort} className="ml-auto" />
         </div>
       </div>
-      {group && ev && <EventStrip group={group} round={round} tally={ev.tallies[round ? group.rounds.indexOf(round) + 1 : 0]} unit="횟수" deltaLabel="손익" />}
-      {filter.picked && list.length > 0 && (
-        <PickedTotal spent={list.reduce((sum, p) => sum + p.spent, 0)} delta={list.some((p) => p.delta !== null) ? list.reduce((sum, p) => sum + (p.delta ?? 0), 0) : null} />
-      )}
+      <Reveal open={!!(group && ev)}>{group && ev && <EventStrip group={group} round={round} tally={ev.tallies[round ? group.rounds.indexOf(round) + 1 : 0]} unit="횟수" deltaLabel="손익" />}</Reveal>
+      <Reveal open={!!filter.picked && list.length > 0}>
+        {filter.picked && list.length > 0 && (
+          <PickedTotal spent={list.reduce((sum, p) => sum + p.spent, 0)} delta={list.some((p) => p.delta !== null) ? list.reduce((sum, p) => sum + (p.delta ?? 0), 0) : null} />
+        )}
+      </Reveal>
       {list.length === 0 && <Empty>해당 아이템 없음</Empty>}
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
         {list.slice(pager.from, pager.to).map((piece) => (
           <PieceCard
             key={piece.key}
@@ -514,24 +554,28 @@ function RollsView({ entries, characters, found }: { entries: PotEntry[]; charac
   const shown = list.slice(list.length - pager.to, list.length - pager.from).reverse();
   return (
     <Card className="overflow-hidden">
-      <div ref={top} className="flex scroll-mt-4 flex-wrap items-center gap-2.5 border-b border-border px-4 py-3">
+      {/* The count has a line of its own, as in 모아보기: next to the fields, a change of its digits moved the field
+          that had just been used. */}
+      <div ref={top} className="flex scroll-mt-4 flex-col gap-2.5 border-b border-border px-4 py-3">
         <b className="text-sm">
           재설정 내역 <span className="font-medium text-muted-foreground">{list.length.toLocaleString("ko-KR")}건</span>
         </b>
-        <CharacterFilter names={characters} value={who} onChange={(name) => (setWho(name), setItem(NO_ITEM_FILTER))} className={PICK_W.who} />
-        <ItemFilter names={items} value={item} onChange={setItem} className={PICK_W.item} />
-        <Select aria-label="종류" value={kind} onChange={(e) => setKind(e.target.value)}>
-          <option value="">모든 종류</option>
-          {KINDS.map((k) => (
-            <option key={k} value={k}>
-              {KIND_LABEL[k]}
-            </option>
-          ))}
-        </Select>
-        <label className="inline-flex items-center gap-1.5 text-[13px]">
-          <input type="checkbox" checked={only} onChange={(e) => setOnly(e.target.checked)} className="size-4 accent-primary" />
-          선택 · 등급 상승만
-        </label>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <CharacterFilter names={characters} value={who} onChange={(name) => (setWho(name), setItem(NO_ITEM_FILTER))} className={PICK_W.who} />
+          <ItemFilter names={items} value={item} onChange={setItem} className={PICK_W.item} />
+          <Select aria-label="종류" value={kind} onChange={(e) => setKind(e.target.value)}>
+            <option value="">모든 종류</option>
+            {KINDS.map((k) => (
+              <option key={k} value={k}>
+                {KIND_LABEL[k]}
+              </option>
+            ))}
+          </Select>
+          <label className="relative inline-flex items-center gap-1.5 text-[13px] after:absolute after:-inset-2">
+            <input type="checkbox" checked={only} onChange={(e) => setOnly(e.target.checked)} className="size-4 accent-primary" />
+            선택 · 등급 상승만
+          </label>
+        </div>
       </div>
       {shown.length === 0 && <p className="px-4 py-8 text-center text-[13px] text-muted-foreground">해당 기록 없음</p>}
       {shown.map((e) => (
@@ -685,7 +729,9 @@ export function PotentialBoard({ apiKey, account, onForget, switcher }: { apiKey
                 {tiles.map((t) => (
                   <div key={t.label} className="flex min-w-0 flex-col gap-1 rounded-lg bg-muted px-3 py-2.5">
                     <span className="text-xs text-muted-foreground">{t.label}</span>
-                    <b className="truncate font-num text-lg">{t.value}</b>
+                    <b className="truncate font-num text-lg" title={t.value}>
+                      {t.value}
+                    </b>
                   </div>
                 ))}
               </div>
@@ -697,7 +743,8 @@ export function PotentialBoard({ apiKey, account, onForget, switcher }: { apiKey
           {view === "insight" && <PotInsight stats={stats} found={icons} onOpen={openWith} />}
           {view === "log" && <RollsView entries={entries} characters={stats.characters} found={icons} />}
           {view === "items" && <PiecesView pieces={stats.pieces} entries={entries} build={buildPieces} found={icons} onOpen={openWith} />}
-          <PieceDialog key={openPiece} piece={openPieces.find((p) => p.key === openPiece) ?? null} entries={openEntries} found={icons} onClose={() => setOpenPiece("")} />
+          {/* No `key`: the window stays mounted, so closing can play its exit. It resets its own page per piece. */}
+          <PieceDialog piece={openPieces.find((p) => p.key === openPiece) ?? null} entries={openEntries} found={icons} onClose={() => setOpenPiece("")} />
         </>
       )}
     </div>

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { ChevronDown, Minus, Plus } from "lucide-react";
-import { Label, LuckRow, Note, NumberField, Panel, Segment, Switch, count, eok, parseNum, pct } from "@/components/ev/ui";
+import { Label, LuckRow, NumberField, Panel, Segment, Switch, arrowTurn, count, eok, parseNum, pct, stepButton } from "@/components/ev/ui";
 import { CustomGoal, condText } from "@/components/ev/custom-goal";
 import { CREDIT_SHOP, STAT_CONV_DEFAULT } from "@/lib/ev/defaults";
 import { averageTries } from "@/lib/ev/luck";
@@ -58,6 +58,17 @@ const GRADE_COLOR: Record<Grade, string> = {
   unique: "border-amber-400 text-amber-600 dark:text-amber-300",
   legendary: "border-emerald-400 text-emerald-600 dark:text-emerald-300",
 };
+/** The same grades on the dark head of a "직접" set, which is dark in both themes. */
+const GRADE_ON_DARK: Record<Grade, string> = {
+  rare: "text-sky-300",
+  epic: "text-violet-300",
+  unique: "text-amber-300",
+  legendary: "text-emerald-300",
+};
+/** 32px to look at, 40px to press: the area reaches 4px past the button (the rows are 8px apart and more). */
+const smallStep = cn(stepButton, "relative size-8 rounded-md after:absolute after:-inset-1");
+/** An option to pick, not picked yet: the edge of a tile, turning orange under the pointer. */
+const pickable = "tile-edge hover:border-primary/60";
 const TIERS = WEAPON_TIERS;
 /** Hover notes on the main stat choices (user, 2026-11-16: "진짜 간단하게"). */
 const MAIN_HINT = { str: "내 직업 주스탯", all: "올스탯만", hp: "HP만", sale: "모든 주스탯 중 하나라도 · 팔 장비" } as const;
@@ -204,11 +215,12 @@ export function PotentialTab() {
     const vals = (refRows ?? []).flat().filter((r) => r[0] === cat).map((r) => r[1]);
     return vals.length ? Math.min(...vals) : 0;
   };
+  // Steps start from what is on screen (a total clamped to this grade), not from the number kept underneath.
+  const comboWith = (k: "lines" | "stat", v: number) => ({ lines: special, stat: combo.stat, [k]: v });
+  const comboFits = (next: { lines: number; stat: number }) => next.lines >= 1 && next.stat >= 0 && specialLines(next.lines) + next.stat <= 3;
   const setComboPart = (k: "lines" | "stat", v: number) => {
-    // Steps start from what is on screen (a total clamped to this grade), not from the number kept underneath.
-    const next = { lines: special, stat: combo.stat, [k]: v };
-    if (next.lines < 1 || next.stat < 0 || specialLines(next.lines) + next.stat > 3) return;
-    setCombo(next);
+    const next = comboWith(k, v);
+    if (comboFits(next)) setCombo(next);
   };
 
   // Emblems: attack % and ignore defence are what counts; damage and the main stat (all stat with it; HP for a demon
@@ -401,7 +413,7 @@ export function PotentialTab() {
               )}
             >
               <b className={cn("text-[13px]", s.id === slotId && "text-primary-text")}>{s.label}</b>
-              <span className="truncate text-[11px] text-muted-foreground">{s.sub}</span>
+              <span title={s.sub} className="truncate text-[11px] text-muted-foreground">{s.sub}</span>
             </button>
           ))}
         </div>
@@ -443,7 +455,11 @@ export function PotentialTab() {
                 type="button"
                 aria-pressed={g === grade}
                 onClick={() => setGrade(g)}
-                className={cn("h-9 rounded-lg border text-[13px]", g === grade ? cn("border-[1.5px] font-bold", GRADE_COLOR[g]) : "tile-edge text-muted-foreground")}
+                className={cn(
+                  // 36px to look at, 40px to press: the area reaches 2px above and below.
+                  "relative h-9 rounded-lg border text-[13px] after:absolute after:inset-x-0 after:-inset-y-0.5",
+                  g === grade ? cn("border-[1.5px] font-bold", GRADE_COLOR[g]) : "tile-edge text-muted-foreground"
+                )}
               >
                 {GRADE_LABEL[g]}
               </button>
@@ -486,11 +502,12 @@ export function PotentialTab() {
             chanceOf={(set) => (refRows ? customChance(refRows, [set]) : 0)}
             slotLabel={slot.label}
             gradeLabel={GRADE_LABEL[grade]}
+            gradeClass={GRADE_ON_DARK[grade]}
           />
         )}
 
         {goal === "opt" && weaponLike && optGrade && mode === "preset" && (
-          <div className="@container flex flex-col gap-2.5 rounded-lg tile-edge bg-muted/40 p-3">
+          <div className="@container flex flex-col gap-2.5 rounded-2xl tile-edge bg-muted/40 p-2">
             <Label>
               노리는 줄
             </Label>
@@ -518,11 +535,13 @@ export function PotentialTab() {
                       className={cn(
                         "col-span-2 flex flex-col items-start rounded-lg border px-2.5 py-1.5 text-left @min-[27rem]:col-span-1",
                         i === 3 && "col-start-2 @min-[27rem]:col-start-auto",
-                        on ? "border-primary bg-primary-soft text-primary-text" : "tile-edge"
+                        on ? "border-primary bg-primary-soft text-primary-text" : pickable
                       )}
                     >
                       <b className="text-[13px]">{t.label}</b>
-                      <span className="font-num text-[11px] text-muted-foreground">{pct(p)}</span>
+                      <span className="font-num text-[11px] text-muted-foreground">
+                        <Digits>{pct(p)}</Digits>
+                      </span>
                     </button>
                   );
                 })}
@@ -530,7 +549,7 @@ export function PotentialTab() {
             )}
             {/* The rules are written for three useful lines; say the count asked for when it was lowered. */}
             {kind === "main" && tier !== "v3" && (
-              <span className="text-[11px] text-muted-foreground">
+              <span className="text-[11px] text-pretty text-muted-foreground">
                 {TIERS.find((t) => t.id === tier)!.desc.replace("유효 3줄", min.v ? `유효 ${min.v}줄` : "아무 줄")}
               </span>
             )}
@@ -549,11 +568,13 @@ export function PotentialTab() {
                         onClick={() => setAddGoal(g.id)}
                         className={cn(
                           "flex flex-col items-start rounded-lg border px-2.5 py-1.5 text-left",
-                          addGoal === g.id ? "border-primary bg-primary-soft text-primary-text" : "tile-edge"
+                          addGoal === g.id ? "border-primary bg-primary-soft text-primary-text" : pickable
                         )}
                       >
                         <b className="text-[13px]">{g.label(need, "공/마")}</b>
-                        <span className="font-num text-[11px] text-muted-foreground">{pct(p)}</span>
+                        <span className="font-num text-[11px] text-muted-foreground">
+                          <Digits>{pct(p)}</Digits>
+                        </span>
                       </button>
                     );
                   })}
@@ -568,7 +589,7 @@ export function PotentialTab() {
                     value={primeLine}
                     onChange={setPrimeFirst}
                     options={[
-                      { id: "a" as const, label: "공격력(마력)" },
+                      { id: "a" as const, label: "공/마" },
                       ...(best.boss ? [{ id: "b" as const, label: "보공" }] : []),
                       { id: "i" as const, label: "방무" },
                     ]}
@@ -589,10 +610,11 @@ export function PotentialTab() {
                   <button
                     type="button"
                     aria-label={`${label} 줄이기`}
+                    disabled={min[k] <= 0}
                     onClick={() => setMin({ ...min, [k]: Math.max(0, min[k] - 1) })}
-                    className="flex size-8 items-center justify-center rounded-md tile-edge"
+                    className={smallStep}
                   >
-                    <Minus className="size-3.5" aria-hidden="true" />
+                    <Minus size={14} strokeWidth={2} absoluteStrokeWidth aria-hidden="true" />
                   </button>
                   <b className="w-6 text-center font-num">
                     <Digits>{min[k]}</Digits>
@@ -600,10 +622,11 @@ export function PotentialTab() {
                   <button
                     type="button"
                     aria-label={`${label} 늘리기`}
+                    disabled={min[k] >= 3}
                     onClick={() => setMin({ ...min, [k]: Math.min(3, min[k] + 1) })}
-                    className="flex size-8 items-center justify-center rounded-md tile-edge"
+                    className={smallStep}
                   >
-                    <Plus className="size-3.5" aria-hidden="true" />
+                    <Plus size={14} strokeWidth={2} absoluteStrokeWidth aria-hidden="true" />
                   </button>
                 </span>
               </div>
@@ -613,23 +636,25 @@ export function PotentialTab() {
             )}
             {kind === "main" && emblem && <Switch on={emblemMore} onChange={setEmblemMore} label="데미지 · 주스탯도 유효 줄로 치기" />}
             {/* Which line is the emblem's main stat: the same setting the armour targets use. */}
-            {kind === "main" && emblem && emblemMore && (
-              <Segment
-                label="주스탯 종류"
-                value={mainStat}
-                onChange={setMainStat}
-                options={[
-                  { id: "str", label: "일반", hint: MAIN_HINT.str },
-                  { id: "all", label: "제논 · 올스탯", hint: MAIN_HINT.all },
-                  { id: "hp", label: "데벤 · HP", hint: MAIN_HINT.hp },
-                ]}
-              />
+            {kind === "main" && emblem && (
+              <Reveal open={emblemMore}>
+                <Segment
+                  label="주스탯 종류"
+                  value={mainStat}
+                  onChange={setMainStat}
+                  options={[
+                    { id: "str", label: "일반", hint: MAIN_HINT.str },
+                    { id: "all", label: "제논 · 올스탯", hint: MAIN_HINT.all },
+                    { id: "hp", label: "데벤 · HP", hint: MAIN_HINT.hp },
+                  ]}
+                />
+              </Reveal>
             )}
           </div>
         )}
 
         {goal === "opt" && !weaponLike && !soul && optGrade && mode === "preset" && (
-          <div className="flex flex-col gap-2.5 rounded-lg tile-edge bg-muted/40 p-3">
+          <div className="flex flex-col gap-2.5 rounded-2xl tile-edge bg-muted/40 p-2">
             <Label
               aside={
                 extraOptions.length > 1 ? (
@@ -669,12 +694,10 @@ export function PotentialTab() {
                 ]}
               />
             )}
-            {target === "stat" && saleOn && (
-              <>
-                <Switch on={!!sale.hp} onChange={(hp) => setSale({ on: true, hp })} label="HP 도 치기" note="데몬어벤져에게도 팔 때" />
-                <span className="text-[11px] text-muted-foreground">STR · DEX · INT · LUK{sale.hp ? " · HP" : ""} 중 하나라도 목표 이상 · 환산 포함</span>
-              </>
-            )}
+            <Reveal open={target === "stat" && saleOn} className="flex flex-col gap-2.5">
+              <Switch on={!!sale?.hp} onChange={(hp) => setSale({ on: true, hp })} label="HP 도 치기" note="데몬어벤져에게도 팔 때" />
+              <span className="text-[11px] text-pretty text-muted-foreground">STR · DEX · INT · LUK{sale?.hp ? " · HP" : ""} 중 하나라도 목표 이상 · 환산 포함</span>
+            </Reveal>
             {/* No 공격력 / 마력 choice here: in the official table the flat attack and magic lines have the same values and
                 chances on every slot (188 pairs checked 2026-11-10), so the result is the same either way. */}
             {/* One row, split evenly by however many targets there are (4 presets + an own target). */}
@@ -697,10 +720,11 @@ export function PotentialTab() {
                       <button
                         type="button"
                         aria-label={`${label} 줄이기`}
+                        disabled={!comboFits(comboWith(k, (k === "lines" ? special : combo.stat) - 1))}
                         onClick={() => setComboPart(k, (k === "lines" ? special : combo.stat) - 1)}
-                        className="flex size-8 items-center justify-center rounded-md tile-edge"
+                        className={smallStep}
                       >
-                        <Minus className="size-3.5" aria-hidden="true" />
+                        <Minus size={14} strokeWidth={2} absoluteStrokeWidth aria-hidden="true" />
                       </button>
                       <b className={cn("text-center font-num", k === "lines" && bySeconds ? "w-10" : "w-6")}>
                         <Digits>{k === "lines" ? (bySeconds ? `${special}초` : special) : combo.stat}</Digits>
@@ -708,15 +732,16 @@ export function PotentialTab() {
                       <button
                         type="button"
                         aria-label={`${label} 늘리기`}
+                        disabled={!comboFits(comboWith(k, (k === "lines" ? special : combo.stat) + 1))}
                         onClick={() => setComboPart(k, (k === "lines" ? special : combo.stat) + 1)}
-                        className="flex size-8 items-center justify-center rounded-md tile-edge"
+                        className={smallStep}
                       >
-                        <Plus className="size-3.5" aria-hidden="true" />
+                        <Plus size={14} strokeWidth={2} absoluteStrokeWidth aria-hidden="true" />
                       </button>
                     </span>
                   </div>
                 ))}
-                <span className="text-[11px] text-muted-foreground">
+                <span className="text-[11px] text-pretty text-muted-foreground">
                   {comboRest ? `나머지 ${comboRest}줄은 아무 옵션이어도 됨` : "3줄 모두 지정"} · 합쳐서 3줄까지
                 </span>
               </div>
@@ -728,7 +753,7 @@ export function PotentialTab() {
                     type="button"
                     aria-pressed={i === tIdx}
                     onClick={() => setTargetIdx(i)}
-                    className={cn("flex flex-col items-start rounded-lg border px-2.5 py-1.5", i === tIdx ? "border-primary bg-primary-soft text-primary-text" : "tile-edge")}
+                    className={cn("flex flex-col items-start rounded-lg border px-2.5 py-1.5", i === tIdx ? "border-primary bg-primary-soft text-primary-text" : pickable)}
                   >
                     <b className="font-num text-[13px]">{t.label}</b>
                     <span className="text-[11px] text-muted-foreground">{t.sub}</span>
@@ -756,18 +781,21 @@ export function PotentialTab() {
             )}
             {target === "stat" && (statMain === "str" || saleOn) && (
               <div className="flex flex-col gap-2 tile-sm p-2.5">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setConvOpen((o) => !o)}
-                    aria-expanded={convOpen}
-                    className="flex items-center gap-1 text-[12px] font-bold"
-                  >
-                    <ChevronDown className={cn("size-3.5 transition-transform", !convOpen && "-rotate-90")} aria-hidden="true" />
-                    환산 기준
-                    {!convOpen && <span className="font-normal text-muted-foreground">· {convChanged ? "바꾼 값 사용 중" : "기본값"}</span>}
-                  </button>
-                </div>
+                {/* A line of words to look at; the press area reaches 8px past it (as far as the fields under it). */}
+                <button
+                  type="button"
+                  onClick={() => setConvOpen((o) => !o)}
+                  aria-expanded={convOpen}
+                  className="relative flex items-center gap-1 self-start text-[12px] font-bold after:absolute after:-inset-2 hover:text-primary-text"
+                >
+                  <ChevronDown size={14} strokeWidth={2} absoluteStrokeWidth className={cn("-ml-0.5 shrink-0", arrowTurn, convOpen && "rotate-180")} aria-hidden="true" />
+                  환산 기준
+                  {!convOpen && (
+                    <span className="font-normal text-muted-foreground transition-opacity duration-200 ease-out starting:opacity-0">
+                      · {convChanged ? "바꾼 값 사용 중" : "기본값"}
+                    </span>
+                  )}
+                </button>
                 <Reveal open={convOpen} className="flex flex-col gap-2">
                 <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
                   {(
@@ -813,7 +841,7 @@ export function PotentialTab() {
                   ))}
                 </div>
                 <span className="flex flex-wrap items-center justify-end gap-2 text-[11px] text-muted-foreground">
-                  <button type="button" onClick={() => setConvText(CONV_TEXT_DEFAULT)} className="rounded tile-edge px-2 py-0.5">
+                  <button type="button" onClick={() => setConvText(CONV_TEXT_DEFAULT)} className="relative rounded tile-edge px-2 py-0.5 whitespace-nowrap after:absolute after:-inset-2">
                     기본값으로
                   </button>
                 </span>
@@ -824,7 +852,7 @@ export function PotentialTab() {
         )}
 
         {goal === "opt" && soul && (
-          <div className="flex flex-col gap-2.5 rounded-lg tile-edge bg-muted/40 p-3">
+          <div className="flex flex-col gap-2.5 rounded-2xl tile-edge bg-muted/40 p-2">
             <Label>
               소울 증폭 단계
             </Label>
@@ -846,11 +874,13 @@ export function PotentialTab() {
                     onClick={() => setAddGoal(g.id)}
                     className={cn(
                       "flex flex-col items-start rounded-lg border px-2.5 py-1.5 text-left",
-                      addGoal === g.id ? "border-primary bg-primary-soft text-primary-text" : "tile-edge"
+                      addGoal === g.id ? "border-primary bg-primary-soft text-primary-text" : pickable
                     )}
                   >
                     <b className="text-[13px]">{g.label(soulNeed, "공/마")}</b>
-                    <span className="font-num text-[11px] text-muted-foreground">{pct(p)}</span>
+                    <span className="font-num text-[11px] text-muted-foreground">
+                      <Digits>{pct(p)}</Digits>
+                    </span>
                   </button>
                 );
               })}
@@ -869,7 +899,7 @@ export function PotentialTab() {
                   type="button"
                   aria-pressed={on}
                   onClick={() => setChosen(on ? picked.filter((x) => x !== c.id) : [...picked, c.id])}
-                  className={cn("flex flex-col items-start rounded-lg border px-3 py-2 text-left", on ? "border-primary bg-primary-soft" : "tile-edge")}
+                  className={cn("flex flex-col items-start rounded-lg border px-3 py-2 text-left", on ? "border-primary bg-primary-soft" : pickable)}
                 >
                   <b className={cn("text-[13px]", on && "text-primary-text")}>{c.name}</b>
                   <span className="text-[11px] text-muted-foreground">{c.alias}</span>
@@ -878,34 +908,42 @@ export function PotentialTab() {
             })}
           </div>
         </div>
-        {goal === "grade" && potKind === "add" && (
+        <Reveal open={goal === "grade" && potKind === "add"}>
           <Switch
             on={whiteUp}
             onChange={setWhiteUp}
             label="화이트 에디셔널 큐브로 올리기"
             note="등급 상승 확률 2배 · 천장 31 · 76 · 214번"
           />
-        )}
-        {goal === "grade" && <Switch on={miracle} onChange={setMiracle} label="미라클 타임" note="등급 상승 확률 2배" />}
+        </Reveal>
+        <Reveal open={goal === "grade"}>
+          <Switch on={miracle} onChange={setMiracle} label="미라클 타임" note="등급 상승 확률 2배" />
+        </Reveal>
       </Panel>
 
-      <section className="flex min-w-0 flex-col gap-3">
+      <section className="flex min-w-0 flex-col gap-2">
         <div className="tile px-4 py-3 text-[13px]">
           <span className="text-muted-foreground">목표 </span>
           <b>{goalText}</b>
         </div>
-        {results.length === 0 && <Note>큐브 1개 이상 선택</Note>}
+        {results.length === 0 && (
+          <p className="rounded-lg border border-dashed border-border py-6 text-center text-[13px] text-muted-foreground">큐브 1개 이상 선택</p>
+        )}
         {results.map((r, i) => {
           const avg = r.p ? averageTries(r.p, r.cap) : Infinity;
           return (
-            <div key={r.cube.id} className={cn("flex flex-col gap-3 tile p-4", i === 0 && r.p ? "border-primary" : "", !r.p && "opacity-70")}>
+            <div
+              key={r.cube.id}
+              // The cheapest card has an orange border in place of the shadow edge of a tile, not on top of it.
+              className={cn("flex flex-col gap-3 p-4 sm:p-5", i === 0 && r.p ? "rounded-[1rem] border border-primary bg-card" : "tile", !r.p && "opacity-70")}
+            >
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <span className="flex flex-wrap items-baseline gap-2">
                   <b className="text-[15px]">{r.cube.name}</b>
                   <span className="text-xs text-muted-foreground">{r.cube.alias}</span>
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  1번에 될 확률 <b className="font-num text-foreground">{r.p ? pct(r.p) : "불가"}</b>
+                  1번에 될 확률 <b className="font-num text-foreground">{r.p ? <Digits>{pct(r.p)}</Digits> : "불가"}</b>
                 </span>
               </div>
               {r.p > 0 && (
@@ -917,7 +955,9 @@ export function PotentialTab() {
                           {eok(avg * r.price)}
                           <span className="ml-1 text-sm">메소</span>
                         </span>
-                        <b className="font-num">평균 {count(avg, "번")}</b>
+                        <b className="font-num">
+                          평균 <Digits>{count(avg, "번")}</Digits>
+                        </b>
                       </>
                     ) : (
                       <span className="font-num text-[34px] leading-none font-bold text-primary-text">
@@ -934,7 +974,11 @@ export function PotentialTab() {
                 <span className="text-[11px] text-muted-foreground">{r.note}</span>
                 {r.fixed ? (
                   <span className="text-[11px] text-muted-foreground">
-                    1번 <b className="font-num text-foreground">{eok(r.price)}</b> 메소
+                    1번{" "}
+                    <b className="font-num text-foreground">
+                      <Digits>{eok(r.price)}</Digits>
+                    </b>{" "}
+                    메소
                   </span>
                 ) : (
                 <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">

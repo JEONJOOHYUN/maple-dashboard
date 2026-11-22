@@ -4,7 +4,9 @@ import { useRef, type ComponentProps, type ReactNode } from "react";
 import { ChevronDown, Package } from "lucide-react";
 import { eok } from "@/components/ev/ui";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { Digits } from "@/components/ui/digits";
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Reveal } from "@/components/ui/reveal";
 import { roundDates, roundName, type EventGroup, type EventRound } from "@/lib/enhance/events";
 import type { ItemInfo } from "@/lib/enhance/items";
 import type { SkipReason } from "@/lib/enhance/judge";
@@ -49,7 +51,7 @@ export function RankHead({ title, more, onMore }: { title: string; more: boolean
     <div className="flex items-center justify-between gap-2 px-4 pt-3.5 pb-2">
       <h2 className="text-sm font-bold">{title}</h2>
       {more && (
-        <button type="button" onClick={onMore} className="rounded-sm text-xs font-semibold text-primary-text outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50">
+        <button type="button" onClick={onMore} className="relative rounded-sm text-xs font-semibold text-primary-text outline-none after:absolute after:-inset-2 hover:underline focus-visible:ring-3 focus-visible:ring-ring/50">
           더보기
         </button>
       )}
@@ -63,12 +65,12 @@ export function RankDialog({ title, count, open, onClose, children }: { title: s
   const listRef = useRef<HTMLDivElement>(null);
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
-      <DialogContent initialFocus={listRef} className="flex max-h-[86vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg" data-clarity-mask="true">
+      <DialogContent initialFocus={listRef} className="flex max-h-[86dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg" data-clarity-mask="true">
         <div className="flex flex-col gap-1 border-b border-border p-4 pr-12">
           <DialogTitle className="text-base leading-tight font-bold">{title}</DialogTitle>
           <DialogDescription className="text-xs">{count.toLocaleString("ko-KR")}개 · 누르면 그 아이템의 내역</DialogDescription>
         </div>
-        <div ref={listRef} tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto outline-none [&>*:first-child]:border-t-0">
+        <div ref={listRef} tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto overscroll-contain outline-none [&>*:first-child]:border-t-0">
           {children}
         </div>
       </DialogContent>
@@ -77,7 +79,11 @@ export function RankDialog({ title, count, open, onClose, children }: { title: s
 }
 
 export function Delta({ v, className }: { v: number; className?: string }) {
-  return <b className={cn("font-num whitespace-nowrap", tone(v), className)}>{signed(v)}</b>;
+  return (
+    <b className={cn("font-num whitespace-nowrap", tone(v), className)}>
+      <Digits>{signed(v)}</Digits>
+    </b>
+  );
 }
 
 /**
@@ -100,8 +106,11 @@ export function PickedTotal({ spent, delta }: { spent: number; delta: number | n
   );
 }
 
-/** Small label on a card (a count, a streak). */
-export const CHIP = "rounded tile-edge px-1.5 text-[11px] leading-[18px] font-semibold whitespace-nowrap";
+/**
+ * Small label on a card or a try (a count, a streak, an event). A plain one adds `tile-edge`, a coloured one its own
+ * border colour: `tile-edge` makes the border transparent, so the two never go on one label.
+ */
+export const CHIP = "rounded border px-1.5 text-[11px] leading-[calc(18/11)] font-semibold whitespace-nowrap";
 
 /** One small box of a card: a label and a number on one line (the number drops under the label when it does not fit). */
 export function Tile({ label, className, children }: { label: string; className?: string; children: ReactNode }) {
@@ -114,13 +123,15 @@ export function Tile({ label, className, children }: { label: string; className?
 }
 
 /** What was used against the average: the bar is what was used, the tick is the average. Past the tick = worse than average. */
-export function Gauge({ label, used, mean, children }: { label: ReactNode; used: number; mean: number; children: ReactNode }) {
+export function Gauge({ label, title, used, mean, children }: { label: ReactNode; /** The label in words, when it is not a plain string. */ title?: string; used: number; mean: number; children: ReactNode }) {
   const scale = Math.max(used, mean) * 1.15 || 1;
   const pct = (v: number) => `${Math.min(100, Math.max(0, (v / scale) * 100))}%`;
   return (
     <div className="flex flex-col gap-[5px]">
       <div className="flex items-baseline justify-between gap-2 text-xs">
-        <span className="min-w-0 truncate text-muted-foreground">{label}</span>
+        <span className="min-w-0 truncate text-muted-foreground" title={title ?? (typeof label === "string" ? label : undefined)}>
+          {label}
+        </span>
         <span className="whitespace-nowrap">{children}</span>
       </div>
       <div className="relative h-2 rounded-full bg-muted" aria-hidden="true">
@@ -189,9 +200,10 @@ export function EventFields({
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger aria-label="이벤트" className={cn(MENU_TRIGGER, group && "border-primary/60 font-semibold", className)}>
+        {/* Picked = the orange border alone: with the shadow edge under it the field had two edges. */}
+        <DropdownMenuTrigger aria-label="이벤트" title={group ? group.label : undefined} className={cn(MENU_TRIGGER, group && "border-primary/60 font-semibold shadow-none", className)}>
           <span className="truncate">{group ? group.label : "모든 기록"}</span>
-          <ChevronDown className="pointer-events-none absolute top-1/2 right-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+          <ChevronDown className={MENU_ARROW} aria-hidden="true" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" collisionAvoidance={BELOW} className="max-h-[min(16rem,var(--available-height))] w-56">
           <DropdownMenuRadioGroup value={group ? group.label : NONE} onValueChange={(next) => onPick(next === NONE ? "" : String(next), "")}>
@@ -200,36 +212,45 @@ export function EventFields({
             </DropdownMenuRadioItem>
             {groups.map((g) => (
               <DropdownMenuRadioItem key={g.label} value={g.label} closeOnClick>
-                <span className="truncate">{g.label}</span>
+                <span className="truncate" title={g.label}>
+                  {g.label}
+                </span>
               </DropdownMenuRadioItem>
             ))}
           </DropdownMenuRadioGroup>
         </DropdownMenuContent>
       </DropdownMenu>
-      {group && (
-        <DropdownMenu>
-          <DropdownMenuTrigger aria-label="세부 날짜" className={cn(MENU_TRIGGER, className)}>
-            <span className="truncate">{round ? roundName(group, round) : rows[0].name}</span>
-            <ChevronDown className="pointer-events-none absolute top-1/2 right-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" collisionAvoidance={BELOW} className="max-h-[min(20rem,var(--available-height))] w-72">
-            <DropdownMenuRadioGroup value={round ? round.id : NONE} onValueChange={(next) => onPick(group.label, next === NONE ? "" : String(next))}>
-              {rows.map((r, i) => {
-                const t = tallies[i];
-                return (
-                  <DropdownMenuRadioItem key={r.id} value={r.id} closeOnClick className="gap-3 py-1.5">
-                    <span className="flex min-w-0 flex-1 flex-col">
-                      <span className={cn("truncate", i === 0 && "font-semibold")}>{r.name}</span>
-                      <span className="truncate text-xs text-muted-foreground">{sub(t)}</span>
-                    </span>
-                    {t && t.delta !== null && <Delta v={t.delta} className="text-[13px]" />}
-                  </DropdownMenuRadioItem>
-                );
-              })}
-            </DropdownMenuRadioGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
+      {/* The widths of the row go on the box that comes and goes; the field fills it. */}
+      <Reveal open={!!group} className={cn("flex min-w-0", className)}>
+        {group && (
+          <DropdownMenu>
+            <DropdownMenuTrigger aria-label="세부 날짜" title={round ? roundName(group, round) : rows[0].name} className={cn(MENU_TRIGGER, "flex-1")}>
+              <span className="truncate">{round ? roundName(group, round) : rows[0].name}</span>
+              <ChevronDown className={MENU_ARROW} aria-hidden="true" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" collisionAvoidance={BELOW} className="max-h-[min(20rem,var(--available-height))] w-72">
+              <DropdownMenuRadioGroup value={round ? round.id : NONE} onValueChange={(next) => onPick(group.label, next === NONE ? "" : String(next))}>
+                {rows.map((r, i) => {
+                  const t = tallies[i];
+                  return (
+                    <DropdownMenuRadioItem key={r.id} value={r.id} closeOnClick className="gap-3 py-1.5">
+                      <span className="flex min-w-0 flex-1 flex-col">
+                        <span className={cn("truncate", i === 0 && "font-semibold")} title={r.name}>
+                          {r.name}
+                        </span>
+                        <span className="truncate text-xs text-muted-foreground" title={sub(t)}>
+                          {sub(t)}
+                        </span>
+                      </span>
+                      {t && t.delta !== null && <Delta v={t.delta} className="text-[13px]" />}
+                    </DropdownMenuRadioItem>
+                  );
+                })}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+      </Reveal>
     </>
   );
 }
@@ -243,7 +264,7 @@ export function EventStrip({ group, round, tally, unit, deltaLabel, destroy }: {
   const newest = group.rounds[0];
   const when = round ? roundName(group, round) : oldest && newest ? `${group.rounds.length}회 · ${roundDates(oldest.from, newest.to)}` : "";
   return (
-    <Card className="flex flex-wrap items-center gap-x-5 gap-y-1.5 border-primary/40 bg-primary-soft/40 px-4 py-2.5 text-[13px]">
+    <Card className="flex flex-wrap items-center gap-x-5 gap-y-1.5 border-primary/40 bg-primary-soft/40 px-4 py-2.5 text-[13px] shadow-none">
       <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 font-bold">
         <span className={cn(CHIP, "border-primary/50 bg-primary-soft text-primary-text")}>{group.label}</span>
         {when}
@@ -273,9 +294,11 @@ export function RoundsIn({ group, n }: { group: EventGroup; n: number }) {
   return <span className="mt-2 text-xs font-semibold text-primary-text">{`${group.name ? group.label : "이벤트"} ${group.rounds.length}회 중 ${n}회`}</span>;
 }
 
-/** A menu button that reads like the fields next to it. */
+/** A menu button that reads like the fields next to it. The `after` box makes it 40px tall to the finger. */
 const MENU_TRIGGER =
-  "relative inline-flex h-8 min-w-0 items-center tile-sm pr-8 pl-2.5 text-left text-[13px] text-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50";
+  "relative inline-flex h-8 min-w-0 items-center tile-sm pr-8 pl-2.5 text-left text-[13px] text-foreground outline-none after:absolute after:inset-x-0 after:-inset-y-1 hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50";
+/** The arrow of a menu button or a select. Its glyph has 3.5px of air inside its box, so the box sits 6px in for the glyph to stand 10px in like the text. */
+const MENU_ARROW = "pointer-events-none absolute top-1/2 right-1.5 size-3.5 -translate-y-1/2 text-muted-foreground";
 
 export type Sort = "spent" | "delta" | "recent";
 const SORT_LABEL: Record<Sort, string> = { spent: "많이 쓴 순", delta: "이득 큰 순", recent: "최근 순" };
@@ -287,12 +310,12 @@ const SORT_LABEL: Record<Sort, string> = { spent: "많이 쓴 순", delta: "이�
 export function SortMenu({ value, onChange, hideLow, onHideLow, className }: { value: Sort; onChange: (sort: Sort) => void; hideLow?: boolean; onHideLow?: (v: boolean) => void; className?: string }) {
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger aria-label="정렬" className={cn(MENU_TRIGGER, className)}>
+      <DropdownMenuTrigger aria-label="정렬" title={`${SORT_LABEL[value]}${onHideLow && hideLow ? " · 12성 이상" : ""}`} className={cn(MENU_TRIGGER, className)}>
         <span className="truncate">
           {SORT_LABEL[value]}
           {onHideLow && hideLow ? " · 12성 이상" : ""}
         </span>
-        <ChevronDown className="pointer-events-none absolute top-1/2 right-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+        <ChevronDown className={MENU_ARROW} aria-hidden="true" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" collisionAvoidance={BELOW} className="w-48">
         <DropdownMenuRadioGroup value={value} onValueChange={(next) => onChange(next as Sort)}>
@@ -322,13 +345,14 @@ export function Select({ className, children, ...props }: ComponentProps<"select
       <select
         {...props}
         className={cn(
-          "h-8 min-w-0 appearance-none rounded-md border border-border bg-background pr-8 pl-2.5 text-[13px] text-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+          // 16px on a phone: iOS zooms the page in on a field with smaller text.
+          "h-8 min-w-0 appearance-none rounded-md border border-border bg-background pr-8 pl-2.5 text-base text-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50 sm:text-[13px]",
           className
         )}
       >
         {children}
       </select>
-      <ChevronDown className="pointer-events-none absolute top-1/2 right-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+      <ChevronDown className={MENU_ARROW} aria-hidden="true" />
     </span>
   );
 }
@@ -357,7 +381,7 @@ export function TryBadges({ row, restored }: { row: SfRow; restored: boolean }) 
   return (
     <span className="flex flex-wrap gap-1">
       {out.map(([label, css]) => (
-        <span key={label} className={cn("rounded border px-1.5 text-[11px] leading-[18px] font-semibold whitespace-nowrap", css)}>
+        <span key={label} className={cn(CHIP, css)}>
           {label}
         </span>
       ))}

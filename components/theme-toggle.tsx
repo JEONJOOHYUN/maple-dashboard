@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
 import { Moon, Sun } from "lucide-react";
+import { SwapIcon } from "@/components/ui/swap-icon";
 
 export function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
@@ -26,11 +27,7 @@ export function ThemeToggle() {
       aria-label={isDark ? "라이트 모드로 전환" : "다크 모드로 전환"}
       className="flex size-10 items-center justify-center rounded-xl bg-card text-foreground transition-[background-color,scale] outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.96]"
     >
-      {isDark ? (
-        <Sun className="size-[17px]" aria-hidden="true" />
-      ) : (
-        <Moon className="size-[17px]" aria-hidden="true" />
-      )}
+      <SwapIcon on={!isDark} from={<Sun className="size-[17px]" aria-hidden="true" />} to={<Moon className="size-[17px]" aria-hidden="true" />} />
     </button>
   );
 }

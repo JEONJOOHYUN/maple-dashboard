@@ -60,7 +60,8 @@ export function SundayHomeCard({ week, prediction }: { week: SundayPageData["thi
           )}
         </div>
         <div className="mx-auto flex flex-col items-center gap-1">
-          <ul className="flex items-start pb-3 pl-5" aria-label={`${prediction.label} 테마별 나올 확률`}>
+          {/* The cards are lifted above the tile's link: a press on them goes through to it. */}
+          <ul className="pointer-events-none flex items-start pb-3 pl-5" aria-label={`${prediction.label} 테마별 나올 확률`}>
             {fan.map((t, i) => {
               const top = t.p === maxP;
               return (
@@ -88,7 +89,8 @@ export function SundayHomeCard({ week, prediction }: { week: SundayPageData["thi
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap gap-2">
           {prediction.bigDays.map((d) => (
-            <span key={d.id} className="inline-flex h-7 items-center gap-1.5 rounded-full bg-background px-3 text-xs whitespace-nowrap text-muted-foreground">
+            // A label, not a pill to press: a flatter corner and a fainter fill than the links beside it.
+            <span key={d.id} className="inline-flex h-7 items-center gap-1.5 rounded-md bg-background/60 px-2.5 text-xs whitespace-nowrap text-muted-foreground">
               {d.label.replace(" 타임", "")} <b className="font-semibold text-foreground">{d.overdue ? "나올 때 지남" : d.when}</b>
             </span>
           ))}
@@ -96,12 +98,12 @@ export function SundayHomeCard({ week, prediction }: { week: SundayPageData["thi
         <div className="flex flex-wrap gap-2">
           {recorded && <NoticeImage images={recorded.images} label={week.label} icon={false} className={cn(PILL_LINK, "relative z-10 hover:no-underline")} />}
           {recorded?.noticeUrl && (
-            <a href={recorded.noticeUrl} target="_blank" rel="noreferrer" className={cn(PILL_LINK, "relative z-10 pr-2")}>
+            <a href={recorded.noticeUrl} target="_blank" rel="noreferrer" className={cn(PILL_LINK, "relative z-10 pr-[7px]")}>
               공지사항
               <ExternalLink className="size-3 text-muted-foreground" aria-hidden="true" />
             </a>
           )}
-          <Link href="/sunday" aria-label="썬데이 메이플 자세히" className={cn(PILL_LINK, "relative z-10 pr-2")}>
+          <Link href="/sunday" aria-label="썬데이 메이플 자세히" className={cn(PILL_LINK, "relative z-10 pr-[7px]")}>
             자세히
             <PillArrow />
           </Link>

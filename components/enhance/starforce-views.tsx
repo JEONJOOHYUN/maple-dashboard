@@ -35,7 +35,10 @@ function DuoBox({ label, title, value, sub, onOpen, className }: Box & { classNa
   const body = (
     <>
       <span className="text-[11px] text-muted-foreground">{label}</span>
-      <b className="text-sm leading-snug">{title}</b>
+      {/* One line: a name on two lines made this box taller than the one next to it. */}
+      <b className="truncate text-sm leading-snug" title={title}>
+        {title}
+      </b>
       {value === null ? <b className="font-num text-lg text-muted-foreground">—</b> : <Delta v={value} className="text-lg" />}
       <span className="text-[11px] text-muted-foreground">{sub}</span>
     </>
@@ -43,7 +46,7 @@ function DuoBox({ label, title, value, sub, onOpen, className }: Box & { classNa
   const css = cn("flex min-w-0 flex-col gap-0.5 rounded-lg px-3 py-2.5", className);
   if (!onOpen) return <div className={css}>{body}</div>;
   return (
-    <button type="button" onClick={onOpen} className={cn(css, "text-left outline-none hover:brightness-95 focus-visible:ring-3 focus-visible:ring-ring/50 dark:hover:brightness-125")}>
+    <button type="button" onClick={onOpen} className={cn(css, "text-left outline-none transition-[filter,scale] hover:brightness-95 focus-visible:ring-3 focus-visible:ring-ring/50 dark:hover:brightness-125")}>
       {body}
     </button>
   );
@@ -89,15 +92,20 @@ function RankCard({
       type="button"
       onClick={() => (setAll(false), onOpen(it.key))}
       className={cn(
-        "press-static grid w-full items-center gap-2.5 border-t border-border px-4 py-2.5 text-left outline-none hover:bg-muted/60 focus-visible:ring-3 focus-visible:ring-ring/50",
+        // The ring is drawn inside: the card and the window's list would cut one drawn outside.
+        "press-static grid w-full items-center gap-2.5 border-t border-border px-4 py-2.5 text-left outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset",
         wide ? "grid-cols-[30px_minmax(0,1fr)_auto]" : "grid-cols-[18px_minmax(0,1fr)_auto]"
       )}
     >
-      <b className="font-num text-[15px] text-muted-foreground">{i + 1}</b>
+      <b className="font-num text-[15px] text-muted-foreground">
+        <Digits>{i + 1}</Digits>
+      </b>
       <span className="flex min-w-0 items-center gap-2.5">
         <ItemIcon info={it.info} />
         <span className="flex min-w-0 flex-col gap-0.5">
-          <b className="truncate text-sm">{it.item}</b>
+          <b className="truncate text-sm" title={it.item}>
+            {it.item}
+          </b>
           <span className="text-xs text-muted-foreground">
             {it.who} · {sub(it)}
           </span>
@@ -130,7 +138,7 @@ export function InsightView({ stats, onOpen }: { stats: Stats; onOpen: (key: str
 
   return (
     <>
-      <div className="grid gap-3.5 lg:grid-cols-2">
+      <div className="grid gap-2 lg:grid-cols-2">
         <Card>
           <h2 className="flex items-center gap-2 px-4 pt-3.5 pb-1 text-sm font-bold">
             <Package className="size-4 text-primary-text" aria-hidden="true" />
@@ -147,7 +155,7 @@ export function InsightView({ stats, onOpen }: { stats: Stats; onOpen: (key: str
         </Card>
       </div>
       {/* Wide screens: the three rankings in one row, weekdays underneath. Narrower: two by two. */}
-      <div className="grid items-start gap-3.5 lg:grid-cols-2 xl:grid-cols-3">
+      <div className="grid items-start gap-2 lg:grid-cols-2 xl:grid-cols-3">
         <RankCard title="연속 성공이 많았던 아이템" empty="연속 성공 없음" items={wins} sub={(it) => `${it.win.from}성 → ${it.win.to}성`} value={(it) => `${it.win.n}번 연속 성공`} color="text-gain" onOpen={onOpen} />
         <RankCard title="연속 실패가 많았던 아이템" empty="연속 실패 없음" items={fails} sub={(it) => `${it.streak.star}성에서`} value={(it) => `${it.streak.n}번 연속 실패`} color="text-loss" onOpen={onOpen} />
         <RankCard title="파괴가 많았던 아이템" empty="파괴 없음" items={booms} sub={(it) => `강화 ${it.tries.toLocaleString("ko-KR")}번`} value={(it) => `파괴 ${it.destroy}번`} color="text-destructive" onOpen={onOpen} />
@@ -164,7 +172,8 @@ export function InsightView({ stats, onOpen }: { stats: Stats; onOpen: (key: str
                   <span className="w-[22px] rounded-b-[3px] bg-loss" style={{ height: v < 0 ? Math.max(2, Math.round((-v / peak) * 48)) : 0 }} />
                 </span>
                 <b className="text-xs">{WEEKDAYS[i]}</b>
-                <span className={cn("font-num text-[11px] whitespace-nowrap", tone(v))}>{v === 0 ? "—" : signed(v)}</span>
+                {/* The short form, as in the calendar: seven columns on a phone are about 39px each. */}
+                <span className={cn("font-num text-[11px] whitespace-nowrap", tone(v))}>{v === 0 ? "—" : signedShort(v)}</span>
               </div>
             ))}
           </div>
@@ -194,7 +203,7 @@ function TryRow({ entry, showItem }: { entry: Entry; showItem: boolean }) {
       <span className="flex flex-col gap-0.5">
         <b className={cn("text-xs", res.text)}>{res.label}</b>
         <b className="font-num text-[15px] whitespace-nowrap sm:text-base">
-          {row.from} → {starAfter(row, j.restored)}
+          <Digits>{`${row.from} → ${starAfter(row, j.restored)}`}</Digits>
         </b>
       </span>
       <span className="flex min-w-0 flex-col gap-1.5">
@@ -202,8 +211,12 @@ function TryRow({ entry, showItem }: { entry: Entry; showItem: boolean }) {
           <span className="flex min-w-0 items-center gap-2.5">
             <ItemIcon info={info} />
             <span className="flex min-w-0 flex-col gap-0.5">
-              <b className="truncate text-sm">{row.item}</b>
-              <span className="truncate text-xs text-muted-foreground">{row.who}</span>
+              <b className="truncate text-sm" title={row.item}>
+                {row.item}
+              </b>
+              <span className="truncate text-xs text-muted-foreground" title={row.who}>
+                {row.who}
+              </span>
             </span>
           </span>
         )}
@@ -212,8 +225,9 @@ function TryRow({ entry, showItem }: { entry: Entry; showItem: boolean }) {
       <span className="flex flex-col items-end gap-0.5">
         {j.ok && (
           <span className="font-num text-[11px] whitespace-nowrap text-muted-foreground">
+            {/* The struck price stays plain text: a line-through is not drawn across the boxes Digits puts each digit in. */}
             {j.list > j.cost + 0.5 && <s className="mr-1 opacity-70">{eok(j.list)}</s>}
-            {eok(j.cost)}
+            <Digits>{eok(j.cost)}</Digits>
           </span>
         )}
         {j.ok ? <Delta v={j.delta} className="text-sm" /> : <span className="text-xs whitespace-nowrap text-muted-foreground">{j.why ? SKIP_LABEL[j.why] : ""}</span>}
@@ -252,22 +266,26 @@ export function LogView({ entries, characters, hideLow, onHideLow }: { entries: 
 
   return (
     <Card className="overflow-hidden">
-      <div ref={top} className="flex scroll-mt-4 flex-wrap items-center gap-2.5 border-b border-border px-4 py-3">
+      {/* The count has a line of its own, as in 모아보기: next to the fields, a change of its digits moved the field
+          that had just been used. */}
+      <div ref={top} className="flex scroll-mt-4 flex-col gap-2.5 border-b border-border px-4 py-3">
         <b className="text-sm">
           강화 내역 <span className="font-medium text-muted-foreground">{list.length.toLocaleString("ko-KR")}건</span>
         </b>
-        <CharacterFilter names={characters} value={who} onChange={(name) => (setWho(name), setItem(NO_ITEM_FILTER))} className={PICK_W.who} />
-        <ItemFilter names={items} value={item} onChange={setItem} className={PICK_W.item} />
-        <Select aria-label="결과" value={result} onChange={(e) => setResult(e.target.value)}>
-          <option value="">모든 결과</option>
-          <option value="success">성공</option>
-          <option value="fail">실패</option>
-          <option value="destroy">파괴</option>
-        </Select>
-        <label className="inline-flex items-center gap-1.5 text-[13px]">
-          <input type="checkbox" checked={hideLow} onChange={(e) => onHideLow(e.target.checked)} className="size-4 accent-primary" />
-          12성 미만 숨기기
-        </label>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <CharacterFilter names={characters} value={who} onChange={(name) => (setWho(name), setItem(NO_ITEM_FILTER))} className={PICK_W.who} />
+          <ItemFilter names={items} value={item} onChange={setItem} className={PICK_W.item} />
+          <Select aria-label="결과" value={result} onChange={(e) => setResult(e.target.value)}>
+            <option value="">모든 결과</option>
+            <option value="success">성공</option>
+            <option value="fail">실패</option>
+            <option value="destroy">파괴</option>
+          </Select>
+          <label className="relative inline-flex items-center gap-1.5 text-[13px] after:absolute after:-inset-2">
+            <input type="checkbox" checked={hideLow} onChange={(e) => onHideLow(e.target.checked)} className="size-4 accent-primary" />
+            12성 미만 숨기기
+          </label>
+        </div>
       </div>
       {shown.length === 0 && <p className="px-4 py-8 text-center text-[13px] text-muted-foreground">해당 기록 없음</p>}
       {shown.map((e) => (
@@ -346,14 +364,18 @@ export function ItemsView({
           <SortMenu value={sort} onChange={setSort} hideLow={hideLow} onHideLow={onHideLow} className="ml-auto" />
         </div>
       </div>
-      {group && ev && (
-        <EventStrip group={group} round={round} tally={round ? ev.tallies[group.rounds.indexOf(round) + 1] : ev.tallies[0]} unit="강화" deltaLabel="기댓값 대비" destroy={shown.items.reduce((sum, it) => sum + it.destroy, 0)} />
-      )}
-      {filter.picked && items.length > 0 && (
-        <PickedTotal spent={items.reduce((sum, it) => sum + it.spent, 0)} delta={items.some((it) => it.judged > 0) ? items.reduce((sum, it) => sum + (it.judged > 0 ? it.delta : 0), 0) : null} />
-      )}
+      <Reveal open={!!(group && ev)}>
+        {group && ev && (
+          <EventStrip group={group} round={round} tally={round ? ev.tallies[group.rounds.indexOf(round) + 1] : ev.tallies[0]} unit="강화" deltaLabel="기댓값 대비" destroy={shown.items.reduce((sum, it) => sum + it.destroy, 0)} />
+        )}
+      </Reveal>
+      <Reveal open={!!filter.picked && items.length > 0}>
+        {filter.picked && items.length > 0 && (
+          <PickedTotal spent={items.reduce((sum, it) => sum + it.spent, 0)} delta={items.some((it) => it.judged > 0) ? items.reduce((sum, it) => sum + (it.judged > 0 ? it.delta : 0), 0) : null} />
+        )}
+      </Reveal>
       {items.length === 0 && <Empty>{visible.length === 0 ? "12성 이상 아이템 없음" : "해당 아이템 없음"}</Empty>}
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
         {/* The card being typed in stays on screen wherever it sorts to: a level typed into an unknown item makes it
             known after two digits, which moved it to another page and took the field away mid-number
             (Codex review, 2026-11-13). */}
@@ -363,13 +385,16 @@ export function ItemsView({
           const noLevel = it.info.level <= 0;
           const open = editing === it.key || noLevel;
           return (
-            <Card key={it.key} className="relative flex flex-col items-center p-3.5 text-center hover:border-primary/60">
-              {/* The whole card opens the item's tries; the pencil and the fields sit above this button. */}
+            <Card key={it.key} className="relative flex flex-col items-center p-3.5 text-center transition-[box-shadow] hover:shadow-tile-hover">
+              {/* The whole card opens the item's tries; the pencil and the fields sit above this button. It lies over
+                  the name, so the full name (cut to one line below) is its tooltip. Corner = the card's 16 less its
+                  1px border. */}
               <button
                 type="button"
                 aria-label={`${it.item} 강화 내역 보기`}
+                title={it.item}
                 onClick={() => onOpen(it.key, scope)}
-                className="absolute inset-0 rounded-lg outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                className="absolute inset-0 rounded-[15px] outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
               />
               <span className="absolute top-3.5 left-3.5 text-xs text-muted-foreground">
                 {kstShort(it.first)} ~ {kstShort(it.last)}
@@ -380,7 +405,7 @@ export function ItemsView({
                   aria-label={`${it.item} 레벨 · 노작 가격 고치기`}
                   aria-expanded={open}
                   onClick={() => setEditing(open ? "" : it.key)}
-                  className="absolute top-1.5 right-2 z-10 flex size-8 items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+                  className="absolute top-1.5 right-2 z-10 flex size-8 items-center justify-center rounded-md text-muted-foreground outline-none after:absolute after:-inset-1 hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
                 >
                   <Pencil className="size-3.5" aria-hidden="true" />
                 </button>
@@ -410,7 +435,8 @@ export function ItemsView({
               ) : (
                 <span className="mt-2 text-xs text-muted-foreground">{noLevel ? "레벨 입력 → 손익 계산" : it.skip ? `${SKIP_LABEL[it.skip]} · 손익 제외` : ""}</span>
               )}
-              <div className="mt-3 grid grid-cols-[1fr_1fr_1.4fr] gap-1.5 self-stretch">
+              {/* Pushed to the bottom: the cards of a row differ above it (a gauge, a line, nothing). */}
+              <div className="mt-auto grid grid-cols-[1fr_1fr_1.4fr] gap-1.5 self-stretch pt-3">
                 <Tile label="강화">
                   <b className="font-num text-sm whitespace-nowrap">{it.tries.toLocaleString("ko-KR")}번</b>
                 </Tile>
@@ -422,8 +448,8 @@ export function ItemsView({
                 </Tile>
               </div>
               <div className="mt-2.5 flex flex-wrap items-center justify-center gap-1.5 text-xs">
-                {it.top.success > 0 && <span className={CHIP}>성공 {it.top.success}</span>}
-                {it.top.fail > 0 && <span className={CHIP}>실패 {it.top.fail}</span>}
+                {it.top.success > 0 && <span className={cn(CHIP, "tile-edge")}>성공 {it.top.success}</span>}
+                {it.top.fail > 0 && <span className={cn(CHIP, "tile-edge")}>실패 {it.top.fail}</span>}
                 {it.top.destroy > 0 && <span className={cn(CHIP, "border-input bg-muted")}>파괴 {it.top.destroy}</span>}
               </div>
               {it.streak.n > 1 && (
@@ -447,8 +473,20 @@ export function ItemsView({
 }
 
 /** Every try of one item (one piece), newest first. Opened from a 모아보기 card or a ranking row. */
-export function ItemDialog({ item, entries, onClose }: { item: ItemStat | null; entries: Entry[]; onClose: () => void }) {
+export function ItemDialog({ item: live, entries, onClose }: { item: ItemStat | null; entries: Entry[]; onClose: () => void }) {
   const [limit, setLimit] = useState(PAGE);
+  // The window stays mounted between items (a `key` unmounted it in one frame, before its exit could play). While it
+  // closes there is no item any more, so it goes on showing the last one it had.
+  const [kept, setKept] = useState(live);
+  if (live && live !== kept) setKept(live);
+  const item = live ?? kept;
+  // Every opening starts from the first page again, and so does another item.
+  const liveKey = live?.key ?? "";
+  const [openKey, setOpenKey] = useState(liveKey);
+  if (liveKey !== openKey) {
+    setOpenKey(liveKey);
+    if (liveKey) setLimit(PAGE);
+  }
   // Focus goes to the list itself when the window opens. Left to the default it lands on the first button inside,
   // which is "더 보기" at the very bottom of a long list, and the list opens scrolled down to it.
   const listRef = useRef<HTMLDivElement>(null);
@@ -463,8 +501,8 @@ export function ItemDialog({ item, entries, onClose }: { item: ItemStat | null; 
     : [];
 
   return (
-    <Dialog open={item !== null} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent initialFocus={listRef} className="flex max-h-[86vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl" data-clarity-mask="true">
+    <Dialog open={live !== null} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent initialFocus={listRef} className="flex max-h-[86dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl" data-clarity-mask="true">
         {item && (
           <>
             <div className="flex flex-col gap-3 border-b border-border p-4">
@@ -472,7 +510,8 @@ export function ItemDialog({ item, entries, onClose }: { item: ItemStat | null; 
               <div className="flex items-center gap-3 pr-9">
                 <ItemIcon info={item.info} size={44} />
                 <div className="flex min-w-0 flex-col gap-1">
-                  <DialogTitle className="truncate text-base leading-tight font-bold">{item.item}</DialogTitle>
+                  {/* Not cut: this is where a name that is cut in the lists can be read whole. */}
+                  <DialogTitle className="text-base leading-tight font-bold">{item.item}</DialogTitle>
                   <DialogDescription className="text-xs">
                     {item.info.level > 0 ? `Lv.${item.info.level}` : "레벨 모름"} · {item.who}
                     {item.copies > 1 && ` · ${item.copy}번째`} · ★{item.start} → ★{item.now} · 강화 {item.tries.toLocaleString("ko-KR")}번 · 파괴 {item.destroy}번
@@ -490,12 +529,12 @@ export function ItemDialog({ item, entries, onClose }: { item: ItemStat | null; 
                 </div>
               )}
             </div>
-            <div ref={listRef} tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto outline-none">
+            <div ref={listRef} tabIndex={-1} className="min-h-0 flex-1 overflow-y-auto overscroll-contain outline-none">
               {shown.map((e) => (
                 <TryRow key={e.row.id} entry={e} showItem={false} />
               ))}
               {list.length > limit && (
-                <button type="button" onClick={() => setLimit(limit + PAGE)} className="press-static w-full border-t border-border py-3 text-[13px] font-semibold text-primary-text outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50">
+                <button type="button" onClick={() => setLimit(limit + PAGE)} className="press-static w-full border-t border-border py-3 text-[13px] font-semibold text-primary-text outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset">
                   더 보기 ({(list.length - limit).toLocaleString("ko-KR")}건 남음)
                 </button>
               )}
@@ -556,7 +595,7 @@ function Step({ label, disabled, onClick, children }: { label: string; disabled:
       aria-label={label}
       disabled={disabled}
       onClick={onClick}
-      className="flex size-8 items-center justify-center tile-sm outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-40"
+      className="relative flex size-8 items-center justify-center tile-sm outline-none after:absolute after:-inset-1 hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
     >
       {children}
     </button>
@@ -596,15 +635,20 @@ export function CalendarView({ stats, from, to }: { stats: Stats; from: string; 
     .slice(0, 3);
 
   return (
-    <div className="grid items-start gap-3.5 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+    <div className="grid items-start gap-2 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
       <Card className="flex flex-col gap-3 p-[18px]">
         <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
           <div className="flex items-center gap-2">
             <Step label={mode === "month" ? "이전 달" : "이전 해"} disabled={!canBack} onClick={() => move(-1)}>
               <ChevronLeft className="size-4" aria-hidden="true" />
             </Step>
-            <h2 className="font-num text-[15px] font-bold whitespace-nowrap">
-              {mode === "month" ? `${year}년 ${mon}월` : `${year}년`} · <span className={tone(total)}>{signed(total)}</span>
+            {/* One width for (nearly) every month and centred in it, digits of one width: the next button stays under
+                the pointer while the months are stepped through. */}
+            <h2 className="text-center font-num text-[15px] font-bold whitespace-nowrap min-[360px]:min-w-[12.5rem] sm:min-w-[14rem]">
+              <Digits>{mode === "month" ? `${year}년 ${mon}월` : `${year}년`}</Digits> ·{" "}
+              <span className={tone(total)}>
+                <Digits>{signed(total)}</Digits>
+              </span>
             </h2>
             <Step label={mode === "month" ? "다음 달" : "다음 해"} disabled={!canNext} onClick={() => move(1)}>
               <ChevronRight className="size-4" aria-hidden="true" />
@@ -665,7 +709,7 @@ export function CalendarView({ stats, from, to }: { stats: Stats; from: string; 
                   onClick={() => (setPicked(m), setMode("month"))}
                   className={cn(
                     "flex flex-col items-center gap-[3px] rounded-md px-0.5 py-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-                    inside ? "hover:bg-muted" : "opacity-40"
+                    inside ? "hover:bg-muted" : "opacity-50"
                   )}
                 >
                   <span className="flex h-12 items-end">
@@ -705,9 +749,11 @@ export function CalendarView({ stats, from, to }: { stats: Stats; from: string; 
         {lucky.map((d) => (
           <div key={d.date} className="flex items-center gap-3 border-t border-border py-2.5">
             <span className="w-11 shrink-0 font-num text-[13px] text-muted-foreground">
-              {Number(d.date.slice(5, 7))}/{Number(d.date.slice(8))}
+              <Digits>{`${Number(d.date.slice(5, 7))}/${Number(d.date.slice(8))}`}</Digits>
             </span>
-            <span className="min-w-0 flex-1 truncate text-[13px]">{d.best?.label ?? `강화 ${d.tries}번`}</span>
+            <span className="min-w-0 flex-1 truncate text-[13px]" title={d.best?.label ?? `강화 ${d.tries}번`}>
+              {d.best?.label ?? `강화 ${d.tries}번`}
+            </span>
             <Delta v={d.delta} className="text-sm" />
           </div>
         ))}

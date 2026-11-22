@@ -72,7 +72,9 @@ export function ClassAbilityTable({
                 aria-label={`${c.name}${c.collector ? "(콜렉터 기준)" : ""}: 고급 재설정 ${full}, 일반 재설정 레전드리 ${lead}, 유니크 ${rest.join(" · ")}`}
                 onClick={() => onPick(c.name)}
                 className={cn(
-                  "press-static grid w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[13px] transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                  // No ring of its own: the list clips whatever is drawn outside a row, and the site's focus outline for
+                  // a `press-static` row is drawn inside it.
+                  "group/row press-static grid w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[13px] transition-colors duration-150 ease-out",
                   COLS,
                   on ? "bg-primary-soft" : "hover:bg-muted",
                 )}
@@ -80,14 +82,14 @@ export function ClassAbilityTable({
                 <span className={cn("min-w-0", on && "font-bold")}>
                   {c.name}
                   {/* The user's table *: this build is the stronger one only with a collector. The note shows on hover
-                      (user 2026-11-15: no text in the row), to the right so the scrolling list does not clip it; screen
-                      readers get it from the row's label. */}
+                      (user 2026-11-15: no text in the row) and while the row has keyboard focus, to the right so the
+                      scrolling list does not clip it; screen readers get it from the row's label. */}
                   {c.collector && (
                     <span className="group/star relative ml-0.5 font-bold text-primary-text">
                       *
                       <span
                         aria-hidden="true"
-                        className="pointer-events-none absolute top-1/2 left-full z-10 ml-1.5 -translate-y-1/2 rounded-md bg-foreground px-2 py-1 text-[11px] font-medium whitespace-nowrap text-background opacity-0 shadow-sm transition-opacity group-hover/star:opacity-100"
+                        className="pointer-events-none absolute top-1/2 left-full z-10 ml-1.5 -translate-y-1/2 rounded-md bg-foreground px-2 py-1 text-[11px] font-medium whitespace-nowrap text-background opacity-0 shadow-sm transition-opacity duration-150 ease-out group-hover/star:opacity-100 group-focus-visible/row:opacity-100"
                       >
                         콜렉터를 쓸 때만 이 조합이 더 셈
                       </span>

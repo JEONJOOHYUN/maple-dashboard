@@ -5,10 +5,12 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { AlertCircle, RefreshCw, Search, SlidersHorizontal, X } from "lucide-react";
 import { eok } from "@/components/ev/ui";
 import { BELOW } from "@/components/enhance/parts";
+import { SteadyText } from "@/components/ui/steady-text";
 import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from "@/components/ui/combobox";
 import { InputGroupAddon, InputGroupButton } from "@/components/ui/input-group";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Digits } from "@/components/ui/digits";
+import { Reveal } from "@/components/ui/reveal";
 import { Spinner } from "@/components/ui/spinner";
 import { SwapIcon } from "@/components/ui/swap-icon";
 import type { ApiErrorKind } from "@/lib/enhance/client";
@@ -39,8 +41,11 @@ const ERRORS: Record<ApiErrorKind, string> = {
   failed: "넥슨 API 응답 오류 → 받은 기록까지만 표시",
 };
 
-const dateInput = "h-8 rounded-md border border-border bg-background px-2 text-[13px] text-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50";
-const plainButton = "h-8 tile-sm px-2.5 text-[13px] text-foreground outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50";
+// 16px on a phone: iOS zooms the page in on a field with smaller text.
+const dateInput = "h-8 rounded-md border border-border bg-background px-2 text-base text-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50 sm:text-[13px]";
+// The `after` box makes the 32px button 40px tall to the finger.
+const plainButton =
+  "relative h-8 tile-sm px-2.5 text-[13px] text-foreground outline-none after:absolute after:inset-x-0 after:-inset-y-1 hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50";
 
 export type PeriodState = ReturnType<typeof usePeriod>;
 
@@ -104,7 +109,7 @@ export function PeriodBar({
         {lead}
         <div className="ml-auto flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           {!loading && status}
-          <button type="button" onClick={onRefresh} disabled={loading} className={cn(plainButton, "inline-flex items-center gap-1.5 disabled:opacity-50")}>
+          <button type="button" onClick={onRefresh} disabled={loading} className={cn(plainButton, "inline-flex items-center gap-1.5 pl-2 disabled:opacity-50")}>
             <SwapIcon on={loading} from={<RefreshCw className="size-3.5" aria-hidden="true" />} to={<Spinner size={14} />} />
             새로 고침
           </button>
@@ -120,25 +125,24 @@ export function PeriodBar({
                 aria-label={p.label}
                 aria-pressed={period === p.id}
                 onClick={() => setPeriod(p.id)}
+                // The transparent border is the picked button's edge where shadows are not drawn (forced colours).
                 className={cn(
-                  "h-8 rounded-lg px-2.5 text-[13px] transition-[background-color,color,scale] outline-none focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.96]",
+                  "h-8 rounded-lg border border-transparent px-[9px] text-[13px] transition-[background-color,color,box-shadow,scale] outline-none focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.96]",
                   period === p.id ? "bg-card font-bold text-primary-text shadow-tile" : "text-muted-foreground hover:text-foreground"
                 )}
               >
-                {p.short}
+                <SteadyText>{p.short}</SteadyText>
               </button>
             ))}
           </div>
         </div>
         {aside}
       </div>
-      {period === "custom" && (
-        <div className="flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground">
-          <input type="date" aria-label="시작일" value={custom.from || from} min={oldest} max={to} onChange={(e) => setCustom({ ...custom, from: e.target.value })} className={dateInput} />
-          ~
-          <input type="date" aria-label="종료일" value={custom.to || to} min={oldest} max={today} onChange={(e) => setCustom({ ...custom, to: e.target.value })} className={dateInput} />
-        </div>
-      )}
+      <Reveal open={period === "custom"} className="flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground">
+        <input type="date" aria-label="시작일" value={custom.from || from} min={oldest} max={to} onChange={(e) => setCustom({ ...custom, from: e.target.value })} className={dateInput} />
+        ~
+        <input type="date" aria-label="종료일" value={custom.to || to} min={oldest} max={today} onChange={(e) => setCustom({ ...custom, to: e.target.value })} className={dateInput} />
+      </Reveal>
     </>
   );
 }
@@ -202,11 +206,11 @@ function WorldChips({ tallies, off, onToggle }: { tallies: GroupTally[]; off: Wo
             aria-pressed={on}
             onClick={() => onToggle(id)}
             className={cn(
-              "inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[13px] outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-              on ? "bg-primary-soft font-bold text-primary-text" : "text-muted-foreground hover:text-foreground"
+              "inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[13px] transition-[background-color,color,filter,scale] outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+              on ? "bg-primary-soft font-bold text-primary-text hover:brightness-95 dark:hover:brightness-125" : "text-muted-foreground hover:text-foreground"
             )}
           >
-            {GROUP_LABEL[id]}
+            <SteadyText>{GROUP_LABEL[id]}</SteadyText>
             {spent > 0 && <span className="font-num text-xs font-medium">{eok(spent)}</span>}
           </button>
         );
@@ -222,7 +226,7 @@ function WorldChips({ tallies, off, onToggle }: { tallies: GroupTally[]; off: Wo
 export function BasisButton({ summary, children }: { summary: string; children: ReactNode }) {
   return (
     <Popover>
-      <PopoverTrigger className={cn(plainButton, "ml-auto inline-flex items-center gap-1.5")}>
+      <PopoverTrigger className={cn(plainButton, "ml-auto inline-flex items-center gap-1.5 pl-2")}>
         <SlidersHorizontal className="size-3.5" aria-hidden="true" />
         계산 기준
         <span className="text-muted-foreground">{summary}</span>
@@ -253,9 +257,13 @@ export function Toggle({ on, onChange, label }: { on: boolean; onChange: (on: bo
       aria-checked={on}
       aria-label={label}
       onClick={() => onChange(!on)}
-      className={cn("press-static flex h-6 w-10 shrink-0 rounded-full p-0.5 outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50", on ? "justify-end bg-primary" : "justify-start bg-input")}
+      className={cn(
+        "press-static relative flex h-6 w-10 shrink-0 rounded-full p-0.5 outline-none transition-colors after:absolute after:-inset-2 focus-visible:ring-3 focus-visible:ring-ring/50",
+        on ? "bg-primary" : "bg-input"
+      )}
     >
-      <span className="size-5 rounded-full bg-white shadow-sm" />
+      {/* Moved by a transform, so the knob slides and a second press half-way turns it round. */}
+      <span className={cn("size-5 rounded-full bg-white shadow-sm transition-transform", on && "translate-x-4")} />
     </button>
   );
 }
@@ -263,35 +271,37 @@ export function Toggle({ on, onChange, label }: { on: boolean; onChange: (on: bo
 /** "기록 받는 중 n / m" while loading; what went wrong, with the way out, on an error. `unit` = what done / total count. */
 export function SyncBanners({ snap, unit, onRetry, onForget }: { snap: Pick<SyncSnap<unknown>, "status" | "done" | "total" | "error">; unit: string; onRetry: () => void; onForget: () => void }) {
   const loading = snap.status === "loading" || snap.status === "idle";
+  const error = snap.status === "error" ? snap.error : null;
   return (
     <>
-      {loading && (
-        <div role="status" className="flex flex-col gap-2 tile px-4 py-3">
-          <span className="flex items-center gap-2 text-[13px]">
-            <Spinner className="text-primary-text" />
-            기록 받는 중
-            {snap.total > 0 && (
-              <b className="font-num">
-                {/* Counts up many times a second: digits of one width, so the line does not shake. */}
-                <Digits>{snap.done.toLocaleString("ko-KR")}</Digits> / <Digits>{snap.total.toLocaleString("ko-KR")}</Digits>
-                {unit}
-              </b>
-            )}
-          </span>
-          <span className="h-1.5 overflow-hidden rounded-full bg-muted">
-            <span className="block h-full rounded-full bg-primary transition-[width]" style={{ width: `${snap.total ? (snap.done / snap.total) * 100 : 0}%` }} />
-          </span>
-        </div>
-      )}
-      {snap.status === "error" && snap.error && (
-        <div role="alert" className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-[13px]">
-          <AlertCircle className="size-4 shrink-0 text-destructive" aria-hidden="true" />
-          <span className="min-w-0 flex-1 basis-48 font-semibold">{ERRORS[snap.error]}</span>
-          <button type="button" onClick={snap.error === "badKey" ? onForget : onRetry} className={cn(plainButton, "px-3 font-semibold")}>
-            {snap.error === "badKey" ? "키 다시 입력" : "다시 시도"}
-          </button>
-        </div>
-      )}
+      <Reveal open={loading} role="status" className="flex flex-col gap-2 tile px-4 py-3">
+        <span className="flex items-center gap-2 text-[13px]">
+          <Spinner className="text-primary-text" />
+          기록 받는 중
+          {snap.total > 0 && (
+            <b className="font-num">
+              {/* Counts up many times a second: digits of one width, so the line does not shake. */}
+              <Digits>{snap.done.toLocaleString("ko-KR")}</Digits> / <Digits>{snap.total.toLocaleString("ko-KR")}</Digits>
+              {unit}
+            </b>
+          )}
+        </span>
+        <span className="h-1.5 overflow-hidden rounded-full bg-muted">
+          <span className="block h-full rounded-full bg-primary transition-[width]" style={{ width: `${snap.total ? (snap.done / snap.total) * 100 : 0}%` }} />
+        </span>
+      </Reveal>
+      {/* The same corners as the loading tile it takes the place of. */}
+      <Reveal open={!!error} role="alert" className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[1rem] border border-destructive/40 bg-destructive/10 px-4 py-3 text-[13px]">
+        {error && (
+          <>
+            <AlertCircle className="size-4 shrink-0 text-destructive" aria-hidden="true" />
+            <span className="min-w-0 flex-1 basis-48 font-semibold">{ERRORS[error]}</span>
+            <button type="button" onClick={error === "badKey" ? onForget : onRetry} className={cn(plainButton, "px-3 font-semibold")}>
+              {error === "badKey" ? "키 다시 입력" : "다시 시도"}
+            </button>
+          </>
+        )}
+      </Reveal>
     </>
   );
 }
@@ -390,7 +400,8 @@ function NamePick({
           onChange(query ? { query, picked: "" } : NO_ITEM_FILTER);
           close();
         }}
-        className={cn("h-8 rounded-md border-border bg-card text-[13px] dark:bg-card [&_input]:text-[13px] md:[&_input]:text-[13px]", className)}
+        // The typed text is 16px on a phone: iOS zooms the page in on a field with smaller text.
+        className={cn("h-8 rounded-md border-border bg-card text-[13px] dark:bg-card [&_input]:text-base sm:[&_input]:text-[13px]", className)}
       >
         <InputGroupAddon align="inline-start">
           <Search className="size-3.5" aria-hidden="true" />
@@ -416,7 +427,9 @@ function NamePick({
         <ComboboxList>
           {(name: string) => (
             <ComboboxItem key={name} value={name} className="text-[13px]">
-              <span className="truncate">{name}</span>
+              <span className="truncate" title={name}>
+                {name}
+              </span>
             </ComboboxItem>
           )}
         </ComboboxList>
@@ -458,11 +471,12 @@ export function ViewTabs<T extends string>({ views, value, onChange }: { views: 
           aria-selected={value === v.id}
           onClick={() => onChange(v.id)}
           className={cn(
-            "h-10 shrink-0 px-3.5 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+            // The ring is drawn inside: the scrolling row would cut one drawn outside.
+            "h-10 shrink-0 px-3.5 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset",
             value === v.id ? "font-bold text-primary-text shadow-[inset_0_-2px_0_var(--primary)]" : "text-muted-foreground hover:text-foreground"
           )}
         >
-          {v.label}
+          <SteadyText>{v.label}</SteadyText>
         </button>
       ))}
     </div>

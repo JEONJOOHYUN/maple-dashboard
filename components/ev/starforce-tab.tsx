@@ -9,6 +9,7 @@ import {
   Panel,
   Segment,
   Switch,
+  dashedHover,
   eok,
   avg,
   parseNum,
@@ -38,7 +39,8 @@ import {
 } from "@/components/ui/tooltip";
 import { Digits } from "@/components/ui/digits";
 import { Reveal } from "@/components/ui/reveal";
-import { SwapLabel } from "@/components/ui/swap-icon";
+import { Spinner } from "@/components/ui/spinner";
+import { SwapIcon, SwapLabel } from "@/components/ui/swap-icon";
 import { ZEBRA_HEAD, ZEBRA_ROW, ZEBRA_SCROLL, ZEBRA_TABLE } from "@/components/ui/zebra";
 import { cn } from "@/lib/utils";
 import { koreanUnits } from "@/lib/format";
@@ -96,9 +98,10 @@ function AddButton({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="relative inline-flex h-7 shrink-0 items-center gap-1 rounded-full bg-background pr-2.5 pl-2 text-xs whitespace-nowrap text-muted-foreground shadow-tile transition-[box-shadow,color,scale] after:absolute after:inset-x-0 after:-inset-y-1.5 hover:text-primary-text hover:shadow-tile-hover active:scale-[0.96]"
+      // The transparent border is the edge where shadows are not drawn (forced colours); the padding gives its 1px back.
+      className="relative inline-flex h-7 shrink-0 items-center gap-1 rounded-full border border-transparent bg-background pr-[9px] pl-[7px] text-xs whitespace-nowrap text-muted-foreground shadow-tile transition-[box-shadow,color,scale] duration-150 ease-out after:absolute after:inset-x-0 after:-inset-y-1.5 hover:text-primary-text hover:shadow-tile-hover active:scale-[0.96]"
     >
-      <Plus className="size-3" strokeWidth={1.5} aria-hidden="true" />
+      <Plus size={12} strokeWidth={1.5} absoluteStrokeWidth aria-hidden="true" />
       담기
     </button>
   );
@@ -145,6 +148,8 @@ export function StarforceTab() {
   // How the last picture copy ended; kept after the label swaps back so the words do not change mid-fade.
   const [imageResult, setImageResult] = useState<ImageCopyResult>("copied");
   const [imageBusy, setImageBusy] = useState(false);
+  // The same for the sum: a blocked clipboard says so instead of doing nothing.
+  const [sumFailed, setSumFailed] = useState(false);
 
   const level =
     item === CUSTOM
@@ -187,6 +192,7 @@ export function StarforceTab() {
   const shownRestore = optimize ? recommended.restore : restore;
 
   const startStar = Math.min(start, maxStar - 1);
+  const startChoices = Array.from({ length: 18 }, (_, i) => i + 12).filter((s) => s < maxStar);
   const fold = Math.max(22, startStar + 3);
   const lastRow = more ? maxStar : Math.min(maxStar, fold);
   const allRows = [];
@@ -246,13 +252,16 @@ export function StarforceTab() {
     ]);
 
   async function copySum() {
+    let failed = false;
     try {
       await navigator.clipboard.writeText(String(Math.round(sum.meso * mult)));
-      setCopied("sum");
-      setTimeout(() => setCopied(""), 1600);
     } catch {
-      // Clipboard can be blocked; nothing to recover.
+      // Clipboard can be blocked; nothing to recover, so the button says it failed.
+      failed = true;
     }
+    setSumFailed(failed);
+    setCopied("sum");
+    setTimeout(() => setCopied(""), 1600);
   }
 
   /** The quote as a picture, with the same words and numbers the page shows (unit switch included). */
@@ -303,14 +312,23 @@ export function StarforceTab() {
         : [...list, s].sort((a, b) => a - b),
     );
 
+  /** "19 → 20성" with every digit the same width, so the arrows of a column stand under each other. */
+  const range = (from: number, to: number) => (
+    <>
+      <Digits>{from}</Digits> <span className="font-sans">→</span> <Digits>{to}</Digits>성
+    </>
+  );
+  // Rows that "더 보기" opens come in softly (reveal-row); the others are there from the start. Keyed by the star
+  // reached, so changing the start star keeps the rows that stay instead of bringing them all in again.
+  const opened = (r: RangeRow) => r.to > fold && "reveal-row";
   const listRow = (r: RangeRow, i: number) => (
     <div
-      key={`${r.from}-${r.to}`}
-      className={cn("-mx-3 flex flex-col gap-0.5 rounded-[10px] px-3 py-2", i % 2 === 1 && "bg-background")}
+      key={r.to}
+      className={cn("-mx-3 flex flex-col gap-0.5 rounded-[10px] px-3 py-2", i % 2 === 1 && "bg-background", opened(r))}
     >
       <div className="flex items-center gap-2">
         <span className="flex-1 font-num text-[15px] font-bold whitespace-nowrap">
-          {r.from} <span className="font-sans">→</span> {r.to}성
+          {range(r.from, r.to)}
         </span>
         <span className="font-num text-[15px] font-bold whitespace-nowrap text-primary-text">
           <Digits>{money(r.meso * mult)}</Digits>
@@ -319,24 +337,33 @@ export function StarforceTab() {
       </div>
       <div className="flex flex-wrap gap-x-1 text-xs text-muted-foreground">
         <span className="whitespace-nowrap">
-          기댓값 <b className="font-num text-foreground">{money(r.meso)}</b>
+          기댓값{" "}
+          <b className="font-num text-foreground">
+            <Digits>{money(r.meso)}</Digits>
+          </b>
         </span>
         <span className="whitespace-nowrap">
-          · 파괴 <b className="font-num text-foreground">{avg(r.destroys, 2)}</b>
+          · 파괴{" "}
+          <b className="font-num text-foreground">
+            <Digits>{avg(r.destroys, 2)}</Digits>
+          </b>
         </span>
         <span className="whitespace-nowrap">
-          · 시도 <b className="font-num text-foreground">{avg(r.tries, 1)}</b>
+          · 시도{" "}
+          <b className="font-num text-foreground">
+            <Digits>{avg(r.tries, 1)}</Digits>
+          </b>
         </span>
       </div>
     </div>
   );
   const tableRow = (r: RangeRow) => (
     <tr
-      key={`${r.from}-${r.to}`}
-      className={cn(ZEBRA_ROW, ROW_CSS)}
+      key={r.to}
+      className={cn(ZEBRA_ROW, ROW_CSS, opened(r))}
     >
       <td className="py-2 font-num text-[15px] font-bold whitespace-nowrap">
-        {r.from} <span className="font-sans">→</span> {r.to}성
+        {range(r.from, r.to)}
       </td>
       <td className="py-2 text-right font-num text-[15px] font-bold whitespace-nowrap">
         <Digits>{money(r.meso)}</Digits>
@@ -382,7 +409,7 @@ export function StarforceTab() {
                         // A name without a picture needs two cells to be read.
                         style={{ gridColumn: `span ${Math.min(ITEM_COLS, it.icons.length || 2)}` }}
                         className={cn(
-                          "flex h-11 min-w-0 items-center justify-around rounded-lg border transition-colors",
+                          "flex h-11 min-w-0 items-center justify-around rounded-lg border transition-[background-color,border-color,box-shadow,scale] duration-150 ease-out",
                           item === it.id
                             ? "border-primary bg-primary-soft ring-1 ring-primary"
                             : "tile-edge bg-card hover:border-primary/60",
@@ -436,7 +463,7 @@ export function StarforceTab() {
                 />
               </span>
             </div>
-            <span className="text-[11px] text-muted-foreground">
+            <span className="text-[11px] text-pretty text-muted-foreground">
               Lv.{level} · 최대 {maxStar}성
               {itemMax && itemMax < maxStarFor(level) ? " (이 장비는 여기까지)" : maxStar < 30 ? " (140제부터 30성)" : ""}
             </span>
@@ -558,25 +585,23 @@ export function StarforceTab() {
               </span>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-            <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold">
-              노작값
-              <NumberField
-                label="노작값 (억 메소)"
-                value={spareText}
-                onChange={setSpareText}
-                suffix="억 메소"
-                decimal
-                inputClassName="w-16"
-              />
-            </span>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>시작 성</Label>
-            <div className="grid grid-cols-6 gap-1.5 sm:grid-cols-9">
-              {Array.from({ length: 18 }, (_, i) => i + 12)
-                .filter((s) => s < maxStar)
-                .map((s) => (
+          <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold">
+            노작값
+            <NumberField
+              label="노작값 (억 메소)"
+              value={spareText}
+              onChange={setSpareText}
+              suffix="억 메소"
+              decimal
+              inputClassName="w-16"
+            />
+          </span>
+          {/* Nothing to pick on an item that stops at 12 stars or under: no heading over an empty row. */}
+          {startChoices.length > 0 && (
+            <div className="flex flex-col gap-1.5">
+              <Label>시작 성</Label>
+              <div className="grid grid-cols-6 gap-1.5 sm:grid-cols-9">
+                {startChoices.map((s) => (
                   <Chip
                     key={s}
                     on={startStar === s}
@@ -586,8 +611,9 @@ export function StarforceTab() {
                     {s}
                   </Chip>
                 ))}
+              </div>
             </div>
-          </div>
+          )}
           <div className="@container">
             {/*
               Narrower than the table (phones, a narrow window) each range takes two lines (user, 2026-11-22): the range,
@@ -626,11 +652,13 @@ export function StarforceTab() {
               type="button"
               onClick={() => setMore(!more)}
               aria-expanded={more}
-              className="h-9 rounded-lg border border-dashed border-border text-[13px] text-muted-foreground transition-[color,scale] hover:text-foreground active:scale-[0.96]"
+              // 36px to look at, 40px to press: the area reaches 2px above and below.
+              className={cn(
+                "relative h-9 rounded-lg border border-dashed border-border text-[13px] text-muted-foreground transition-[color,border-color,scale] duration-150 ease-out after:absolute after:inset-x-0 after:-inset-y-0.5 active:scale-[0.96]",
+                dashedHover,
+              )}
             >
-              {more
-                ? `접기 (${fold}성까지만)`
-                : `${fold + 1}~${maxStar}성 더 보기`}
+              <SwapLabel on={more} from={`${fold + 1}~${maxStar}성 더 보기`} to={`접기 (${fold}성까지만)`} />
             </button>
           )}
           {/* Side by side the folded rows keep their room (user, 2026-11-22): opening them never makes the panel taller.
@@ -654,7 +682,9 @@ export function StarforceTab() {
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <b className="text-[15px]">
               견적서{" "}
-              <span className="font-num text-primary-text">{cart.length}</span>
+              <span className="font-num text-primary-text">
+                <Digits>{cart.length}</Digits>
+              </span>
             </b>
             <span className="text-xs text-muted-foreground">
               표에서 &quot;담기&quot;로 추가
@@ -671,27 +701,31 @@ export function StarforceTab() {
                 and the quoted price on show, the rest one tap away, and nothing to scroll sideways.
               */}
               <div className="flex flex-col @min-[39rem]:hidden">
-                <div className="flex justify-between pr-7 pb-1.5 text-[11px] font-medium text-muted-foreground">
+                <div className="flex justify-between pr-6 pb-1.5 text-[11px] font-medium text-muted-foreground">
                   <span>구간 · 장비</span>
                   <span>×{mult}</span>
                 </div>
                 {cartRows.map((c, i) => {
                   const open = openRows.includes(c.id);
                   return (
-                    <div key={c.id} className={cn("-mx-3 rounded-[10px]", i % 2 === 1 && "bg-background")}>
+                    <div key={c.id} className={cn("-mx-3 rounded-[10px] reveal-row", i % 2 === 1 && "bg-background")}>
                       <button
                         type="button"
                         aria-expanded={open}
                         aria-controls={`quote-${c.id}`}
                         onClick={() => setOpenRows((prev) => (open ? prev.filter((x) => x !== c.id) : [...prev, c.id]))}
-                        className="press-static flex min-h-14 w-full items-center gap-2 rounded-[10px] px-3 py-2.5 text-left"
+                        // The arrow has 4px of air inside its own box: 4px less padding on its side looks even.
+                        className="press-static flex min-h-14 w-full items-center gap-2 rounded-[10px] py-2.5 pr-2 pl-3 text-left hover:bg-muted/60"
                       >
                         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                           <span className="font-num text-[15px] font-bold whitespace-nowrap">
-                            {c.from} <span className="font-sans">→</span> {c.to}성
+                            {range(c.from, c.to)}
                           </span>
                           {/* Two rows of one item and range differ by their settings: the hand-set one says so. */}
-                          <span className="truncate text-[11px] text-muted-foreground">
+                          <span
+                            title={`${c.item}${c.opt.protect !== "auto" ? ` · 방지 ${starList(c.opt.protect)}` : ""}`}
+                            className="truncate text-[11px] text-muted-foreground"
+                          >
                             {c.item}
                             {c.opt.protect !== "auto" && ` · 방지 ${starList(c.opt.protect)}`}
                           </span>
@@ -700,28 +734,41 @@ export function StarforceTab() {
                           <Digits>{money(c.meso * mult)}</Digits>
                         </span>
                         <ChevronDown
+                          size={16}
+                          strokeWidth={2}
+                          absoluteStrokeWidth
                           className={cn(
-                            "ml-1 size-4 shrink-0 transition-[rotate,color] duration-200 motion-reduce:transition-none",
+                            "ml-1 shrink-0 transition-[rotate,color] duration-200 ease-out motion-reduce:transition-none",
                             open ? "rotate-180 text-foreground" : "text-muted-foreground",
                           )}
                           aria-hidden="true"
                         />
                       </button>
                       <Reveal open={open} id={`quote-${c.id}`} className="flex flex-col gap-2 px-3 pb-3">
-                          <span className="text-[11px] text-muted-foreground">
-                            Lv.{c.level} · {c.cond}
+                          {/* The whole name here: the closed row may cut it. */}
+                          <span className="text-[11px] text-pretty text-muted-foreground">
+                            {c.item} · Lv.{c.level} · {c.cond}
                           </span>
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <span className="text-xs text-muted-foreground">
-                              기댓값 <b className="font-num text-foreground">{money(c.meso)}</b> · 파괴{" "}
-                              <b className="font-num text-foreground">{avg(c.destroys, 2)}</b> · 시도{" "}
-                              <b className="font-num text-foreground">{avg(c.tries, 1)}</b>
+                              기댓값{" "}
+                              <b className="font-num text-foreground">
+                                <Digits>{money(c.meso)}</Digits>
+                              </b>{" "}
+                              · 파괴{" "}
+                              <b className="font-num text-foreground">
+                                <Digits>{avg(c.destroys, 2)}</Digits>
+                              </b>{" "}
+                              · 시도{" "}
+                              <b className="font-num text-foreground">
+                                <Digits>{avg(c.tries, 1)}</Digits>
+                              </b>
                             </span>
                             <button
                               type="button"
                               onClick={() => setCart((prev) => prev.filter((x) => x.id !== c.id))}
                               aria-label={`${c.item} ${c.from} → ${c.to}성 빼기`}
-                              className="relative h-7 shrink-0 rounded-md tile-edge px-2.5 text-xs whitespace-nowrap text-muted-foreground transition-[color,scale] after:absolute after:-inset-1.5 hover:text-destructive active:scale-[0.96]"
+                              className="relative h-7 shrink-0 rounded-md tile-edge px-2.5 text-xs whitespace-nowrap text-muted-foreground transition-[color,background-color,scale] duration-150 ease-out after:absolute after:-inset-1.5 hover:text-destructive active:scale-[0.96]"
                             >
                               빼기
                             </button>
@@ -732,7 +779,7 @@ export function StarforceTab() {
                 })}
                 <div
                   className={cn(
-                    "-mx-3 flex items-baseline justify-between gap-2 rounded-[10px] py-3 pr-10 pl-3",
+                    "-mx-3 flex items-baseline justify-between gap-2 rounded-[10px] py-3 pr-9 pl-3",
                     cart.length % 2 === 1 && "bg-background",
                   )}
                 >
@@ -757,7 +804,7 @@ export function StarforceTab() {
                 </thead>
                 <tbody>
                   {cartRows.map((c) => (
-                    <tr key={c.id} className={ZEBRA_ROW}>
+                    <tr key={c.id} className={cn(ZEBRA_ROW, "reveal-row")}>
                       <td className="py-2">
                         <b className="block">{c.item}</b>
                         <span className="text-[11px] text-muted-foreground">
@@ -765,7 +812,7 @@ export function StarforceTab() {
                         </span>
                       </td>
                       <td className="py-2 font-num text-[15px] font-bold whitespace-nowrap">
-                        {c.from} <span className="font-sans">→</span> {c.to}성
+                        {range(c.from, c.to)}
                       </td>
                       <td className="py-2 text-right font-num text-[15px] font-bold whitespace-nowrap">
                         <Digits>{money(c.meso)}</Digits>
@@ -786,9 +833,10 @@ export function StarforceTab() {
                             setCart((prev) => prev.filter((x) => x.id !== c.id))
                           }
                           aria-label={`${c.item} 빼기`}
-                          className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-destructive"
+                          // 28px to look at, 40px to press (the row is 52px tall).
+                          className="relative inline-flex size-7 items-center justify-center rounded-md text-muted-foreground after:absolute after:-inset-1.5 hover:bg-muted hover:text-destructive"
                         >
-                          <X className="size-3.5" aria-hidden="true" />
+                          <X size={14} strokeWidth={2} absoluteStrokeWidth aria-hidden="true" />
                         </button>
                       </td>
                     </tr>
@@ -799,7 +847,7 @@ export function StarforceTab() {
                     <td className="py-2 text-right font-num text-[15px] font-bold whitespace-nowrap">
                       <Digits>{money(sum.meso)}</Digits>
                     </td>
-                    <td className="py-2 text-right font-num text-[15px] font-bold text-primary-text">
+                    <td className="py-2 text-right font-num text-[15px] font-bold whitespace-nowrap text-primary-text">
                       <Digits>{money(sum.meso * mult)}</Digits>
                     </td>
                     <td className="py-2 text-right font-num text-[15px] font-bold whitespace-nowrap">
@@ -817,7 +865,7 @@ export function StarforceTab() {
           )}
         </Panel>
 
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2">
           <Panel>
             <b className="text-sm">배율</b>
             <div className="grid grid-cols-4 gap-1.5">
@@ -850,15 +898,15 @@ export function StarforceTab() {
               </span>
             </div>
           </Panel>
-          <div className="flex flex-col gap-1 rounded-lg bg-primary px-5 py-4 text-primary-foreground">
+          <div className="flex flex-col gap-1 rounded-[1rem] bg-primary px-5 py-4 text-primary-foreground">
             <span className="text-[13px] font-semibold">
               최종 견적 (×{mult})
             </span>
             <span className="font-num text-[30px] leading-tight font-bold">
-              {eok(sum.meso * mult)} 메소
+              <Digits>{eok(sum.meso * mult)}</Digits> 메소
             </span>
             <span className="font-num text-base font-bold">
-              {won(sum.meso * mult)}
+              <Digits>{won(sum.meso * mult)}</Digits>
             </span>
             <span className="text-xs font-semibold opacity-80">
               배율 전 {eok(sum.meso)} 메소 · {won(sum.meso)}
@@ -869,21 +917,28 @@ export function StarforceTab() {
               type="button"
               disabled={cart.length === 0}
               onClick={copySum}
-              className="inline-flex h-10 items-center justify-center gap-1.5 tile text-[13px] font-semibold disabled:opacity-50"
+              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg tile-edge bg-card text-[13px] font-semibold disabled:opacity-50"
             >
               <SwapLabel
                 on={copied === "sum"}
                 from={
                   <>
-                    <Copy className="size-4" aria-hidden="true" />
+                    <Copy size={16} strokeWidth={2} absoluteStrokeWidth aria-hidden="true" />
                     금액 복사
                   </>
                 }
                 to={
-                  <>
-                    <Check className="size-4" aria-hidden="true" />
-                    복사됨
-                  </>
+                  sumFailed ? (
+                    <>
+                      <X size={16} strokeWidth={2} absoluteStrokeWidth aria-hidden="true" />
+                      복사 실패
+                    </>
+                  ) : (
+                    <>
+                      <Check size={16} strokeWidth={2} absoluteStrokeWidth aria-hidden="true" />
+                      복사됨
+                    </>
+                  )
                 }
               />
             </button>
@@ -891,25 +946,30 @@ export function StarforceTab() {
               type="button"
               disabled={cart.length === 0 || imageBusy}
               onClick={copyPicture}
-              className="inline-flex h-10 items-center justify-center gap-1.5 tile text-[13px] font-semibold disabled:opacity-50"
+              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg tile-edge bg-card text-[13px] font-semibold disabled:opacity-50"
             >
               <SwapLabel
                 on={copied === "image"}
                 from={
                   <>
-                    <ImageIcon className="size-4" aria-hidden="true" />
+                    {/* Drawing the picture takes a moment: the icon turns into the waiting mark meanwhile. */}
+                    <SwapIcon
+                      on={imageBusy}
+                      from={<ImageIcon size={16} strokeWidth={2} absoluteStrokeWidth aria-hidden="true" />}
+                      to={<Spinner size={16} />}
+                    />
                     사진 복사
                   </>
                 }
                 to={
                   imageResult === "error" ? (
                     <>
-                      <X className="size-4" aria-hidden="true" />
+                      <X size={16} strokeWidth={2} absoluteStrokeWidth aria-hidden="true" />
                       복사 실패
                     </>
                   ) : (
                     <>
-                      <Check className="size-4" aria-hidden="true" />
+                      <Check size={16} strokeWidth={2} absoluteStrokeWidth aria-hidden="true" />
                       {imageResult === "saved" ? "파일로 저장" : "복사됨"}
                     </>
                   )

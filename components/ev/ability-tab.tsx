@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Digits } from "@/components/ui/digits";
+import { Reveal } from "@/components/ui/reveal";
 import { Spinner } from "@/components/ui/spinner";
 import {
   Chip,
@@ -422,7 +424,7 @@ export function AbilityTab({ classes }: { classes: ClassAbility[] }) {
     if (choices.length <= 1)
       return (
         <b className="px-2 font-num text-xs">
-          +{choices[0] ?? "-"}
+          +<Digits>{choices[0] ?? "-"}</Digits>
           {unitOf(ks[0])}
         </b>
       );
@@ -433,7 +435,8 @@ export function AbilityTab({ classes }: { classes: ClassAbility[] }) {
         onChange={(e) =>
           setGoals({ ...goals, ...Object.fromEntries(ks.map((k) => [`${k}:${g}`, Number(e.target.value)])) })
         }
-        className="h-7 rounded-md border border-input bg-card px-1.5 font-num text-xs"
+        // 16px on a phone: under that, iOS zooms the page in when the list is tapped.
+        className="h-7 rounded-md border border-input bg-card px-1.5 font-num text-base sm:text-xs"
       >
         {choices.map((v) => (
           <option key={v} value={v}>
@@ -515,14 +518,12 @@ export function AbilityTab({ classes }: { classes: ClassAbility[] }) {
                     value={valueSelect([k], gradeOf(i), ABILITY_OPTIONS[k].label)}
                   />
                 ))}
-            {pairOn && (
-              <>
-                <span className="mt-1 text-[11px] font-semibold text-muted-foreground">
-                  드메 프리셋 · {modeLabel(hunt, mode)}
-                </span>
-                {huntLines(mode)}
-              </>
-            )}
+            <Reveal open={pairOn} className="flex flex-col gap-1.5">
+              <span className="mt-1 text-[11px] font-semibold text-muted-foreground">
+                드메 프리셋 · {modeLabel(hunt, mode)}
+              </span>
+              {huntLines(mode)}
+            </Reveal>
           </div>
           <div className="grid gap-2 sm:grid-cols-3">
             <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
@@ -578,8 +579,7 @@ export function AbilityTab({ classes }: { classes: ClassAbility[] }) {
           {/* The event circulators held now (일반 only: they cannot touch legendary lines 2 · 3), up to 50 of each (the
               plan works out every count below them). The steps use these counts as they are, so after a go the counts
               left are typed in (Codex review). */}
-          {mode === "l1u2" && (
-            <div className="flex flex-wrap items-center justify-between gap-2">
+          <Reveal open={mode === "l1u2"} className="flex flex-wrap items-center justify-between gap-2">
               <span className="flex flex-col text-[11px] text-muted-foreground">
                 지금 가진 이벤트 서큘레이터
                 <span className="text-[10px]">쓰고 나면 남은 개수로 고쳐 넣기</span>
@@ -606,8 +606,7 @@ export function AbilityTab({ classes }: { classes: ClassAbility[] }) {
                   />
                 </label>
               </span>
-            </div>
-          )}
+          </Reveal>
           <Switch
             on={sunday}
             onChange={setSunday}
@@ -635,12 +634,12 @@ export function AbilityTab({ classes }: { classes: ClassAbility[] }) {
         </span>
         <div
           className={cn(
-            "flex min-w-0 flex-col gap-3",
+            "flex min-w-0 flex-col gap-2",
             waiting === "now" && "opacity-50",
             waiting === "later" && "opacity-50 transition-opacity delay-150 duration-150",
           )}
         >
-          <div className="flex flex-col gap-1.5 rounded-lg bg-primary px-5 py-4 text-primary-foreground">
+          <div className="flex flex-col gap-1.5 rounded-[1rem] bg-primary px-5 py-4 text-primary-foreground">
             <span className="text-[13px] font-semibold">
               {shown.chosen ? `${shown.chosen.name} ` : ""}
               {shown.preset.label}
@@ -724,7 +723,7 @@ export function AbilityTab({ classes }: { classes: ClassAbility[] }) {
               }
             />
           </div>
-          <div className="flex flex-col gap-3 tile p-4">
+          <div className="flex flex-col gap-3 tile p-4 sm:p-5">
             <b className="text-sm">가장 싼 순서</b>
             <Step
               n={1}
@@ -946,10 +945,11 @@ function Step({
         {aside}
       </div>
       {note && (
-        <span className="pl-7 text-xs text-muted-foreground">{note}</span>
+        <span className="pl-7 text-xs text-pretty text-muted-foreground">{note}</span>
       )}
       {children && (
-        <div className="flex flex-col divide-y divide-border rounded-md tile-edge pl-0">
+        // Clipped: the fill of a picked first or last row stays inside the rounded corners.
+        <div className="flex flex-col divide-y divide-border overflow-hidden rounded-md tile-edge">
           {children}
         </div>
       )}
@@ -984,7 +984,8 @@ function SeenChips({
           aria-pressed={value === k}
           onClick={() => onChange(value === k ? null : k)}
           className={cn(
-            "h-7 shrink-0 rounded-full border px-2.5 text-xs whitespace-nowrap transition-[color,background-color,border-color,scale]",
+            // 28px to look at, 32px to press: wrapped rows of chips are 4px apart, so the area reaches 2px and no further.
+            "relative h-7 shrink-0 rounded-full border px-2.5 text-xs whitespace-nowrap transition-[color,background-color,border-color,box-shadow,scale] duration-150 ease-out after:absolute after:inset-x-0 after:-inset-y-0.5",
             value === k
               ? "border-primary bg-primary font-bold text-primary-foreground"
               : "tile-edge hover:border-primary/60",
@@ -1028,10 +1029,10 @@ function StepRow({
       )}
     >
       <span className="flex min-w-0 flex-col">
-        <span className="text-[13px]">
+        <span className="text-[13px] text-pretty">
           <b>{label}</b>
           {tag && (
-            <span className="ml-1.5 rounded border border-emerald-500/40 bg-emerald-500/10 px-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">
+            <span className="ml-1.5 rounded border border-emerald-500/40 bg-emerald-500/10 px-1 text-[10px] font-bold whitespace-nowrap text-emerald-700 dark:text-emerald-300">
               {tag}
             </span>
           )}
@@ -1045,13 +1046,15 @@ function StepRow({
           )}
         </span>
         {extra?.map((x) => (
-          <span key={x} className="text-[11px] text-muted-foreground">
+          <span key={x} className="text-[11px] text-pretty text-muted-foreground">
             {x}
           </span>
         ))}
       </span>
       <span className="flex flex-col items-end">
-        <b className="font-num text-[13px] whitespace-nowrap">{cost}</b>
+        <b className="font-num text-[13px] whitespace-nowrap">
+          <Digits>{cost}</Digits>
+        </b>
         {unit && <span className="text-[10px] text-muted-foreground">남은 평균</span>}
       </span>
     </div>
@@ -1073,8 +1076,10 @@ function GoalLine({ legend, label, value }: { legend: boolean; label: string; va
       >
         {legend ? "L" : "U"}
       </span>
-      <span className="flex h-9 min-w-0 items-center justify-between gap-2 rounded-lg border border-border bg-background pr-1 pl-3 text-[13px]">
-        <span className="truncate">{label}</span>
+      <span className="flex h-9 min-w-0 items-center justify-between gap-2 rounded-lg tile-edge bg-background pr-1 pl-3 text-[13px]">
+        <span title={label} className="truncate">
+          {label}
+        </span>
         {value}
       </span>
     </div>
@@ -1085,8 +1090,12 @@ function Box({ k, v, sub }: { k: string; v: string; sub: string }) {
   return (
     <div className="flex min-w-0 flex-col gap-0.5 tile p-3">
       <span className="text-[11px] text-muted-foreground">{k}</span>
-      <b className="truncate font-num text-base">{v}</b>
-      <span className="truncate text-[11px] text-muted-foreground">{sub}</span>
+      <b title={v} className="truncate font-num text-base">
+        <Digits>{v}</Digits>
+      </b>
+      <span title={sub} className="truncate text-[11px] text-muted-foreground">
+        {sub}
+      </span>
     </div>
   );
 }

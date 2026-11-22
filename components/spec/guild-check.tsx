@@ -11,10 +11,11 @@ import { useRouter } from "next/navigation";
 import { ChevronDown, CornerDownRight, Search, X } from "lucide-react";
 import { Chip } from "@/components/ev/ui";
 import { PageHeader } from "@/components/page-header";
-import { Message, Pieces, SPEC_DESCRIPTION, whatText } from "@/components/spec/spec-check";
+import { Message, Pieces, RECENT_DROP, RECENT_NAME, RECENT_PILL, RECENT_PILL_OFF, RECENT_PILL_ON, SPEC_DESCRIPTION, whatText } from "@/components/spec/spec-check";
 import { SpecTabs } from "@/components/spec/spec-tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Spinner } from "@/components/ui/spinner";
+import { SwapLabel } from "@/components/ui/swap-icon";
 import type { Tier } from "@/lib/spec/check";
 import {
   CLASS_COLUMNS,
@@ -32,7 +33,7 @@ import {
   type SortBy,
 } from "@/lib/spec/guild-table";
 import { useStored } from "@/lib/use-stored";
-import { useReveal } from "@/components/ui/reveal";
+import { Reveal, useReveal } from "@/components/ui/reveal";
 import { cn } from "@/lib/utils";
 
 /** count = characters; users = accounts (the in-game member count), null when NEXON gives none. */
@@ -78,7 +79,8 @@ function Pill({ cell }: { cell: Cell }) {
     <Tooltip>
       <TooltipTrigger
         render={<span tabIndex={0} />}
-        className={cn("inline-block cursor-default rounded-full px-2.5 py-0.5 text-xs font-bold whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-primary", TONE[cell.tier])}
+        // No ring of its own: the site's focus outline keeps the outlined pill's shadow edge under it.
+        className={cn("inline-block cursor-default rounded-full px-2.5 py-0.5 text-xs font-bold whitespace-nowrap", TONE[cell.tier])}
       >
         {cell.text}
       </TooltipTrigger>
@@ -116,7 +118,7 @@ function WorldPick({ name, guilds }: { name: string; guilds: GuildInfo[] }) {
             <Link
               href={guildHref(g.name, g.world)}
               prefetch={false}
-              className="flex flex-col gap-1 rounded-lg tile-edge bg-background px-3.5 py-3 transition-colors hover:border-primary/60"
+              className="flex flex-col gap-1 rounded-lg tile-edge bg-background px-3.5 py-3 transition-[background-color,scale] active:scale-[0.96]"
             >
               <span className="flex items-baseline justify-between gap-2">
                 <b className="text-[15px]">{g.world}</b>
@@ -174,10 +176,11 @@ function SubsToggle({ person, open, onToggle }: { person: Person; open: boolean;
       aria-expanded={open}
       aria-label={`부캐 ${count}명${missed ? ` 중 ${missed}명 놓침` : " 다 챙김"} ${open ? "접기" : "펼치기"}`}
       // One width down the column (user, 2026-11-20: "부캐 글자가 정렬이 안되어있어"), the count and the arrow together in
-      // its middle ("너무 쏠려있다" when they sat at the two ends).
+      // its middle ("너무 쏠려있다" when they sat at the two ends). after: the press area reaches 6px past the 32px
+      // button, inside its own cell.
       className={cn(
-        "inline-flex h-8 items-center justify-center gap-1 rounded-full border pr-2 pl-2.5 text-xs font-bold whitespace-nowrap transition-[color,background-color,border-color,scale] outline-none focus-visible:ring-2 focus-visible:ring-primary min-w-[3.25rem] sm:min-w-[7.5rem]",
-        missed ? "border-primary/45 bg-primary-soft text-primary-text" : "tile-edge text-muted-foreground hover:text-foreground",
+        "relative inline-flex h-8 min-w-[3.25rem] items-center justify-center gap-1 rounded-full border pr-2 pl-2.5 text-xs font-bold whitespace-nowrap transition-[color,background-color,border-color,scale] after:absolute after:-inset-1.5 sm:min-w-[7.5rem]",
+        missed ? "border-transparent bg-primary-soft text-primary-text hover:bg-primary/20" : "tile-edge text-muted-foreground hover:text-foreground",
       )}
     >
       {/* A phone keeps this column narrow: the count only, the colour still telling whether one missed. */}
@@ -185,7 +188,8 @@ function SubsToggle({ person, open, onToggle }: { person: Person; open: boolean;
       <span className="hidden sm:inline">
         {count}명{missed ? ` · 놓침 ${missed}` : " ✓"}
       </span>
-      <ChevronDown className={cn("size-3.5 transition-transform", open && "rotate-180")} aria-hidden="true" />
+      {/* 2px of the icon box's own blank goes back on each side, so the arrow sits by the count. */}
+      <ChevronDown className={cn("-mx-0.5 size-3.5 transition-transform", open && "rotate-180")} aria-hidden="true" />
     </button>
   );
 }
@@ -349,8 +353,8 @@ function GuildResult({ guild, pieces, others }: { guild: GuildInfo; pieces: Prom
   const search = (q: string) => change(() => ({ query: q, flipped: [] }));
 
   return (
-    <section className="flex flex-col gap-3">
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+    <section className="flex flex-col gap-2">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         <Stat label={`${guild.name} · ${guild.world} Lv.${guild.level}`} className="col-span-2 sm:col-span-1">
           <span className="flex items-baseline justify-between gap-2">
             {/* Players; the in-game member count is accounts, and one player can hold several (가몽: 122 · 137 · 366). */}
@@ -380,26 +384,25 @@ function GuildResult({ guild, pieces, others }: { guild: GuildInfo; pieces: Prom
 
       {asOf && <p className="px-0.5 text-xs font-semibold text-primary-text">{asOfLabel(asOf)}</p>}
 
-      {loading && (
-        <div className="flex flex-col gap-2 tile px-4 py-3.5">
-          <div className="flex items-baseline justify-between gap-2 text-sm">
-            <b>
-              길드원 확인 중 · {n(done)} / {n(guild.count)}명
-            </b>
-            {got.eta !== null && got.eta >= 1000 && <span className="shrink-0 text-xs text-muted-foreground">약 {Math.ceil(got.eta / 1000)}초 남음</span>}
-          </div>
-          <div
-            role="progressbar"
-            aria-label="길드원 확인"
-            aria-valuemin={0}
-            aria-valuemax={guild.count}
-            aria-valuenow={done}
-            className="h-2.5 overflow-hidden rounded-full bg-secondary"
-          >
-            <div className="h-full rounded-full bg-primary transition-[width] duration-300" style={{ width: `${(done / guild.count) * 100}%` }} />
-          </div>
+      {/* It fades out before it leaves, so the table under it does not jump the moment the last member arrives. */}
+      <Reveal open={loading} className="flex flex-col gap-2 tile px-4 py-3.5">
+        <div className="flex items-baseline justify-between gap-2 text-sm">
+          <b>
+            길드원 확인 중 · {n(done)} / {n(guild.count)}명
+          </b>
+          {got.eta !== null && got.eta >= 1000 && <span className="shrink-0 text-xs text-muted-foreground">약 {Math.ceil(got.eta / 1000)}초 남음</span>}
         </div>
-      )}
+        <div
+          role="progressbar"
+          aria-label="길드원 확인"
+          aria-valuemin={0}
+          aria-valuemax={guild.count}
+          aria-valuenow={done}
+          className="h-2.5 overflow-hidden rounded-full bg-secondary"
+        >
+          <div className="h-full rounded-full bg-primary transition-[width] duration-300" style={{ width: `${(done / guild.count) * 100}%` }} />
+        </div>
+      </Reveal>
 
       <div className="flex flex-wrap items-center gap-1.5">
         {SORTS.map((s) => (
@@ -420,7 +423,7 @@ function GuildResult({ guild, pieces, others }: { guild: GuildInfo; pieces: Prom
           부캐 모두 펼치기
         </Chip>
         {/* A member by name (user, 2026-11-20): its own line on a phone, the right end on a wider screen. */}
-        <label className="order-first flex h-9 w-full items-center gap-2 tile pr-1 pl-3 focus-within:border-primary sm:order-none sm:ml-auto sm:w-56">
+        <label className="order-first flex h-9 w-full items-center gap-2 rounded-lg tile-edge bg-card pr-1 pl-3 transition-[border-color,box-shadow] focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 sm:order-none sm:ml-auto sm:w-56">
           <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
           <span className="sr-only">길드원 이름으로 찾기</span>
           <input
@@ -432,7 +435,7 @@ function GuildResult({ guild, pieces, others }: { guild: GuildInfo; pieces: Prom
             className="h-8 min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground sm:text-[13px]"
           />
           {query && (
-            <button type="button" onClick={() => search("")} aria-label="길드원 찾기 지우기" className="flex size-7 shrink-0 items-center justify-center rounded-md opacity-60 hover:opacity-100">
+            <button type="button" onClick={() => search("")} aria-label="길드원 찾기 지우기" className="flex size-7 shrink-0 items-center justify-center rounded-md opacity-60 transition-[opacity,scale] hover:opacity-100">
               <X className="size-3.5" aria-hidden="true" />
             </button>
           )}
@@ -456,7 +459,7 @@ function GuildResult({ guild, pieces, others }: { guild: GuildInfo; pieces: Prom
                       onClick={() => change(() => ({ sortBy: on ? "miss" : `col:${c}` }))}
                       aria-pressed={on}
                       className={cn(
-                        "inline-flex flex-col items-center gap-0.5 rounded-md px-2 py-1 font-bold transition-[color,background-color,border-color,scale] hover:bg-card",
+                        "inline-flex flex-col items-center gap-0.5 rounded-md px-2 py-1 font-bold transition-[color,background-color,box-shadow,scale] hover:bg-card",
                         on && "bg-card text-primary-text ring-1 ring-primary/60",
                       )}
                     >
@@ -493,7 +496,7 @@ function GuildResult({ guild, pieces, others }: { guild: GuildInfo; pieces: Prom
         <button
           type="button"
           onClick={() => change((v) => ({ limit: v.limit + PAGE }))}
-          className="h-11 rounded-lg tile-edge text-sm font-bold transition-[color,background-color,border-color,scale] hover:bg-secondary"
+          className="press-static h-11 rounded-lg tile-edge text-sm font-bold"
         >
           더 보기 · {n(visible.length - limit)}명 남음
         </button>
@@ -505,9 +508,25 @@ function GuildResult({ guild, pieces, others }: { guild: GuildInfo; pieces: Prom
           {failed > 0 && (
             <>
               {" · "}
-              <button type="button" onClick={() => startRetry(() => router.refresh())} disabled={retrying} className="inline-flex items-center gap-1 font-semibold text-primary-text hover:underline disabled:opacity-60">
-                {retrying && <Spinner size={12} />}
-                {retrying ? "다시 확인 중" : "다시 확인"}
+              {/* Inside a sentence: the words stay at the left of the box the two states share (underline per state: it
+                  does not pass into the stacked boxes by itself). */}
+              <button
+                type="button"
+                onClick={() => startRetry(() => router.refresh())}
+                disabled={retrying}
+                className="inline-flex items-center font-semibold text-primary-text disabled:opacity-50 hover:[&>span>span]:underline"
+              >
+                <SwapLabel
+                  on={retrying}
+                  from="다시 확인"
+                  to={
+                    <>
+                      <Spinner size={12} />
+                      다시 확인 중
+                    </>
+                  }
+                  className="[&>span]:justify-start [&>span]:gap-1"
+                />
               </button>
             </>
           )}
@@ -549,7 +568,7 @@ export function GuildCheck({ name, view }: { name: string; view: GuildView }) {
       <PageHeader title="숨은 스펙업" description={SPEC_DESCRIPTION} aside={<SpecTabs on="guild" />} />
 
       <form onSubmit={submit} className="flex gap-2" role="search">
-        <label className="flex h-[50px] min-w-0 flex-1 items-center gap-2.5 tile px-4 focus-within:border-primary">
+        <label className="flex h-[50px] min-w-0 flex-1 items-center gap-2.5 rounded-lg tile-edge bg-card px-4 transition-[border-color,box-shadow] focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50">
           <Search className="size-[18px] shrink-0 text-muted-foreground" aria-hidden="true" />
           <span className="sr-only">길드 이름</span>
           <input
@@ -565,48 +584,51 @@ export function GuildCheck({ name, view }: { name: string; view: GuildView }) {
         <button
           type="submit"
           disabled={pending || !text.trim()}
-          className="flex h-[50px] shrink-0 items-center gap-1.5 rounded-lg bg-primary px-[22px] text-[15px] font-bold text-primary-foreground disabled:opacity-60"
+          className="flex h-[50px] shrink-0 items-center justify-center rounded-lg bg-primary px-[22px] text-[15px] font-bold text-primary-foreground disabled:opacity-50"
         >
-          {pending && <Spinner />}
-          {pending ? "조회 중" : "검색"}
+          <SwapLabel
+            on={pending}
+            from="검색"
+            to={
+              <>
+                <Spinner />
+                조회 중
+              </>
+            }
+          />
         </button>
       </form>
 
-      {recentList.length > 0 && (
-        <div className="mt-1 flex flex-wrap items-center gap-1.5">
-          <span className="mr-0.5 text-xs text-muted-foreground">최근 길드</span>
-          {recentList.map((g) => {
-            const on = g.name === foundName && g.world === foundWorld;
-            return (
-              <span
-                key={`${g.name}@${g.world}`}
-                className={cn("inline-flex items-center rounded-full border text-[13px]", on ? "border-primary bg-primary-soft text-primary-text" : "tile-edge bg-card")}
+      <Reveal open={recentList.length > 0} className="mt-1 flex flex-wrap items-center gap-1.5">
+        <span className="mr-0.5 text-xs text-muted-foreground">최근 길드</span>
+        {recentList.map((g) => {
+          const on = g.name === foundName && g.world === foundWorld;
+          return (
+            <span key={`${g.name}@${g.world}`} className={cn(RECENT_PILL, on ? RECENT_PILL_ON : RECENT_PILL_OFF)}>
+              <button
+                type="button"
+                onClick={() => {
+                  setText(g.name);
+                  go(guildHref(g.name, g.world));
+                }}
+                disabled={pending}
+                className={RECENT_NAME}
               >
-                <button
-                  type="button"
-                  onClick={() => {
-                    setText(g.name);
-                    go(guildHref(g.name, g.world));
-                  }}
-                  disabled={pending}
-                  className="py-1.5 pr-1 pl-3 font-semibold"
-                >
-                  {g.name}
-                  <span className="font-normal opacity-70"> · {g.world}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRecent((prev) => (Array.isArray(prev) ? prev.filter(isRecent) : []).filter((x) => x.name !== g.name || x.world !== g.world))}
-                  aria-label={`${g.name} ${g.world} 최근 길드에서 지우기`}
-                  className="py-1.5 pr-2.5 pl-1 opacity-60 hover:opacity-100"
-                >
-                  <X className="size-3.5" aria-hidden="true" />
-                </button>
-              </span>
-            );
-          })}
-        </div>
-      )}
+                {g.name}
+                <span className="font-normal opacity-70"> · {g.world}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setRecent((prev) => (Array.isArray(prev) ? prev.filter(isRecent) : []).filter((x) => x.name !== g.name || x.world !== g.world))}
+                aria-label={`${g.name} ${g.world} 최근 길드에서 지우기`}
+                className={RECENT_DROP}
+              >
+                <X className="size-3.5" aria-hidden="true" />
+              </button>
+            </span>
+          );
+        })}
+      </Reveal>
 
       <div className={cn("transition-opacity", pending && "opacity-50")} aria-busy={pending}>
         {view.kind === "guild" && <GuildResult guild={view.guild} pieces={view.pieces} others={view.others} />}
@@ -621,8 +643,8 @@ export function GuildCheck({ name, view }: { name: string; view: GuildView }) {
       </div>
 
       <div className="flex flex-col gap-1 text-xs leading-relaxed text-muted-foreground">
-        <span className="break-keep">확인하는 것: 0차 스킬(이벤트 중엔 보약도) · 연합의 의지 · 여제의 축복 · 하이퍼 패시브 · 링크 · 펫 버프 → 나머지는 이름을 누르면 개인 탭에서</span>
-        <span className="break-keep">본캐 · 부캐는 넥슨 유니온 랭킹(어제 기준)으로 묶음</span>
+        <span className="text-pretty break-keep">확인하는 것: 0차 스킬(이벤트 중엔 보약도) · 연합의 의지 · 여제의 축복 · 하이퍼 패시브 · 링크 · 펫 버프 → 나머지는 이름을 누르면 개인 탭에서</span>
+        <span className="text-pretty break-keep">본캐 · 부캐는 넥슨 유니온 랭킹(어제 기준)으로 묶음</span>
         <span>Data based on NEXON Open API</span>
       </div>
     </div>

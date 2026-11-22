@@ -8,6 +8,7 @@ import { Digits } from "@/components/ui/digits";
 import { cn } from "@/lib/utils";
 
 const stageLabel = (i: number) => (i === 0 ? "강화 전" : `${i}단계`);
+const SOUL_COLS = "grid-cols-[minmax(0,1fr)_64px_84px_56px]";
 
 export function SoulTab() {
   const [now, setNow] = useState(0);
@@ -26,9 +27,7 @@ export function SoulTab() {
   return (
     <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       <Panel>
-        <div className="flex flex-col gap-0.5">
-          <b className="text-[15px]">소울 증폭</b>
-        </div>
+        <b className="text-[15px]">소울 증폭</b>
         <div className="flex flex-col gap-1.5">
           <Label>지금 단계</Label>
           <Segment
@@ -47,13 +46,13 @@ export function SoulTab() {
             label="목표 단계"
             value={String(target)}
             onChange={(v) => Number(v) > now && setGoal(Number(v))}
-            options={[1, 2, 3, 4].map((i) => ({ id: String(i), label: <span className={cn(i <= now && "opacity-40")}>{i}단계</span> }))}
+            options={[1, 2, 3, 4].map((i) => ({ id: String(i), label: `${i}단계`, disabled: i <= now }))}
           />
         </div>
         <div className="flex items-center justify-between gap-3">
           <span className="flex flex-col gap-0.5">
             <b className="text-[13px]">이미 실패한 횟수</b>
-            <span className="text-[11px] text-muted-foreground">
+            <span className="text-[11px] text-pretty text-muted-foreground">
               {stageLabel(now)}에서 도전 중 · 지금 {fails >= stage.cap ? 100 : Math.round(Math.min(1, stage.first + stage.step * fails) * 1000) / 10}% · {Math.max(0, stage.cap - fails)}번 더 실패하면 확정
             </span>
           </span>
@@ -78,7 +77,7 @@ export function SoulTab() {
         </div>
       </Panel>
 
-      <section className="flex min-w-0 flex-col gap-3">
+      <section className="flex min-w-0 flex-col gap-2">
         <ResultCard
           label={`${stageLabel(now)} → ${target}단계까지`}
           big={eok(plan.avgMeso)}
@@ -89,19 +88,21 @@ export function SoulTab() {
         <div className="grid grid-cols-3 gap-2">
           {LUCK_LEVELS.map((l) => {
             const n = percentileOf(plan.dist, l.q);
-            return <LuckBox key={l.q} label={l.label} value={eok(plan.costAt(l.q))} sub={`${n}번`} />;
+            return <LuckBox key={l.q} label={l.label} value={eok(plan.costAt(l.q))} sub={`${n}번`} onPage />;
           })}
         </div>
-        <div className="overflow-hidden tile">
-          <div className="grid grid-cols-[minmax(0,1fr)_64px_84px_56px] gap-2 px-4 py-2.5 text-[11px] text-muted-foreground">
+        {/* Narrower than 26rem (phones, the lg two-column layout at its narrowest) the stage takes a line of its own and
+            the three numbers go under their headings: beside them the name had about 80px. */}
+        <div className="@container overflow-hidden tile">
+          <div className={cn("grid gap-2 px-4 py-2.5 text-[11px] text-muted-foreground", SOUL_COLS)}>
             <span>단계</span>
             <span className="text-right">처음 확률</span>
             <span className="text-right">천장</span>
             <span className="text-right">평균</span>
           </div>
           {SOUL_STAGES.map((s, i) => (
-            <div key={i} className={cn("grid grid-cols-[minmax(0,1fr)_64px_84px_56px] items-center gap-2 border-t border-border px-4 py-2.5 text-[13px]", used(i) ? "bg-primary-soft" : "opacity-55")}>
-              <span className="flex min-w-0 flex-col">
+            <div key={i} className={cn("grid items-center gap-x-2 gap-y-1 border-t border-border px-4 py-2.5 text-[13px]", SOUL_COLS, used(i) ? "bg-primary-soft" : "opacity-55")}>
+              <span className="col-span-full flex min-w-0 flex-col @min-[26rem]:col-span-1">
                 <b>
                   {stageLabel(i)} → {i + 1}단계
                 </b>
@@ -109,9 +110,9 @@ export function SoulTab() {
                   실패마다 +{Math.round(s.step * 1000) / 10}%p · 강화비 {s.feeEok}억
                 </span>
               </span>
-              <span className="text-right font-num"><Digits>{Math.round(s.first * 1000) / 10}</Digits>%</span>
-              <span className="text-right font-num text-muted-foreground"><Digits>{s.cap}</Digits>번 실패 후</span>
-              <b className="text-right font-num"><Digits>{plan.stages[i].avgTries.toFixed(1)}</Digits>번</b>
+              <span className="col-start-2 text-right font-num whitespace-nowrap @min-[26rem]:col-start-auto"><Digits>{Math.round(s.first * 1000) / 10}</Digits>%</span>
+              <span className="text-right font-num whitespace-nowrap text-muted-foreground"><Digits>{s.cap}</Digits>번 실패 후</span>
+              <b className="text-right font-num whitespace-nowrap"><Digits>{plan.stages[i].avgTries.toFixed(1)}</Digits>번</b>
             </div>
           ))}
         </div>

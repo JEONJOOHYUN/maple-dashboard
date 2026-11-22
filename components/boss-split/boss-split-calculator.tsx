@@ -2,14 +2,17 @@
 
 import { useMemo, useState } from "react";
 import { Check, Copy, ImageIcon, Info, Plus, X } from "lucide-react";
+import { Digits } from "@/components/ui/digits";
+import { Reveal } from "@/components/ui/reveal";
 import { Spinner } from "@/components/ui/spinner";
-import { SwapIcon, SwapLabel } from "@/components/ui/swap-icon";
+import { SwapLabel } from "@/components/ui/swap-icon";
 import { PageHeader } from "@/components/page-header";
 import { MESO_MARKET_FEE_RATE, computeBossSplit, wholeMeso } from "@/lib/boss-split/boss-split-math";
 import { formatKoreanMeso, formatNumber } from "@/lib/format";
 import { handleMesoInput } from "@/lib/meso-input";
 import { copyImage as copyImageBlob } from "@/lib/canvas-image";
 import { cn } from "@/lib/utils";
+import { SteadyText } from "@/components/ui/steady-text";
 
 const FEE_OPTIONS = [3, 5] as const;
 const COUNT_OPTIONS = [2, 3, 4, 5, 6] as const;
@@ -43,6 +46,14 @@ const CROSS_NOTE = `다른 서버 = 메소마켓에서 메이플포인트로 바
 
 type Item = { id: string; grossMeso: number };
 type ImageState = "idle" | "working" | "copied" | "saved" | "error";
+const IMAGE_LABEL: Record<ImageState, string> = {
+  idle: "이미지 복사",
+  working: "이미지 만드는 중…",
+  copied: "이미지 복사됨",
+  saved: "복사 불가 · 파일로 저장",
+  error: "이미지 만들기 실패",
+};
+const IMAGE_STATES = Object.keys(IMAGE_LABEL) as ImageState[];
 
 function createItem(): Item {
   return { id: crypto.randomUUID(), grossMeso: 0 };
@@ -175,13 +186,6 @@ export function BossSplitCalculator() {
     setTimeout(() => setImageState("idle"), 2000);
   }
 
-  const imageLabel = {
-    idle: "이미지 복사",
-    working: "이미지 만드는 중…",
-    copied: "이미지 복사됨",
-    saved: "복사 불가 · 파일로 저장",
-    error: "이미지 만들기 실패",
-  }[imageState];
 
   return (
     <div className="flex flex-col gap-2">
@@ -193,7 +197,7 @@ export function BossSplitCalculator() {
           <button
             type="button"
             onClick={() => setItems((prev) => [...prev, createItem()])}
-            className="inline-flex h-[34px] items-center gap-1.5 rounded-lg border border-dashed border-border pr-3 pl-2.5 text-[13px] text-muted-foreground transition-[color,background-color,border-color,scale] hover:border-primary hover:text-primary-text"
+            className="relative inline-flex h-[34px] items-center gap-1.5 rounded-lg border border-dashed border-border pr-3 pl-2.5 text-[13px] text-muted-foreground transition-[color,background-color,border-color,scale] after:absolute after:-inset-1 hover:border-primary hover:text-primary-text"
           >
             <Plus className="size-3.5" aria-hidden="true" />
             아이템 추가
@@ -218,16 +222,16 @@ export function BossSplitCalculator() {
                   {formatKoreanMeso(item.grossMeso, { spaced: true })}
                 </span>
               </label>
-              {items.length > 1 && (
+              <Reveal open={items.length > 1} className="mt-2 shrink-0">
                 <button
                   type="button"
                   onClick={() => setItems((prev) => prev.filter((x) => x.id !== item.id))}
                   aria-label={`아이템 ${index + 1} 빼기`}
-                  className="mt-2 flex size-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-destructive"
+                  className="flex size-10 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-destructive"
                 >
                   <X className="size-4" aria-hidden="true" />
                 </button>
-              )}
+              </Reveal>
             </div>
           ))}
         </div>
@@ -262,15 +266,15 @@ export function BossSplitCalculator() {
               </SegmentButton>
             </div>
           </div>
-          {mode === "custom" && (
-            <>
+          <Reveal open={mode === "custom"} className="flex flex-col gap-2.5">
               <div className={cn("grid gap-2", PERCENT_COLS[count])}>
                 {Array.from({ length: count }, (_, i) => (
+                  // Corner 16 = the field inside (6) + the 10px between them.
                   <label
                     key={i}
-                    className="flex min-w-0 flex-col items-center gap-1.5 rounded-lg tile-edge bg-background px-2.5 py-3"
+                    className="flex min-w-0 flex-col items-center gap-1.5 rounded-[1rem] tile-edge bg-background px-2.5 py-3"
                   >
-                    <span className="w-full truncate text-center text-[13px] font-semibold">
+                    <span className="w-full truncate text-center text-[13px] font-semibold" title={names[i] || DEFAULT_NAMES[i]}>
                       {names[i] || DEFAULT_NAMES[i]}
                     </span>
                     <span className="relative w-full">
@@ -286,7 +290,7 @@ export function BossSplitCalculator() {
                         setPercents((prev) => prev.map((p, j) => (j === i ? value : p)));
                       }}
                       aria-label={`${names[i] || DEFAULT_NAMES[i]} 비율 (%)`}
-                      className="h-11 w-full rounded-lg border border-input bg-card pr-7 pl-2 text-center font-num text-lg font-bold outline-none [appearance:textfield] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                      className="h-11 w-full rounded-sm border border-input bg-card pr-7 pl-2 text-center font-num text-lg font-bold outline-none [appearance:textfield] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                     />
                     <span className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 text-sm text-muted-foreground">
                       %
@@ -303,8 +307,7 @@ export function BossSplitCalculator() {
                   {isValidSplit ? "100% 맞음" : percentsInRange ? "합계 100% 필요" : "0 ~ 100% 로"}
                 </span>
               </div>
-            </>
-          )}
+          </Reveal>
         </div>
       </section>
 
@@ -342,7 +345,8 @@ export function BossSplitCalculator() {
                     placeholder={DEFAULT_NAMES[card.index]}
                     aria-label={`${DEFAULT_NAMES[card.index]} 이름`}
                     size={Math.max(4, (names[card.index] || DEFAULT_NAMES[card.index]).length + 1)}
-                    className="min-w-0 rounded-md border border-transparent bg-transparent px-1 text-center text-sm font-bold outline-none field-sizing-content hover:border-border focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                    // 16px on a phone: iOS zooms the page in on a field with smaller text.
+                    className="min-w-0 rounded-md border border-transparent bg-transparent px-1 text-center text-base font-bold outline-none field-sizing-content hover:border-border focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:text-sm"
                   />
                   <span className="shrink-0 rounded-full bg-muted px-2 py-px text-xs font-bold">{card.pctLabel}</span>
                 </span>
@@ -358,7 +362,8 @@ export function BossSplitCalculator() {
                           aria-pressed={card.cross === other}
                           onClick={() => setOtherServer((prev) => prev.map((v, j) => (j === card.index ? other : v)))}
                           className={cn(
-                            "h-8 rounded-lg text-xs transition-[background-color,color,scale] outline-none focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.96]",
+                            // The `after` box makes the 32px option as tall as its 40px track to the finger.
+                            "relative h-8 rounded-lg text-xs transition-[background-color,color,scale] outline-none after:absolute after:inset-x-0 after:-inset-y-1 focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.96]",
                             card.cross === other ? "bg-primary font-bold text-primary-foreground" : "text-muted-foreground hover:text-foreground"
                           )}
                         >
@@ -366,18 +371,18 @@ export function BossSplitCalculator() {
                         </button>
                       ))}
                     </div>
-                    <span className="text-xs text-muted-foreground">{card.cross ? `메소마켓으로 보내요 · 수수료 ${MARKET_PCT}%` : "같은 서버에서 바로 건네요"}</span>
+                    <span className="text-xs text-pretty text-muted-foreground">{card.cross ? `메소마켓으로 보내요 · 수수료 ${MARKET_PCT}%` : "같은 서버에서 바로 건네요"}</span>
                   </>
                 ) : (
                   <>
                     {/* The leader's two rows of the same height: a label where the members have their switch. */}
-                    <span className="self-center rounded-full tile-edge px-2.5 py-0.5 text-xs font-semibold text-muted-foreground">내가 갖는 몫</span>
-                    <span className="text-xs text-muted-foreground">실수령에서 파티원 몫을 뺀 나머지</span>
+                    <span className="self-center rounded-full tile-edge px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap text-muted-foreground">내가 갖는 몫</span>
+                    <span className="text-xs text-pretty text-muted-foreground">실수령에서 파티원 몫을 뺀 나머지</span>
                   </>
                 )}
                 <span
                   className={cn(
-                    "max-w-full self-center font-num text-[26px] leading-tight font-bold break-all tabular-nums sm:text-[30px]",
+                    "max-w-full self-center font-num text-[26px] leading-tight font-bold break-all sm:text-[30px]",
                     highlight ? "text-primary-text" : "text-foreground"
                   )}
                 >
@@ -392,11 +397,16 @@ export function BossSplitCalculator() {
                 <div className={cn("flex w-full max-w-72 flex-col gap-1 border-t pt-2 text-[13px]", highlight ? "border-primary/30" : "border-border")}>
                   <span className="flex justify-between gap-3">
                     <span className="text-muted-foreground">{!highlight ? `실수령 (수수료 ${feePercent}% 뒤)` : card.cross ? "다른 서버에 도착" : "건넬 금액 (수수료 포함)"}</span>
-                    <b className="font-num">{formatNumber(!highlight ? (isValidSplit ? netMeso : 0) : card.handed)}</b>
+                    {/* The two amounts stand one over the other: digits of one width keep them in columns. */}
+                    <b className="font-num">
+                      <Digits>{formatNumber(!highlight ? (isValidSplit ? netMeso : 0) : card.handed)}</Digits>
+                    </b>
                   </span>
                   <span className="flex justify-between gap-3">
                     <span className="text-muted-foreground">{highlight ? `받는 몫 (수수료 ${feePercent}% 뒤)` : "파티원 몫 합계"}</span>
-                    <b className="font-num">{formatNumber(highlight ? card.final : membersTotal)}</b>
+                    <b className="font-num">
+                      <Digits>{formatNumber(highlight ? card.final : membersTotal)}</Digits>
+                    </b>
                   </span>
                 </div>
                 {/* The last row of the subgrid: the buttons of a row of cards line up. */}
@@ -405,7 +415,8 @@ export function BossSplitCalculator() {
                     type="button"
                     onClick={() => copyAmount(card.index, card.amount)}
                     disabled={!hasResult}
-                    className="inline-flex h-[38px] items-center gap-1.5 rounded-lg border border-input bg-muted px-3.5 text-[13px] font-semibold transition-[color,background-color,border-color,scale] hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
+                    // The icon's side has less padding: its glyph has air inside its box.
+                    className="inline-flex h-[38px] items-center gap-1.5 rounded-lg tile-edge bg-background pr-3.5 pl-3 text-[13px] font-semibold transition-[color,background-color,scale] disabled:opacity-50"
                   >
                     <SwapLabel
                       on={copied}
@@ -438,7 +449,7 @@ export function BossSplitCalculator() {
         <p className="flex items-start justify-center gap-1.5 text-center text-xs leading-relaxed text-muted-foreground">
           <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
           {NOTE}
-          {anyOtherServer ? ` · ${CROSS_NOTE}` : ""} · &quot;금액 복사&quot; = 숫자만
+          {anyOtherServer ? ` · ${CROSS_NOTE}` : ""} · “금액 복사” = 숫자만
         </p>
 
         <div className="flex flex-col items-center gap-1.5 border-t border-border pt-3.5">
@@ -447,12 +458,28 @@ export function BossSplitCalculator() {
             onClick={copyImage}
             disabled={!hasResult || imageState === "working"}
             aria-live="polite"
-            className="inline-flex h-[46px] items-center gap-2 rounded-lg bg-primary pr-7 pl-6 text-[15px] font-bold text-primary-foreground transition-[color,background-color,border-color,scale] hover:bg-primary/85 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex h-[46px] items-center rounded-lg bg-primary pr-7 pl-6 text-[15px] font-bold text-primary-foreground transition-[color,background-color,scale] hover:bg-primary/85 disabled:opacity-50"
           >
-            <SwapIcon on={imageState === "working"} from={<ImageIcon className="size-4" aria-hidden="true" />} to={<Spinner />} />
-            {imageLabel}
+            {/* Every wording lies in one grid cell, so the button is as wide as the longest from the start and its two
+                ends stay put while the words change; the one on show fades in over the one before. Read out once, from
+                the plain copy. */}
+            <span className="sr-only">{IMAGE_LABEL[imageState]}</span>
+            <span aria-hidden="true" className="inline-grid">
+              {IMAGE_STATES.map((state) => (
+                <span
+                  key={state}
+                  className={cn(
+                    "col-start-1 row-start-1 inline-flex items-center justify-center gap-2 whitespace-nowrap transition-[opacity,filter] duration-300 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none",
+                    state === imageState ? "opacity-100 blur-none" : "opacity-0 blur-xs"
+                  )}
+                >
+                  {state === "working" ? <Spinner /> : <ImageIcon className="size-4" />}
+                  {IMAGE_LABEL[state]}
+                </span>
+              ))}
+            </span>
           </button>
-          <span className="text-xs text-muted-foreground">결과를 그림으로 복사 → 디스코드 · 카톡에 붙여 넣기</span>
+          <span className="text-xs text-pretty text-muted-foreground">결과를 그림으로 복사 → 디스코드 · 카톡에 붙여 넣기</span>
         </div>
       </section>
     </div>
@@ -471,8 +498,9 @@ function ChoiceRow({
   return (
     <div className="flex flex-col gap-2" role="group" aria-label={label}>
       <span className="text-[13px] font-semibold text-muted-foreground">{label}</span>
-      {/* Track radius 14 = button radius 10 + the 4px between them. */}
-      <div className={cn("grid gap-1 rounded-xl bg-background p-1 shadow-tile", columns)}>{children}</div>
+      {/* Track radius 14 = button radius 10 + the 4px between them (3px of padding and the 1px edge, which is what
+          still draws the track where shadows are not drawn). */}
+      <div className={cn("grid gap-1 rounded-xl tile-edge bg-background p-[3px]", columns)}>{children}</div>
     </div>
   );
 }
@@ -510,12 +538,15 @@ function SegmentButton({ on, onClick, children }: { on: boolean; onClick: () => 
       type="button"
       onClick={onClick}
       aria-pressed={on}
+      // The transparent border is the picked button's edge where shadows are not drawn; the `after` box makes the
+      // 34px button as tall as its 42px track to the finger.
       className={cn(
-        "h-[34px] rounded-lg px-3.5 text-[13px] transition-[background-color,color,scale] active:scale-[0.96]",
-        on ? "bg-card font-bold text-primary-text shadow-tile" : "text-muted-foreground"
+        "relative h-[34px] rounded-lg border border-transparent px-[13px] text-[13px] transition-[background-color,color,box-shadow,scale] after:absolute after:inset-x-0 after:-inset-y-1 active:scale-[0.96]",
+        on ? "bg-card font-bold text-primary-text shadow-tile" : "text-muted-foreground hover:text-foreground"
       )}
     >
-      {children}
+      <SteadyText>{children}</SteadyText>
     </button>
   );
 }
+

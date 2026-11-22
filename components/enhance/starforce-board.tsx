@@ -160,7 +160,9 @@ export function StarforceBoard({ apiKey, account, onForget, switcher }: { apiKey
                 {tiles.map((t) => (
                   <div key={t.label} className="flex min-w-0 flex-col gap-1 rounded-lg bg-muted px-3 py-2.5">
                     <span className="text-xs text-muted-foreground">{t.label}</span>
-                    <b className={cn("truncate font-num text-lg", t.css)}>{t.value}</b>
+                    <b className={cn("truncate font-num text-lg", t.css)} title={t.value}>
+                      {t.value}
+                    </b>
                   </div>
                 ))}
               </div>
@@ -173,7 +175,7 @@ export function StarforceBoard({ apiKey, account, onForget, switcher }: { apiKey
               {noLevel > 0 && view !== "items" && (
                 <>
                   <span>·</span>
-                  <button type="button" onClick={toLevels} className="font-semibold text-primary-text underline underline-offset-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+                  <button type="button" onClick={toLevels} className="relative rounded-sm font-semibold text-primary-text outline-none after:absolute after:-inset-2 hover:underline focus-visible:ring-3 focus-visible:ring-ring/50">
                     레벨 모르는 장비 입력
                   </button>
                 </>
@@ -191,7 +193,8 @@ export function StarforceBoard({ apiKey, account, onForget, switcher }: { apiKey
           {view === "log" && <LogView entries={entries} characters={stats.characters} hideLow={hideLow} onHideLow={setHideLow} />}
           {view === "items" && <ItemsView stats={stats} entries={entries} overrides={overrides} onOverrides={setOverrides} onOpen={openWith} hideLow={hideLow} onHideLow={setHideLow} />}
           {view === "cal" && <CalendarView stats={stats} from={from} to={to} />}
-          <ItemDialog key={openItem} item={openStats.items.find((it) => it.key === openItem) ?? null} entries={openEntries} onClose={() => setOpenItem("")} />
+          {/* No `key`: the window stays mounted, so closing can play its exit. It resets its own page per item. */}
+          <ItemDialog item={openStats.items.find((it) => it.key === openItem) ?? null} entries={openEntries} onClose={() => setOpenItem("")} />
         </>
       )}
     </div>

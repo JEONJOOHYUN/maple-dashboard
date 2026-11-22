@@ -27,7 +27,7 @@ const text = "text-sm leading-relaxed";
 
 export default function PrivacyPage() {
   return (
-    <div className="flex flex-wrap items-start gap-5 lg:gap-7">
+    <div className="flex flex-wrap items-start gap-2">
       <nav
         aria-label="목차"
         className="flex w-full flex-col gap-1 tile p-4 text-[13px] lg:sticky lg:top-6 lg:w-56"
@@ -37,7 +37,8 @@ export default function PrivacyPage() {
           <a
             key={s.id}
             href={`#${s.id}`}
-            className="rounded-md px-2 py-1.5 outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
+            // after: the press area fills the 4px between two lines, never over a neighbour.
+            className="relative rounded-md px-2 py-1.5 transition-colors outline-none after:absolute after:inset-x-0 after:-inset-y-0.5 hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
           >
             {i + 1}. {s.title}
           </a>
@@ -136,7 +137,7 @@ export default function PrivacyPage() {
             운영자 (개인정보 보호책임자):{" "}
             <a
               href={`mailto:${CONTACT_EMAIL}`}
-              className="font-semibold text-primary-text underline underline-offset-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="rounded-sm font-semibold text-primary-text underline underline-offset-2 transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
             >
               {CONTACT_EMAIL}
             </a>

@@ -11,7 +11,7 @@ export function Brand({ compact = false, className }: { compact?: boolean; class
     <Link
       href="/"
       className={cn(
-        "flex items-center rounded-lg font-heading font-bold outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+        "flex items-center rounded-lg font-heading font-bold transition-opacity outline-none hover:opacity-80 focus-visible:ring-3 focus-visible:ring-ring/50",
         compact ? "gap-2 text-[15px]" : "gap-2.5 text-[17px]",
         className
       )}

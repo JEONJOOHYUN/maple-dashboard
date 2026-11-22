@@ -9,11 +9,11 @@ import { PageHeader } from "@/components/page-header";
 import { SpecTabs } from "@/components/spec/spec-tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Spinner } from "@/components/ui/spinner";
-import { SwapIcon } from "@/components/ui/swap-icon";
+import { SwapIcon, SwapLabel } from "@/components/ui/swap-icon";
 import type { Miss, SpecResult, Tier, Tile } from "@/lib/spec/check";
 import { periodGroups } from "@/lib/spec/period-rows";
 import { useStored } from "@/lib/use-stored";
-import { useReveal } from "@/components/ui/reveal";
+import { Reveal, useReveal } from "@/components/ui/reveal";
 import { Digits } from "@/components/ui/digits";
 import { cn } from "@/lib/utils";
 // Static imports, like the menu icons: each address carries a content hash.
@@ -39,6 +39,14 @@ export const SPEC_DESCRIPTION = "닉네임 · 길드 → 돈 거의 안 들이�
 // Recent characters (this browser only): people come back to check a fix (user, 2026-11-16).
 const RECENT_KEY = "spec-recent";
 const RECENT_MAX = 8;
+
+// A recent search is a pill of two buttons (open it · drop it), shared with the 길드 tab. The pill, not the words in
+// it, answers the pointer and the press, so both buttons stay still themselves.
+export const RECENT_PILL = "inline-flex items-center rounded-full border text-[13px] transition-[background-color,scale] has-[button:active]:scale-[0.96]";
+export const RECENT_PILL_ON = "border-primary bg-primary-soft text-primary-text [@media(hover:hover)]:has-[button:first-child:enabled:hover]:bg-primary/20";
+export const RECENT_PILL_OFF = "tile-edge bg-card [@media(hover:hover)]:has-[button:first-child:enabled:hover]:bg-muted";
+export const RECENT_NAME = "press-static rounded-l-full py-1.5 pr-1 pl-3 font-semibold disabled:opacity-50";
+export const RECENT_DROP = "press-static rounded-r-full py-1.5 pr-2.5 pl-1 opacity-60 transition-opacity hover:opacity-100";
 
 const CHECKED =
   "공용 · 직업 0차 스킬 · 성향 · 유니온 아티팩트 · 칭호 · 주문서 강화 · 캐시 장비 · 펫 기간 · 펫 장비 · 마스터라벨 · 마스터라벨 플러스 · 5차 · 하이퍼 스탯 · 하이퍼 패시브 · 펫 버프 · 링크 · 어빌리티";
@@ -209,7 +217,7 @@ const fitsCard = (m: Miss) => !m.rows?.length && (m.tiles?.length ?? 0) <= 4;
 
 function TopCard({ miss }: { miss: Miss }) {
   return (
-    <li className="flex gap-3 rounded-lg border border-primary/45 bg-card p-3.5 @xl:flex-col @xl:gap-2.5 @xl:p-4">
+    <li className="flex gap-3 tile-sm p-3.5 @xl:flex-col @xl:gap-2.5 @xl:p-4">
       <PicBox pic={picsOf(miss)[0]} cat={miss.cat} large />
       {/* The chip shares the line of the category, so the text under it keeps the whole width of a narrow card. */}
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -217,7 +225,7 @@ function TopCard({ miss }: { miss: Miss }) {
           <span className="text-xs break-keep text-muted-foreground">{miss.cat}</span>
           <TierChip tier={miss.tier} />
         </span>
-        <b className="text-sm leading-snug break-keep">{whatText(miss.what)}</b>
+        <b className="text-sm leading-snug text-balance break-keep">{whatText(miss.what)}</b>
         {miss.detail.map((d, i) => (
           <DetailLine key={i} text={d} />
         ))}
@@ -339,7 +347,8 @@ function Lines({ items, chip }: { items: Miss[]; chip: boolean }) {
       {items.map((m, i) =>
         opens(m) ? (
           <AccordionItem key={i} value={`${i}`}>
-            <AccordionTrigger className="min-h-[56px] items-center gap-3 rounded-none px-4 py-2.5 hover:bg-secondary/60 hover:no-underline">
+            {/* The list clips at its rounded edge, so the focus ring is drawn inside the line. */}
+            <AccordionTrigger className="min-h-[56px] items-center gap-3 rounded-none px-4 py-2.5 hover:bg-secondary/60 hover:no-underline focus-visible:ring-inset">
               <LineHead miss={m} chip={chip} />
             </AccordionTrigger>
             <AccordionContent className="px-4 pb-4">
@@ -398,7 +407,7 @@ function Periods({ result }: { result: SpecResult }) {
           {g.rows.map((r) => (
             <div key={`${r.what}-${r.date}`} className="grid grid-cols-[minmax(0,1fr)_auto_3.25rem] items-baseline gap-x-3">
               <DetailLine text={r.what} />
-              <span className="font-num text-[13px] text-muted-foreground tabular-nums"><Digits>{r.date}</Digits></span>
+              <span className="font-num text-[13px] font-bold text-muted-foreground tabular-nums"><Digits>{r.date}</Digits></span>
               <b className={cn("text-right font-num text-[13px] tabular-nums", r.warn && "text-[oklch(0.63_0.182_24.3)]")}><Digits>{r.days}</Digits></b>
             </div>
           ))}
@@ -425,7 +434,7 @@ function Result({ result, at, asOf, optimizer, refreshing, refreshNote, onRefres
     list.shown && top.length > 0 ? (
       <div {...list.attrs} className="reveal flex flex-col gap-3">
         <ListTitle title="먼저 채울 것" note="보스 프리셋 기준" />
-        <ul className="grid grid-cols-[minmax(0,1fr)] gap-2.5 @xl:grid-cols-3">
+        <ul className="grid grid-cols-[minmax(0,1fr)] gap-2 @xl:grid-cols-3">
           {top.map((m, i) => (
             <TopCard key={i} miss={m} />
           ))}
@@ -468,39 +477,49 @@ function Result({ result, at, asOf, optimizer, refreshing, refreshNote, onRefres
               type="button"
               onClick={onRefresh}
               disabled={refreshing}
-              aria-label="다시 조회"
+              // The time is in the name too: a title alone never reaches a keyboard or a screen reader.
+              aria-label={`다시 조회, ${fetchedAt(at)} 조회`}
               title={`${fetchedAt(at)} 조회`}
-              className="absolute top-4 right-4 inline-flex h-8 items-center gap-1 rounded-md tile-edge px-2 text-xs font-semibold whitespace-nowrap hover:bg-secondary disabled:opacity-60 sm:top-5 sm:right-5"
+              // after: the press area reaches 6px past the 32px button. With the words beside it, the icon's side is 2px tighter.
+              className="absolute top-4 right-4 inline-flex h-8 items-center gap-1 rounded-md tile-edge px-2 text-xs font-semibold whitespace-nowrap after:absolute after:-inset-1.5 disabled:opacity-50 @sm:pl-1.5 sm:top-5 sm:right-5"
             >
               <SwapIcon on={refreshing} from={<RotateCw className="size-3.5" aria-hidden="true" />} to={<Spinner size={14} />} />
               <span className="hidden @sm:inline">다시 조회</span>
             </button>
           </div>
 
-          <button
-            type="button"
-            onClick={() => n && setOpen((o) => !o)}
-            aria-expanded={n ? open : undefined}
-            className={cn(
-              "press-static flex w-full items-center gap-2.5 rounded-lg border px-3.5 py-3 text-left",
-              n
-                ? "cursor-pointer border-[oklch(0.63_0.182_24.3_/_0.5)] bg-[oklch(0.63_0.182_24.3_/_0.12)] text-[oklch(0.63_0.182_24.3)]"
-                : "cursor-default border-[oklch(0.678_0.134_152.4_/_0.5)] bg-[oklch(0.678_0.134_152.4_/_0.12)] text-[oklch(0.651_0.137_152.5)]",
-            )}
-          >
-            {n ? <ShieldAlert className="size-[22px] shrink-0" aria-hidden="true" /> : <ShieldCheck className="size-[22px] shrink-0" aria-hidden="true" />}
-            <span className="flex flex-col gap-0.5">
-              <b className="text-[15px]">{n ? `놓친 스펙 ${n}개` : "빠진 것 없음"}</b>
-              <span className="text-xs opacity-85">{n ? "보스 기준 · 바로 되는 것부터" : "확인한 항목 모두 채움"}</span>
-            </span>
-            {n > 0 && <span className="ml-auto text-xs font-bold">{open ? "목록 닫기" : "목록 보기"}</span>}
-          </button>
+          {/* A button only while there is a list to open: with nothing missed it is a plain badge, out of the tab order. */}
+          {n ? (
+            <button
+              type="button"
+              onClick={() => setOpen((o) => !o)}
+              aria-expanded={open}
+              className="press-static flex w-full items-center gap-2.5 rounded-lg border border-[oklch(0.63_0.182_24.3_/_0.5)] bg-[oklch(0.63_0.182_24.3_/_0.12)] px-3.5 py-3 text-left text-[oklch(0.63_0.182_24.3)] hover:bg-[oklch(0.63_0.182_24.3_/_0.2)]"
+            >
+              <ShieldAlert className="size-[22px] shrink-0" aria-hidden="true" />
+              <span className="flex flex-col gap-0.5">
+                <b className="text-[15px]">놓친 스펙 {n}개</b>
+                <span className="text-xs opacity-85">보스 기준 · 바로 되는 것부터</span>
+              </span>
+              <SwapLabel on={open} from="목록 보기" to="목록 닫기" className="ml-auto shrink-0 text-xs font-bold" />
+            </button>
+          ) : (
+            <div className="flex w-full items-center gap-2.5 rounded-lg border border-[oklch(0.678_0.134_152.4_/_0.5)] bg-[oklch(0.678_0.134_152.4_/_0.12)] px-3.5 py-3 text-[oklch(0.651_0.137_152.5)]">
+              <ShieldCheck className="size-[22px] shrink-0" aria-hidden="true" />
+              <span className="flex flex-col gap-0.5">
+                <b className="text-[15px]">빠진 것 없음</b>
+                <span className="text-xs opacity-85">확인한 항목 모두 채움</span>
+              </span>
+            </div>
+          )}
 
           <Periods result={result} />
 
           <div className="flex flex-col gap-1 text-xs text-muted-foreground">
             {presetText && <span>보스 프리셋: {presetText}</span>}
-            {refreshNote && <span className="text-[oklch(0.63_0.182_24.3)]">{refreshNote}</span>}
+            <Reveal open={!!refreshNote} className="text-[oklch(0.63_0.182_24.3)]">
+              {refreshNote}
+            </Reveal>
             {!result.known && <span>새 직업 → 직업별 기준 없음, 공용 항목만 확인</span>}
           </div>
 
@@ -509,7 +528,7 @@ function Result({ result, at, asOf, optimizer, refreshing, refreshNote, onRefres
               href={optimizer}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-2 rounded-lg tile-edge px-3.5 py-2.5 text-[13px] font-semibold hover:bg-secondary"
+              className="flex items-center gap-2 rounded-lg tile-edge py-2.5 pr-3 pl-3.5 text-[13px] font-semibold transition-colors"
             >
               하이퍼 스탯 효율 배분 보기
               <span className="text-xs font-normal text-muted-foreground">외부 사이트</span>
@@ -535,12 +554,12 @@ function Result({ result, at, asOf, optimizer, refreshing, refreshNote, onRefres
             <span className="flex size-12 items-center justify-center rounded-full bg-[oklch(0.678_0.134_152.4_/_0.16)] text-[oklch(0.651_0.137_152.5)]">
               <Check className="size-6" aria-hidden="true" />
             </span>
-            <b className="text-base">빠진 것 없음</b>
-            <span className="text-[13px] text-muted-foreground">확인하는 항목 모두 채움</span>
+            <b className="text-base text-balance">빠진 것 없음</b>
+            <span className="text-[13px] text-pretty text-muted-foreground">확인하는 항목 모두 채움</span>
           </div>
         )}
         {n > 0 && !list.shown && (
-          <div className="reveal tile px-4 py-9 text-center text-[13px] text-muted-foreground">왼쪽 배지 → 목록 열기</div>
+          <div className="reveal tile px-4 py-9 text-center text-[13px] text-pretty text-muted-foreground">왼쪽 배지 → 목록 열기</div>
         )}
         {result.tips.length > 0 && (
           <>
@@ -558,8 +577,8 @@ function Result({ result, at, asOf, optimizer, refreshing, refreshNote, onRefres
 export function Message({ title, sub }: { title: string; sub: string }) {
   return (
     <section className="flex flex-col items-center gap-1.5 rounded-[1rem] border border-dashed border-border bg-card px-5 py-10 text-center">
-      <b className="text-[15px]">{title}</b>
-      <span className="text-[13px] text-muted-foreground">{sub}</span>
+      <b className="text-[15px] text-balance">{title}</b>
+      <span className="text-[13px] text-pretty text-muted-foreground">{sub}</span>
     </section>
   );
 }
@@ -605,7 +624,8 @@ export function SpecCheck({ name, view }: { name: string; view: SpecView }) {
       <PageHeader title="숨은 스펙업" description={SPEC_DESCRIPTION} aside={<SpecTabs on="person" />} />
 
       <form onSubmit={submit} className="flex gap-2" role="search">
-        <label className="flex h-[50px] min-w-0 flex-1 items-center gap-2.5 tile px-4 focus-within:border-primary">
+        {/* The button's corner, and on focus the site's ring in place of the edge (the input itself draws none). */}
+        <label className="flex h-[50px] min-w-0 flex-1 items-center gap-2.5 rounded-lg tile-edge bg-card px-4 transition-[border-color,box-shadow] focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50">
           <Search className="size-[18px] shrink-0 text-muted-foreground" aria-hidden="true" />
           <span className="sr-only">캐릭터 닉네임</span>
           <input
@@ -621,39 +641,41 @@ export function SpecCheck({ name, view }: { name: string; view: SpecView }) {
         <button
           type="submit"
           disabled={pending || !text.trim()}
-          className="flex h-[50px] shrink-0 items-center gap-1.5 rounded-lg bg-primary px-[22px] text-[15px] font-bold text-primary-foreground disabled:opacity-60"
+          className="flex h-[50px] shrink-0 items-center justify-center rounded-lg bg-primary px-[22px] text-[15px] font-bold text-primary-foreground disabled:opacity-50"
         >
-          {pending && <Spinner />}
-          {pending ? "조회 중" : "검색"}
+          {/* Both states share one box, so the button keeps its width and the field beside it does not shrink. */}
+          <SwapLabel
+            on={pending}
+            from="검색"
+            to={
+              <>
+                <Spinner />
+                조회 중
+              </>
+            }
+          />
         </button>
       </form>
 
-      {recentList.length > 0 && (
-        <div className="mt-1 flex flex-wrap items-center gap-1.5">
-          <span className="mr-0.5 text-xs text-muted-foreground">최근 검색</span>
-          {recentList.map((n) => (
-            <span
-              key={n}
-              className={cn(
-                "inline-flex items-center rounded-full border text-[13px]",
-                n === found ? "border-primary bg-primary-soft text-primary-text" : "tile-edge bg-card",
-              )}
+      {/* The browser's list is not known to the server: the row comes in softly after the page, and leaves the same way. */}
+      <Reveal open={recentList.length > 0} className="mt-1 flex flex-wrap items-center gap-1.5">
+        <span className="mr-0.5 text-xs text-muted-foreground">최근 검색</span>
+        {recentList.map((n) => (
+          <span key={n} className={cn(RECENT_PILL, n === found ? RECENT_PILL_ON : RECENT_PILL_OFF)}>
+            <button type="button" onClick={() => pick(n)} disabled={pending} className={RECENT_NAME}>
+              {n}
+            </button>
+            <button
+              type="button"
+              onClick={() => setRecent((prev) => (Array.isArray(prev) ? prev : []).filter((x) => x !== n))}
+              aria-label={`${n} 최근 검색에서 지우기`}
+              className={RECENT_DROP}
             >
-              <button type="button" onClick={() => pick(n)} disabled={pending} className="py-1.5 pr-1 pl-3 font-semibold">
-                {n}
-              </button>
-              <button
-                type="button"
-                onClick={() => setRecent((prev) => (Array.isArray(prev) ? prev : []).filter((x) => x !== n))}
-                aria-label={`${n} 최근 검색에서 지우기`}
-                className="py-1.5 pr-2.5 pl-1 opacity-60 hover:opacity-100"
-              >
-                <X className="size-3.5" aria-hidden="true" />
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
+              <X className="size-3.5" aria-hidden="true" />
+            </button>
+          </span>
+        ))}
+      </Reveal>
 
       <div className={cn("transition-opacity", pending && "opacity-50")} aria-busy={pending}>
         {view.kind === "result" && (

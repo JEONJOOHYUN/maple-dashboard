@@ -170,10 +170,34 @@
      transition, so letting go half-way is smooth. Wide rows and switches stay still (`press-static`), and so do
      buttons that open a menu. A button with its own transition utility must list `scale` in it. */
   button {
-    transition: scale 0.15s ease-out;
+    /* What a button changes under the pointer or a press eases instead of snapping, unless it lists its own. */
+    transition:
+      scale 0.15s ease-out,
+      background-color 0.15s ease-out,
+      border-color 0.15s ease-out,
+      color 0.15s ease-out,
+      box-shadow 0.15s ease-out;
+    /* The press is drawn by the scale: no grey flash over it on a phone. */
+    -webkit-tap-highlight-color: transparent;
+  }
+  button:enabled {
+    cursor: pointer;
   }
   button:enabled:active:not(.press-static, [aria-haspopup]) {
     scale: 0.96;
+  }
+  /* Keyboard focus: one ring for everything that can take it, the look of `focus-visible:ring-3 ring-ring/50`, drawn
+     as an outline so it never replaces a shadow edge. An element that sets `outline-none` draws its own ring.
+     On an orange fill the ring stands 2px off; on a wide row inside a clipping box it is drawn inside. */
+  :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+    outline: 3px solid color-mix(in oklch, var(--ring) 50%, transparent);
+    outline-offset: 0;
+  }
+  :where(.bg-primary):focus-visible {
+    outline-offset: 2px;
+  }
+  :where(.press-static):focus-visible {
+    outline-offset: -3px;
   }
   html {
     /* Keep the scrollbar slot so pages and tabs of different heights never shift sideways. */
@@ -205,6 +229,17 @@
     user-select: none;
     -webkit-user-drag: none;
     -webkit-touch-callout: none;
+  }
+}
+
+/* Hover that every button of a kind shares, outside the layers so it holds whatever fill the button was given:
+   an orange button dims a step, a button drawn with the tile's edge takes the chip colour. */
+@media (hover: hover) {
+  :is(button:enabled, a).bg-primary:hover {
+    background-color: color-mix(in oklch, var(--primary) 85%, var(--background));
+  }
+  :is(button:enabled, a).tile-edge:hover {
+    background-color: var(--muted);
   }
 }
 

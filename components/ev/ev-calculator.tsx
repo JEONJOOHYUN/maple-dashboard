@@ -36,9 +36,12 @@ export function EvCalculator({ abilityClasses }: { abilityClasses: ClassAbility[
             aria-selected={tab === t.id}
             aria-controls="ev-panel"
             onClick={() => setTab(t.id)}
+            title={t.label}
             className={cn(
-              "h-10 min-w-0 truncate rounded-lg px-1 text-[13px] transition-[background-color,color,scale] active:scale-[0.96] sm:text-sm",
-              tab === t.id ? "bg-card font-bold text-primary-text shadow-tile" : "text-muted-foreground hover:text-foreground"
+              "h-10 min-w-0 truncate rounded-lg text-[13px] transition-[background-color,color,box-shadow,scale] duration-150 ease-out active:scale-[0.96] sm:text-sm",
+              // The transparent border is the tab's edge where shadows are not drawn (forced colours); it takes its 1px
+              // from the padding.
+              tab === t.id ? "border border-transparent bg-card px-[3px] font-bold text-primary-text shadow-tile" : "px-1 text-muted-foreground hover:text-foreground"
             )}
           >
             {t.label}

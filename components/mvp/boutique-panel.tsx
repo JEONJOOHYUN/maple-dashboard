@@ -70,34 +70,41 @@ export function BoutiquePanel({
           ]}
           className="w-52"
         />
-        <span className="text-xs text-muted-foreground">10개 기준 · 10번째는 피버(최소 10개) · 티켓 {ticketMan.toLocaleString("ko-KR")}만</span>
+        <span className="text-xs text-pretty text-muted-foreground">10개 기준 · 10번째는 피버(최소 10개) · 티켓 {ticketMan.toLocaleString("ko-KR")}만</span>
       </div>
 
+      {/* Each side comes in softly (the entrance of `reveal`, on a fresh element). The side it replaces leaves at once:
+          two on show together would double the panel's height for a moment. */}
       {tab === "before" ? (
-        <>
+        <div key="before" className="reveal flex flex-col gap-3">
           <div className="grid grid-cols-1 gap-2 @sm:grid-cols-3">
             {LUCK.map((l) => (
               <LuckBox key={l.label} label={l.label} value={meso(l.tickets, ticketMan)} sub={`티켓 ${l.tickets}개`} />
             ))}
           </div>
-          <span className="text-xs leading-relaxed text-muted-foreground">
+          <span className="text-xs leading-relaxed text-pretty text-muted-foreground">
             평균 {PER_10.toFixed(1)}개(500개 이상 대박은 뺌 · 넣으면 {PER_10_ALL.toFixed(1)}개) · 판매가는 수수료 전
           </span>
-        </>
+        </div>
       ) : (
-        <>
+        <div key="after" className="reveal flex flex-col gap-3">
           <div className="grid grid-cols-1 gap-2 @sm:grid-cols-2">
-            <label className="flex h-10 min-w-0 items-center justify-between gap-2 rounded-lg border border-border bg-background pr-1 pl-3 text-[13px] text-muted-foreground">
-              <span className="truncate">깐 개수</span>
+            {/* Corner 14 = the field inside (10) + the 4px between them, as the fields of the calculator above. */}
+            <label className="flex h-10 min-w-0 items-center justify-between gap-2 rounded-xl border border-border bg-background pr-1 pl-3 text-[13px] text-muted-foreground">
+              <span className="truncate" title="깐 개수">
+                깐 개수
+              </span>
               <NumberField label="깐 부티크 기프트 개수" value={opened.n} onChange={(v) => onOpened({ ...opened, n: v })} suffix="개" inputClassName="h-8 w-16" />
             </label>
-            <label className="flex h-10 min-w-0 items-center justify-between gap-2 rounded-lg border border-border bg-background pr-1 pl-3 text-[13px] text-muted-foreground">
-              <span className="truncate">받은 티켓</span>
+            <label className="flex h-10 min-w-0 items-center justify-between gap-2 rounded-xl border border-border bg-background pr-1 pl-3 text-[13px] text-muted-foreground">
+              <span className="truncate" title="받은 티켓">
+                받은 티켓
+              </span>
               <NumberField label="받은 부티크 티켓 개수" value={opened.t} onChange={(v) => onOpened({ ...opened, t: v })} suffix="개" inputClassName="h-8 w-16" />
             </label>
           </div>
           {ready ? (
-            <div className="flex flex-col gap-1 rounded-lg border border-primary bg-primary-soft px-4 py-3">
+            <div className="reveal flex flex-col gap-1 rounded-lg border border-primary bg-primary-soft px-4 py-3">
               <span className="text-xs text-muted-foreground">같은 개수 깐 사람 중</span>
               <b className="font-num text-[26px] leading-tight text-primary-text">{top}</b>
               <span className="text-[13px]">
@@ -113,7 +120,7 @@ export function BoutiquePanel({
               </span>
             </div>
           ) : (
-            <p className="rounded-lg border border-dashed border-border px-4 py-4 text-center text-[13px] text-muted-foreground">
+            <p className="reveal rounded-lg border border-dashed border-border px-4 py-4 text-center text-[13px] text-muted-foreground">
               {tooBig
                 ? `${MAX_OPENS.toLocaleString("ko-KR")}개 · 티켓 ${MAX_TICKETS.toLocaleString("ko-KR")}개까지 계산`
                 : n > 0 && t > 0
@@ -121,8 +128,8 @@ export function BoutiquePanel({
                   : "깐 개수 · 받은 티켓 → 같은 개수 깐 사람 중 몇 %인지"}
             </p>
           )}
-          <span className="text-xs text-muted-foreground">10번째마다 피버 · 판매 기간이 바뀌면 처음부터 셈</span>
-        </>
+          <span className="text-xs text-pretty text-muted-foreground">10번째마다 피버 · 판매 기간이 바뀌면 처음부터 셈</span>
+        </div>
       )}
     </div>
   );

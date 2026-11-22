@@ -14,7 +14,8 @@ function SideLink({ item, active }: { item: NavItem; active: boolean }) {
       href={item.href}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "flex w-full items-center gap-2.5 rounded-lg px-3 py-[7px] text-sm whitespace-nowrap transition-[background-color,color,scale] outline-none active:scale-[0.96] focus-visible:ring-3 focus-visible:ring-ring/50",
+        // after: the press area fills the 4px between two links (36px → 40px), never over a neighbour.
+        "relative flex w-full items-center gap-2.5 rounded-lg px-3 py-[7px] text-sm whitespace-nowrap transition-[background-color,color,scale] outline-none after:absolute after:inset-x-0 after:-inset-y-0.5 active:scale-[0.96] focus-visible:ring-3 focus-visible:ring-ring/50",
         active
           ? "bg-sidebar-accent font-semibold text-sidebar-accent-foreground"
           : "font-medium text-muted-foreground hover:bg-muted hover:text-foreground"

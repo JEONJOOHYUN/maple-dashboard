@@ -8,6 +8,9 @@ import { Chip, NumberField, parseNum } from "@/components/ev/ui";
 import type { Roulette } from "@/lib/third-party/roulette/roulette";
 import { useStored } from "@/lib/use-stored";
 import { Digits } from "@/components/ui/digits";
+import { Reveal } from "@/components/ui/reveal";
+import { Spinner } from "@/components/ui/spinner";
+import { SwapLabel } from "@/components/ui/swap-icon";
 import { cn } from "@/lib/utils";
 
 type Entry = { name: string; count: number };
@@ -249,8 +252,8 @@ export function PinballGame() {
           it is pinned next to it and scrolls on its own, so the ranks stay in view while the page follows the
           marbles down. On a phone the wrapper is not a box: people, board, ranks stack in that order. */}
       <div className="flex flex-col gap-2 lg:grid lg:grid-cols-[340px_minmax(0,1fr)]">
-        <div className="contents lg:sticky lg:top-4 lg:-m-1 lg:flex lg:max-h-[calc(100dvh-1.5rem)] lg:flex-col lg:gap-4 lg:overflow-y-auto lg:overscroll-contain lg:p-1 lg:[scrollbar-width:thin]">
-        <div className="order-1 flex min-w-0 flex-col gap-3 lg:order-none lg:shrink-0">
+        <div className="contents lg:sticky lg:top-4 lg:-m-1 lg:flex lg:max-h-[calc(100dvh-1.5rem)] lg:flex-col lg:gap-2 lg:overflow-y-auto lg:overscroll-contain lg:p-1 lg:[scrollbar-width:thin]">
+        <div className="order-1 flex min-w-0 flex-col gap-2 lg:order-none lg:shrink-0">
           <section className="flex flex-col gap-3 tile p-4">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <b className="text-[15px]">
@@ -277,9 +280,10 @@ export function PinballGame() {
                           setOpen(-1);
                         }
                       }}
-                      className="h-7 w-20 min-w-0 rounded-md border border-primary/40 bg-card px-1.5 text-[13px] font-bold outline-none focus:border-primary"
+                      // Round like the pill around it (18 = 14 + the 4px between). 16px on a phone: smaller, and iOS zooms in.
+                      className="h-7 w-20 min-w-0 rounded-full border border-primary/40 bg-card px-2 text-base font-bold outline-none transition-[border-color,box-shadow] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50 sm:text-[13px]"
                     />
-                    <button type="button" disabled={running || e.count <= 1} onClick={() => setCount(i, String(e.count - 1))} aria-label={`${e.name} 구슬 하나 빼기`} className="flex size-7 items-center justify-center rounded-full hover:bg-card disabled:opacity-40">
+                    <button type="button" disabled={running || e.count <= 1} onClick={() => setCount(i, String(e.count - 1))} aria-label={`${e.name} 구슬 하나 빼기`} className="flex size-7 items-center justify-center rounded-full hover:bg-card disabled:opacity-50">
                       <Minus className="size-3.5" aria-hidden="true" />
                     </button>
                     {/* Typed straight in (user, 2026-11-19), saved on Enter or when the box is left.
@@ -300,13 +304,13 @@ export function PinballGame() {
                         value={countDraft}
                         onChange={setCountDraft}
                         disabled={running}
-                        inputClassName="h-7 w-14 border-primary/40 bg-card px-1 text-center text-[13px] font-bold text-transparent focus:text-foreground disabled:opacity-40"
+                        inputClassName="h-7 w-14 rounded-full border-primary/40 bg-card px-1 text-center text-base font-bold text-transparent focus:text-foreground focus:ring-ring/50 disabled:opacity-50 sm:text-[13px]"
                       />
-                      <span aria-hidden="true" className={cn("pointer-events-none absolute inset-0 flex items-center justify-center font-num text-[13px] font-bold text-foreground group-focus-within/count:hidden", running && "opacity-40")}>
+                      <span aria-hidden="true" className={cn("pointer-events-none absolute inset-0 flex items-center justify-center font-num text-base font-bold text-foreground group-focus-within/count:hidden sm:text-[13px]", running && "opacity-50")}>
                         <Digits>{/^\d+$/.test(countDraft) ? Number(countDraft).toLocaleString("ko-KR") : countDraft}</Digits>
                       </span>
                     </span>
-                    <button type="button" disabled={running || e.count >= roomFor(i)} onClick={() => setCount(i, String(e.count + 1))} aria-label={`${e.name} 구슬 하나 더하기`} className="flex size-7 items-center justify-center rounded-full hover:bg-card disabled:opacity-40">
+                    <button type="button" disabled={running || e.count >= roomFor(i)} onClick={() => setCount(i, String(e.count + 1))} aria-label={`${e.name} 구슬 하나 더하기`} className="flex size-7 items-center justify-center rounded-full hover:bg-card disabled:opacity-50">
                       <Plus className="size-3.5" aria-hidden="true" />
                     </button>
                     <button
@@ -317,7 +321,7 @@ export function PinballGame() {
                         setOpen(-1);
                       }}
                       aria-label={`${e.name} 빼기`}
-                      className="flex size-7 items-center justify-center rounded-full text-muted-foreground hover:bg-card hover:text-destructive disabled:opacity-40"
+                      className="flex size-7 items-center justify-center rounded-full text-muted-foreground hover:bg-card hover:text-destructive disabled:opacity-50"
                     >
                       <X className="size-3.5" aria-hidden="true" />
                     </button>
@@ -331,11 +335,13 @@ export function PinballGame() {
                       setNameDraft(e.name);
                       setCountDraft(String(e.count));
                     }}
-                    className="inline-flex h-9 items-center gap-1.5 rounded-full tile-edge px-3 text-[13px] hover:border-primary/60"
+                    className="inline-flex h-9 items-center gap-1.5 rounded-full tile-edge px-3 text-[13px]"
                   >
                     <span aria-hidden="true" className="size-3.5 shrink-0 rounded-full" style={{ background: colorFor(e.name) }} />
-                    <span className="max-w-24 truncate">{e.name}</span>
-                    <span className={cn("font-num text-xs", e.count > 1 ? "font-bold text-primary-text" : "text-muted-foreground")}>
+                    <span className="max-w-24 truncate" title={e.name}>
+                      {e.name}
+                    </span>
+                    <span className={cn("font-num text-xs font-bold", e.count > 1 ? "text-primary-text" : "text-muted-foreground")}>
                       ×<Digits>{e.count.toLocaleString("ko-KR")}</Digits>
                     </span>
                   </button>
@@ -352,7 +358,7 @@ export function PinballGame() {
                   if (e.key === "Enter" && !e.nativeEvent.isComposing && !full) addDraft();
                 }}
                 placeholder={full ? `구슬 최대 ${MAX_TOTAL}개` : "이름 추가 (쉼표로 여러 명, 이름*3)"}
-                className="h-10 min-w-0 flex-1 rounded-lg border border-input bg-background px-3 text-sm outline-none focus:border-ring focus:ring-3 focus:ring-ring/40"
+                className="h-10 min-w-0 flex-1 rounded-lg border border-input bg-background px-3 text-base outline-none transition-[border-color,box-shadow] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50 sm:text-sm"
               />
               <button type="button" onClick={addDraft} disabled={running || full} className="h-10 rounded-lg tile-edge px-4 text-[13px] font-semibold disabled:opacity-50">
                 추가
@@ -391,12 +397,23 @@ export function PinballGame() {
                 type="button"
                 onClick={start}
                 disabled={status === "loading" || status === "error" || people.length === 0}
-                className="h-11 rounded-lg bg-primary text-[15px] font-bold text-primary-foreground disabled:opacity-50"
+                className="flex h-11 items-center justify-center rounded-lg bg-primary text-[15px] font-bold text-primary-foreground disabled:opacity-50"
               >
-                {status === "loading" ? "준비 중…" : "시작하기"}
+                <SwapLabel
+                  on={status === "loading"}
+                  from="시작하기"
+                  to={
+                    <>
+                      <Spinner />
+                      준비 중…
+                    </>
+                  }
+                />
               </button>
             </div>
-            {status === "error" && <span className="text-xs text-destructive">물리 엔진 불러오기 실패 · 새로고침</span>}
+            <Reveal open={status === "error"} className="text-xs text-destructive">
+              물리 엔진 불러오기 실패 · 새로고침
+            </Reveal>
           </section>
         </div>
           {/* The card takes the room left under the settings; a longer list scrolls inside it instead of spilling out
@@ -406,20 +423,27 @@ export function PinballGame() {
               <b className="text-[15px]">순위</b>
               <span className="text-xs text-muted-foreground">한 사람은 한 번만 · {rule === "first" ? "가장 먼저 들어온 구슬로" : "가장 늦게 들어온 구슬로"}</span>
             </div>
-            <ol className="flex flex-col gap-1 lg:-mr-2 lg:min-h-0 lg:flex-1 lg:gap-1.5 lg:overflow-y-auto lg:pr-2 lg:[scrollbar-width:thin]">
+            {ordered.length === 0 && <p className="py-6 text-center text-[13px] text-muted-foreground">참가자 없음</p>}
+            {/* The scroll box is a little larger than the list (lg), so the rows' shadow edges are not cut at its sides. */}
+            <ol className="flex flex-col gap-1 lg:-mx-2 lg:-my-1 lg:min-h-0 lg:flex-1 lg:gap-1.5 lg:overflow-y-auto lg:px-2 lg:py-1 lg:[scrollbar-width:thin]">
               {ordered.map((r, k) => {
                 const win = winner === r.name;
                 return (
                   <li
                     key={r.name}
+                    // Every row carries the 1px border (padding 1px less for it), so a row keeps its size as it is decided.
                     className={cn(
-                      "grid grid-cols-[36px_16px_minmax(0,1fr)_auto] items-center gap-2 rounded-lg px-2.5 py-1.5 text-[13px] lg:py-2",
-                      win ? "bg-primary font-bold text-primary-foreground" : r.decided ? "bg-muted" : "text-muted-foreground ring-1 ring-border ring-inset"
+                      "grid grid-cols-[36px_16px_minmax(0,1fr)_auto] items-center gap-2 rounded-lg border border-transparent px-[9px] py-[5px] text-[13px] lg:py-[7px]",
+                      win ? "bg-primary font-bold text-primary-foreground" : r.decided ? "bg-muted" : "text-muted-foreground shadow-tile"
                     )}
                   >
-                    <b className="font-num">{k + 1}등</b>
+                    <b className="font-num">
+                      <Digits>{`${k + 1}등`}</Digits>
+                    </b>
                     <span aria-hidden="true" className="size-3.5 shrink-0 rounded-full" style={{ background: r.color }} />
-                    <span className="truncate">{r.name}</span>
+                    <span className="truncate" title={r.name}>
+                      {r.name}
+                    </span>
                     <span className="text-xs">
                       {win ? "당첨" : r.decided ? "확정" : status === "running" || status === "done" ? (r.left > 1 ? `구슬 ${r.left}개 남음` : "진행 중") : "대기"}
                     </span>
@@ -432,18 +456,25 @@ export function PinballGame() {
 
         <section className="relative order-2 min-w-0 overflow-hidden tile lg:order-none lg:col-start-2">
           <div ref={boardRef} className="h-[480px] w-full sm:h-[600px] lg:h-[720px]" aria-label="핀볼 판" role="img" />
-          {status === "loading" && <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">판 준비 중…</div>}
+          {status === "loading" && (
+            <div className="absolute inset-0 flex items-center justify-center gap-2 text-sm text-muted-foreground">
+              <Spinner />판 준비 중…
+            </div>
+          )}
           {/* The map is at the right edge of the board (drawn by the engine); this opens and closes it. */}
           <button
             type="button"
             aria-pressed={mapOpen}
             onClick={() => setMapOpen(!mapOpen)}
-            className="absolute top-2 left-2 inline-flex h-8 items-center gap-1.5 rounded-md tile-edge bg-card/90 pr-2.5 pl-2 text-xs font-semibold outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
+            // after: the press area reaches 6px past the 32px button. The site's focus outline keeps its shadow edge.
+            className="absolute top-2 left-2 inline-flex h-8 items-center gap-1.5 rounded-md tile-edge bg-card/90 pr-2.5 pl-2 text-xs font-semibold after:absolute after:-inset-1.5"
           >
             <MapIcon className="size-3.5" aria-hidden="true" />
-            {mapOpen ? "맵 닫기" : "맵 열기"}
+            <SwapLabel on={mapOpen} from="맵 열기" to="맵 닫기" />
           </button>
-          {mapOpen && <span className="pointer-events-none absolute bottom-2 left-3 text-[11px] text-muted-foreground">맵에 올리면 그 자리 보기</span>}
+          <Reveal open={mapOpen} className="pointer-events-none absolute bottom-2 left-3 text-[11px] text-muted-foreground">
+            맵에 올리면 그 자리 보기
+          </Reveal>
         </section>
 
       </div>

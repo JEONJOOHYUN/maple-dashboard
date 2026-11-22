@@ -43,8 +43,9 @@ export function ThumbCarousel({ title, more, slides, empty }: { title: string; m
     return () => window.clearInterval(id);
   }, [held, slides.length, step]);
 
-  // On the pictures' two ends, shown while the pointer is on the row or a key reaches them; a touch screen swipes.
-  const arrow = "pointer-events-auto flex size-8 items-center justify-center rounded-full bg-background/90 text-foreground opacity-0 shadow-tile transition-[opacity,scale] outline-none group-hover/row:opacity-100 focus-visible:opacity-100 focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.96]";
+  // On the pictures' two ends, shown while the pointer is on the row or a key reaches them. A touch screen swipes, so
+  // there they are gone: unseen, they took the taps on both ends of a picture.
+  const arrow = "pointer-events-auto flex size-8 items-center justify-center rounded-full tile-edge bg-background/90 text-foreground opacity-0 transition-[opacity,background-color,scale] group-hover/row:opacity-100 focus-visible:opacity-100 active:scale-[0.96] [@media(hover:none)]:hidden";
   return (
     <section
       aria-label={title}
@@ -59,17 +60,18 @@ export function ThumbCarousel({ title, more, slides, empty }: { title: string; m
         <MoreLink href={more} />
       </div>
       {slides.length === 0 ? (
-        <p className="rounded-md bg-muted px-4 py-8 text-center text-[13px] text-muted-foreground">{empty}</p>
+        <p className="rounded-lg bg-muted px-4 py-8 text-center text-[13px] text-muted-foreground">{empty}</p>
       ) : (
         <div className="group/row @container relative">
         <ul ref={track} className="flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-smooth [scrollbar-width:none] motion-reduce:scroll-auto [&::-webkit-scrollbar]:hidden">
           {slides.map((slide) => (
             <li key={slide.id} className="min-w-0 shrink-0 basis-full snap-start sm:basis-[calc((100%-12px)/2)]">
-              <a href={slide.url} target="_blank" rel="noreferrer" className="group flex flex-col rounded-lg outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+              {/* A title cut at two lines shows whole in the browser's own tooltip, like the lists below. */}
+              <a href={slide.url} target="_blank" rel="noreferrer" title={slide.title} className="group flex flex-col rounded-lg outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
                 {/* eslint-disable-next-line @next/next/no-img-element -- NEXON's notice picture, shown as is (never stored or resized by us) */}
                 <img src={slide.img} alt="" loading="lazy" className="aspect-[14/5] w-full rounded-lg bg-muted object-cover image-line" />
                 <span className="mt-2.5 flex items-start gap-2">
-                  <b className="line-clamp-2 min-w-0 flex-1 text-sm font-semibold text-balance group-hover:text-primary-text">{slide.title}</b>
+                  <b className="line-clamp-2 min-w-0 flex-1 text-sm font-semibold text-balance transition-colors group-hover:text-primary-text">{slide.title}</b>
                   {slide.badge && <span className="inline-flex h-[22px] min-w-11 shrink-0 items-center justify-center rounded-full bg-primary-soft px-[7px] text-[11px] font-bold whitespace-nowrap text-primary-text">{slide.badge}</span>}
                 </span>
                 {slide.meta && <span className="text-xs text-muted-foreground">{slide.meta}</span>}

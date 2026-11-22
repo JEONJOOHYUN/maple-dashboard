@@ -4,7 +4,10 @@ import { useLayoutEffect, useRef, type ReactNode } from "react";
 import { LUCK_LEVELS, triesAt } from "@/lib/ev/luck";
 import { koreanUnits } from "@/lib/format";
 import { caretAfter, cleanNumberText, forwardDeleteText, groupDigits, keptBefore } from "@/lib/number-text";
+import { Digits } from "@/components/ui/digits";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { SteadyText } from "@/components/ui/steady-text";
 
 /** Card section used by every calculator tab. */
 export function Panel({ className, children }: { className?: string; children: ReactNode }) {
@@ -46,22 +49,25 @@ export function Chip({
       aria-pressed={on}
       title={title}
       className={cn(
-        "h-9 min-w-0 rounded-lg border px-3 text-[13px] whitespace-nowrap transition-[background-color,border-color,color,box-shadow,scale] enabled:active:scale-[0.96] disabled:cursor-default",
+        // 36px to look at, 40px to press: the area reaches 2px above and below (chips sit 6px apart).
+        "relative h-9 min-w-0 rounded-lg border px-3 text-[13px] whitespace-nowrap transition-[background-color,border-color,color,box-shadow,scale] duration-150 ease-out after:absolute after:inset-x-0 after:-inset-y-0.5 enabled:active:scale-[0.96] disabled:cursor-default",
         on && !soft && "border-transparent bg-primary font-bold text-primary-foreground",
         on && soft && "border-primary bg-primary-soft font-bold text-primary-text",
         !on && soft && "border-dashed border-border bg-transparent text-muted-foreground",
-        !on && !soft && "border-transparent bg-background text-foreground shadow-tile hover:shadow-tile-hover",
+        !on && !soft && "border-transparent bg-background text-foreground shadow-tile enabled:hover:bg-muted enabled:hover:shadow-tile-hover",
         className
       )}
     >
-      {children}
+      {/* Picked chips turn bold: the unseen bold copy keeps the chip, and so its neighbours, where they were. */}
+      <SteadyText>{children}</SteadyText>
     </button>
   );
 }
 
 /**
- * Segmented control (tabs inside a muted track). `hint` = a short note shown above the option on mouse hover
- * (user, 2026-11-16); hover only exists on devices with a mouse, so anything a phone needs stays on screen.
+ * Segmented control (tabs inside a muted track). `hint` = a short note shown above the option on mouse hover or
+ * keyboard focus (user, 2026-11-16); neither exists on a phone, so anything a phone needs stays on screen.
+ * A `disabled` option cannot be picked and says so (dimmed, no hover, no press).
  */
 export function Segment<T extends string>({
   value,
@@ -71,46 +77,48 @@ export function Segment<T extends string>({
   className,
 }: {
   value: T;
-  options: { id: T; label: ReactNode; hint?: string }[];
+  options: { id: T; label: ReactNode; hint?: string; disabled?: boolean }[];
   onChange: (id: T) => void;
   label: string;
   className?: string;
 }) {
   return (
     <div role="radiogroup" aria-label={label} className={cn("grid gap-0.5 rounded-xl bg-muted p-1", className)} style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}>
-      {options.map((o, i) => {
-        const button = (
-          <button
-            key={o.id}
-            type="button"
-            role="radio"
-            aria-checked={value === o.id}
-            onClick={() => onChange(o.id)}
-            className={cn(
-              "h-[34px] min-w-0 truncate rounded-lg px-2 text-[13px] transition-[background-color,color,scale] active:scale-[0.96]",
-              o.hint && "flex-1",
-              value === o.id ? "bg-card font-bold text-foreground shadow-tile" : "text-muted-foreground hover:text-foreground"
-            )}
-          >
+      {options.map((o) => {
+        const on = value === o.id;
+        const props = {
+          type: "button" as const,
+          role: "radio",
+          "aria-checked": on,
+          disabled: o.disabled,
+          onClick: () => onChange(o.id),
+          className: cn(
+            "h-[34px] min-w-0 truncate rounded-lg text-[13px] transition-[background-color,color,box-shadow,scale] duration-150 ease-out enabled:active:scale-[0.96] disabled:opacity-40",
+            // The transparent border is the pill's edge where shadows are not drawn (forced colours); it takes its 1px
+            // from the padding, so the words have the same room picked or not.
+            on ? "border border-transparent bg-card px-[7px] font-bold text-foreground shadow-tile" : "px-2 text-muted-foreground enabled:hover:text-foreground"
+          ),
+        };
+        const content = (
+          <>
             {o.label}
             {o.hint && <span className="sr-only">, {o.hint}</span>}
-          </button>
+          </>
         );
-        if (!o.hint) return button;
-        // Outside the button (it truncates), pinned to the track's edge at either end so it does not run past it.
+        // A label that is cut can still be read whole.
+        if (!o.hint)
+          return (
+            <button key={o.id} {...props} title={typeof o.label === "string" ? o.label : undefined}>
+              {content}
+            </button>
+          );
         return (
-          <span key={o.id} className="group/seg relative flex min-w-0">
-            {button}
-            <span
-              aria-hidden="true"
-              className={cn(
-                "pointer-events-none absolute bottom-full z-10 mb-1.5 rounded-md bg-foreground px-2 py-1 text-[11px] font-medium whitespace-nowrap text-background opacity-0 shadow-sm transition-opacity group-hover/seg:opacity-100",
-                i === 0 ? "left-0" : i === options.length - 1 ? "right-0" : "left-1/2 -translate-x-1/2"
-              )}
-            >
-              {o.hint}
-            </span>
-          </span>
+          <Tooltip key={o.id}>
+            <TooltipTrigger render={<button type="button" />} delay={0} {...props}>
+              {content}
+            </TooltipTrigger>
+            <TooltipContent>{o.hint}</TooltipContent>
+          </Tooltip>
         );
       })}
     </div>
@@ -124,7 +132,8 @@ export function Switch({ on, onChange, label, note }: { on: boolean; onChange: (
       role="switch"
       aria-checked={on}
       onClick={() => onChange(!on)}
-      className="press-static flex w-full items-center gap-3 rounded-lg bg-background px-3 py-2.5 text-left shadow-tile"
+      // tile-edge has a 1px border: the padding is 1px less each way, so the switch keeps its size.
+      className="press-static flex w-full items-center gap-3 rounded-lg tile-edge bg-background px-[11px] py-[9px] text-left hover:shadow-tile-hover"
     >
       <span className={cn("flex h-6 w-10 shrink-0 rounded-full p-0.5 transition-colors", on ? "bg-primary" : "bg-border")}>
         <span className={cn("size-5 rounded-full bg-white shadow-sm transition-transform", on && "translate-x-4")} />
@@ -195,7 +204,8 @@ export function NumberField({
           requestAnimationFrame(putCaret);
         }}
         className={cn(
-          "h-9 w-20 min-w-0 rounded-lg border border-input bg-background px-2 text-right font-num text-[15px] font-bold text-foreground outline-none focus:border-ring focus:ring-3 focus:ring-ring/40",
+          // 16px on a phone whatever size the caller asks for: under that, iOS zooms the page in when the field is tapped.
+          "h-9 w-20 min-w-0 rounded-lg border border-input bg-background px-2 text-right font-num text-[15px] font-bold text-foreground transition-[border-color,box-shadow] duration-150 ease-out outline-none focus:border-ring focus:ring-3 focus:ring-ring/50 max-sm:text-base",
           inputClassName
         )}
       />
@@ -210,6 +220,13 @@ export const parseNum = (text: string, fallback = 0) => {
   return Number.isFinite(n) ? n : fallback;
 };
 
+/** The − / + of a stepper, one look for every tab: the caller adds its size and radius. */
+export const stepButton = "flex shrink-0 items-center justify-center tile-edge disabled:opacity-40";
+/** How an arrow that marks open / closed turns (down = closed, up = open), the same in every tab. */
+export const arrowTurn = "transition-[rotate] duration-200 ease-out motion-reduce:transition-none";
+/** One hover for every dashed button of the calculators: the edge turns orange and the words darken. */
+export const dashedHover = "hover:border-primary/60 hover:text-foreground";
+
 /** Big orange result card. */
 export function ResultCard({ label, big, unit, side, foot }: { label: ReactNode; big: ReactNode; unit?: string; side?: ReactNode; foot?: ReactNode }) {
   return (
@@ -220,7 +237,7 @@ export function ResultCard({ label, big, unit, side, foot }: { label: ReactNode;
           {big}
           {unit && <span className="ml-1 text-[0.42em]">{unit}</span>}
         </span>
-        {side && <b className="font-num text-lg">{side}</b>}
+        {side && <b className="font-num text-lg">{typeof side === "string" || typeof side === "number" ? <Digits>{side}</Digits> : side}</b>}
       </span>
       {foot && <span className="text-xs font-semibold opacity-85">{foot}</span>}
     </div>
@@ -241,12 +258,19 @@ export function LuckRow({ p, cap = 0, cost, unit = "번" }: { p: number; cap?: n
   );
 }
 
-export function LuckBox({ label, value, sub }: { label: string; value: string; sub?: string }) {
+/** `onPage`: the box stands on the page itself, not inside a tile, so it is a tile of its own instead of a well. */
+export function LuckBox({ label, value, sub, onPage }: { label: string; value: string; sub?: string; onPage?: boolean }) {
   return (
-    <div className="flex min-w-0 flex-col gap-0.5 rounded-lg bg-background p-3">
+    <div className={cn("flex min-w-0 flex-col gap-0.5 p-3", onPage ? "tile" : "rounded-lg bg-background")}>
       <span className="text-[11px] text-muted-foreground">{label}</span>
-      <b className="font-num text-lg">{value}</b>
-      {sub && <span className="truncate font-num text-xs text-muted-foreground">{sub}</span>}
+      <b className="font-num text-lg">
+        <Digits>{value}</Digits>
+      </b>
+      {sub && (
+        <span title={sub} className="truncate font-num text-xs text-muted-foreground">
+          <Digits>{sub}</Digits>
+        </span>
+      )}
     </div>
   );
 }
