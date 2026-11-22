@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { MoreLink } from "@/components/home/more-link";
 import type { NewsSlide } from "@/lib/home/news-parse";
 
 /** Seconds a page of pictures stays before the next one comes (user, 2026-11-13: "몇 초마다 옆 이미지로"). */
@@ -42,52 +43,52 @@ export function ThumbCarousel({ title, more, slides, empty }: { title: string; m
     return () => window.clearInterval(id);
   }, [held, slides.length, step]);
 
-  const arrow = "flex size-8 items-center justify-center rounded-full text-muted-foreground transition-[background-color,color,scale] outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.96]";
+  // On the pictures' two ends, shown while the pointer is on the row or a key reaches them; a touch screen swipes.
+  const arrow = "pointer-events-auto flex size-8 items-center justify-center rounded-full bg-background/90 text-foreground opacity-0 shadow-tile transition-[opacity,scale] outline-none group-hover/row:opacity-100 focus-visible:opacity-100 focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.96]";
   return (
     <section
       aria-label={title}
-      className="flex min-w-0 flex-col gap-2.5 tile px-4 pt-3 pb-4 lg:px-[18px]"
+      className="flex min-w-0 flex-col gap-3 tile p-4 sm:p-5"
       onPointerEnter={() => setHover(true)}
       onPointerLeave={() => setHover(false)}
       onFocusCapture={() => setFocus(true)}
       onBlurCapture={() => setFocus(false)}
     >
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex min-h-7 items-center justify-between gap-2">
         <h2 className="text-[15px] font-bold whitespace-nowrap">{title}</h2>
-        <span className="flex items-center gap-0.5">
-          {slides.length > 1 && (
-            <>
-              <button type="button" aria-label={`${title} 이전`} onClick={() => step(-1)} className={arrow}>
-                <ChevronLeft className="size-4" aria-hidden="true" />
-              </button>
-              <button type="button" aria-label={`${title} 다음`} onClick={() => step(1)} className={arrow}>
-                <ChevronRight className="size-4" aria-hidden="true" />
-              </button>
-            </>
-          )}
-          <a href={more} target="_blank" rel="noreferrer" className="ml-1.5 inline-flex h-7 shrink-0 items-center rounded-full bg-background px-2.5 text-xs font-semibold whitespace-nowrap shadow-tile transition-[box-shadow,scale] outline-none hover:shadow-tile-hover focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.96]">
-            더 보기 →
-          </a>
-        </span>
+        <MoreLink href={more} />
       </div>
       {slides.length === 0 ? (
         <p className="rounded-md bg-muted px-4 py-8 text-center text-[13px] text-muted-foreground">{empty}</p>
       ) : (
+        <div className="group/row @container relative">
         <ul ref={track} className="flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-smooth [scrollbar-width:none] motion-reduce:scroll-auto [&::-webkit-scrollbar]:hidden">
           {slides.map((slide) => (
             <li key={slide.id} className="min-w-0 shrink-0 basis-full snap-start sm:basis-[calc((100%-12px)/2)]">
-              <a href={slide.url} target="_blank" rel="noreferrer" className="group flex flex-col gap-1.5 rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+              <a href={slide.url} target="_blank" rel="noreferrer" className="group flex flex-col rounded-lg outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
                 {/* eslint-disable-next-line @next/next/no-img-element -- NEXON's notice picture, shown as is (never stored or resized by us) */}
-                <img src={slide.img} alt="" loading="lazy" className="aspect-[14/5] w-full rounded-md bg-muted object-cover image-line" />
-                <span className="flex items-center justify-between gap-2">
-                  <b className="min-w-0 truncate text-[13.5px] group-hover:text-primary-text">{slide.title}</b>
-                  {slide.badge && <span className="shrink-0 rounded-full bg-primary-soft px-2 text-[11px] leading-5 font-bold whitespace-nowrap text-primary-text">{slide.badge}</span>}
+                <img src={slide.img} alt="" loading="lazy" className="aspect-[14/5] w-full rounded-lg bg-muted object-cover image-line" />
+                <span className="mt-2.5 flex items-start gap-2">
+                  <b className="line-clamp-2 min-w-0 flex-1 text-sm font-semibold text-balance group-hover:text-primary-text">{slide.title}</b>
+                  {slide.badge && <span className="inline-flex h-[22px] min-w-11 shrink-0 items-center justify-center rounded-full bg-primary-soft px-[7px] text-[11px] font-bold whitespace-nowrap text-primary-text">{slide.badge}</span>}
                 </span>
-                {slide.meta && <span className="-mt-1 text-xs text-muted-foreground">{slide.meta}</span>}
+                {slide.meta && <span className="text-xs text-muted-foreground">{slide.meta}</span>}
               </a>
             </li>
           ))}
         </ul>
+        {slides.length > 1 && (
+          // As tall as one picture (14 : 5 of a slide's width), so the arrows sit at the pictures' middle whatever the text under them.
+          <div className="pointer-events-none absolute inset-x-0 top-0 flex h-[calc(100cqw*5/14)] items-center justify-between px-2 sm:h-[calc((100cqw-12px)/2*5/14)]">
+            <button type="button" aria-label={`${title} 이전`} onClick={() => step(-1)} className={arrow}>
+              <ChevronLeft className="size-4" aria-hidden="true" />
+            </button>
+            <button type="button" aria-label={`${title} 다음`} onClick={() => step(1)} className={arrow}>
+              <ChevronRight className="size-4" aria-hidden="true" />
+            </button>
+          </div>
+        )}
+        </div>
       )}
     </section>
   );

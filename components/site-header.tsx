@@ -21,7 +21,7 @@ export function SiteHeader() {
         : "";
 
   return (
-    <header className="flex flex-wrap items-center gap-3 px-4 py-3 lg:py-2 lg:pr-2 lg:pl-[26px]">
+    <header className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3 lg:px-8 lg:py-3.5">
       <Brand compact className="lg:hidden" />
       <span className="hidden text-[13px] font-medium text-muted-foreground lg:inline">{crumb}</span>
 

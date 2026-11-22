@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/page-header";
 import { Chip, NumberField, parseNum } from "@/components/ev/ui";
 import type { Roulette } from "@/lib/third-party/roulette/roulette";
 import { useStored } from "@/lib/use-stored";
+import { Digits } from "@/components/ui/digits";
 import { cn } from "@/lib/utils";
 
 type Entry = { name: string; count: number };
@@ -281,8 +282,11 @@ export function PinballGame() {
                     <button type="button" disabled={running || e.count <= 1} onClick={() => setCount(i, String(e.count - 1))} aria-label={`${e.name} 구슬 하나 빼기`} className="flex size-7 items-center justify-center rounded-full hover:bg-card disabled:opacity-40">
                       <Minus className="size-3.5" aria-hidden="true" />
                     </button>
-                    {/* Typed straight in (user, 2026-11-19), saved on Enter or when the box is left. */}
+                    {/* Typed straight in (user, 2026-11-19), saved on Enter or when the box is left.
+                        While nobody is typing in it, the number is drawn over the box with digits of one width: the
+                        number font's digits are not, and under the − / + buttons the centred number shook. */}
                     <span
+                      className="group/count relative inline-flex"
                       onBlur={() => setCount(i, countDraft)}
                       onKeyDown={(ev) => {
                         if (ev.key === "Enter" && !ev.nativeEvent.isComposing) {
@@ -296,8 +300,11 @@ export function PinballGame() {
                         value={countDraft}
                         onChange={setCountDraft}
                         disabled={running}
-                        inputClassName="h-7 w-14 border-primary/40 bg-card px-1 text-center text-[13px] font-bold disabled:opacity-40"
+                        inputClassName="h-7 w-14 border-primary/40 bg-card px-1 text-center text-[13px] font-bold text-transparent focus:text-foreground disabled:opacity-40"
                       />
+                      <span aria-hidden="true" className={cn("pointer-events-none absolute inset-0 flex items-center justify-center font-num text-[13px] font-bold text-foreground group-focus-within/count:hidden", running && "opacity-40")}>
+                        <Digits>{/^\d+$/.test(countDraft) ? Number(countDraft).toLocaleString("ko-KR") : countDraft}</Digits>
+                      </span>
                     </span>
                     <button type="button" disabled={running || e.count >= roomFor(i)} onClick={() => setCount(i, String(e.count + 1))} aria-label={`${e.name} 구슬 하나 더하기`} className="flex size-7 items-center justify-center rounded-full hover:bg-card disabled:opacity-40">
                       <Plus className="size-3.5" aria-hidden="true" />
@@ -328,7 +335,9 @@ export function PinballGame() {
                   >
                     <span aria-hidden="true" className="size-3.5 shrink-0 rounded-full" style={{ background: colorFor(e.name) }} />
                     <span className="max-w-24 truncate">{e.name}</span>
-                    <span className={cn("font-num text-xs", e.count > 1 ? "font-bold text-primary-text" : "text-muted-foreground")}>×{e.count.toLocaleString("ko-KR")}</span>
+                    <span className={cn("font-num text-xs", e.count > 1 ? "font-bold text-primary-text" : "text-muted-foreground")}>
+                      ×<Digits>{e.count.toLocaleString("ko-KR")}</Digits>
+                    </span>
                   </button>
                 )
               )}
@@ -429,7 +438,7 @@ export function PinballGame() {
             type="button"
             aria-pressed={mapOpen}
             onClick={() => setMapOpen(!mapOpen)}
-            className="absolute top-2 left-2 inline-flex h-8 items-center gap-1.5 tile-sm/90 pr-2.5 pl-2 text-xs font-semibold outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
+            className="absolute top-2 left-2 inline-flex h-8 items-center gap-1.5 rounded-md tile-edge bg-card/90 pr-2.5 pl-2 text-xs font-semibold outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
           >
             <MapIcon className="size-3.5" aria-hidden="true" />
             {mapOpen ? "맵 닫기" : "맵 열기"}

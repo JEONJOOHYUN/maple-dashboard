@@ -5,6 +5,7 @@ import { ChevronDown, Minus, Plus, X } from "lucide-react";
 import { pct } from "@/components/ev/ui";
 import { OPTION_GROUPS, type CustomCond, type SlotOption } from "@/lib/ev/potential";
 import { Reveal } from "@/components/ui/reveal";
+import { Digits } from "@/components/ui/digits";
 import { cn } from "@/lib/utils";
 
 const MAX_SETS = 4;
@@ -123,7 +124,7 @@ export function CustomGoal({
                         <Minus className="size-4" aria-hidden="true" />
                       </button>
                       <b className="w-[5.5rem] text-center font-num text-[15px]">
-                        {cond.min}
+                        <Digits>{cond.min}</Digits>
                         {option.unit} 이상
                       </b>
                       <button type="button" aria-label={`${option.label} 올리기`} disabled={at >= option.sums.length - 1} onClick={() => step(1)} className={stepButton}>

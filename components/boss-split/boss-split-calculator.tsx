@@ -193,7 +193,7 @@ export function BossSplitCalculator() {
           <button
             type="button"
             onClick={() => setItems((prev) => [...prev, createItem()])}
-            className="inline-flex h-[34px] items-center gap-1.5 rounded-lg border border-dashed border-border pr-3 pl-2.5 text-[13px] text-muted-foreground transition-colors hover:border-primary hover:text-primary-text"
+            className="inline-flex h-[34px] items-center gap-1.5 rounded-lg border border-dashed border-border pr-3 pl-2.5 text-[13px] text-muted-foreground transition-[color,background-color,border-color,scale] hover:border-primary hover:text-primary-text"
           >
             <Plus className="size-3.5" aria-hidden="true" />
             아이템 추가
@@ -405,7 +405,7 @@ export function BossSplitCalculator() {
                     type="button"
                     onClick={() => copyAmount(card.index, card.amount)}
                     disabled={!hasResult}
-                    className="inline-flex h-[38px] items-center gap-1.5 rounded-lg border border-input bg-muted px-3.5 text-[13px] font-semibold transition-colors hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
+                    className="inline-flex h-[38px] items-center gap-1.5 rounded-lg border border-input bg-muted px-3.5 text-[13px] font-semibold transition-[color,background-color,border-color,scale] hover:bg-accent disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     <SwapLabel
                       on={copied}
@@ -447,7 +447,7 @@ export function BossSplitCalculator() {
             onClick={copyImage}
             disabled={!hasResult || imageState === "working"}
             aria-live="polite"
-            className="inline-flex h-[46px] items-center gap-2 rounded-lg bg-primary pr-7 pl-6 text-[15px] font-bold text-primary-foreground transition-colors hover:bg-primary/85 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex h-[46px] items-center gap-2 rounded-lg bg-primary pr-7 pl-6 text-[15px] font-bold text-primary-foreground transition-[color,background-color,border-color,scale] hover:bg-primary/85 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <SwapIcon on={imageState === "working"} from={<ImageIcon className="size-4" aria-hidden="true" />} to={<Spinner />} />
             {imageLabel}

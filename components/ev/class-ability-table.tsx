@@ -72,7 +72,7 @@ export function ClassAbilityTable({
                 aria-label={`${c.name}${c.collector ? "(콜렉터 기준)" : ""}: 고급 재설정 ${full}, 일반 재설정 레전드리 ${lead}, 유니크 ${rest.join(" · ")}`}
                 onClick={() => onPick(c.name)}
                 className={cn(
-                  "grid w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[13px] transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                  "press-static grid w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[13px] transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
                   COLS,
                   on ? "bg-primary-soft" : "hover:bg-muted",
                 )}

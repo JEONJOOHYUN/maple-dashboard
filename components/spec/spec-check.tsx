@@ -482,7 +482,7 @@ function Result({ result, at, asOf, optimizer, refreshing, refreshNote, onRefres
             onClick={() => n && setOpen((o) => !o)}
             aria-expanded={n ? open : undefined}
             className={cn(
-              "flex w-full items-center gap-2.5 rounded-lg border px-3.5 py-3 text-left",
+              "press-static flex w-full items-center gap-2.5 rounded-lg border px-3.5 py-3 text-left",
               n
                 ? "cursor-pointer border-[oklch(0.63_0.182_24.3_/_0.5)] bg-[oklch(0.63_0.182_24.3_/_0.12)] text-[oklch(0.63_0.182_24.3)]"
                 : "cursor-default border-[oklch(0.678_0.134_152.4_/_0.5)] bg-[oklch(0.678_0.134_152.4_/_0.12)] text-[oklch(0.651_0.137_152.5)]",
@@ -629,7 +629,7 @@ export function SpecCheck({ name, view }: { name: string; view: SpecView }) {
       </form>
 
       {recentList.length > 0 && (
-        <div className="-mt-1 flex flex-wrap items-center gap-1.5">
+        <div className="mt-1 flex flex-wrap items-center gap-1.5">
           <span className="mr-0.5 text-xs text-muted-foreground">최근 검색</span>
           {recentList.map((n) => (
             <span

@@ -79,9 +79,9 @@ const ITEM_GROUPS = (() => {
 const ITEM_COLS = 8;
 /**
  * Row height of the table beside the settings panel (user, 2026-11-13): fixed, the one at which the 18 rows of
- * 12 → 30성 end on the panel's bottom. The same for every item and start star; stacked panels keep the plain row.
+ * 12 → 30성 end on the panel's bottom (43.2: at 43.5 the open table was 5px taller than the panel, 2026-11-22). The same for every item and start star; stacked panels keep the plain row.
  */
-const ROW_CSS = "lg:h-[43.5px]";
+const ROW_CSS = "lg:h-[43.2px]";
 const findItem = (id: string) => {
   for (const g of STAR_ITEMS) {
     const it = g.items.find((x) => x.id === id);
@@ -189,11 +189,15 @@ export function StarforceTab() {
   const startStar = Math.min(start, maxStar - 1);
   const fold = Math.max(22, startStar + 3);
   const lastRow = more ? maxStar : Math.min(maxStar, fold);
-  const rows = [];
-  for (let to = startStar + 1; to <= lastRow; to++) {
+  const allRows = [];
+  for (let to = startStar + 1; to <= maxStar; to++) {
     const from = view === "cum" ? startStar : to - 1;
-    rows.push({ from, to, ...starRange(steps, from, to) });
+    allRows.push({ from, to, ...starRange(steps, from, to) });
   }
+  type RangeRow = (typeof allRows)[number];
+  const rows = allRows.filter((r) => r.to <= lastRow);
+  /** The rows "더 보기" opens: drawn unseen under the button so their room is already there. */
+  const foldedRows = allRows.filter((r) => r.to > lastRow);
 
   const money = (meso: number) =>
     unit === "won"
@@ -298,6 +302,59 @@ export function StarforceTab() {
         ? list.filter((x) => x !== s)
         : [...list, s].sort((a, b) => a - b),
     );
+
+  const listRow = (r: RangeRow, i: number) => (
+    <div
+      key={`${r.from}-${r.to}`}
+      className={cn("-mx-3 flex flex-col gap-0.5 rounded-[10px] px-3 py-2", i % 2 === 1 && "bg-background")}
+    >
+      <div className="flex items-center gap-2">
+        <span className="flex-1 font-num text-[15px] font-bold whitespace-nowrap">
+          {r.from} <span className="font-sans">→</span> {r.to}성
+        </span>
+        <span className="font-num text-[15px] font-bold whitespace-nowrap text-primary-text">
+          <Digits>{money(r.meso * mult)}</Digits>
+        </span>
+        <AddButton onClick={() => add(r.from, r.to)} />
+      </div>
+      <div className="flex flex-wrap gap-x-1 text-xs text-muted-foreground">
+        <span className="whitespace-nowrap">
+          기댓값 <b className="font-num text-foreground">{money(r.meso)}</b>
+        </span>
+        <span className="whitespace-nowrap">
+          · 파괴 <b className="font-num text-foreground">{avg(r.destroys, 2)}</b>
+        </span>
+        <span className="whitespace-nowrap">
+          · 시도 <b className="font-num text-foreground">{avg(r.tries, 1)}</b>
+        </span>
+      </div>
+    </div>
+  );
+  const tableRow = (r: RangeRow) => (
+    <tr
+      key={`${r.from}-${r.to}`}
+      className={cn(ZEBRA_ROW, ROW_CSS)}
+    >
+      <td className="py-2 font-num text-[15px] font-bold whitespace-nowrap">
+        {r.from} <span className="font-sans">→</span> {r.to}성
+      </td>
+      <td className="py-2 text-right font-num text-[15px] font-bold whitespace-nowrap">
+        <Digits>{money(r.meso)}</Digits>
+      </td>
+      <td className="py-2 text-right font-num text-[15px] font-bold whitespace-nowrap text-primary-text">
+        <Digits>{money(r.meso * mult)}</Digits>
+      </td>
+      <td className="py-2 text-right font-num text-[15px] font-bold whitespace-nowrap">
+        <Digits>{avg(r.destroys, 2)}</Digits>
+      </td>
+      <td className="py-2 text-right font-num text-[15px] font-bold whitespace-nowrap">
+        <Digits>{avg(r.tries, 1)}</Digits>
+      </td>
+      <td className="py-1 text-right">
+        <AddButton onClick={() => add(r.from, r.to)} />
+      </td>
+    </tr>
+  );
 
   return (
     <div className="flex flex-col gap-2">
@@ -543,33 +600,7 @@ export function StarforceTab() {
                 <span>구간</span>
                 <span>×{mult}</span>
               </div>
-              {rows.map((r, i) => (
-                <div
-                  key={`${r.from}-${r.to}`}
-                  className={cn("-mx-3 flex flex-col gap-0.5 rounded-[10px] px-3 py-2", i % 2 === 1 && "bg-background")}
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="flex-1 font-num text-[15px] font-bold whitespace-nowrap">
-                      {r.from} <span className="font-sans">→</span> {r.to}성
-                    </span>
-                    <span className="font-num text-[15px] font-bold whitespace-nowrap text-primary-text">
-                      <Digits>{money(r.meso * mult)}</Digits>
-                    </span>
-                    <AddButton onClick={() => add(r.from, r.to)} />
-                  </div>
-                  <div className="flex flex-wrap gap-x-1 text-xs text-muted-foreground">
-                    <span className="whitespace-nowrap">
-                      기댓값 <b className="font-num text-foreground">{money(r.meso)}</b>
-                    </span>
-                    <span className="whitespace-nowrap">
-                      · 파괴 <b className="font-num text-foreground">{avg(r.destroys, 2)}</b>
-                    </span>
-                    <span className="whitespace-nowrap">
-                      · 시도 <b className="font-num text-foreground">{avg(r.tries, 1)}</b>
-                    </span>
-                  </div>
-                </div>
-              ))}
+              {rows.map(listRow)}
             </div>
           {/* 520px: at a 1280px window the panel is 551px wide (560 scrolled by 9px and cut "담기"). */}
           <div className={cn(ZEBRA_SCROLL, "hidden @min-[32.5rem]:block")}>
@@ -585,31 +616,7 @@ export function StarforceTab() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
-                  <tr
-                    key={`${r.from}-${r.to}`}
-                    className={cn(ZEBRA_ROW, ROW_CSS)}
-                  >
-                    <td className="py-2 font-num text-[15px] font-bold whitespace-nowrap">
-                      {r.from} <span className="font-sans">→</span> {r.to}성
-                    </td>
-                    <td className="py-2 text-right font-num text-[15px] font-bold whitespace-nowrap">
-                      <Digits>{money(r.meso)}</Digits>
-                    </td>
-                    <td className="py-2 text-right font-num text-[15px] font-bold whitespace-nowrap text-primary-text">
-                      <Digits>{money(r.meso * mult)}</Digits>
-                    </td>
-                    <td className="py-2 text-right font-num text-[15px] font-bold whitespace-nowrap">
-                      <Digits>{avg(r.destroys, 2)}</Digits>
-                    </td>
-                    <td className="py-2 text-right font-num text-[15px] font-bold whitespace-nowrap">
-                      <Digits>{avg(r.tries, 1)}</Digits>
-                    </td>
-                    <td className="py-1 text-right">
-                      <AddButton onClick={() => add(r.from, r.to)} />
-                    </td>
-                  </tr>
-                ))}
+                {rows.map(tableRow)}
               </tbody>
             </table>
           </div>
@@ -625,6 +632,19 @@ export function StarforceTab() {
                 ? `접기 (${fold}성까지만)`
                 : `${fold + 1}~${maxStar}성 더 보기`}
             </button>
+          )}
+          {/* Side by side the folded rows keep their room (user, 2026-11-22): opening them never makes the panel taller.
+              The room is those very rows drawn unseen, so it is right for the table and for the two-line list at any
+              width; stacked (below lg) the panel just grows. */}
+          {foldedRows.length > 0 && (
+            <div aria-hidden="true" inert className="invisible @container -mt-3.5 hidden lg:block">
+              <div className="flex flex-col @min-[32.5rem]:hidden">{foldedRows.map(listRow)}</div>
+              <div className={cn(ZEBRA_SCROLL, "hidden @min-[32.5rem]:block")}>
+                <table className={cn(ZEBRA_TABLE, "min-w-[520px] text-[13px]")}>
+                  <tbody>{foldedRows.map(tableRow)}</tbody>
+                </table>
+              </div>
+            </div>
           )}
         </Panel>
       </div>
@@ -664,7 +684,7 @@ export function StarforceTab() {
                         aria-expanded={open}
                         aria-controls={`quote-${c.id}`}
                         onClick={() => setOpenRows((prev) => (open ? prev.filter((x) => x !== c.id) : [...prev, c.id]))}
-                        className="flex min-h-14 w-full items-center gap-2 rounded-[10px] px-3 py-2.5 text-left"
+                        className="press-static flex min-h-14 w-full items-center gap-2 rounded-[10px] px-3 py-2.5 text-left"
                       >
                         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                           <span className="font-num text-[15px] font-bold whitespace-nowrap">

@@ -176,7 +176,7 @@ function SubsToggle({ person, open, onToggle }: { person: Person; open: boolean;
       // One width down the column (user, 2026-11-20: "부캐 글자가 정렬이 안되어있어"), the count and the arrow together in
       // its middle ("너무 쏠려있다" when they sat at the two ends).
       className={cn(
-        "inline-flex h-8 items-center justify-center gap-1 rounded-full border pr-2 pl-2.5 text-xs font-bold whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-primary min-w-[3.25rem] sm:min-w-[7.5rem]",
+        "inline-flex h-8 items-center justify-center gap-1 rounded-full border pr-2 pl-2.5 text-xs font-bold whitespace-nowrap transition-[color,background-color,border-color,scale] outline-none focus-visible:ring-2 focus-visible:ring-primary min-w-[3.25rem] sm:min-w-[7.5rem]",
         missed ? "border-primary/45 bg-primary-soft text-primary-text" : "tile-edge text-muted-foreground hover:text-foreground",
       )}
     >
@@ -456,7 +456,7 @@ function GuildResult({ guild, pieces, others }: { guild: GuildInfo; pieces: Prom
                       onClick={() => change(() => ({ sortBy: on ? "miss" : `col:${c}` }))}
                       aria-pressed={on}
                       className={cn(
-                        "inline-flex flex-col items-center gap-0.5 rounded-md px-2 py-1 font-bold transition-colors hover:bg-card",
+                        "inline-flex flex-col items-center gap-0.5 rounded-md px-2 py-1 font-bold transition-[color,background-color,border-color,scale] hover:bg-card",
                         on && "bg-card text-primary-text ring-1 ring-primary/60",
                       )}
                     >
@@ -493,7 +493,7 @@ function GuildResult({ guild, pieces, others }: { guild: GuildInfo; pieces: Prom
         <button
           type="button"
           onClick={() => change((v) => ({ limit: v.limit + PAGE }))}
-          className="h-11 rounded-lg tile-edge text-sm font-bold transition-colors hover:bg-secondary"
+          className="h-11 rounded-lg tile-edge text-sm font-bold transition-[color,background-color,border-color,scale] hover:bg-secondary"
         >
           더 보기 · {n(visible.length - limit)}명 남음
         </button>
@@ -573,7 +573,7 @@ export function GuildCheck({ name, view }: { name: string; view: GuildView }) {
       </form>
 
       {recentList.length > 0 && (
-        <div className="-mt-1 flex flex-wrap items-center gap-1.5">
+        <div className="mt-1 flex flex-wrap items-center gap-1.5">
           <span className="mr-0.5 text-xs text-muted-foreground">최근 길드</span>
           {recentList.map((g) => {
             const on = g.name === foundName && g.world === foundWorld;

@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
  * it is neither a thumbnail nor a hover preview: it opens on a press, at a width it can be read at, and scrolls.
  * It is NEXON's own address, asked for only when the window opens (never stored or resized by us).
  */
-export function NoticeImage({ images, label, className }: { images: string[]; label: string; className?: string }) {
+export function NoticeImage({ images, label, className, icon = true }: { images: string[]; label: string; className?: string; icon?: boolean }) {
   const [open, setOpen] = useState(false);
   if (images.length === 0) return null;
   return (
@@ -21,7 +21,7 @@ export function NoticeImage({ images, label, className }: { images: string[]; la
         onClick={() => setOpen(true)}
         className={cn("inline-flex items-center gap-1 rounded-sm font-semibold text-primary-text outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50", className)}
       >
-        <ImageIcon className="size-3.5" aria-hidden="true" />
+        {icon && <ImageIcon className="size-3.5" aria-hidden="true" />}
         원본 그림
       </button>
       <Dialog open={open} onOpenChange={setOpen}>

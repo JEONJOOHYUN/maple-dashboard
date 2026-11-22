@@ -5,13 +5,13 @@
    the `dark:` variant off that class instead of `prefers-color-scheme`. */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Tokens follow the confirmed redesign mock (C: a sheet floating on the page, warm black + orange).
+/* Tokens follow the confirmed redesign mock (C: tiles on the page, warm black + orange).
+   The frame is the earlier one (user, 2026-11-22): the side menu fixed to the left edge, the page full width.
    :root (light) must come before .dark: both selectors have the same
    specificity, so if the order flips the dark values get overridden. */
 :root {
-  /* shell = the page behind everything, background = the sheet the content sits on, card = a tile on the sheet,
-     muted = a chip or well on a tile. One hue (85) down the whole grey ramp. */
-  --shell: oklch(0.945 0.008 85);
+  /* background = the page, card = a tile on the page, muted = a chip or well on a tile. One hue (85) down the
+     whole grey ramp. */
   --background: oklch(1 0 0);
   --foreground: oklch(0.219 0.008 85);
   --card: oklch(0.968 0.006 85);
@@ -41,22 +41,23 @@
   --chart-4: oklch(0.477 0.017 85);
   --chart-5: oklch(0.895 0.012 85);
   --radius: 0.625rem;
-  --sidebar: oklch(0.945 0.008 85);
+  --sidebar: oklch(1 0 0);
   --sidebar-foreground: oklch(0.219 0.008 85);
   --sidebar-primary: oklch(0.683 0.185 43.9);
   --sidebar-primary-foreground: oklch(0.175 0.029 58.4);
-  --sidebar-accent: oklch(1 0 0);
-  --sidebar-accent-foreground: oklch(0.219 0.008 85);
+  --sidebar-accent: oklch(0.683 0.185 43.9 / 0.11);
+  --sidebar-accent-foreground: oklch(0.5338 0.1574 41.65);
   --sidebar-border: oklch(0.895 0.012 85);
   --sidebar-ring: oklch(0.683 0.185 43.9);
   /* Depth comes from transparent shadows, not coloured borders, so an edge suits whatever it sits on. */
   --tile-shadow: 0 0 0 1px oklch(0 0 0 / 0.06), 0 1px 2px -1px oklch(0 0 0 / 0.06), 0 2px 4px 0 oklch(0 0 0 / 0.04);
   --tile-shadow-hover: 0 0 0 1px oklch(0 0 0 / 0.08), 0 1px 2px -1px oklch(0 0 0 / 0.08), 0 2px 4px 0 oklch(0 0 0 / 0.06);
   --image-line: oklch(0 0 0 / 0.1);
+  /* A card lifted off its tile (the fan of odds on the home page). */
+  --lift-shadow: 0 0 0 1px oklch(0 0 0 / 0.06), 0 1px 2px -1px oklch(0 0 0 / 0.08), 0 6px 14px 0 oklch(0 0 0 / 0.08);
 }
 
 .dark {
-  --shell: oklch(0.155 0.004 85);
   --background: oklch(0.205 0.006 85);
   --foreground: oklch(0.956 0.011 85);
   --card: oklch(0.245 0.008 85);
@@ -84,24 +85,25 @@
   --chart-3: oklch(0.779 0.146 52.5);
   --chart-4: oklch(0.721 0.019 85);
   --chart-5: oklch(0.33 0.01 85);
-  --sidebar: oklch(0.155 0.004 85);
+  --sidebar: oklch(0.225 0.007 85);
   --sidebar-foreground: oklch(0.956 0.011 85);
   --sidebar-primary: oklch(0.716 0.188 44.7);
   --sidebar-primary-foreground: oklch(0.175 0.029 58.4);
-  --sidebar-accent: oklch(0.205 0.006 85);
-  --sidebar-accent-foreground: oklch(0.956 0.011 85);
+  --sidebar-accent: oklch(0.716 0.188 44.7 / 0.14);
+  --sidebar-accent-foreground: oklch(0.751 0.161 46.8);
   --sidebar-border: oklch(0.33 0.01 85);
   --sidebar-ring: oklch(0.716 0.188 44.7);
   /* On a dark surface the soft layers do not show: one white ring is the whole edge. */
   --tile-shadow: 0 0 0 1px oklch(1 0 0 / 0.08);
   --tile-shadow-hover: 0 0 0 1px oklch(1 0 0 / 0.13);
   --image-line: oklch(1 0 0 / 0.1);
+  --lift-shadow: 0 0 0 1px oklch(1 0 0 / 0.09), 0 1px 2px -1px oklch(0 0 0 / 0.5), 0 6px 14px 0 oklch(0 0 0 / 0.28);
 }
 
 @theme inline {
-  --color-shell: var(--shell);
   --shadow-tile: var(--tile-shadow);
   --shadow-tile-hover: var(--tile-shadow-hover);
+  --shadow-lift: var(--lift-shadow);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: "Pretendard Variable", ui-sans-serif, system-ui, -apple-system,
@@ -157,13 +159,21 @@
     @apply border-border outline-ring/50;
   }
   body {
-    /* Phones: the sheet is the whole screen. Desktop: the page shows around the sheet and the side menu sits on it. */
-    @apply bg-background text-foreground lg:bg-shell;
+    @apply bg-background text-foreground;
     /* Every digit the same width, so columns and changing values line up (the body font has the feature). */
     font-variant-numeric: tabular-nums;
     /* Korean wraps between words, not mid-word ("12 / 성"); very long tokens may still break. */
     word-break: keep-all;
     overflow-wrap: anywhere;
+  }
+  /* Every button gives a little under the press (design skill: scale 0.96, never lower) and comes back through a
+     transition, so letting go half-way is smooth. Wide rows and switches stay still (`press-static`), and so do
+     buttons that open a menu. A button with its own transition utility must list `scale` in it. */
+  button {
+    transition: scale 0.15s ease-out;
+  }
+  button:enabled:active:not(.press-static, [aria-haspopup]) {
+    scale: 0.96;
   }
   html {
     /* Keep the scrollbar slot so pages and tabs of different heights never shift sideways. */
@@ -198,7 +208,7 @@
   }
 }
 
-/* A tile on the sheet: the edge is a transparent shadow ring. The 1px transparent border keeps the box the size the
+/* A tile on the page: the edge is a transparent shadow ring. The 1px transparent border keeps the box the size the
    old bordered card had, and still draws an edge in forced-colors mode, where shadows are removed. */
 @utility tile {
   border: 1px solid transparent;

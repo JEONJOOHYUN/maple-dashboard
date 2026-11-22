@@ -41,6 +41,7 @@ import { type MainStat,
   type WeaponGoal,
 } from "@/lib/ev/potential";
 import { Reveal } from "@/components/ui/reveal";
+import { Digits } from "@/components/ui/digits";
 import { cn } from "@/lib/utils";
 import { koreanUnits } from "@/lib/format";
 
@@ -593,7 +594,9 @@ export function PotentialTab() {
                   >
                     <Minus className="size-3.5" aria-hidden="true" />
                   </button>
-                  <b className="w-6 text-center font-num">{min[k]}</b>
+                  <b className="w-6 text-center font-num">
+                    <Digits>{min[k]}</Digits>
+                  </b>
                   <button
                     type="button"
                     aria-label={`${label} 늘리기`}
@@ -699,7 +702,9 @@ export function PotentialTab() {
                       >
                         <Minus className="size-3.5" aria-hidden="true" />
                       </button>
-                      <b className={cn("text-center font-num", k === "lines" && bySeconds ? "w-10" : "w-6")}>{k === "lines" ? (bySeconds ? `${special}초` : special) : combo.stat}</b>
+                      <b className={cn("text-center font-num", k === "lines" && bySeconds ? "w-10" : "w-6")}>
+                        <Digits>{k === "lines" ? (bySeconds ? `${special}초` : special) : combo.stat}</Digits>
+                      </b>
                       <button
                         type="button"
                         aria-label={`${label} 늘리기`}

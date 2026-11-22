@@ -8,6 +8,7 @@ import { BELOW } from "@/components/enhance/parts";
 import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from "@/components/ui/combobox";
 import { InputGroupAddon, InputGroupButton } from "@/components/ui/input-group";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Digits } from "@/components/ui/digits";
 import { Spinner } from "@/components/ui/spinner";
 import { SwapIcon } from "@/components/ui/swap-icon";
 import type { ApiErrorKind } from "@/lib/enhance/client";
@@ -252,7 +253,7 @@ export function Toggle({ on, onChange, label }: { on: boolean; onChange: (on: bo
       aria-checked={on}
       aria-label={label}
       onClick={() => onChange(!on)}
-      className={cn("flex h-6 w-10 shrink-0 rounded-full p-0.5 outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50", on ? "justify-end bg-primary" : "justify-start bg-input")}
+      className={cn("press-static flex h-6 w-10 shrink-0 rounded-full p-0.5 outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50", on ? "justify-end bg-primary" : "justify-start bg-input")}
     >
       <span className="size-5 rounded-full bg-white shadow-sm" />
     </button>
@@ -271,7 +272,8 @@ export function SyncBanners({ snap, unit, onRetry, onForget }: { snap: Pick<Sync
             기록 받는 중
             {snap.total > 0 && (
               <b className="font-num">
-                {snap.done.toLocaleString("ko-KR")} / {snap.total.toLocaleString("ko-KR")}
+                {/* Counts up many times a second: digits of one width, so the line does not shake. */}
+                <Digits>{snap.done.toLocaleString("ko-KR")}</Digits> / <Digits>{snap.total.toLocaleString("ko-KR")}</Digits>
                 {unit}
               </b>
             )}

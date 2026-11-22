@@ -256,7 +256,7 @@ function PieceDialog({ piece, entries, found, onClose }: { piece: PieceStat | nu
                 <RollRow key={e.row.id} entry={e} found={found} showItem={false} />
               ))}
               {list.length > limit && (
-                <button type="button" onClick={() => setLimit(limit + PAGE)} className="w-full border-t border-border py-3 text-[13px] font-semibold text-primary-text outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50">
+                <button type="button" onClick={() => setLimit(limit + PAGE)} className="press-static w-full border-t border-border py-3 text-[13px] font-semibold text-primary-text outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50">
                   더 보기 ({(list.length - limit).toLocaleString("ko-KR")}건 남음)
                 </button>
               )}
@@ -281,7 +281,7 @@ function RankCard({ rank, found, onOpen }: { rank: Rank; found: Icons; onOpen: (
       type="button"
       onClick={() => (setAll(false), onOpen(p.key))}
       className={cn(
-        "grid w-full items-center gap-2.5 border-t border-border px-4 py-2.5 text-left outline-none hover:bg-muted/60 focus-visible:ring-3 focus-visible:ring-ring/50",
+        "press-static grid w-full items-center gap-2.5 border-t border-border px-4 py-2.5 text-left outline-none hover:bg-muted/60 focus-visible:ring-3 focus-visible:ring-ring/50",
         wide ? "grid-cols-[30px_minmax(0,1fr)_auto]" : "grid-cols-[18px_minmax(0,1fr)_auto]"
       )}
     >

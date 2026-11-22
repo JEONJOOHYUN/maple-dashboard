@@ -984,7 +984,7 @@ function SeenChips({
           aria-pressed={value === k}
           onClick={() => onChange(value === k ? null : k)}
           className={cn(
-            "h-7 shrink-0 rounded-full border px-2.5 text-xs whitespace-nowrap transition-colors",
+            "h-7 shrink-0 rounded-full border px-2.5 text-xs whitespace-nowrap transition-[color,background-color,border-color,scale]",
             value === k
               ? "border-primary bg-primary font-bold text-primary-foreground"
               : "tile-edge hover:border-primary/60",
