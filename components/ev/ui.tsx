@@ -5,7 +5,6 @@ import { LUCK_LEVELS, triesAt } from "@/lib/ev/luck";
 import { koreanUnits } from "@/lib/format";
 import { caretAfter, cleanNumberText, forwardDeleteText, groupDigits, keptBefore } from "@/lib/number-text";
 import { Digits } from "@/components/ui/digits";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { SteadyText } from "@/components/ui/steady-text";
 
@@ -84,7 +83,7 @@ export function Segment<T extends string>({
 }) {
   return (
     <div role="radiogroup" aria-label={label} className={cn("grid gap-0.5 rounded-xl bg-muted p-1", className)} style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}>
-      {options.map((o) => {
+      {options.map((o, i) => {
         const on = value === o.id;
         const props = {
           type: "button" as const,
@@ -112,13 +111,24 @@ export function Segment<T extends string>({
               {content}
             </button>
           );
+        // The hint is plain CSS, shown under the pointer and on keyboard focus. Not the shared Tooltip: this file is
+        // on every calculator page, and the popup library behind that part put 32KB (compressed) on the two pages that
+        // did not have it (MVP · 핀볼). Outside the button (it truncates), pinned to the track's edge at either end.
         return (
-          <Tooltip key={o.id}>
-            <TooltipTrigger render={<button type="button" />} delay={0} {...props}>
+          <span key={o.id} className="group/seg relative flex min-w-0">
+            <button {...props} className={cn(props.className, "flex-1")}>
               {content}
-            </TooltipTrigger>
-            <TooltipContent>{o.hint}</TooltipContent>
-          </Tooltip>
+            </button>
+            <span
+              aria-hidden="true"
+              className={cn(
+                "pointer-events-none absolute bottom-full z-10 mb-1.5 rounded-md bg-foreground px-2 py-1 text-[11px] font-medium whitespace-nowrap text-background opacity-0 shadow-sm transition-opacity duration-150 ease-out group-focus-within/seg:opacity-100 group-hover/seg:opacity-100",
+                i === 0 ? "left-0" : i === options.length - 1 ? "right-0" : "left-1/2 -translate-x-1/2"
+              )}
+            >
+              {o.hint}
+            </span>
+          </span>
         );
       })}
     </div>
@@ -228,9 +238,12 @@ export const arrowTurn = "transition-[rotate] duration-200 ease-out motion-reduc
 export const dashedHover = "hover:border-primary/60 hover:text-foreground";
 
 /** Big orange result card. */
+/** The orange card a tab's answer sits on: the same shell on every tab, each with its own lines inside. */
+export const RESULT_SHELL = "flex flex-col rounded-[1rem] bg-primary px-5 py-4 text-primary-foreground";
+
 export function ResultCard({ label, big, unit, side, foot }: { label: ReactNode; big: ReactNode; unit?: string; side?: ReactNode; foot?: ReactNode }) {
   return (
-    <div className="flex flex-col gap-1.5 rounded-[1rem] bg-primary px-5 py-4 text-primary-foreground shadow-[0_10px_30px_var(--primary-soft)]">
+    <div className={cn(RESULT_SHELL, "gap-1.5 shadow-[0_10px_30px_var(--primary-soft)]")}>
       <span className="text-[13px] font-semibold">{label}</span>
       <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <span className="font-num text-[36px] leading-none font-bold sm:text-[44px]">

@@ -9,6 +9,7 @@ import {
   Label,
   NumberField,
   Panel,
+  RESULT_SHELL,
   Segment,
   Switch,
   count,
@@ -639,7 +640,7 @@ export function AbilityTab({ classes }: { classes: ClassAbility[] }) {
             waiting === "later" && "opacity-50 transition-opacity delay-150 duration-150",
           )}
         >
-          <div className="flex flex-col gap-1.5 rounded-[1rem] bg-primary px-5 py-4 text-primary-foreground">
+          <div className={cn(RESULT_SHELL, "gap-1.5")}>
             <span className="text-[13px] font-semibold">
               {shown.chosen ? `${shown.chosen.name} ` : ""}
               {shown.preset.label}

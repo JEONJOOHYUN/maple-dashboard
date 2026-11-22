@@ -5,6 +5,7 @@ import { useEffect, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Check, ExternalLink, RotateCw, Search, ShieldAlert, ShieldCheck, X } from "lucide-react";
 import { refreshSpec } from "@/app/spec/actions";
+import { Message } from "@/components/message";
 import { PageHeader } from "@/components/page-header";
 import { SpecTabs } from "@/components/spec/spec-tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -570,15 +571,6 @@ function Result({ result, at, asOf, optimizer, refreshing, refreshNote, onRefres
           </>
         )}
       </div>
-    </section>
-  );
-}
-
-export function Message({ title, sub }: { title: string; sub: string }) {
-  return (
-    <section className="flex flex-col items-center gap-1.5 rounded-[1rem] border border-dashed border-border bg-card px-5 py-10 text-center">
-      <b className="text-[15px] text-balance">{title}</b>
-      <span className="text-[13px] text-pretty text-muted-foreground">{sub}</span>
     </section>
   );
 }

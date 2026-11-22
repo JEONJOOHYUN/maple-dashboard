@@ -4,7 +4,7 @@ import { useMemo, useRef, useState, type ReactNode } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, Package, Pencil } from "lucide-react";
 import { NumberField, Segment, eok, parseNum } from "@/components/ev/ui";
 import { CARD_PAGE, CharacterFilter, ItemFilter, NO_ITEM_FILTER, PICK_W, ROW_PAGE, itemMatches, liveFilter } from "@/components/enhance/board-bits";
-import { CHIP, Card, Delta, Empty, Gauge, EventFields, EventStrip, ItemIcon, PickedTotal, RANK_TOP, RankDialog, RankHead, RoundsIn, SKIP_LABEL, type EventTally, Select, SortMenu, type Sort, Tile, TryBadges, signed, signedShort, tone } from "@/components/enhance/parts";
+import { CHIP, Card, Delta, Empty, Gauge, EventFields, EventStrip, ItemIcon, PickedTotal, RankCard, RoundsIn, SKIP_LABEL, type EventTally, Select, SortMenu, type Sort, Tile, TryBadges, signed, signedShort, tone } from "@/components/enhance/parts";
 import { Pager, usePage } from "@/components/pager";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import type { ItemOverrides } from "@/lib/enhance/items";
@@ -63,68 +63,8 @@ const itemBox = (label: string, it: ItemStat | undefined, onOpen: (key: string) 
     ? { label, title: it.item, value: it.delta, sub: `${it.judged.toLocaleString("ko-KR")}회 · 파괴 ${it.destroy} · 사용 ${eok(it.spent)}`, onOpen: () => onOpen(it.key) }
     : { label, title: "해당 없음", value: null, sub: "" };
 
-/**
- * The items of one ranking, best first: the card shows the top three, "더보기" opens the whole list (user,
- * 2026-11-14). `sub` goes under the name after the character, `value` on the right in `color`.
- */
-function RankCard({
-  title,
-  empty,
-  items,
-  sub,
-  value,
-  color,
-  onOpen,
-}: {
-  title: string;
-  empty: string;
-  items: ItemStat[];
-  sub: (it: ItemStat) => string;
-  value: (it: ItemStat) => string;
-  color: string;
-  onOpen: (key: string) => void;
-}) {
-  const [all, setAll] = useState(false);
-  // The window's list runs past 9: room for two digits there.
-  const row = (it: ItemStat, i: number, wide = false) => (
-    <button
-      key={it.key}
-      type="button"
-      onClick={() => (setAll(false), onOpen(it.key))}
-      className={cn(
-        // The ring is drawn inside: the card and the window's list would cut one drawn outside.
-        "press-static grid w-full items-center gap-2.5 border-t border-border px-4 py-2.5 text-left outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset",
-        wide ? "grid-cols-[30px_minmax(0,1fr)_auto]" : "grid-cols-[18px_minmax(0,1fr)_auto]"
-      )}
-    >
-      <b className="font-num text-[15px] text-muted-foreground">
-        <Digits>{i + 1}</Digits>
-      </b>
-      <span className="flex min-w-0 items-center gap-2.5">
-        <ItemIcon info={it.info} />
-        <span className="flex min-w-0 flex-col gap-0.5">
-          <b className="truncate text-sm" title={it.item}>
-            {it.item}
-          </b>
-          <span className="text-xs text-muted-foreground">
-            {it.who} · {sub(it)}
-          </span>
-        </span>
-      </span>
-      <b className={cn("font-num text-sm whitespace-nowrap", color)}><Digits>{value(it)}</Digits></b>
-    </button>
-  );
-  return (
-    <Card className="overflow-hidden">
-      <RankHead title={title} more={items.length > RANK_TOP} onMore={() => setAll(true)} />
-      {items.length === 0 && <p className="border-t border-border px-4 py-6 text-center text-[13px] text-muted-foreground">{empty}</p>}
-      {items.slice(0, RANK_TOP).map((it, i) => row(it, i))}
-      <RankDialog title={title} count={items.length} open={all} onClose={() => setAll(false)}>
-        {items.map((it, i) => row(it, i, true))}
-      </RankDialog>
-    </Card>
-  );
-}
+/** How a ranking card reads an item. Each ranking adds its own line under the name (after the character) and its value. */
+const ITEM_RANK = { rowKey: (it: ItemStat) => it.key, name: (it: ItemStat) => it.item, info: (it: ItemStat) => it.info };
 
 export function InsightView({ stats, onOpen }: { stats: Stats; onOpen: (key: string) => void }) {
   const judged = stats.items.filter((it) => it.judged > 0);
@@ -156,9 +96,9 @@ export function InsightView({ stats, onOpen }: { stats: Stats; onOpen: (key: str
       </div>
       {/* Wide screens: the three rankings in one row, weekdays underneath. Narrower: two by two. */}
       <div className="grid items-start gap-2 lg:grid-cols-2 xl:grid-cols-3">
-        <RankCard title="연속 성공이 많았던 아이템" empty="연속 성공 없음" items={wins} sub={(it) => `${it.win.from}성 → ${it.win.to}성`} value={(it) => `${it.win.n}번 연속 성공`} color="text-gain" onOpen={onOpen} />
-        <RankCard title="연속 실패가 많았던 아이템" empty="연속 실패 없음" items={fails} sub={(it) => `${it.streak.star}성에서`} value={(it) => `${it.streak.n}번 연속 실패`} color="text-loss" onOpen={onOpen} />
-        <RankCard title="파괴가 많았던 아이템" empty="파괴 없음" items={booms} sub={(it) => `강화 ${it.tries.toLocaleString("ko-KR")}번`} value={(it) => `파괴 ${it.destroy}번`} color="text-destructive" onOpen={onOpen} />
+        <RankCard {...ITEM_RANK} title="연속 성공이 많았던 아이템" empty="연속 성공 없음" rows={wins} sub={(it) => `${it.who} · ${it.win.from}성 → ${it.win.to}성`} value={(it) => `${it.win.n}번 연속 성공`} color="text-gain" onOpen={onOpen} />
+        <RankCard {...ITEM_RANK} title="연속 실패가 많았던 아이템" empty="연속 실패 없음" rows={fails} sub={(it) => `${it.who} · ${it.streak.star}성에서`} value={(it) => `${it.streak.n}번 연속 실패`} color="text-loss" onOpen={onOpen} />
+        <RankCard {...ITEM_RANK} title="파괴가 많았던 아이템" empty="파괴 없음" rows={booms} sub={(it) => `${it.who} · 강화 ${it.tries.toLocaleString("ko-KR")}번`} value={(it) => `파괴 ${it.destroy}번`} color="text-destructive" onOpen={onOpen} />
         <Card className="xl:col-span-3">
           <h2 className="px-4 pt-3.5 pb-1 text-sm font-bold">요일별 손익</h2>
           <div className="grid grid-cols-7 gap-1.5 px-4 pt-2 pb-4">

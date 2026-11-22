@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { Package, Split } from "lucide-react";
 import { NumberField, eok, parseNum } from "@/components/ev/ui";
 import { BasisButton, BasisRow, CARD_PAGE, CharacterFilter, ItemFilter, NO_ITEM_FILTER, PICK_W, PeriodBar, ROW_PAGE, SyncBanners, ViewTabs, WorldStrip, itemMatches, liveFilter, useGroupsOff, useKnownGroups, usePeriod, useSync } from "@/components/enhance/board-bits";
-import { Card, Delta, Empty, Gauge, EventFields, EventStrip, ItemIcon, PickedTotal, RANK_TOP, RankDialog, RankHead, RoundsIn, Select, type EventTally, SortMenu, Tile, signed, type Sort } from "@/components/enhance/parts";
+import { Card, Delta, Empty, Gauge, EventFields, EventStrip, ItemIcon, PickedTotal, RankCard, RoundsIn, Select, type EventTally, SortMenu, Tile, signed, type Sort } from "@/components/enhance/parts";
 import { Pager, usePage } from "@/components/pager";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { useItemDict, type Rolled } from "@/components/enhance/use-item-dict";
@@ -296,53 +296,6 @@ function PieceDialog({ piece: live, entries, found, onClose }: { piece: PieceSta
 /** `css` = the colour of the value on the right. `pieces` = the whole ranking, best first. */
 type Rank = { title: string; empty: string; pieces: PieceStat[]; value: (p: PieceStat) => string; sub: (p: PieceStat) => string; css?: string };
 
-/** One ranking: the top three on the card, "더보기" opens the whole list (user, 2026-11-14). */
-function RankCard({ rank, found, onOpen }: { rank: Rank; found: Icons; onOpen: (key: string) => void }) {
-  const [all, setAll] = useState(false);
-  // The window's list runs past 9: room for two digits there.
-  const row = (p: PieceStat, i: number, wide = false) => {
-    const sub = `${kindLabel(p)}${p.of > 1 ? ` ${p.n}번째` : ""} · ${rank.sub(p)}`;
-    return (
-      <button
-        key={p.key}
-        type="button"
-        onClick={() => (setAll(false), onOpen(p.key))}
-        className={cn(
-          // The ring is drawn inside: the card and the window's list would cut one drawn outside.
-          "press-static grid w-full items-center gap-2.5 border-t border-border px-4 py-2.5 text-left outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset",
-          wide ? "grid-cols-[30px_minmax(0,1fr)_auto]" : "grid-cols-[18px_minmax(0,1fr)_auto]"
-        )}
-      >
-        <b className="font-num text-[15px] text-muted-foreground">
-          <Digits>{i + 1}</Digits>
-        </b>
-        <span className="flex min-w-0 items-center gap-2.5">
-          <ItemIcon info={iconOf(p.item, p.level, found)} />
-          <span className="flex min-w-0 flex-col gap-0.5">
-            <b className="truncate text-sm" title={p.item}>
-              {p.item}
-            </b>
-            <span className="truncate text-xs text-muted-foreground" title={sub}>
-              {sub}
-            </span>
-          </span>
-        </span>
-        <b className={cn("font-num text-sm whitespace-nowrap", rank.css)}><Digits>{rank.value(p)}</Digits></b>
-      </button>
-    );
-  };
-  return (
-    <Card className="overflow-hidden">
-      <RankHead title={rank.title} more={rank.pieces.length > RANK_TOP} onMore={() => setAll(true)} />
-      {rank.pieces.length === 0 && <p className="border-t border-border px-4 py-6 text-center text-[13px] text-muted-foreground">{rank.empty}</p>}
-      {rank.pieces.slice(0, RANK_TOP).map((p, i) => row(p, i))}
-      <RankDialog title={rank.title} count={rank.pieces.length} open={all} onClose={() => setAll(false)}>
-        {rank.pieces.map((p, i) => row(p, i, true))}
-      </RankDialog>
-    </Card>
-  );
-}
-
 /** Lucky and unlucky item, main vs additional potential, and the items that took the most meso, resets and cubes. */
 function PotInsight({ stats, found, onOpen }: { stats: ReturnType<typeof buildPotStats>; found: Icons; onOpen: (key: string) => void }) {
   const priced = stats.pieces.filter((p) => p.delta !== null);
@@ -425,7 +378,20 @@ function PotInsight({ stats, found, onOpen }: { stats: ReturnType<typeof buildPo
       </div>
       <div className="grid items-start gap-2 lg:grid-cols-2 xl:grid-cols-3">
         {ranks.map((rank) => (
-          <RankCard key={rank.title} rank={rank} found={found} onOpen={onOpen} />
+          <RankCard
+            key={rank.title}
+            title={rank.title}
+            empty={rank.empty}
+            rows={rank.pieces}
+            rowKey={(p) => p.key}
+            name={(p) => p.item}
+            info={(p) => iconOf(p.item, p.level, found)}
+            sub={(p) => `${kindLabel(p)}${p.of > 1 ? ` ${p.n}번째` : ""} · ${rank.sub(p)}`}
+            cutSub
+            value={rank.value}
+            color={rank.css}
+            onOpen={onOpen}
+          />
         ))}
       </div>
     </>

@@ -18,8 +18,8 @@
 // and spends OCR calls, so opening the URL by hand must not be enough (Codex review 2026-11-10).
 // Every run first checks the season patch dates against the NEXON event notices (sunday_patches, store.ts
 // checkPatches; `?dry=1` only reports), then, unless `?dry=1`, stores the prediction the pages show (sunday_predictions).
-import { timingSafeEqual } from "node:crypto";
 import { revalidateTag } from "next/cache";
+import { bearerAuthorized } from "@/lib/bearer-auth";
 import { readSunday } from "@/lib/sunday/auto-update";
 import { upcomingSunday } from "@/lib/sunday/history";
 import { SUNDAY_WEEKS_TAG } from "@/lib/sunday/live";
@@ -28,14 +28,6 @@ import { alreadyDone, checkPatches, logPrediction, logRun, saveReading, waitingF
 import type { SaveDecision } from "@/lib/sunday/stored";
 
 export const maxDuration = 300;
-
-function authorized(request: Request): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return false;
-  const given = Buffer.from(request.headers.get("authorization") ?? "");
-  const want = Buffer.from(`Bearer ${secret}`);
-  return given.length === want.length && timingSafeEqual(given, want);
-}
 
 type PatchResult = Awaited<ReturnType<typeof checkPatches>>;
 
@@ -53,7 +45,7 @@ function patchDetail(p: PatchResult): string {
 }
 
 export async function GET(request: Request) {
-  if (!authorized(request)) return new Response("Unauthorized", { status: 401 });
+  if (!bearerAuthorized(request, process.env.CRON_SECRET)) return new Response("Unauthorized", { status: 401 });
 
   const params = new URL(request.url).searchParams;
   const asked = params.get("sunday");

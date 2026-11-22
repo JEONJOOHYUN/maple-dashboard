@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { LuckBox, NumberField, Segment, parseNum } from "@/components/ev/ui";
+import { Field } from "@/components/mvp/field";
 import { LUCK_LEVELS } from "@/lib/ev/luck";
 import { koreanUnits } from "@/lib/format";
 import { fewestTickets, shareAtLeast, ticketsAtTop, ticketsPer10 } from "@/lib/mvp/boutique";
@@ -89,19 +90,12 @@ export function BoutiquePanel({
       ) : (
         <div key="after" className="reveal flex flex-col gap-3">
           <div className="grid grid-cols-1 gap-2 @sm:grid-cols-2">
-            {/* Corner 14 = the field inside (10) + the 4px between them, as the fields of the calculator above. */}
-            <label className="flex h-10 min-w-0 items-center justify-between gap-2 rounded-xl border border-border bg-background pr-1 pl-3 text-[13px] text-muted-foreground">
-              <span className="truncate" title="깐 개수">
-                깐 개수
-              </span>
+            <Field label="깐 개수">
               <NumberField label="깐 부티크 기프트 개수" value={opened.n} onChange={(v) => onOpened({ ...opened, n: v })} suffix="개" inputClassName="h-8 w-16" />
-            </label>
-            <label className="flex h-10 min-w-0 items-center justify-between gap-2 rounded-xl border border-border bg-background pr-1 pl-3 text-[13px] text-muted-foreground">
-              <span className="truncate" title="받은 티켓">
-                받은 티켓
-              </span>
+            </Field>
+            <Field label="받은 티켓">
               <NumberField label="받은 부티크 티켓 개수" value={opened.t} onChange={(v) => onOpened({ ...opened, t: v })} suffix="개" inputClassName="h-8 w-16" />
-            </label>
+            </Field>
           </div>
           {ready ? (
             <div className="reveal flex flex-col gap-1 rounded-lg border border-primary bg-primary-soft px-4 py-3">

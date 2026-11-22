@@ -4,22 +4,14 @@
 // never leaves Vercel (the service role key also covers the nyamnyam schema in the same project).
 // POST { sunday, model, data_end, data_hash, scores } with Authorization: Bearer ML_UPLOAD_SECRET. The same Sunday and
 // model is replaced: a later run may have more or corrected weeks (pages use a row only when its data_hash matches, mlFor).
-import { timingSafeEqual } from "node:crypto";
 import { revalidateTag } from "next/cache";
+import { bearerAuthorized } from "@/lib/bearer-auth";
 import { SUNDAY_ML_TAG } from "@/lib/sunday/live";
 import { parseMlUpload } from "@/lib/sunday/ml";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
-function authorized(request: Request): boolean {
-  const secret = process.env.ML_UPLOAD_SECRET;
-  if (!secret) return false;
-  const given = Buffer.from(request.headers.get("authorization") ?? "");
-  const want = Buffer.from(`Bearer ${secret}`);
-  return given.length === want.length && timingSafeEqual(given, want);
-}
-
 export async function POST(request: Request) {
-  if (!authorized(request)) return new Response("Unauthorized", { status: 401 });
+  if (!bearerAuthorized(request, process.env.ML_UPLOAD_SECRET)) return new Response("Unauthorized", { status: 401 });
   let body: unknown;
   try {
     body = await request.json();

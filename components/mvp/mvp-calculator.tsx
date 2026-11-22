@@ -5,6 +5,7 @@ import { ChevronDown, X } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { Chip, NumberField, Segment, parseNum } from "@/components/ev/ui";
 import { BoutiquePanel, type BoutiqueTab } from "@/components/mvp/boutique-panel";
+import { Field } from "@/components/mvp/field";
 import { BOUTIQUE_OPEN_ID, CREDIT_PCT, CREDIT_SHOP, GIFT_WON_PER_10K, MESO_MARKET_MP, MVP_ITEMS, MVP_MESO_WON, MVP_METHODS } from "@/lib/ev/defaults";
 import { ticketsPer10 } from "@/lib/mvp/boutique";
 import {
@@ -128,19 +129,6 @@ function Stat({ label, big, sub, accent }: { label: string; big: ReactNode; sub:
       <b className="flex items-center gap-2 text-[22px] leading-tight">{big}</b>
       <span className="text-xs text-muted-foreground">{sub}</span>
     </div>
-  );
-}
-
-/** One setting: name on the left, control on the right, always 40 px high. */
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    // Corner 14 = the field inside (10) + the 4px between them.
-    <span className="flex h-10 min-w-0 items-center justify-between gap-2 rounded-xl border border-border bg-background pr-1 pl-3 text-[13px] text-muted-foreground">
-      <span className="truncate" title={label}>
-        {label}
-      </span>
-      {children}
-    </span>
   );
 }
 
@@ -396,7 +384,7 @@ export function MvpCalculator() {
             <Field label="선물식 1만 캐시">
               <NumberField label="선물식 1만 캐시당 받는 돈 (원)" value={s.giftRate} onChange={(t) => update({ giftRate: t })} suffix="원" inputClassName="h-8 w-20" />
             </Field>
-            <Field label="경매장 수수료">
+            <Field as="span" label="경매장 수수료">
               <Toggle
                 label="경매장 수수료"
                 value={String(s.fee) as "3" | "5"}

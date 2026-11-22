@@ -2,7 +2,7 @@
 
 import { Fragment, useMemo, useState } from "react";
 import { ChevronDown } from "lucide-react";
-import { Chip, Label, NumberField, Panel, Segment, arrowTurn, count, eok, parseNum, pct } from "@/components/ev/ui";
+import { Chip, Label, NumberField, Panel, RESULT_SHELL, Segment, arrowTurn, count, eok, parseNum, pct } from "@/components/ev/ui";
 import { FLAMES, armorChance, bestWeaponGrade, goalChips, hpScore, hpTarget, tierValues, weaponChance, DEFAULT_HP_WEIGHTS, DEFAULT_WEIGHTS, DEFAULT_XENON_WEIGHTS, type FlameJob } from "@/lib/ev/flame";
 import { averageTries, triesAt } from "@/lib/ev/luck";
 import { Reveal } from "@/components/ui/reveal";
@@ -322,7 +322,7 @@ export function FlameTab() {
       </Panel>
 
       <section className="flex min-w-0 flex-col gap-2">
-        <div className="flex flex-col gap-1.5 rounded-[1rem] bg-primary px-5 py-4 text-primary-foreground">
+        <div className={cn(RESULT_SHELL, "gap-1.5")}>
           <span className="text-[13px] font-semibold">{goalText} · {Number.isFinite(bestMeso) ? "가장 싸게" : "가장 적게"}</span>
           {best ? (
             <>

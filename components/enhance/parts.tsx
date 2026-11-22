@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, type ComponentProps, type ReactNode } from "react";
+import { useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { ChevronDown, Package } from "lucide-react";
 import { eok } from "@/components/ev/ui";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -40,13 +40,13 @@ export function Card({ className, children }: { className?: string; children: Re
 }
 
 /** How many rows a ranking card shows; the rest are in its window. */
-export const RANK_TOP = 3;
+const RANK_TOP = 3;
 
 /**
  * A ranking card's title, with "더보기" on the right when the list is longer than the card shows (user, 2026-11-14).
  * In the title row so the button sits at the same height on every card of a row, whatever their lengths.
  */
-export function RankHead({ title, more, onMore }: { title: string; more: boolean; onMore: () => void }) {
+function RankHead({ title, more, onMore }: { title: string; more: boolean; onMore: () => void }) {
   return (
     <div className="flex items-center justify-between gap-2 px-4 pt-3.5 pb-2">
       <h2 className="text-sm font-bold">{title}</h2>
@@ -60,7 +60,7 @@ export function RankHead({ title, more, onMore }: { title: string; more: boolean
 }
 
 /** The whole ranking a card shows the top of, in a window like an item's; a row opens that item (user, 2026-11-14). */
-export function RankDialog({ title, count, open, onClose, children }: { title: string; count: number; open: boolean; onClose: () => void; children: ReactNode }) {
+function RankDialog({ title, count, open, onClose, children }: { title: string; count: number; open: boolean; onClose: () => void; children: ReactNode }) {
   // Focus goes to the list, not to its first row.
   const listRef = useRef<HTMLDivElement>(null);
   return (
@@ -75,6 +75,85 @@ export function RankDialog({ title, count, open, onClose, children }: { title: s
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * One ranking, best first: the card shows the top three, "더보기" opens the whole list in a window (user, 2026-11-14).
+ * Generic over what a row is; the caller says how to read one.
+ */
+export function RankCard<T>({
+  title,
+  empty,
+  rows,
+  rowKey,
+  name,
+  sub,
+  cutSub = false,
+  value,
+  color,
+  info,
+  onOpen,
+}: {
+  title: string;
+  empty: string;
+  /** The whole ranking, best first. */
+  rows: T[];
+  rowKey: (row: T) => string;
+  name: (row: T) => string;
+  /** The line under the name. */
+  sub: (row: T) => string;
+  /** Keeps that line on one line, with the whole of it as its tooltip. */
+  cutSub?: boolean;
+  /** The text on the right, in `color`. */
+  value: (row: T) => string;
+  color?: string;
+  info: (row: T) => ItemInfo;
+  onOpen: (key: string) => void;
+}) {
+  const [all, setAll] = useState(false);
+  // The window's list runs past 9: room for two digits there.
+  const line = (row: T, i: number, wide = false) => {
+    const key = rowKey(row);
+    const under = sub(row);
+    return (
+      <button
+        key={key}
+        type="button"
+        onClick={() => (setAll(false), onOpen(key))}
+        className={cn(
+          // The ring is drawn inside: the card and the window's list would cut one drawn outside.
+          "press-static grid w-full items-center gap-2.5 border-t border-border px-4 py-2.5 text-left outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset",
+          wide ? "grid-cols-[30px_minmax(0,1fr)_auto]" : "grid-cols-[18px_minmax(0,1fr)_auto]"
+        )}
+      >
+        <b className="font-num text-[15px] text-muted-foreground">
+          <Digits>{i + 1}</Digits>
+        </b>
+        <span className="flex min-w-0 items-center gap-2.5">
+          <ItemIcon info={info(row)} />
+          <span className="flex min-w-0 flex-col gap-0.5">
+            <b className="truncate text-sm" title={name(row)}>
+              {name(row)}
+            </b>
+            <span className={cutSub ? "truncate text-xs text-muted-foreground" : "text-xs text-muted-foreground"} title={cutSub ? under : undefined}>
+              {under}
+            </span>
+          </span>
+        </span>
+        <b className={cn("font-num text-sm whitespace-nowrap", color)}><Digits>{value(row)}</Digits></b>
+      </button>
+    );
+  };
+  return (
+    <Card className="overflow-hidden">
+      <RankHead title={title} more={rows.length > RANK_TOP} onMore={() => setAll(true)} />
+      {rows.length === 0 && <p className="border-t border-border px-4 py-6 text-center text-[13px] text-muted-foreground">{empty}</p>}
+      {rows.slice(0, RANK_TOP).map((row, i) => line(row, i))}
+      <RankDialog title={title} count={rows.length} open={all} onClose={() => setAll(false)}>
+        {rows.map((row, i) => line(row, i, true))}
+      </RankDialog>
+    </Card>
   );
 }
 

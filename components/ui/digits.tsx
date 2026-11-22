@@ -1,3 +1,5 @@
+import { memo } from "react";
+
 /**
  * A number whose digits each take the same width, for a column of numbers in the number font: that font's digits
  * are not one width (its 1 is a third narrower than its 0) and it has no tabular feature, so right-aligned values did
@@ -5,8 +7,10 @@
  * Screen readers get the plain text once; the spaced copy is for the eye only.
  * `relative` keeps that hidden copy inside a scrolling table: an absolutely placed element whose containing block is
  * outside the scroll box is not clipped by it, and each one widened the whole page on phones.
+ * Every digit is an element of its own, so a table of numbers is hundreds of them: memo keeps a number that did not
+ * change from being drawn again when something else on the page does.
  */
-export function Digits({ children }: { children: string | number }) {
+export const Digits = memo(function Digits({ children }: { children: string | number }) {
   const text = String(children);
   return (
     <span className="relative">
@@ -24,4 +28,4 @@ export function Digits({ children }: { children: string | number }) {
       </span>
     </span>
   );
-}
+});

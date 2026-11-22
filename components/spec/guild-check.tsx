@@ -10,8 +10,9 @@ import { Fragment, useEffect, useMemo, useState, useTransition, type FormEvent, 
 import { useRouter } from "next/navigation";
 import { ChevronDown, CornerDownRight, Search, X } from "lucide-react";
 import { Chip } from "@/components/ev/ui";
+import { Message } from "@/components/message";
 import { PageHeader } from "@/components/page-header";
-import { Message, Pieces, RECENT_DROP, RECENT_NAME, RECENT_PILL, RECENT_PILL_OFF, RECENT_PILL_ON, SPEC_DESCRIPTION, whatText } from "@/components/spec/spec-check";
+import { Pieces, RECENT_DROP, RECENT_NAME, RECENT_PILL, RECENT_PILL_OFF, RECENT_PILL_ON, SPEC_DESCRIPTION, whatText } from "@/components/spec/spec-check";
 import { SpecTabs } from "@/components/spec/spec-tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Spinner } from "@/components/ui/spinner";

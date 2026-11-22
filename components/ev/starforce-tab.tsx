@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, ChevronDown, Copy, ImageIcon, Plus, X } from "lucide-react";
 import {
   Chip,
   Label,
   NumberField,
   Panel,
+  RESULT_SHELL,
   Segment,
   Switch,
   dashedHover,
@@ -38,7 +39,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Digits } from "@/components/ui/digits";
-import { Reveal } from "@/components/ui/reveal";
+import { Reveal, useReveal } from "@/components/ui/reveal";
 import { Spinner } from "@/components/ui/spinner";
 import { SwapIcon, SwapLabel } from "@/components/ui/swap-icon";
 import { ZEBRA_HEAD, ZEBRA_ROW, ZEBRA_SCROLL, ZEBRA_TABLE } from "@/components/ui/zebra";
@@ -81,9 +82,9 @@ const ITEM_GROUPS = (() => {
 const ITEM_COLS = 8;
 /**
  * Row height of the table beside the settings panel (user, 2026-11-13): fixed, the one at which the 18 rows of
- * 12 → 30성 end on the panel's bottom (43.2: at 43.5 the open table was 5px taller than the panel, 2026-11-22). The same for every item and start star; stacked panels keep the plain row.
+ * 12 → 30성 end on the panel's bottom (42.7 with the 조건 and 결과 lines over the table, 2026-11-22: measured so the two panels end together). The same for every item and start star; stacked panels keep the plain row.
  */
-const ROW_CSS = "lg:h-[43.2px]";
+const ROW_CSS = "lg:h-[42.7px]";
 const findItem = (id: string) => {
   for (const g of STAR_ITEMS) {
     const it = g.items.find((x) => x.id === id);
@@ -120,6 +121,31 @@ type CartItem = {
 const starList = (s: number[]) =>
   s.length ? s.map((x) => `${x}`).join(" · ") + "성" : "없음";
 
+/** The range table's box: under 520px the two-line list, from 520px the table, from 700px the table with room to spare. */
+const RANGE_STEPS = [520, 700];
+/** The quote's box: the table from 624px (@min-[39rem]). */
+const QUOTE_STEPS = [624];
+
+/**
+ * How many of `steps` (widths in px, rising) a box has reached, measured once the page is on screen. Until then it is
+ * null: the first HTML holds both layouts and CSS (a container query at the same width) picks one, so nothing jumps;
+ * after that only the layout in use is drawn. The range table is the heaviest part of the page (every digit is its own
+ * element), and two copies of it made each press re-draw twice as much.
+ * A step count, not the width itself: dragging the window edge then re-draws only when a step is crossed.
+ */
+function useBoxSteps(steps: number[]) {
+  // The box as state, not a ref: the quote's box is only in the page once something is in the quote.
+  const [box, setBox] = useState<HTMLDivElement | null>(null);
+  const [reached, setReached] = useState<number | null>(null);
+  useEffect(() => {
+    if (!box) return;
+    const watch = new ResizeObserver(([entry]) => setReached(steps.filter((px) => entry.contentRect.width >= px).length));
+    watch.observe(box);
+    return () => watch.disconnect();
+  }, [box, steps]);
+  return [setBox, reached] as const;
+}
+
 export function StarforceTab() {
   const [item, setItem] = useState(DEFAULT_ITEM);
   const [customLv, setCustomLv] = useState(String(CUSTOM_LEVEL));
@@ -139,6 +165,18 @@ export function StarforceTab() {
   );
   const [start, setStart] = useState(12);
   const [more, setMore] = useState(false);
+  // The opened rows stay a moment after "접기" so they can fade out (user, 2026-11-22: opening moved, closing did not).
+  const moreRows = useReveal(more);
+  // 520px = the container query the two layouts of the range table switch at (@min-[32.5rem]).
+  const [rangeBox, rangeSteps] = useBoxSteps(RANGE_STEPS);
+  const rangeWide = rangeSteps === null ? null : rangeSteps >= 1;
+  // With room to spare the table never scrolls sideways, so every row is exactly ROW_CSS tall: empty rows hold the
+  // folded rows' room. Narrower, a wide number can bring the scrollbar in, and only the real rows know.
+  const rangeRoomy = rangeSteps === 2;
+  const listClass = cn("flex flex-col", rangeWide === null && "@min-[32.5rem]:hidden");
+  const tableClass = cn(ZEBRA_SCROLL, rangeWide === null ? "hidden @min-[32.5rem]:block" : "block");
+  const [quoteBox, quoteSteps] = useBoxSteps(QUOTE_STEPS);
+  const quoteWide = quoteSteps === null ? null : quoteSteps >= 1;
   const [mult, setMult] = useState(1.07);
   const [multText, setMultText] = useState("1.07");
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -194,7 +232,7 @@ export function StarforceTab() {
   const startStar = Math.min(start, maxStar - 1);
   const startChoices = Array.from({ length: 18 }, (_, i) => i + 12).filter((s) => s < maxStar);
   const fold = Math.max(22, startStar + 3);
-  const lastRow = more ? maxStar : Math.min(maxStar, fold);
+  const lastRow = moreRows.shown ? maxStar : Math.min(maxStar, fold);
   const allRows = [];
   for (let to = startStar + 1; to <= maxStar; to++) {
     const from = view === "cum" ? startStar : to - 1;
@@ -318,13 +356,17 @@ export function StarforceTab() {
       <Digits>{from}</Digits> <span className="font-sans">→</span> <Digits>{to}</Digits>성
     </>
   );
-  // Rows that "더 보기" opens come in softly (reveal-row); the others are there from the start. Keyed by the star
-  // reached, so changing the start star keeps the rows that stay instead of bringing them all in again.
-  const opened = (r: RangeRow) => r.to > fold && "reveal-row";
-  const listRow = (r: RangeRow, i: number) => (
+  // Rows that "더 보기" opens come in and leave softly (reveal-row); the others are there from the start. Keyed by the
+  // star reached, so changing the start star keeps the rows that stay instead of bringing them all in again.
+  // `ghost` = the unseen copy that only holds the room: no motion state on it (with reduced motion a closed
+  // reveal-row takes no room at all).
+  const opened = (r: RangeRow, ghost: boolean) => !ghost && r.to > fold && "reveal-row";
+  const openedAttrs = (r: RangeRow, ghost: boolean) => (!ghost && r.to > fold ? moreRows.attrs : undefined);
+  const listRow = (r: RangeRow, i: number, ghost = false) => (
     <div
       key={r.to}
-      className={cn("-mx-3 flex flex-col gap-0.5 rounded-[10px] px-3 py-2", i % 2 === 1 && "bg-background", opened(r))}
+      {...openedAttrs(r, ghost)}
+      className={cn("-mx-3 flex flex-col gap-0.5 rounded-[10px] px-3 py-2", i % 2 === 1 && "bg-background", opened(r, ghost))}
     >
       <div className="flex items-center gap-2">
         <span className="flex-1 font-num text-[15px] font-bold whitespace-nowrap">
@@ -357,10 +399,11 @@ export function StarforceTab() {
       </div>
     </div>
   );
-  const tableRow = (r: RangeRow) => (
+  const tableRow = (r: RangeRow, ghost = false) => (
     <tr
       key={r.to}
-      className={cn(ZEBRA_ROW, ROW_CSS, opened(r))}
+      {...openedAttrs(r, ghost)}
+      className={cn(ZEBRA_ROW, ROW_CSS, opened(r, ghost))}
     >
       <td className="py-2 font-num text-[15px] font-bold whitespace-nowrap">
         {range(r.from, r.to)}
@@ -551,18 +594,21 @@ export function StarforceTab() {
         </Panel>
 
         <Panel>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <Segment
-              label="표 보기"
-              value={view}
-              onChange={setView}
-              options={[
-                { id: "cum", label: "누적 기댓값" },
-                { id: "step", label: "단계별 기댓값" },
-              ]}
-              className="w-full sm:w-64"
-            />
-            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          {/* What goes in on one line (user, 2026-11-22: the spare price sat alone on a second line). */}
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2.5">
+            <b className="text-[15px]">조건</b>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2.5 text-xs text-muted-foreground">
+              <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-foreground">
+                노작값
+                <NumberField
+                  label="노작값 (억 메소)"
+                  value={spareText}
+                  onChange={setSpareText}
+                  suffix="억 메소"
+                  decimal
+                  inputClassName="w-16"
+                />
+              </span>
               <Segment
                 label="단위"
                 value={unit}
@@ -585,17 +631,6 @@ export function StarforceTab() {
               </span>
             </div>
           </div>
-          <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold">
-            노작값
-            <NumberField
-              label="노작값 (억 메소)"
-              value={spareText}
-              onChange={setSpareText}
-              suffix="억 메소"
-              decimal
-              inputClassName="w-16"
-            />
-          </span>
           {/* Nothing to pick on an item that stops at 12 stars or under: no heading over an empty row. */}
           {startChoices.length > 0 && (
             <div className="flex flex-col gap-1.5">
@@ -614,22 +649,39 @@ export function StarforceTab() {
               </div>
             </div>
           )}
-          <div className="@container">
+          {/* How the table reads sits by the table. */}
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2.5 pt-1">
+            <b className="text-[15px]">결과</b>
+            <Segment
+              label="표 보기"
+              value={view}
+              onChange={setView}
+              options={[
+                { id: "cum", label: "누적 기댓값" },
+                { id: "step", label: "단계별 기댓값" },
+              ]}
+              className="w-full sm:w-64"
+            />
+          </div>
+          <div ref={rangeBox} className="@container">
             {/*
               Narrower than the table (phones, a narrow window) each range takes two lines (user, 2026-11-22): the range,
               the quoted price and "담기" on the first, the other three numbers small on the second. Everything stays on
               show, since this table is for comparing the ranges, and nothing scrolls sideways. One price a line is what
               fits: 구간 70 + a price up to 120 (30성) + 담기 55 in a 311px panel.
             */}
-            <div className="flex flex-col @min-[32.5rem]:hidden">
+            {rangeWide !== true && (
+            <div className={listClass}>
               <div className="flex justify-between pr-[63px] pb-1.5 text-[11px] font-medium text-muted-foreground">
                 <span>구간</span>
                 <span>×{mult}</span>
               </div>
-              {rows.map(listRow)}
+              {rows.map((r, i) => listRow(r, i))}
             </div>
+            )}
           {/* 520px: at a 1280px window the panel is 551px wide (560 scrolled by 9px and cut "담기"). */}
-          <div className={cn(ZEBRA_SCROLL, "hidden @min-[32.5rem]:block")}>
+          {rangeWide !== false && (
+          <div className={tableClass}>
             <table className={cn(ZEBRA_TABLE, "min-w-[520px] text-[13px]")}>
               <thead>
                 <tr className={ZEBRA_HEAD}>
@@ -642,10 +694,11 @@ export function StarforceTab() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map(tableRow)}
+                {rows.map((r) => tableRow(r))}
               </tbody>
             </table>
           </div>
+          )}
           </div>
           {fold < maxStar && (
             <button
@@ -666,12 +719,22 @@ export function StarforceTab() {
               width; stacked (below lg) the panel just grows. */}
           {foldedRows.length > 0 && (
             <div aria-hidden="true" inert className="invisible @container -mt-3.5 hidden lg:block">
-              <div className="flex flex-col @min-[32.5rem]:hidden">{foldedRows.map(listRow)}</div>
-              <div className={cn(ZEBRA_SCROLL, "hidden @min-[32.5rem]:block")}>
-                <table className={cn(ZEBRA_TABLE, "min-w-[520px] text-[13px]")}>
-                  <tbody>{foldedRows.map(tableRow)}</tbody>
-                </table>
-              </div>
+              {rangeWide !== true && <div className={listClass}>{foldedRows.map((r, i) => listRow(r, i, true))}</div>}
+              {rangeWide !== false && (
+                <div className={tableClass}>
+                  <table className={cn(ZEBRA_TABLE, "min-w-[520px] text-[13px]")}>
+                    <tbody>
+                      {rangeRoomy
+                        ? foldedRows.map((r) => (
+                            <tr key={r.to} className={ROW_CSS}>
+                              <td />
+                            </tr>
+                          ))
+                        : foldedRows.map((r) => tableRow(r, true))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
         </Panel>
@@ -695,12 +758,13 @@ export function StarforceTab() {
               담은 구간 없음
             </p>
           ) : (
-            <div className="@container">
+            <div ref={quoteBox} className="@container">
               {/*
                 Where the table does not fit (phones, a narrow column) the quote is a list (user, 2026-11-22): the range
                 and the quoted price on show, the rest one tap away, and nothing to scroll sideways.
               */}
-              <div className="flex flex-col @min-[39rem]:hidden">
+              {quoteWide !== true && (
+              <div className={cn("flex flex-col", quoteWide === null && "@min-[39rem]:hidden")}>
                 <div className="flex justify-between pr-6 pb-1.5 text-[11px] font-medium text-muted-foreground">
                   <span>구간 · 장비</span>
                   <span>×{mult}</span>
@@ -789,7 +853,9 @@ export function StarforceTab() {
                   </span>
                 </div>
               </div>
-              <div className={cn(ZEBRA_SCROLL, "hidden @min-[39rem]:block")}>
+              )}
+              {quoteWide !== false && (
+              <div className={cn(ZEBRA_SCROLL, quoteWide === null ? "hidden @min-[39rem]:block" : "block")}>
               <table className={cn(ZEBRA_TABLE, "min-w-[620px] text-[13px]")}>
                 <thead>
                   <tr className={ZEBRA_HEAD}>
@@ -861,6 +927,7 @@ export function StarforceTab() {
                 </tbody>
               </table>
               </div>
+              )}
             </div>
           )}
         </Panel>
@@ -898,7 +965,7 @@ export function StarforceTab() {
               </span>
             </div>
           </Panel>
-          <div className="flex flex-col gap-1 rounded-[1rem] bg-primary px-5 py-4 text-primary-foreground">
+          <div className={cn(RESULT_SHELL, "gap-1")}>
             <span className="text-[13px] font-semibold">
               최종 견적 (×{mult})
             </span>
