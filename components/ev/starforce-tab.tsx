@@ -778,7 +778,7 @@ export function StarforceTab() {
               </span>
             </b>
             <span className="text-xs text-muted-foreground">
-              표에서 &quot;담기&quot;로 추가
+              표에서 “담기”로 추가
             </span>
           </div>
           {cart.length === 0 ? (
@@ -828,7 +828,7 @@ export function StarforceTab() {
                         <ChevronDown
                           size={16}
                           className={cn(
-                            "ml-1 shrink-0 transition-[rotate,color] duration-200 ease-out motion-reduce:transition-none",
+                            "ml-1 shrink-0 transition-[rotate,color] duration-200 ease-out",
                             open ? "rotate-180 text-foreground" : "text-muted-foreground",
                           )}
                           aria-hidden="true"

@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
-const EASE = "duration-300 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none";
+const EASE = "duration-300 ease-[cubic-bezier(0.2,0,0,1)]";
 /**
  * The state not on show stays in the page: a waiting mark inside it must not keep turning unseen (it re-styled the page
  * eight times a second while nothing was happening). Important, since the mark's own stylesheet is outside the layers.

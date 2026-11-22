@@ -243,6 +243,31 @@
   }
 }
 
+/* Light ↔ dark (components/theme-toggle.tsx): every colour on the page changes in the same frame, instead of each
+   button and chip fading at its own pace. The toggle alone keeps its motion: the press giving back, the sun ↔ moon. */
+.theme-switching :not([data-theme-toggle], [data-theme-toggle] *),
+.theme-switching ::before,
+.theme-switching ::after {
+  transition: none !important;
+}
+.theme-switching [data-theme-toggle] {
+  transition-property: scale !important;
+}
+
+/* Reduced motion (the system setting): nothing moves, fades or gives under a press; every change lands in one frame.
+   Unlayered and important, so it holds over each element's own transition utility. The waiting mark stops by itself and
+   the table's height glide (components/ui/glide.ts) checks the setting. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    transition: none !important;
+  }
+  :is(a, button, [role="button"]):active {
+    scale: none !important;
+  }
+}
+
 /* A tile on the page: the edge is a transparent shadow ring. The 1px transparent border keeps the box the size the
    old bordered card had, and still draws an edge in forced-colors mode, where shadows are removed. */
 @utility tile {
@@ -289,9 +314,6 @@
   &[data-side="inline-end"][data-starting-style] {
     translate: -8px 0;
   }
-  @media (prefers-reduced-motion: reduce) {
-    transition: none;
-  }
 }
 /* A hairline around a picture, pure black or white at 10%, drawn inside so the picture keeps its size. */
 @utility image-line {
@@ -300,7 +322,7 @@
 }
 /* components/ui/reveal.tsx. The values are the design skill's "subtle exit": it leaves by 12px with a 4px blur in
    0.15s, and comes in the same way back in 0.3s (an exit is quicker and quieter than an entrance), both ease-out.
-   With reduced motion there is no fade to wait for, so the closed state simply takes no room. */
+   With reduced motion (no transition at all, see above) the closed state simply takes no room. */
 @utility reveal {
   transition:
     opacity 0.3s ease-out,
@@ -318,7 +340,6 @@
     transition-duration: 0.15s;
   }
   @media (prefers-reduced-motion: reduce) {
-    transition: none;
     &[data-open="false"] {
       display: none;
     }
@@ -340,7 +361,6 @@
     transition-duration: 0.15s;
   }
   @media (prefers-reduced-motion: reduce) {
-    transition: none;
     &[data-open="false"] {
       display: none;
     }

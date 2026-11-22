@@ -153,7 +153,7 @@ function ThisWeekBand({ week, recorded: r }: { week: SundayPageData["thisWeek"];
               <ThemeChip key={id} id={id} />
             ))}
             {r.noticeUrl && <NoticeLink href={r.noticeUrl} />}
-            <NoticeImage images={r.images} label={week.label} className="text-[13px]" />
+            <NoticeImage images={r.images} label={week.label} className={cn("text-[13px]", NOTICE_HIT)} />
           </div>
         )}
       </div>
@@ -393,13 +393,16 @@ function Outlook({ bigDays, last }: { bigDays: SundayPageData["prediction"]["big
   );
 }
 
+/** 20px to look at, 40px to press: the area reaches 10px above and below, and 6px to the sides (half the 12px gap). */
+const NOTICE_HIT = "relative after:absolute after:-inset-x-1.5 after:-inset-y-2.5";
+
 function NoticeLink({ href }: { href: string }) {
   return (
     <a
       href={href}
       target="_blank"
       rel="noreferrer"
-      className="inline-flex items-center gap-1.5 self-start rounded-sm text-[13px] font-semibold text-primary-text outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
+      className={cn("inline-flex items-center gap-1.5 self-start rounded-sm text-[13px] font-semibold text-primary-text outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50", NOTICE_HIT)}
     >
       넥슨 공지 보기
       <ExternalLink className="size-3.5" aria-hidden="true" />

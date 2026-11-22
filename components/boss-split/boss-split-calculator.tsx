@@ -471,7 +471,7 @@ export function BossSplitCalculator() {
                 <span
                   key={state}
                   className={cn(
-                    "col-start-1 row-start-1 inline-flex items-center justify-center gap-2 whitespace-nowrap transition-[opacity,filter] duration-300 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none",
+                    "col-start-1 row-start-1 inline-flex items-center justify-center gap-2 whitespace-nowrap transition-[opacity,filter] duration-300 ease-[cubic-bezier(0.2,0,0,1)]",
                     state === imageState ? "opacity-100 blur-none" : cn("opacity-0 blur-xs", UNSEEN_STILL)
                   )}
                 >

@@ -237,7 +237,7 @@ export const parseNum = (text: string, fallback = 0) => {
 /** The − / + of a stepper, one look for every tab: the caller adds its size and radius. */
 export const stepButton = "flex shrink-0 items-center justify-center tile-edge disabled:opacity-40";
 /** How an arrow that marks open / closed turns (down = closed, up = open), the same in every tab. */
-export const arrowTurn = "transition-[rotate] duration-200 ease-out motion-reduce:transition-none";
+export const arrowTurn = "transition-[rotate] duration-200 ease-out";
 /** One hover for every dashed button of the calculators: the edge turns orange and the words darken. */
 export const dashedHover = "hover:border-primary/60 hover:text-foreground";
 

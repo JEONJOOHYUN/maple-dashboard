@@ -109,7 +109,7 @@ function WorldPick({ name, guilds }: { name: string; guilds: GuildInfo[] }) {
     <section className="flex flex-col gap-3 tile p-4 sm:p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
         <b className="text-[15px] break-keep">
-          &quot;{name}&quot; 길드 {guilds.length}곳 → 월드 고르기
+          “{name}” 길드 {guilds.length}곳 → 월드 고르기
         </b>
         <span className="text-xs text-muted-foreground">캐릭터 많은 순</span>
       </div>
@@ -639,7 +639,7 @@ export function GuildCheck({ name, view }: { name: string; view: GuildView }) {
         {view.kind === "guild" && <GuildResult guild={view.guild} pieces={view.pieces} others={view.others} />}
         {view.kind === "pick" && <WorldPick name={view.name} guilds={view.guilds} />}
         {view.kind === "empty" && <Message title="길드 검색" sub="길드원마다 놓친 0차 스킬 · 연합의 의지 · 하이퍼 패시브 · 링크 · 펫 버프를 표 하나로" />}
-        {view.kind === "notFound" && <Message title={`"${view.name}" 길드 없음`} sub="길드 이름 확인 · 영문은 대소문자까지 같아야 함" />}
+        {view.kind === "notFound" && <Message title={`“${view.name}” 길드 없음`} sub="길드 이름 확인 · 영문은 대소문자까지 같아야 함" />}
         {view.kind === "limit" && <Message title="길드 검색 잠시 멈춤" sub="짧은 시간에 너무 많이 검색 → 1시간 안에 다시 됨" />}
         {view.kind === "busy" && <Message title="오늘 길드 검색 한도 다 씀" sub="넥슨 API 하루 한도 보호 → 내일 다시 · 개인 검색은 그대로 됨" />}
         {view.kind === "quota" && <Message title="오늘 조회 한도 다 씀" sub="넥슨 API 하루 한도 → 내일 다시" />}
