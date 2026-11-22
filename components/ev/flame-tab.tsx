@@ -235,8 +235,6 @@ export function FlameTab() {
                 >
                   <ChevronDown
                     size={14}
-                    strokeWidth={2}
-                    absoluteStrokeWidth
                     className={cn("-ml-0.5 shrink-0", arrowTurn, convOpen && "rotate-180")}
                     aria-hidden="true"
                   />

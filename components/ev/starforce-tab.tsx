@@ -102,7 +102,7 @@ function AddButton({ onClick }: { onClick: () => void }) {
       // The transparent border is the edge where shadows are not drawn (forced colours); the padding gives its 1px back.
       className="relative inline-flex h-7 shrink-0 items-center gap-1 rounded-full border border-transparent bg-background pr-[9px] pl-[7px] text-xs whitespace-nowrap text-muted-foreground shadow-tile transition-[box-shadow,color,scale] duration-150 ease-out after:absolute after:inset-x-0 after:-inset-y-1.5 hover:text-primary-text hover:shadow-tile-hover active:scale-[0.96]"
     >
-      <Plus size={12} strokeWidth={1.5} absoluteStrokeWidth aria-hidden="true" />
+      <Plus size={12} strokeWidth={1.5} aria-hidden="true" />
       담기
     </button>
   );
@@ -121,8 +121,8 @@ type CartItem = {
 const starList = (s: number[]) =>
   s.length ? s.map((x) => `${x}`).join(" · ") + "성" : "없음";
 
-/** The range table's box: under 520px the two-line list, from 520px the table, from 700px the table with room to spare. */
-const RANGE_STEPS = [520, 700];
+/** The range table's box: under 520px the two-line list, from 520px the table (@min-[32.5rem]). */
+const RANGE_STEPS = [520];
 /** The quote's box: the table from 624px (@min-[39rem]). */
 const QUOTE_STEPS = [624];
 
@@ -170,9 +170,6 @@ export function StarforceTab() {
   // 520px = the container query the two layouts of the range table switch at (@min-[32.5rem]).
   const [rangeBox, rangeSteps] = useBoxSteps(RANGE_STEPS);
   const rangeWide = rangeSteps === null ? null : rangeSteps >= 1;
-  // With room to spare the table never scrolls sideways, so every row is exactly ROW_CSS tall: empty rows hold the
-  // folded rows' room. Narrower, a wide number can bring the scrollbar in, and only the real rows know.
-  const rangeRoomy = rangeSteps === 2;
   const listClass = cn("flex flex-col", rangeWide === null && "@min-[32.5rem]:hidden");
   const tableClass = cn(ZEBRA_SCROLL, rangeWide === null ? "hidden @min-[32.5rem]:block" : "block");
   const [quoteBox, quoteSteps] = useBoxSteps(QUOTE_STEPS);
@@ -240,7 +237,7 @@ export function StarforceTab() {
   }
   type RangeRow = (typeof allRows)[number];
   const rows = allRows.filter((r) => r.to <= lastRow);
-  /** The rows "더 보기" opens: drawn unseen under the button so their room is already there. */
+  /** The rows "더 보기" opens: their room is kept under the button, so opening them never makes the panel taller. */
   const foldedRows = allRows.filter((r) => r.to > lastRow);
 
   const money = (meso: number) =>
@@ -362,6 +359,18 @@ export function StarforceTab() {
   // reveal-row takes no room at all).
   const opened = (r: RangeRow, ghost: boolean) => !ghost && r.to > fold && "reveal-row";
   const openedAttrs = (r: RangeRow, ghost: boolean) => (!ghost && r.to > fold ? moreRows.attrs : undefined);
+  // The table sizes its columns by what is in them, and the folded rows hold the biggest numbers: opening them
+  // moved every column up to 45px (user, 2026-11-22). A zero-height row with the widest value of each column over
+  // all rows, folded or not, keeps the columns where they are. Widest by a rough width: a digit is 0.68em, a comma or
+  // a dot about a third, a Korean unit a full em.
+  const roughWidth = (s: string) => [...s].reduce((w, ch) => w + (ch >= "0" && ch <= "9" ? 0.68 : ch === "," || ch === "." ? 0.3 : 1), 0);
+  const widest = (texts: string[]) => texts.reduce((a, b) => (roughWidth(b) > roughWidth(a) ? b : a), "");
+  const columnSizers = [
+    widest(allRows.map((r) => money(r.meso))),
+    widest(allRows.map((r) => money(r.meso * mult))),
+    widest(allRows.map((r) => avg(r.destroys, 2))),
+    widest(allRows.map((r) => avg(r.tries, 1))),
+  ];
   const listRow = (r: RangeRow, i: number, ghost = false) => (
     <div
       key={r.to}
@@ -399,11 +408,11 @@ export function StarforceTab() {
       </div>
     </div>
   );
-  const tableRow = (r: RangeRow, ghost = false) => (
+  const tableRow = (r: RangeRow) => (
     <tr
       key={r.to}
-      {...openedAttrs(r, ghost)}
-      className={cn(ZEBRA_ROW, ROW_CSS, opened(r, ghost))}
+      {...openedAttrs(r, false)}
+      className={cn(ZEBRA_ROW, ROW_CSS, opened(r, false))}
     >
       <td className="py-2 font-num text-[15px] font-bold whitespace-nowrap">
         {range(r.from, r.to)}
@@ -696,6 +705,19 @@ export function StarforceTab() {
               <tbody>
                 {rows.map((r) => tableRow(r))}
               </tbody>
+              <tfoot aria-hidden="true">
+                <tr className="[&>td]:px-3 [&>td]:py-0">
+                  <td />
+                  {columnSizers.map((text, i) => (
+                    <td key={i} className="text-right font-num text-[15px] font-bold whitespace-nowrap">
+                      <div className="h-0 overflow-hidden">
+                        <Digits>{text}</Digits>
+                      </div>
+                    </td>
+                  ))}
+                  <td />
+                </tr>
+              </tfoot>
             </table>
           </div>
           )}
@@ -720,20 +742,18 @@ export function StarforceTab() {
           {foldedRows.length > 0 && (
             <div aria-hidden="true" inert className="invisible @container -mt-3.5 hidden lg:block">
               {rangeWide !== true && <div className={listClass}>{foldedRows.map((r, i) => listRow(r, i, true))}</div>}
+              {/* The table's rows are one fixed height side by side, and its width is pinned by the sizer row, so
+                  empty rows are all the room needs (the two-line list above needs the real lines: they can wrap). */}
               {rangeWide !== false && (
-                <div className={tableClass}>
-                  <table className={cn(ZEBRA_TABLE, "min-w-[520px] text-[13px]")}>
-                    <tbody>
-                      {rangeRoomy
-                        ? foldedRows.map((r) => (
-                            <tr key={r.to} className={ROW_CSS}>
-                              <td />
-                            </tr>
-                          ))
-                        : foldedRows.map((r) => tableRow(r, true))}
-                    </tbody>
-                  </table>
-                </div>
+                <table className={cn("w-full", rangeWide === null && "hidden @min-[32.5rem]:table")}>
+                  <tbody>
+                    {foldedRows.map((r) => (
+                      <tr key={r.to} className={ROW_CSS}>
+                        <td />
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               )}
             </div>
           )}
@@ -799,8 +819,6 @@ export function StarforceTab() {
                         </span>
                         <ChevronDown
                           size={16}
-                          strokeWidth={2}
-                          absoluteStrokeWidth
                           className={cn(
                             "ml-1 shrink-0 transition-[rotate,color] duration-200 ease-out motion-reduce:transition-none",
                             open ? "rotate-180 text-foreground" : "text-muted-foreground",
@@ -902,7 +920,7 @@ export function StarforceTab() {
                           // 28px to look at, 40px to press (the row is 52px tall).
                           className="relative inline-flex size-7 items-center justify-center rounded-md text-muted-foreground after:absolute after:-inset-1.5 hover:bg-muted hover:text-destructive"
                         >
-                          <X size={14} strokeWidth={2} absoluteStrokeWidth aria-hidden="true" />
+                          <X size={14} aria-hidden="true" />
                         </button>
                       </td>
                     </tr>
@@ -990,19 +1008,19 @@ export function StarforceTab() {
                 on={copied === "sum"}
                 from={
                   <>
-                    <Copy size={16} strokeWidth={2} absoluteStrokeWidth aria-hidden="true" />
+                    <Copy size={16} aria-hidden="true" />
                     금액 복사
                   </>
                 }
                 to={
                   sumFailed ? (
                     <>
-                      <X size={16} strokeWidth={2} absoluteStrokeWidth aria-hidden="true" />
+                      <X size={16} aria-hidden="true" />
                       복사 실패
                     </>
                   ) : (
                     <>
-                      <Check size={16} strokeWidth={2} absoluteStrokeWidth aria-hidden="true" />
+                      <Check size={16} aria-hidden="true" />
                       복사됨
                     </>
                   )
@@ -1022,7 +1040,7 @@ export function StarforceTab() {
                     {/* Drawing the picture takes a moment: the icon turns into the waiting mark meanwhile. */}
                     <SwapIcon
                       on={imageBusy}
-                      from={<ImageIcon size={16} strokeWidth={2} absoluteStrokeWidth aria-hidden="true" />}
+                      from={<ImageIcon size={16} aria-hidden="true" />}
                       to={<Spinner size={16} />}
                     />
                     사진 복사
@@ -1031,12 +1049,12 @@ export function StarforceTab() {
                 to={
                   imageResult === "error" ? (
                     <>
-                      <X size={16} strokeWidth={2} absoluteStrokeWidth aria-hidden="true" />
+                      <X size={16} aria-hidden="true" />
                       복사 실패
                     </>
                   ) : (
                     <>
-                      <Check size={16} strokeWidth={2} absoluteStrokeWidth aria-hidden="true" />
+                      <Check size={16} aria-hidden="true" />
                       {imageResult === "saved" ? "파일로 저장" : "복사됨"}
                     </>
                   )

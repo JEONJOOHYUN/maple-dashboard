@@ -97,7 +97,7 @@ export function CustomGoal({
                     // 32px to look at, 40px to press (the head keeps 6px round it).
                     className="relative flex size-8 items-center justify-center rounded-md outline-none after:absolute after:-inset-1 hover:bg-white/15 focus-visible:ring-3 focus-visible:ring-white/50"
                   >
-                    <X size={16} strokeWidth={2} absoluteStrokeWidth aria-hidden="true" />
+                    <X size={16} aria-hidden="true" />
                   </button>
                 ) : (
                   <span className="h-8 w-1.5" />
@@ -126,18 +126,18 @@ export function CustomGoal({
                       <span title={option.label} className="truncate">
                         {option.label}
                       </span>
-                      <ChevronDown size={16} strokeWidth={2} absoluteStrokeWidth className={cn("shrink-0 text-muted-foreground", arrowTurn, replacing && "rotate-180")} aria-hidden="true" />
+                      <ChevronDown size={16} className={cn("shrink-0 text-muted-foreground", arrowTurn, replacing && "rotate-180")} aria-hidden="true" />
                     </button>
                     <div className="ml-auto flex items-center gap-1.5">
                       <button type="button" aria-label={`${option.label} 낮추기`} disabled={at <= 0} onClick={() => move(-1)} className={step}>
-                        <Minus size={16} strokeWidth={2} absoluteStrokeWidth aria-hidden="true" />
+                        <Minus size={16} aria-hidden="true" />
                       </button>
                       <b className="w-[5.5rem] text-center font-num text-[15px]">
                         <Digits>{cond.min}</Digits>
                         {option.unit} 이상
                       </b>
                       <button type="button" aria-label={`${option.label} 올리기`} disabled={at >= option.sums.length - 1} onClick={() => move(1)} className={step}>
-                        <Plus size={16} strokeWidth={2} absoluteStrokeWidth aria-hidden="true" />
+                        <Plus size={16} aria-hidden="true" />
                       </button>
                       <button
                         type="button"
@@ -148,7 +148,7 @@ export function CustomGoal({
                         }}
                         className="flex size-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
                       >
-                        <X size={16} strokeWidth={2} absoluteStrokeWidth aria-hidden="true" />
+                        <X size={16} aria-hidden="true" />
                       </button>
                     </div>
                   </div>
@@ -167,7 +167,7 @@ export function CustomGoal({
                     )}
                   >
                     + 옵션 추가
-                    <ChevronDown size={16} strokeWidth={2} absoluteStrokeWidth className={cn("shrink-0", arrowTurn, open?.row === conds.length && "rotate-180")} aria-hidden="true" />
+                    <ChevronDown size={16} className={cn("shrink-0", arrowTurn, open?.row === conds.length && "rotate-180")} aria-hidden="true" />
                   </button>
                 )}
                 <Reveal open={!!open} className="flex flex-col gap-2.5">

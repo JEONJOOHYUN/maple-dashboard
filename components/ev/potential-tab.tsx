@@ -614,7 +614,7 @@ export function PotentialTab() {
                     onClick={() => setMin({ ...min, [k]: Math.max(0, min[k] - 1) })}
                     className={smallStep}
                   >
-                    <Minus size={14} strokeWidth={2} absoluteStrokeWidth aria-hidden="true" />
+                    <Minus size={14} aria-hidden="true" />
                   </button>
                   <b className="w-6 text-center font-num">
                     <Digits>{min[k]}</Digits>
@@ -626,7 +626,7 @@ export function PotentialTab() {
                     onClick={() => setMin({ ...min, [k]: Math.min(3, min[k] + 1) })}
                     className={smallStep}
                   >
-                    <Plus size={14} strokeWidth={2} absoluteStrokeWidth aria-hidden="true" />
+                    <Plus size={14} aria-hidden="true" />
                   </button>
                 </span>
               </div>
@@ -724,7 +724,7 @@ export function PotentialTab() {
                         onClick={() => setComboPart(k, (k === "lines" ? special : combo.stat) - 1)}
                         className={smallStep}
                       >
-                        <Minus size={14} strokeWidth={2} absoluteStrokeWidth aria-hidden="true" />
+                        <Minus size={14} aria-hidden="true" />
                       </button>
                       <b className={cn("text-center font-num", k === "lines" && bySeconds ? "w-10" : "w-6")}>
                         <Digits>{k === "lines" ? (bySeconds ? `${special}초` : special) : combo.stat}</Digits>
@@ -736,7 +736,7 @@ export function PotentialTab() {
                         onClick={() => setComboPart(k, (k === "lines" ? special : combo.stat) + 1)}
                         className={smallStep}
                       >
-                        <Plus size={14} strokeWidth={2} absoluteStrokeWidth aria-hidden="true" />
+                        <Plus size={14} aria-hidden="true" />
                       </button>
                     </span>
                   </div>
@@ -788,7 +788,7 @@ export function PotentialTab() {
                   aria-expanded={convOpen}
                   className="relative flex items-center gap-1 self-start text-[12px] font-bold after:absolute after:-inset-2 hover:text-primary-text"
                 >
-                  <ChevronDown size={14} strokeWidth={2} absoluteStrokeWidth className={cn("-ml-0.5 shrink-0", arrowTurn, convOpen && "rotate-180")} aria-hidden="true" />
+                  <ChevronDown size={14} className={cn("-ml-0.5 shrink-0", arrowTurn, convOpen && "rotate-180")} aria-hidden="true" />
                   환산 기준
                   {!convOpen && (
                     <span className="font-normal text-muted-foreground transition-opacity duration-200 ease-out starting:opacity-0">
