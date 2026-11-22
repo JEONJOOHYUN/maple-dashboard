@@ -253,6 +253,43 @@
 .theme-switching [data-theme-toggle] {
   transition-property: scale !important;
 }
+/* The switch as one motion where the browser has view transitions (components/theme-transition.ts): the light page is a
+   circle around the toggle, spreading out of it going light and gathered back into it going dark, under a warm light
+   from the toggle that blooms and fades. With reduced motion the switch is instant. */
+@property --theme-r {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+html.theme-vt::view-transition-old(root),
+html.theme-vt::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+html.theme-vt-up::view-transition-new(root),
+html.theme-vt-down::view-transition-old(root) {
+  clip-path: circle(var(--theme-r) at var(--theme-x) var(--theme-y));
+}
+html.theme-vt-down::view-transition-old(root) {
+  z-index: 1;
+}
+/* The page underneath stays pressable while it plays. */
+::view-transition {
+  pointer-events: none;
+}
+.theme-glow {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(
+    circle at var(--theme-x) var(--theme-y),
+    oklch(0.8 0.15 60 / 0.6),
+    oklch(0.75 0.17 50 / 0.28) 32%,
+    transparent 68%
+  );
+}
 
 /* Reduced motion (the system setting): nothing moves, fades or gives under a press; every change lands in one frame.
    Unlayered and important, so it holds over each element's own transition utility. The waiting mark stops by itself and
