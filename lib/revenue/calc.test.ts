@@ -39,7 +39,15 @@ test("scheduler rows: cleared or registered weekly and monthly bosses, in the sc
 test("crystal prices of the confirmed screen and the missing ones", () => {
   assert.equal(crystalPrice("카링|하드"), 1_560_000_000);
   assert.equal(crystalPrice("림보|하드"), 2_385_000_000);
-  assert.equal(crystalPrice("림보|익스트림"), null);
+  // In-game shop list (2026-11-24): the gaps of the notices, and two rows the game has the other way round.
+  assert.equal(crystalPrice("림보|익스트림"), 7_500_000_000);
+  assert.equal(crystalPrice("발드릭스|익스트림"), 9_600_000_000);
+  assert.equal(crystalPrice("벨로나|하드"), 2_950_000_000);
+  assert.equal(crystalPrice("유피테르|하드"), 5_387_000_000);
+  assert.equal(crystalPrice("카링|익스트림"), 4_845_000_000);
+  assert.equal(crystalPrice("시즌 보스 메이린|노멀"), null);
+  assert.equal(crystalPrice("핑크빈|카오스"), 1_320_000);
+  assert.equal(crystalPrice("반 레온|하드"), 1_070_000);
   assert.equal(share(1_560_000_000, 3), 520_000_000);
   assert.equal(share(100_000_000, 3), 33_333_333);
 });
@@ -91,13 +99,10 @@ test("defaults the user gave and the ones read from the expected-value calculato
   assert.deepEqual(BOXES.ringLife.opts, ["rr4", "ct4", "lifeStone"]);
 });
 
-// No official crystal price was found for these (the notices leave them out).
-const NO_PRICE = new Set(["림보|익스트림", "발드릭스|익스트림", "벨로나|하드"]);
-
-test("every boss · difficulty in the tables has a crystal price or is a known gap, and every material points at a box", () => {
-  for (const key of Object.keys(DROPS)) assert.ok(key in CRYSTAL || NO_PRICE.has(key), key);
+test("every boss · difficulty in the tables has a crystal price, and every material points at a box", () => {
+  for (const key of Object.keys(DROPS)) assert.ok(key in CRYSTAL, key);
   for (const [key, m] of Object.entries(MATERIALS)) {
-    assert.ok(key in CRYSTAL || NO_PRICE.has(key), key);
+    assert.ok(key in CRYSTAL, key);
     assert.equal(ITEMS[m.box].cat, "eter");
   }
 });
