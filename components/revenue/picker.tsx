@@ -7,19 +7,27 @@ import { Spinner } from "@/components/ui/spinner";
 import { bossRows, type SchedulerState } from "@/lib/revenue/calc";
 import { MAX_PICKED, SCAN_MIN_LEVEL } from "@/lib/revenue/data";
 import { cn } from "@/lib/utils";
+import { chip, focus, hoverRing, pickedRing } from "@/components/revenue/styles";
 import type { Char } from "@/components/revenue/use-data";
 
 /** A NEXON account in use: its key's name, its colour dot and how its character list came back. */
 export type AccountView = { account: string; label: string; color: string; chars: Char[]; error?: string; loading: boolean };
 
-const chip = "h-[34px] rounded-[9px] px-3 text-[13px] font-semibold whitespace-nowrap text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50";
-const chipOn = "bg-card text-foreground shadow-(--tile-shadow)";
+const tab = cn("h-[34px] rounded-[9px] px-3 text-[13px] font-semibold whitespace-nowrap text-muted-foreground hover:text-foreground", focus);
+/** A card in the lists: an account, a character. */
+const card = "flex min-h-[60px] items-center gap-2.5 rounded-xl bg-background px-3 py-2.5";
+/** A text button in a section's head. */
+const headBtn = cn("h-8 rounded-lg px-1.5 text-[13px] font-bold text-primary-text", focus);
+/** A small button on an account card. */
+const cardBtn = cn("h-[30px] shrink-0 rounded-lg px-2 text-xs hover:bg-muted", focus);
+const charGrid = "grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-4";
+const tabOn = "bg-card text-foreground shadow-(--tile-shadow)";
 
 function Tabs({ items, value, onChange, label }: { items: { id: string; label: string }[]; value: string; onChange: (id: string) => void; label: string }) {
   return (
     <div role="radiogroup" aria-label={label} className="flex gap-[3px] overflow-x-auto rounded-xl bg-muted p-[3px]">
       {items.map((t) => (
-        <button key={t.id} type="button" role="radio" aria-checked={value === t.id} onClick={() => onChange(t.id)} className={cn(chip, value === t.id && chipOn)}>
+        <button key={t.id} type="button" role="radio" aria-checked={value === t.id} onClick={() => onChange(t.id)} className={cn(tab, value === t.id && tabOn)}>
           {t.label}
         </button>
       ))}
@@ -35,8 +43,10 @@ function CharCard({ c, on, boss, color, onToggle, disabled }: { c: Char; on: boo
       disabled={disabled && !on}
       onClick={onToggle}
       className={cn(
-        "flex min-h-[60px] items-center gap-2.5 rounded-xl bg-background px-3 py-2.5 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-45",
-        on ? "bg-primary/14 shadow-[inset_0_0_0_2px_var(--primary)]" : "hover:shadow-[inset_0_0_0_1px_var(--input)]"
+        card,
+        "text-left disabled:opacity-45",
+        focus,
+        on ? pickedRing : hoverRing
       )}
     >
       <span className={cn("grid size-[18px] shrink-0 place-items-center rounded-[5px] border-[1.5px]", on ? "border-primary bg-primary text-primary-foreground" : "border-input")}>
@@ -52,7 +62,7 @@ function CharCard({ c, on, boss, color, onToggle, disabled }: { c: Char; on: boo
           </span>
         </span>
       </span>
-      {!!boss && <span className="ml-auto inline-flex h-5 shrink-0 items-center rounded-full bg-primary/14 px-[7px] pt-0.5 text-[11px] font-bold whitespace-nowrap text-primary-text">보스 {boss}</span>}
+      {!!boss && <span className={cn(chip, "ml-auto bg-primary/14 text-primary-text")}>보스 {boss}</span>}
     </button>
   );
 }
@@ -89,7 +99,8 @@ export function Picker({
   const [world, setWorld] = useState("all");
   const [restOpen, setRestOpen] = useState(false);
   const colorOf = (account: string) => (accounts.length > 1 ? accounts.find((a) => a.account === account)?.color : undefined);
-  const bossCount = (c: Char) => bossRows(states[c.ocid]).filter((r) => !r.monthly).length;
+  const counts = new Map(all.map((c) => [c.ocid, bossRows(states[c.ocid]).filter((r) => !r.monthly).length]));
+  const bossCount = (c: Char) => counts.get(c.ocid) ?? 0;
   const scanned = all.filter((c) => c.level >= SCAN_MIN_LEVEL);
   const waiting = scanned.filter((c) => !(c.ocid in states)).length;
   const worlds = [...new Set(all.map((c) => c.world))];
@@ -101,7 +112,10 @@ export function Picker({
   const toggle = (ocid: string) => onPick(set.has(ocid) ? picked.filter((x) => x !== ocid) : [...picked, ocid]);
   const allOn = withBoss.length > 0 && withBoss.every((c) => set.has(c.ocid));
   const toggleAll = () => {
-    if (allOn) return onPick(picked.filter((x) => !withBoss.some((c) => c.ocid === x)));
+    if (allOn) {
+      const off = new Set(withBoss.map((c) => c.ocid));
+      return onPick(picked.filter((x) => !off.has(x)));
+    }
     const add = withBoss.filter((c) => !set.has(c.ocid)).map((c) => c.ocid);
     onPick([...new Set([...picked, ...add])].slice(0, MAX_PICKED));
   };
@@ -116,7 +130,7 @@ export function Picker({
         </div>
         <div className="grid gap-2 sm:grid-cols-[repeat(auto-fill,minmax(250px,1fr))]">
           {accounts.map((a) => (
-            <div key={a.account} className="flex min-h-[60px] items-center gap-2.5 rounded-xl bg-background px-3 py-2.5">
+            <div key={a.account} className={card}>
               <i aria-hidden="true" className="size-2.5 shrink-0 rounded-full" style={{ background: a.color }} />
               <span className="flex min-w-0 flex-1 flex-col">
                 <b className="truncate text-sm" title={a.label}>{a.label}</b>
@@ -125,11 +139,11 @@ export function Picker({
                 </span>
               </span>
               {a.error && (
-                <button type="button" onClick={onRetry} className="h-[30px] shrink-0 rounded-lg px-2 text-xs font-bold text-primary-text outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50">
+                <button type="button" onClick={onRetry} className={cn(cardBtn, "font-bold text-primary-text")}>
                   다시
                 </button>
               )}
-              <button type="button" onClick={() => onRemove(a.account)} className="h-[30px] shrink-0 rounded-lg px-2 text-xs font-semibold text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50">
+              <button type="button" onClick={() => onRemove(a.account)} className={cn(cardBtn, "font-semibold text-muted-foreground hover:text-foreground")}>
                 빼기
               </button>
             </div>
@@ -137,7 +151,7 @@ export function Picker({
           <button
             type="button"
             onClick={onAdd}
-            className="flex min-h-[60px] items-center justify-center gap-2 rounded-xl text-[13px] font-bold text-primary-text shadow-[inset_0_0_0_1.5px_var(--border)] outline-none hover:bg-primary/14 hover:shadow-[inset_0_0_0_1.5px_var(--primary)] focus-visible:ring-3 focus-visible:ring-ring/50"
+            className={cn("flex min-h-[60px] items-center justify-center gap-2 rounded-xl text-[13px] font-bold text-primary-text shadow-[inset_0_0_0_1.5px_var(--border)] hover:bg-primary/14 hover:shadow-[inset_0_0_0_1.5px_var(--primary)]", focus)}
           >
             <Plus className="size-4" strokeWidth={2.4} aria-hidden="true" />
             API 키 추가
@@ -171,13 +185,13 @@ export function Picker({
             </span>
           ) : (
             withBoss.length > 0 && (
-              <button type="button" onClick={toggleAll} className="h-8 rounded-lg px-1.5 text-[13px] font-bold text-primary-text outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+              <button type="button" onClick={toggleAll} className={headBtn}>
                 {allOn ? "모두 빼기" : "모두 고르기"}
               </button>
             )
           )}
         </div>
-        <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-4">
+        <div className={charGrid}>
           {withBoss.map((c) => (
             <CharCard key={c.ocid} c={c} on={set.has(c.ocid)} boss={bossCount(c)} color={colorOf(c.account)} onToggle={() => toggle(c.ocid)} disabled={full} />
           ))}
@@ -190,11 +204,11 @@ export function Picker({
           <b className="text-[15px]">
             나머지 <span className="font-num text-muted-foreground">{rest.length}</span>
           </b>
-          <button type="button" onClick={() => setRestOpen((v) => !v)} aria-expanded={showRest} className="h-8 rounded-lg px-1.5 text-[13px] font-bold text-primary-text outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+          <button type="button" onClick={() => setRestOpen((v) => !v)} aria-expanded={showRest} className={headBtn}>
             {showRest ? "접기" : "펼치기"}
           </button>
         </div>
-        <Reveal open={showRest} className="mt-2.5 grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-4">
+        <Reveal open={showRest} className={cn("mt-2.5", charGrid)}>
             {rest.map((c) => (
               <CharCard key={c.ocid} c={c} on={set.has(c.ocid)} color={colorOf(c.account)} onToggle={() => toggle(c.ocid)} disabled={full} />
             ))}
@@ -210,7 +224,7 @@ export function Picker({
           type="button"
           onClick={onDone}
           disabled={!picked.length}
-          className="inline-flex h-11 shrink-0 items-center gap-2 rounded-[10px] bg-primary px-[18px] text-sm font-bold text-primary-foreground outline-none hover:bg-primary/85 focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
+          className={cn("inline-flex h-11 shrink-0 items-center gap-2 rounded-[10px] bg-primary px-[18px] text-sm font-bold text-primary-foreground hover:bg-primary/85 disabled:opacity-50", focus)}
         >
           보스 수익 보기
           <ArrowRight className="size-4" strokeWidth={2.2} aria-hidden="true" />

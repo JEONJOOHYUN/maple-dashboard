@@ -1,6 +1,6 @@
 // Boss revenue arithmetic, kept apart from the screen so it can be tested.
 import { evenMemberShare } from "../boss-split/boss-split-math.ts";
-import { BOXES, CATEGORIES, CRYSTAL, DIFFICULTY, DROPS, ITEMS, MATERIALS, PER_BOX, isBox, maxParty, type BoxId, type Category, type Drop, type ItemId } from "./data.ts";
+import { BOXES, CATEGORIES, CRYSTAL, DIFFICULTY, DROPS, ITEMS, MATERIALS, PER_BOX, dropCategory, isBox, maxParty, type BoxId, type Category, type Drop, type ItemId } from "./data.ts";
 
 /** One row of the scheduler's `boss_contents`. */
 export type SchedulerBoss = { content_name?: string; difficulty?: string; cycle?: string; list_order_no?: number; registration_flag?: string; complete_flag?: string };
@@ -15,9 +15,17 @@ export const bossKey = (boss: string, diff: string) => `${boss}|${diff}`;
  * The bosses to show for one character: every cleared weekly / monthly boss, and every registered one not cleared yet.
  * Daily bosses are left out. The scheduler's own order (easy bosses first) is kept. A boss cleared at one difficulty
  * hides its other difficulties: a boss is cleared once a week (registered normal, cleared hard = hard only).
+ * Worked out once per scheduler answer (every screen asks for the same one many times); do not change what it returns.
  */
 export function bossRows(state: SchedulerState | null | undefined): BossRow[] {
-  const rows = (state?.boss_contents ?? [])
+  if (!state) return [];
+  let rows = rowsOf.get(state);
+  if (!rows) rowsOf.set(state, (rows = readRows(state)));
+  return rows;
+}
+const rowsOf = new WeakMap<SchedulerState, BossRow[]>();
+function readRows(state: SchedulerState): BossRow[] {
+  const rows = (state.boss_contents ?? [])
     .filter((b) => (b.cycle === "bossWeekly" || b.cycle === "bossMonthly") && b.content_name && b.difficulty)
     .filter((b) => b.complete_flag === "true" || b.registration_flag === "true")
     .sort((a, b) => (a.list_order_no ?? 0) - (b.list_order_no ?? 0));
@@ -64,7 +72,7 @@ export type Cell =
 export function cellsOf(ocid: string, key: string, marks: Marks): Cell[] {
   const drops: Drop[] = DROPS[key] ?? [];
   return CATEGORIES.map(({ cat }) => {
-    const d = drops.find((x) => (isBox(x) ? BOXES[x].cat : ITEMS[x].cat) === cat);
+    const d = drops.find((x) => dropCategory(x) === cat);
     if (!d) return { cat, kind: "none" };
     const m = marks[markKey(ocid, key, cat)];
     if (isBox(d)) {
@@ -92,7 +100,7 @@ export function rewardOf(cells: Cell[], key: string, prices: Prices, withMateria
     if (c.kind === "item" && c.on) drops += priceOf(c.id, prices);
     if (c.kind === "box" && c.got) drops += priceOf(c.got, prices);
   }
-  return evenMemberShare(drops, party, feePercent) +(withMaterial ? materialValue(key, prices) : 0);
+  return evenMemberShare(drops, party, feePercent) + (withMaterial ? materialValue(key, prices) : 0);
 }
 
 const DAY = 86_400_000;

@@ -13,6 +13,8 @@ import { bossRows, lastWeekDate, monthlyThisWeek, weekId } from "@/lib/revenue/c
 import { MAX_PICKED, SCAN_MIN_LEVEL } from "@/lib/revenue/data";
 import { useNow } from "@/lib/use-now";
 import { useStored } from "@/lib/use-stored";
+import { cn } from "@/lib/utils";
+import { focus } from "@/components/revenue/styles";
 
 const ERRORS: Record<ApiErrorKind, string> = {
   badKey: "API 키가 올바르지 않음 → 빼고 다시 추가",
@@ -150,7 +152,7 @@ export function RevenueApp() {
               <button
                 type="button"
                 onClick={() => setView("pick")}
-                className="inline-flex h-9 items-center gap-1.5 tile-sm px-3.5 text-[13px] font-bold outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
+                className={cn("inline-flex h-9 items-center gap-1.5 tile-sm px-3.5 text-[13px] font-bold hover:bg-muted", focus)}
               >
                 <Users className="size-[15px]" aria-hidden="true" />
                 캐릭터 <span className="font-num">{pickedChars.length}</span>명
@@ -162,7 +164,7 @@ export function RevenueApp() {
       {!ready ? null : current === "keys" ? (
         <div className="flex flex-col gap-2">
           {adding && active.length > 0 && (
-            <button type="button" onClick={() => setAdding(false)} className="self-start px-1 text-[13px] font-semibold text-primary-text outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50">
+            <button type="button" onClick={() => setAdding(false)} className={cn("self-start px-1 text-[13px] font-semibold text-primary-text hover:underline", focus)}>
               ← 돌아가기
             </button>
           )}
@@ -188,7 +190,7 @@ export function RevenueApp() {
                 <span>
                   {v.label} · {v.error}
                 </span>
-                <button type="button" onClick={retryAccounts} className="h-8 shrink-0 rounded-lg px-2.5 font-bold outline-none hover:bg-destructive/10 focus-visible:ring-3 focus-visible:ring-ring/50">
+                <button type="button" onClick={retryAccounts} className={cn("h-8 shrink-0 rounded-lg px-2.5 font-bold hover:bg-destructive/10", focus)}>
                   다시
                 </button>
               </div>

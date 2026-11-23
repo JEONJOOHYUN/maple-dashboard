@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useRef, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight, Pencil, RotateCw, X } from "lucide-react";
 import { NumberField, parseNum } from "@/components/ev/ui";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -33,6 +33,7 @@ import {
 import { BOXES, CATEGORIES, DROPS, ITEMS, MATERIALS, iconSrc, isBox, item, maxParty, type Icon, type ItemId } from "@/lib/revenue/data";
 import { useStored } from "@/lib/use-stored";
 import { cn } from "@/lib/utils";
+import { chip, focus, hoverRing, openRing, pickedRing } from "@/components/revenue/styles";
 import type { Char } from "@/components/revenue/use-data";
 
 const won = (meso: number) => koreanUnits(meso);
@@ -44,7 +45,15 @@ const DIFF_STYLE: Record<string, { background: string; color: string }> = {
   카오스: { background: "linear-gradient(#333333, #222233)", color: "#ffe1be" },
   익스트림: { background: "#09090b", color: "#da1b1b" },
 };
-const focus = "outline-none focus-visible:ring-3 focus-visible:ring-ring/50";
+const mutedChip = cn(chip, "bg-muted text-muted-foreground");
+
+/** Every item that can be counted, with where it comes from, for the price list (data only: built once). */
+const PRICE_ITEMS = (Object.keys(ITEMS) as ItemId[]).map((id) => {
+  const from = new Set<string>();
+  for (const [key, drops] of Object.entries(DROPS)) for (const d of drops) if (d === id || (isBox(d) && (BOXES[d].opts as string[]).includes(id))) from.add(key.split("|")[0]);
+  const mat = Object.values(MATERIALS).find((m) => m.box === id);
+  return { id, from: ITEMS[id].cat === "ring" ? "보스 반지 상자에서" : [...from].join(" · ") + (mat ? ` · ${mat.name} 10개 = 1상자` : "") };
+});
 
 function ItemImg({ icon, className }: { icon: Icon; className?: string }) {
   // eslint-disable-next-line @next/next/no-img-element -- tiny item pictures (ours or NEXON's icon host), shown as is
@@ -82,16 +91,26 @@ function Pick({ trigger, label, className, children, width }: { trigger: ReactNo
   );
 }
 
-/** 1 … cap: the party size of one boss. */
-function PartyPills({ value, cap, onPick }: { value: number; cap: number; onPick: (n: number) => void }) {
+/** A row of number buttons, the chosen one filled: party size, auction fee. */
+function Segmented({ options, value, onPick, size, text = String, label }: { options: readonly number[]; value: number; onPick: (n: number) => void; size: string; text?: (n: number) => string; label?: (n: number) => string }) {
   return (
     <div className="flex w-max gap-[3px] rounded-[10px] bg-muted p-[3px]">
-      {Array.from({ length: cap }, (_, i) => i + 1).map((n) => (
-        <button key={n} type="button" aria-label={`${n}명`} aria-pressed={n === value} onClick={() => onPick(n)} className={cn("size-8 rounded-[7px] font-num text-sm", focus, n === value ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>
-          {n}
+      {options.map((n) => (
+        <button key={n} type="button" aria-label={label?.(n)} aria-pressed={n === value} onClick={() => onPick(n)} className={cn("rounded-[7px] font-num text-sm", size, focus, n === value ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>
+          {text(n)}
         </button>
       ))}
     </div>
+  );
+}
+
+/** The party size popover of one boss: 1 … its cap. */
+function PartyChoice({ r, onPick }: { r: Row; onPick: (n: number) => void }) {
+  return (
+    <>
+      <span className="px-0.5 text-xs text-muted-foreground">파티원 · 최대 {r.cap}인</span>
+      <Segmented options={Array.from({ length: r.cap }, (_, i) => i + 1)} value={r.party} onPick={onPick} size="size-8" label={(n) => `${n}명`} />
+    </>
   );
 }
 
@@ -188,19 +207,12 @@ export function Board({
   const leftSum = views.reduce((a, v) => a + v.leftSum, 0);
   const leftCount = views.reduce((a, v) => a + v.left.length, 0);
   const weeklyDone = views.reduce((a, v) => a + v.weeklyDone, 0);
+  const weeklyLimit = views.reduce((a, v) => a + v.limit, 0);
   const waiting = chars.filter((c) => !(c.ocid in states)).length;
   const failed = chars.filter((c) => states[c.ocid] === null || prev[c.ocid] === null).length;
   const reset = untilReset(now);
   const setP = (ocid: string, r: Row, n: number) => setParty((prev) => withParty(prev, ocid, r.boss, r.diff, n));
   const time = loadedAt ? new Date(loadedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false }) : "";
-
-  // Every item that can be counted, for the price list.
-  const priceItems = (Object.keys(ITEMS) as ItemId[]).map((id) => {
-    const from = new Set<string>();
-    for (const [key, drops] of Object.entries(DROPS)) for (const d of drops) if (d === id || (isBox(d) && (BOXES[d].opts as string[]).includes(id))) from.add(key.split("|")[0]);
-    const mat = Object.values(MATERIALS).find((m) => m.box === id);
-    return { id, from: ITEMS[id].cat === "ring" ? "보스 반지 상자에서" : [...from].join(" · ") + (mat ? ` · ${mat.name} 10개 = 1상자` : "") };
-  });
 
   return (
     <div className="flex flex-col gap-2">
@@ -227,23 +239,23 @@ export function Board({
       {failed > 0 && <p className="px-1 text-[13px] font-semibold text-destructive">{failed}명의 스케줄러를 못 받음 → 새로 고침</p>}
 
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-[1.4fr_1fr_1fr]">
-        <div className="col-span-2 flex flex-col gap-1.5 tile px-4 py-[18px] lg:col-span-1 lg:px-5">
-          <span className="text-[13px] font-semibold text-muted-foreground">이번 주 보스 수익</span>
+        <div className={cn(stat, "col-span-2 lg:col-span-1")}>
+          <span className={statLabel}>이번 주 보스 수익</span>
           <span className="font-num text-[30px] leading-tight text-primary-text lg:text-[34px]">{won(crystal + reward)}</span>
           <span className="text-[13px] text-muted-foreground">
             결정석 <span className="font-num">{won(crystal)}</span> · 보상 <span className="font-num">{won(reward)}</span>
           </span>
         </div>
-        <div className="flex flex-col gap-1.5 tile px-4 py-[18px] lg:px-5">
-          <span className="text-[13px] font-semibold text-muted-foreground">주간 보스</span>
+        <div className={stat}>
+          <span className={statLabel}>주간 보스</span>
           <span className="font-num text-xl lg:text-2xl">
             {weeklyDone}
-            <span className="text-[0.7em] text-muted-foreground"> / {chars.length * 12}</span>
+            <span className="text-[0.7em] text-muted-foreground"> / {weeklyLimit}</span>
           </span>
           <span className="text-[13px] text-muted-foreground">캐릭터당 주 12마리</span>
         </div>
-        <div className="flex flex-col gap-1.5 tile px-4 py-[18px] lg:px-5">
-          <span className="text-[13px] font-semibold text-muted-foreground">남은 보스까지 잡으면</span>
+        <div className={stat}>
+          <span className={statLabel}>남은 보스까지 잡으면</span>
           <span className="font-num text-xl lg:text-2xl">{won(crystal + reward + leftSum)}</span>
           <span className="text-[13px] text-muted-foreground">
             +{won(leftSum)} · {leftCount}마리
@@ -265,13 +277,7 @@ export function Board({
             <div className="flex min-h-11 items-center justify-between gap-3 pb-2">
               <div className="flex items-center gap-2.5" role="group" aria-label="경매장 수수료">
                 <span className="text-[13px] font-semibold">경매장 수수료</span>
-                <div className="flex gap-[3px] rounded-[10px] bg-muted p-[3px]">
-                  {AUCTION_FEE_OPTIONS.map((n) => (
-                    <button key={n} type="button" aria-pressed={n === fee} onClick={() => setFee(n)} className={cn("h-8 rounded-[7px] px-3 font-num text-sm", focus, n === fee ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>
-                      {n}%
-                    </button>
-                  ))}
-                </div>
+                <Segmented options={AUCTION_FEE_OPTIONS} value={fee} onPick={setFee} size="h-8 px-3" text={(n) => `${n}%`} />
               </div>
               {changed > 0 && (
                 <button type="button" onClick={() => setPriceText({})} className={cn("text-[13px] font-bold text-primary-text", focus)}>
@@ -280,7 +286,7 @@ export function Board({
               )}
             </div>
             <div className="grid gap-x-7 lg:grid-cols-2">
-              {priceItems.map(({ id, from }) => (
+              {PRICE_ITEMS.map(({ id, from }) => (
                 <label key={id} className="grid min-h-[54px] grid-cols-[30px_minmax(0,1fr)_100px] items-center gap-2.5 border-t border-border">
                   <ItemImg icon={ITEMS[id].icon} className="size-[30px]" />
                   <span className="flex min-w-0 flex-col">
@@ -325,7 +331,7 @@ export function Board({
                   {v.left.map((r) => (
                     <Pick
                       key={r.key}
-                      className={cn("flex w-full flex-col items-start gap-px rounded-xl bg-background px-3 pt-[9px] pb-2.5 text-left hover:shadow-[inset_0_0_0_1px_var(--input)] data-[popup-open]:shadow-[inset_0_0_0_2px_var(--primary)]", focus)}
+                      className={cn("flex w-full flex-col items-start gap-px rounded-xl bg-background px-3 pt-[9px] pb-2.5 text-left", hoverRing, openRing, focus)}
                       label={`${r.boss} ${r.diff} ${r.party}인, 파티원 고치기`}
                       trigger={
                         <>
@@ -340,12 +346,7 @@ export function Board({
                         </>
                       }
                     >
-                      {(close) => (
-                        <>
-                          <span className="px-0.5 text-xs text-muted-foreground">파티원 · 최대 {r.cap}인</span>
-                          <PartyPills value={r.party} cap={r.cap} onPick={(n) => (setP(v.c.ocid, r, n), close())} />
-                        </>
-                      )}
+                      {(close) => <PartyChoice r={r} onPick={(n) => (setP(v.c.ocid, r, n), close())} />}
                     </Pick>
                   ))}
                 </div>
@@ -370,8 +371,8 @@ export function Board({
           const yet = v.left.filter((r) => !r.monthly).length;
           const shown = sheetOpen && sheetId === v.c.ocid;
           return (
-            <div key={v.c.ocid}>
               <button
+                key={v.c.ocid}
                 type="button"
                 ref={(el) => {
                   if (el) rowRefs.current.set(v.c.ocid, el);
@@ -407,7 +408,6 @@ export function Board({
                 <span className="text-right font-num text-base lg:text-lg">{v.state === undefined ? <Spinner /> : <Digits>{won(v.crystal + v.reward)}</Digits>}</span>
                 <ChevronRight className="size-[18px] text-muted-foreground" aria-hidden="true" />
               </button>
-            </div>
           );
         })}
       </section>
@@ -486,25 +486,27 @@ export function Board({
   );
 }
 
+const stat = "flex flex-col gap-1.5 tile px-4 py-[18px] lg:px-5";
+const statLabel = "text-[13px] font-semibold text-muted-foreground";
 const sheetIcon = cn("grid size-10 place-items-center rounded-[10px] text-muted-foreground hover:bg-muted hover:text-foreground", focus);
 /**
  * The sheet's table from 672px of room (wide enough for the boss name): crystal and drops share one money column so it
  * fits the 720px sheet. Below that each boss takes two lines.
  */
 const doneCols = "@2xl:min-h-[52px] @2xl:grid-cols-[minmax(0,1fr)_64px_repeat(6,40px)_112px] @2xl:gap-1.5 @2xl:px-3";
+const doneRow = (zebra: boolean) => cn("grid grid-cols-6 items-center gap-x-1 gap-y-2 rounded-[10px] px-2.5 py-3 @2xl:py-1.5", doneCols, zebra && "bg-background");
 
 function DoneRow({ r, zebra, withMat, prices, onParty, onMark }: { r: Row; zebra: boolean; withMat: boolean; prices: Prices; onParty: (n: number) => void; onMark: (cat: Cell["cat"], val: string | true | undefined) => void }) {
-  const chip = "inline-flex h-5 shrink-0 items-center rounded-full bg-muted px-[7px] pt-0.5 text-[11px] font-bold whitespace-nowrap";
   if (r.earlier)
     return (
-      <div className={cn("grid grid-cols-6 items-center gap-x-1 gap-y-2 rounded-[10px] px-2.5 py-3 @2xl:py-1.5", doneCols, zebra && "bg-background")}>
+      <div className={doneRow(zebra)}>
         {/* No party or drop cells here, so the name may take their room; chips wrap before the name is cut. */}
         <span className="col-span-4 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 @2xl:col-span-8">
           <span className="truncate font-semibold" title={r.boss}>{r.boss}</span>
           <span className={chip} style={DIFF_STYLE[r.diff]}>
             {r.diff}
           </span>
-          <span className={cn(chip, "text-muted-foreground")}>이번 달 잡음</span>
+          <span className={mutedChip}>이번 달 잡음</span>
         </span>
         <span className="col-span-2 text-right text-xs text-muted-foreground @2xl:col-span-1 @2xl:col-start-9 @2xl:text-[13px]">지난 주 수익</span>
       </div>
@@ -512,18 +514,18 @@ function DoneRow({ r, zebra, withMat, prices, onParty, onMark }: { r: Row; zebra
   const mat = MATERIALS[r.key];
   const hasCells = r.cells.some((c) => c.kind !== "none");
   return (
-    <div className={cn("grid grid-cols-6 items-center gap-x-1 gap-y-2 rounded-[10px] px-2.5 py-3 @2xl:py-1.5", doneCols, zebra && "bg-background")}>
+    <div className={doneRow(zebra)}>
       <span className="col-span-4 flex min-w-0 flex-col items-start gap-0.5 @2xl:col-span-1">
         <span className="flex max-w-full items-center gap-2">
           <span className="truncate font-semibold" title={r.boss}>{r.boss}</span>
-          <span className="inline-flex h-5 shrink-0 items-center rounded-full px-[7px] pt-0.5 text-[11px] font-bold whitespace-nowrap" style={DIFF_STYLE[r.diff]}>
+          <span className={chip} style={DIFF_STYLE[r.diff]}>
             {r.diff}
           </span>
-          {r.monthly && <span className="inline-flex h-5 shrink-0 items-center rounded-full bg-muted px-[7px] pt-0.5 text-[11px] font-bold whitespace-nowrap text-muted-foreground">월간</span>}
+          {r.monthly && <span className={mutedChip}>월간</span>}
         </span>
         {mat && (
           <span className={cn("text-xs", withMat ? "text-foreground" : "text-muted-foreground")}>
-            {mat.name} {mat.count}개{withMat ? ` · +${won(materialValue(r.key, prices))}` : ""}
+            {mat.name} {mat.count}개{withMat ? ` · +${won(r.material)}` : ""}
           </span>
         )}
         <span className="text-xs text-muted-foreground @2xl:hidden">
@@ -538,7 +540,7 @@ function DoneRow({ r, zebra, withMat, prices, onParty, onMark }: { r: Row; zebra
       </span>
       <span className="col-span-2 self-start justify-self-end @2xl:col-span-1 @2xl:self-center @2xl:justify-self-start">
         <Pick
-          className={cn("inline-flex h-[30px] items-center gap-1 rounded-[9px] bg-muted px-2.5 text-[13px] font-bold hover:shadow-[inset_0_0_0_1px_var(--input)] data-[popup-open]:shadow-[inset_0_0_0_2px_var(--primary)]", focus)}
+          className={cn("inline-flex h-[30px] items-center gap-1 rounded-[9px] bg-muted px-2.5 text-[13px] font-bold", hoverRing, openRing, focus)}
           label={`${r.boss} 파티원 ${r.party}명, 고치기`}
           trigger={
             <>
@@ -547,12 +549,7 @@ function DoneRow({ r, zebra, withMat, prices, onParty, onMark }: { r: Row; zebra
             </>
           }
         >
-          {(close) => (
-            <>
-              <span className="px-0.5 text-xs text-muted-foreground">파티원 · 최대 {r.cap}인</span>
-              <PartyPills value={r.party} cap={r.cap} onPick={(n) => (onParty(n), close())} />
-            </>
-          )}
+          {(close) => <PartyChoice r={r} onPick={(n) => (onParty(n), close())} />}
         </Pick>
       </span>
       {r.cells.map((c) => (
@@ -568,7 +565,7 @@ function DoneRow({ r, zebra, withMat, prices, onParty, onMark }: { r: Row; zebra
   );
 }
 
-const cellBase = "relative grid size-10 place-items-center rounded-xl bg-muted hover:shadow-[inset_0_0_0_1px_var(--input)]";
+const cellBase = cn("relative grid size-10 place-items-center rounded-xl bg-muted", hoverRing, focus);
 
 function CellButton({ cell, boss, prices, onMark }: { cell: Cell; boss: string; prices: Prices; onMark: (val: string | true | undefined) => void }) {
   if (cell.kind === "none")
@@ -580,7 +577,7 @@ function CellButton({ cell, boss, prices, onMark }: { cell: Cell; boss: string; 
   if (cell.kind === "item") {
     const it = ITEMS[cell.id];
     return (
-      <button type="button" aria-pressed={cell.on} aria-label={`${it.name} 먹음`} title={`${it.name} · ${won(priceOf(cell.id, prices))}`} onClick={() => onMark(cell.on ? undefined : true)} className={cn(cellBase, focus, cell.on && "bg-primary/14 shadow-[inset_0_0_0_2px_var(--primary)]")}>
+      <button type="button" aria-pressed={cell.on} aria-label={`${it.name} 먹음`} title={`${it.name} · ${won(priceOf(cell.id, prices))}`} onClick={() => onMark(cell.on ? undefined : true)} className={cn(cellBase, cell.on && pickedRing)}>
         <ItemImg icon={it.icon} className={cn("size-[30px] lg:size-8", !cell.on && "opacity-50 saturate-50")} />
       </button>
     );
@@ -589,7 +586,7 @@ function CellButton({ cell, boss, prices, onMark }: { cell: Cell; boss: string; 
   const got = cell.got ? item(cell.got) : null;
   return (
     <Pick
-      className={cn(cellBase, focus, got && "bg-primary/14 shadow-[inset_0_0_0_2px_var(--primary)]", "data-[popup-open]:shadow-[inset_0_0_0_2px_var(--primary)]")}
+      className={cn(cellBase, got && pickedRing, openRing)}
       label={`${boss} ${box.name}, ${got ? `${got.name} 나옴` : "나온 것 고르기"}`}
       width="w-[248px]"
       trigger={
@@ -610,13 +607,11 @@ function CellButton({ cell, boss, prices, onMark }: { cell: Cell; boss: string; 
         <>
         <span className="px-1.5 py-1 text-xs text-muted-foreground">{box.name} · 나온 것</span>
         {box.opts.map((id) => (
-          <Fragment key={id}>
-            <button type="button" onClick={() => (onMark(id), close())} aria-pressed={cell.got === id} className={cn("grid min-h-10 grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-2 rounded-[9px] px-2 text-left text-[13px] font-semibold hover:bg-muted", focus, cell.got === id && "bg-primary/14 shadow-[inset_0_0_0_1.5px_var(--primary)]")}>
-              <ItemImg icon={ITEMS[id].icon} className="size-7" />
-              <span className="truncate">{ITEMS[id].name}</span>
-              <span className="font-num text-xs text-muted-foreground">{won(priceOf(id, prices))}</span>
-            </button>
-          </Fragment>
+          <button key={id} type="button" onClick={() => (onMark(id), close())} aria-pressed={cell.got === id} className={cn("grid min-h-10 grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-2 rounded-[9px] px-2 text-left text-[13px] font-semibold hover:bg-muted", focus, cell.got === id && "bg-primary/14 shadow-[inset_0_0_0_1.5px_var(--primary)]")}>
+            <ItemImg icon={ITEMS[id].icon} className="size-7" />
+            <span className="truncate">{ITEMS[id].name}</span>
+            <span className="font-num text-xs text-muted-foreground">{won(priceOf(id, prices))}</span>
+          </button>
         ))}
         {cell.got && (
           <button type="button" onClick={() => (onMark(undefined), close())} className={cn("min-h-8 rounded-[9px] text-xs font-semibold text-muted-foreground hover:bg-muted", focus)}>

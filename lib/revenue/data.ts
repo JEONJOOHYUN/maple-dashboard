@@ -1,12 +1,10 @@
 // Boss revenue data: crystal prices, party caps and what each boss gives. Prices move with patches: change them here
-// together with the date. Item defaults the expected-value calculator also has are read from there (one place).
+// together with the date below. Item defaults the expected-value calculator also has are read from there (one place).
+// Checked: 2026-11-23.
 import { STAR_ITEMS } from "../ev/defaults.ts";
-
-export const REVENUE_UPDATED = "2026-11-23";
 
 /** Scheduler difficulty words → the names the game shows. */
 export const DIFFICULTY: Record<string, string> = { easy: "이지", normal: "노멀", hard: "하드", chaos: "카오스", extreme: "익스트림" };
-export const DIFFICULTY_ORDER = ["이지", "노멀", "하드", "카오스", "익스트림"];
 
 /**
  * Sale price of one crystal (meso), by "boss|difficulty". NEXON update notice 2026-09-17; rows that notice leaves out
