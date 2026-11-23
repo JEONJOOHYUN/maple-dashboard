@@ -10,6 +10,9 @@
 // 가져가 다시 메소로 바꾼 뒤 건네야 합니다. 그래서 그 사람 몫에는 메소마켓 수수료가 한 번 더 붙습니다.
 // 수수료는 다른 수수료와 마찬가지로 모두가 비율대로 나눠 부담합니다(최종 분배금이 비율대로 나오게).
 export const MESO_MARKET_FEE_RATE = 0.01;
+/** Auction house fee choices in percent; the first is the default. Boss revenue offers the same ones. */
+export const AUCTION_FEE_OPTIONS = [3, 5] as const;
+export type AuctionFee = (typeof AUCTION_FEE_OPTIONS)[number];
 
 export type SplitShare = {
   ratio: number; // 0~1, 전체 합이 1이어야 함
@@ -47,6 +50,20 @@ export function computeBossSplit(
       deduction: beforeMeso - finalMeso,
     };
   });
+}
+
+/**
+ * What one member gets from drops sold for `grossMeso`, split evenly among `count` on the same server: exactly the
+ * "받는 몫" a member card of the calculator shows (its even percentages, its rounding). Alone, the sale after the fee.
+ * Boss revenue uses this so both pages give the same number.
+ */
+export function evenMemberShare(grossMeso: number, count: number, feePercent: number): number {
+  const n = Math.max(1, Math.round(count));
+  const feeRate = feePercent / 100;
+  const netMeso = grossMeso * (1 - feeRate);
+  if (n === 1) return Math.max(0, Math.round(netMeso));
+  const shares = computeBossSplit(netMeso, Array.from({ length: n }, () => 100 / n / 100), feeRate);
+  return Math.round(shares[n - 1].finalMeso);
 }
 
 /**

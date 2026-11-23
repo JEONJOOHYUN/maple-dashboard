@@ -79,9 +79,9 @@ export const navGroups: NavGroup[] = [
         short: "보스 수익",
         href: "/revenue",
         icon: Gem,
-        card: { title: "보스 수익", description: "파티원별 결정석 수익 · 물욕 · 수익 달력" },
+        card: { title: "보스 수익", description: "이번 주 결정석 · 먹은 보상까지, 파티원 수대로" },
         needs: "API 키",
-        ready: false,
+        ready: true,
       },
       {
         slug: "enhance",

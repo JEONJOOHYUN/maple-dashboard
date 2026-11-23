@@ -133,7 +133,7 @@ export function EnhanceApp() {
         }
       />
       {!ready ? null : !active ? (
-        <KeyGate saved={list} onConnect={connect} onForgetAll={forgetAll} />
+        <KeyGate saved={list} onConnect={connect} onForgetAll={forgetAll} onNamed={(account, name) => setKeys((prev) => withName(prev, account, name))} />
       ) : kind === "potential" ? (
         <PotentialBoard key={active.account} apiKey={active.key} account={active.account} onForget={forget} switcher={switcher} />
       ) : (

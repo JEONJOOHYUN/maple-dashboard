@@ -352,6 +352,57 @@ html.theme-vt-down::view-transition-old(root) {
     translate: -8px 0;
   }
 }
+/* components/ui/sheet.tsx: a side panel comes in from 32px off its edge in 0.3s and leaves by 12px in 0.15s, fading
+   both ways, ease-out (the design skill: an exit is quicker and quieter than an entrance). Transitions between Base UI's
+   starting / ending styles, so closing half-way through opening turns round. No blur: a filter on a panel this big is
+   one more costly layer for no gain. */
+@utility sheet-in {
+  transition:
+    opacity 0.3s ease-out,
+    translate 0.3s ease-out;
+  &[data-starting-style],
+  &[data-ending-style] {
+    opacity: 0;
+  }
+  &[data-ending-style] {
+    transition-duration: 0.15s;
+  }
+  &[data-side="right"][data-starting-style] {
+    translate: 32px 0;
+  }
+  &[data-side="right"][data-ending-style] {
+    translate: 12px 0;
+  }
+  &[data-side="left"][data-starting-style] {
+    translate: -32px 0;
+  }
+  &[data-side="left"][data-ending-style] {
+    translate: -12px 0;
+  }
+  &[data-side="bottom"][data-starting-style] {
+    translate: 0 32px;
+  }
+  &[data-side="bottom"][data-ending-style] {
+    translate: 0 12px;
+  }
+  &[data-side="top"][data-starting-style] {
+    translate: 0 -32px;
+  }
+  &[data-side="top"][data-ending-style] {
+    translate: 0 -12px;
+  }
+}
+/* The dimmed page behind a sheet, on the sheet's clock. */
+@utility fade-in {
+  transition: opacity 0.3s ease-out;
+  &[data-starting-style],
+  &[data-ending-style] {
+    opacity: 0;
+  }
+  &[data-ending-style] {
+    transition-duration: 0.15s;
+  }
+}
 /* A hairline around a picture, pure black or white at 10%, drawn inside so the picture keeps its size. */
 @utility image-line {
   outline: 1px solid var(--image-line);

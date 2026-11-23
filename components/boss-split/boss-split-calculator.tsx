@@ -7,14 +7,13 @@ import { Reveal } from "@/components/ui/reveal";
 import { Spinner } from "@/components/ui/spinner";
 import { SwapLabel, UNSEEN_STILL } from "@/components/ui/swap-icon";
 import { PageHeader } from "@/components/page-header";
-import { MESO_MARKET_FEE_RATE, computeBossSplit, wholeMeso } from "@/lib/boss-split/boss-split-math";
+import { AUCTION_FEE_OPTIONS, MESO_MARKET_FEE_RATE, computeBossSplit, wholeMeso, type AuctionFee } from "@/lib/boss-split/boss-split-math";
 import { formatKoreanMeso, formatNumber } from "@/lib/format";
 import { handleMesoInput } from "@/lib/meso-input";
 import { copyImage as copyImageBlob } from "@/lib/canvas-image";
 import { cn } from "@/lib/utils";
 import { SteadyText } from "@/components/ui/steady-text";
 
-const FEE_OPTIONS = [3, 5] as const;
 const COUNT_OPTIONS = [2, 3, 4, 5, 6] as const;
 const MAX_MEMBERS = 6;
 const DEFAULT_NAMES = ["파티장", "파티원 1", "파티원 2", "파티원 3", "파티원 4", "파티원 5"];
@@ -67,7 +66,7 @@ function evenPercents(count: number): number[] {
 
 export function BossSplitCalculator() {
   const [items, setItems] = useState<Item[]>(() => [createItem()]);
-  const [feePercent, setFeePercent] = useState<(typeof FEE_OPTIONS)[number]>(3);
+  const [feePercent, setFeePercent] = useState<AuctionFee>(AUCTION_FEE_OPTIONS[0]);
   const [count, setCount] = useState(2);
   const [mode, setMode] = useState<"equal" | "custom">("equal");
   const [names, setNames] = useState<string[]>(DEFAULT_NAMES);
@@ -241,7 +240,7 @@ export function BossSplitCalculator() {
         {/* Full-width button rows: each option shares the width, so 2~6 fits one line on a phone. */}
         <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-[minmax(0,2fr)_minmax(0,5fr)]">
           <ChoiceRow label="경매장 수수료" columns="grid-cols-2">
-            {FEE_OPTIONS.map((fee) => (
+            {AUCTION_FEE_OPTIONS.map((fee) => (
               <ChoiceButton key={fee} on={feePercent === fee} onClick={() => setFeePercent(fee)}>
                 {fee}%
               </ChoiceButton>

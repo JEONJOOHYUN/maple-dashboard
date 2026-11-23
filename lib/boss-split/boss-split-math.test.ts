@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { MESO_MARKET_FEE_RATE, computeBossSplit, wholeMeso } from "./boss-split-math.ts";
+import { MESO_MARKET_FEE_RATE, computeBossSplit, evenMemberShare, wholeMeso } from "./boss-split-math.ts";
 
 const near = (a: number, b: number, label: string) => assert.ok(Math.abs(a - b) < 1e-6, `${label}: ${a} vs ${b}`);
 
@@ -68,4 +68,21 @@ test("whole meso: a negative share is no split, never a payout above the net", (
   const net = 1000000000 * 0.97;
   const whole = wholeMeso(net, exactOf(computeBossSplit(net, [-0.1, 1.1], 0.03)));
   assert.deepEqual(whole, [0, 0]);
+});
+
+test("an even member share is what a member card of the calculator shows", () => {
+  // Alone: the sale after the fee.
+  assert.equal(evenMemberShare(3_300_000_000, 1, 3), 3_201_000_000);
+  assert.equal(evenMemberShare(3_300_000_000, 1, 5), 3_135_000_000);
+  // 3 members, 3 %: 33억 x 0.97 / (1 + 2 / 0.97) = 10억 4,540만 (rounded like the card).
+  assert.equal(evenMemberShare(3_300_000_000, 3, 3), Math.round((3_300_000_000 * 0.97) / (1 + 2 / 0.97)));
+  for (const fee of [3, 5]) {
+    for (const n of [2, 3, 4, 5, 6]) {
+      // The calculator: net = gross x (1 - fee), even percentages, a member card shows round(finalMeso).
+      const shares = computeBossSplit(1_234_567_891 * (1 - fee / 100), Array.from({ length: n }, () => 100 / n / 100), fee / 100);
+      for (let i = 1; i < n; i++) assert.equal(evenMemberShare(1_234_567_891, n, fee), Math.round(shares[i].finalMeso));
+    }
+  }
+  assert.equal(evenMemberShare(0, 3, 3), 0);
+  assert.equal(evenMemberShare(0, 1, 3), 0);
 });

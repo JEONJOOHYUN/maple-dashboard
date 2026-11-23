@@ -6,7 +6,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { SwapIcon, SwapLabel } from "@/components/ui/swap-icon";
 import Link from "next/link";
 import { Check, Copy, ExternalLink, KeyRound } from "lucide-react";
-import { ApiError, accountId, createApi, type ApiErrorKind } from "@/lib/enhance/client";
+import { ApiError, accountId, createApi, fetchMainCharacter, type ApiErrorKind } from "@/lib/enhance/client";
 import { keyLabel, type SavedKey } from "@/lib/enhance/keys";
 import { kstDate } from "@/lib/enhance/kst";
 import { hasRecords } from "@/lib/enhance/sync";
@@ -52,7 +52,7 @@ const FILL: { label: string; value: string; copy: boolean }[] = [
   { label: "대표 언어", value: "한국어(ko)", copy: false },
   // The same name as the URL and the description point to (user, 2026-11-12: with the service stage it is our service).
   { label: "서비스명", value: "메이플 대시보드", copy: true },
-  { label: "서비스 설명", value: "메이플 대시보드에서 내 계정의 스타포스 · 잠재능력 강화 기록을 조회하는 용도입니다.", copy: true },
+  { label: "서비스 설명", value: "메이플 대시보드에서 내 계정의 스타포스 · 잠재능력 강화 기록과 주간 보스 현황을 조회하는 용도입니다.", copy: true },
   { label: "개발 환경", value: "Web", copy: false },
   { label: "URL", value: SITE_URL, copy: true },
   // Tags, the image and the screenshots are optional (user registered without them, 2026-11-12): not listed.
@@ -100,8 +100,33 @@ function CopyButton({ label, text }: { label: string; text: string }) {
   );
 }
 
-/** `saved` = the keys remembered in this browser: one click goes back to that account, its records still here. */
-export function KeyGate({ saved, onConnect, onForgetAll }: { saved: SavedKey[]; onConnect: (value: Connected, remember: boolean) => void; onForgetAll: () => void }) {
+/** One small call that tells whether a key works for what the page asks NEXON. */
+const checkHistory = (key: string) => createApi(key).get("history/starforce", { count: "10", date: kstDate(Date.now()) });
+
+/**
+ * `saved` = the keys remembered in this browser: one click goes back to that account, its records still here.
+ * The boss revenue page uses the same gate with its own button words, check and notes.
+ */
+export function KeyGate({
+  saved,
+  onConnect,
+  onForgetAll,
+  onNamed,
+  action = "강화 기록 보기",
+  check = checkHistory,
+  savedHint = "저장된 키 → 기록 그대로",
+  notes = ["키 · 기록 = 이 브라우저에만 저장, 우리 서버로 안 보냄", "키를 발급한 넥슨 계정의 기록만 조회 · 키마다 따로 저장"],
+}: {
+  saved: SavedKey[];
+  onConnect: (value: Connected, remember: boolean) => void;
+  onForgetAll?: () => void;
+  /** A saved key without a name gets its account's highest character (one call each, when the gate shows). */
+  onNamed?: (account: string, name: string) => void;
+  action?: string;
+  check?: (key: string) => Promise<unknown>;
+  savedHint?: string;
+  notes?: string[];
+}) {
   const [text, setText] = useState("");
   // Records can be left here without a remembered key (a key used with "기억" off): the way to delete them shows then too.
   const [left, setLeft] = useState(false);
@@ -113,6 +138,23 @@ export function KeyGate({ saved, onConnect, onForgetAll }: { saved: SavedKey[]; 
       on = false;
     };
   }, []);
+  const unnamed = saved.filter((k) => !k.name).map((k) => `${k.account}:${k.key}`).join(",");
+  useEffect(() => {
+    if (!onNamed || !unnamed) return;
+    const stop = new AbortController();
+    for (const part of unnamed.split(",")) {
+      const at = part.indexOf(":");
+      const account = part.slice(0, at);
+      fetchMainCharacter(createApi(part.slice(at + 1), account), stop.signal)
+        .then((who) => {
+          if (who && !stop.signal.aborted) onNamed(account, who);
+        })
+        .catch(() => {});
+    }
+    return () => stop.abort();
+    // onNamed is a new function each render of the page; the keys are what decide the calls.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unnamed]);
   const [remember, setRemember] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -131,8 +173,7 @@ export function KeyGate({ saved, onConnect, onForgetAll }: { saved: SavedKey[]; 
     setBusy(true);
     setError("");
     try {
-      // One small call tells whether the key works for the history API.
-      await createApi(key).get("history/starforce", { count: "10", date: kstDate(Date.now()) });
+      await check(key);
       onConnect({ key, account: await accountId(key) }, remember);
     } catch (err) {
       setError(ERRORS[err instanceof ApiError ? err.kind : "failed"]);
@@ -145,7 +186,7 @@ export function KeyGate({ saved, onConnect, onForgetAll }: { saved: SavedKey[]; 
       <form onSubmit={submit} className="flex flex-col gap-3.5 tile p-5 lg:p-7">
         {saved.length > 0 && (
           <div className="flex flex-col gap-2 border-b border-border pb-4" data-clarity-mask="true">
-            <span className="text-[13px] text-muted-foreground">저장된 키 → 기록 그대로</span>
+            <span className="text-[13px] text-muted-foreground">{savedHint}</span>
             <div className="flex flex-wrap gap-2">
               {saved.map((k, i) => (
                 <button
@@ -197,7 +238,7 @@ export function KeyGate({ saved, onConnect, onForgetAll }: { saved: SavedKey[]; 
           {/* The spinner hangs to the left of the words: they stay in the middle whether it shows or not. */}
           <span className="relative">
             <SwapIcon className="absolute top-1/2 right-full mr-2 -translate-y-1/2" on={busy} from={<span className="size-4" />} to={<Spinner />} />
-            강화 기록 보기
+            {action}
           </span>
         </button>
         {!!error && (
@@ -208,22 +249,23 @@ export function KeyGate({ saved, onConnect, onForgetAll }: { saved: SavedKey[]; 
         </div>
         )}
         <ul className="flex list-disc flex-col gap-1 pl-[18px] text-xs leading-relaxed text-muted-foreground">
-          <li>키 · 기록 = 이 브라우저에만 저장, 우리 서버로 안 보냄</li>
-          <li>키를 발급한 넥슨 계정의 기록만 조회 · 키마다 따로 저장</li>
+          {notes.map((n) => (
+            <li key={n}>{n}</li>
+          ))}
           <li>
             <Link href="/privacy" className="underline underline-offset-2 hover:text-foreground">
               개인정보처리방침
             </Link>
           </li>
         </ul>
-        {(saved.length > 0 || left) && (
+        {onForgetAll && (saved.length > 0 || left) && (
           <button
             type="button"
             // Nor a wipe: the key being checked would be saved again right after it.
             disabled={busy}
             onClick={() => {
               if (!sure) return setSure(true);
-              onForgetAll();
+              onForgetAll?.();
               setLeft(false);
               setSure(false);
             }}
