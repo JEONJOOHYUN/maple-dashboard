@@ -495,7 +495,8 @@ function DoneRow({ r, zebra, withMat, prices, onParty, onMark }: { r: Row; zebra
   if (r.earlier)
     return (
       <div className={cn("grid grid-cols-6 items-center gap-x-1 gap-y-2 rounded-[10px] px-2.5 py-3 @2xl:py-1.5", doneCols, zebra && "bg-background")}>
-        <span className="col-span-4 flex min-w-0 items-center gap-2 @2xl:col-span-1">
+        {/* No party or drop cells here, so the name may take their room; chips wrap before the name is cut. */}
+        <span className="col-span-4 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 @2xl:col-span-8">
           <span className="truncate font-semibold" title={r.boss}>{r.boss}</span>
           <span className={chip} style={{ color: DIFF_COLOR[r.diff] }}>
             {r.diff}
