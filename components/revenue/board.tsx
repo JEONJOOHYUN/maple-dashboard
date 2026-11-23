@@ -36,12 +36,13 @@ import { cn } from "@/lib/utils";
 import type { Char } from "@/components/revenue/use-data";
 
 const won = (meso: number) => koreanUnits(meso);
-const DIFF_COLOR: Record<string, string> = {
-  이지: "oklch(0.62 0.02 85)",
-  노멀: "oklch(0.62 0.11 200)",
-  하드: "oklch(0.62 0.20 25)",
-  카오스: "oklch(0.60 0.16 300)",
-  익스트림: "oklch(0.62 0.19 350)",
+/** In-game difficulty badge colors (matches NEXON's boss difficulty banners), same in both themes: players read these at a glance. */
+const DIFF_STYLE: Record<string, { background: string; color: string }> = {
+  이지: { background: "linear-gradient(#888888, #666666)", color: "#ffffff" },
+  노멀: { background: "linear-gradient(#51b2cc, #319dbc)", color: "#ffffff" },
+  하드: { background: "linear-gradient(#bb4466, #aa3355)", color: "#ffffff" },
+  카오스: { background: "linear-gradient(#333333, #222233)", color: "#ffe1be" },
+  익스트림: { background: "#09090b", color: "#da1b1b" },
 };
 const focus = "outline-none focus-visible:ring-3 focus-visible:ring-ring/50";
 
@@ -330,8 +331,10 @@ export function Board({
                         <>
                         <span className="max-w-full truncate text-[13px] font-bold" title={r.boss}>{r.boss}</span>
                         <span className="flex items-center gap-[5px] text-xs text-muted-foreground">
-                          <i aria-hidden="true" className="size-1.5 rounded-full" style={{ background: DIFF_COLOR[r.diff] }} />
-                          {r.diff} · <b className="text-foreground">{r.party}인</b>
+                          <span className="inline-flex h-4 items-center rounded px-1 pt-px text-[11px] font-bold" style={DIFF_STYLE[r.diff]}>
+                            {r.diff}
+                          </span>
+                          <b className="text-foreground">{r.party}인</b>
                         </span>
                           <span className="mt-[3px] font-num text-[15px]">{r.price ? won(r.share) : "가격 미정"}</span>
                         </>
@@ -498,7 +501,7 @@ function DoneRow({ r, zebra, withMat, prices, onParty, onMark }: { r: Row; zebra
         {/* No party or drop cells here, so the name may take their room; chips wrap before the name is cut. */}
         <span className="col-span-4 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 @2xl:col-span-8">
           <span className="truncate font-semibold" title={r.boss}>{r.boss}</span>
-          <span className={chip} style={{ color: DIFF_COLOR[r.diff] }}>
+          <span className={chip} style={DIFF_STYLE[r.diff]}>
             {r.diff}
           </span>
           <span className={cn(chip, "text-muted-foreground")}>이번 달 잡음</span>
@@ -513,7 +516,7 @@ function DoneRow({ r, zebra, withMat, prices, onParty, onMark }: { r: Row; zebra
       <span className="col-span-4 flex min-w-0 flex-col items-start gap-0.5 @2xl:col-span-1">
         <span className="flex max-w-full items-center gap-2">
           <span className="truncate font-semibold" title={r.boss}>{r.boss}</span>
-          <span className="inline-flex h-5 shrink-0 items-center rounded-full bg-muted px-[7px] pt-0.5 text-[11px] font-bold whitespace-nowrap" style={{ color: DIFF_COLOR[r.diff] }}>
+          <span className="inline-flex h-5 shrink-0 items-center rounded-full px-[7px] pt-0.5 text-[11px] font-bold whitespace-nowrap" style={DIFF_STYLE[r.diff]}>
             {r.diff}
           </span>
           {r.monthly && <span className="inline-flex h-5 shrink-0 items-center rounded-full bg-muted px-[7px] pt-0.5 text-[11px] font-bold whitespace-nowrap text-muted-foreground">월간</span>}
