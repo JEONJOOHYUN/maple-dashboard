@@ -32,7 +32,9 @@ export function SiteHeader() {
 
       {/* Mobile: group tabs, then the tools inside the chosen group. */}
       <nav aria-label="메뉴" className="flex w-full flex-col gap-2 lg:hidden">
-        <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pt-1 [scrollbar-width:none]">
+        {/* A sideways scroll row cuts top and bottom too: room inside it for the tabs' shadow (6px under them) and
+            focus ring, given back outside by the negative margin so the rows stay where they were. */}
+        <div className="-mx-4 -mb-1.5 flex gap-1.5 overflow-x-auto px-4 pt-1 pb-1.5 [scrollbar-width:none]">
           <GroupTab href="/" label="홈" active={isHome} />
           {navGroups.map((group) => (
             <GroupTab
@@ -44,7 +46,7 @@ export function SiteHeader() {
           ))}
         </div>
         {active && active.group.items.length > 1 && (
-          <div className="-mx-4 flex gap-2 overflow-x-auto px-4 [scrollbar-width:none]">
+          <div className="-mx-4 -my-1 flex gap-2 overflow-x-auto px-4 py-1 [scrollbar-width:none]">
             {active.group.items.map((item) => {
               const on = item.slug === active.item.slug;
               return (
