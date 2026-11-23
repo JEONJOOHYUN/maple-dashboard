@@ -94,7 +94,7 @@ function PartyPills({ value, cap, onPick }: { value: number; cap: number; onPick
   );
 }
 
-type Row = { boss: string; diff: string; key: string; monthly: boolean; done: boolean; price: number | null; party: number; cap: number; share: number; cells: Cell[]; reward: number; material: number };
+type Row = { boss: string; diff: string; key: string; monthly: boolean; done: boolean; /** A monthly boss cleared before this week: shown, not counted. */ earlier: boolean; price: number | null; party: number; cap: number; share: number; cells: Cell[]; reward: number; material: number };
 type CharView = { c: Char; state: SchedulerState | null | undefined; done: Row[]; left: Row[]; crystal: number; reward: number; leftSum: number; weeklyDone: number; limit: number };
 
 /** The boss revenue of the picked characters this week. */
@@ -150,15 +150,20 @@ export function Board({
     () =>
       chars.map((c) => {
         const state = states[c.ocid];
-        // A monthly boss cleared before this week (or not known yet) is not this week's.
-        const rows: Row[] = bossRows(state).filter((r) => !(r.monthly && r.done) || monthlyThisWeek(r.boss, prev[c.ocid], now) === true).map((r) => {
+        // A monthly boss cleared before this week still shows (user 2026-11-24), at the end and without money: its
+        // crystal and drops belong to the week it was cleared. Not known yet (last week's scheduler not here): left out.
+        const rows: Row[] = bossRows(state).flatMap((r) => {
+          const thisWeek = r.monthly && r.done ? monthlyThisWeek(r.boss, prev[c.ocid], now) : true;
+          if (thisWeek === null) return [];
+          const earlier = !thisWeek;
           const price = crystalPrice(r.key);
           const p = partyFor(party, c.ocid, r.boss, r.diff);
           const cells = cellsOf(c.ocid, r.key, marks);
-          const material = withMat ? materialValue(r.key, prices) : 0;
-          return { ...r, price, party: p, cap: maxParty(r.boss), share: price ? share(price, p) : 0, cells, reward: r.done ? rewardOf(cells, r.key, prices, withMat, p, fee) : 0, material };
+          const material = withMat && !earlier ? materialValue(r.key, prices) : 0;
+          const counted = !earlier;
+          return [{ ...r, earlier, price, party: p, cap: maxParty(r.boss), share: price && counted ? share(price, p) : 0, cells, reward: r.done && counted ? rewardOf(cells, r.key, prices, withMat, p, fee) : 0, material }];
         });
-        const done = rows.filter((r) => r.done);
+        const done = rows.filter((r) => r.done).sort((a, b) => Number(a.earlier) - Number(b.earlier));
         const left = rows.filter((r) => !r.done).sort((a, b) => b.share - a.share);
         return {
           c,
@@ -486,6 +491,20 @@ const sheetIcon = cn("grid size-10 place-items-center rounded-[10px] text-muted-
 const doneCols = "@2xl:min-h-[52px] @2xl:grid-cols-[minmax(0,1fr)_64px_repeat(6,40px)_112px] @2xl:gap-1.5 @2xl:px-3";
 
 function DoneRow({ r, zebra, withMat, prices, onParty, onMark }: { r: Row; zebra: boolean; withMat: boolean; prices: Prices; onParty: (n: number) => void; onMark: (cat: Cell["cat"], val: string | true | undefined) => void }) {
+  const chip = "inline-flex h-5 shrink-0 items-center rounded-full bg-muted px-[7px] pt-0.5 text-[11px] font-bold whitespace-nowrap";
+  if (r.earlier)
+    return (
+      <div className={cn("grid grid-cols-6 items-center gap-x-1 gap-y-2 rounded-[10px] px-2.5 py-3 @2xl:py-1.5", doneCols, zebra && "bg-background")}>
+        <span className="col-span-4 flex min-w-0 items-center gap-2 @2xl:col-span-1">
+          <span className="truncate font-semibold" title={r.boss}>{r.boss}</span>
+          <span className={chip} style={{ color: DIFF_COLOR[r.diff] }}>
+            {r.diff}
+          </span>
+          <span className={cn(chip, "text-muted-foreground")}>이번 달 잡음</span>
+        </span>
+        <span className="col-span-2 text-right text-xs text-muted-foreground @2xl:col-span-1 @2xl:col-start-9 @2xl:text-[13px]">지난 주 수익</span>
+      </div>
+    );
   const mat = MATERIALS[r.key];
   const hasCells = r.cells.some((c) => c.kind !== "none");
   return (
