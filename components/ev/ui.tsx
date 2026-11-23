@@ -174,10 +174,13 @@ export function NumberField({
   className,
   inputClassName,
   disabled,
+  id,
 }: {
   value: string;
   onChange: (text: string) => void;
+  /** The field's name for a screen reader. Words shown beside it go in a <label> around both (or one with `id`). */
   label: string;
+  id?: string;
   suffix?: string;
   decimal?: boolean;
   placeholder?: string;
@@ -202,6 +205,7 @@ export function NumberField({
     <span className={cn("inline-flex items-center gap-1.5 text-[13px] text-muted-foreground", className)}>
       <input
         ref={ref}
+        id={id}
         aria-label={label}
         inputMode={decimal ? "decimal" : "numeric"}
         disabled={disabled}

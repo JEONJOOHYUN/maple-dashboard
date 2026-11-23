@@ -49,7 +49,7 @@ export function SoulTab() {
             options={[1, 2, 3, 4].map((i) => ({ id: String(i), label: `${i}단계`, disabled: i <= now }))}
           />
         </div>
-        <div className="flex items-center justify-between gap-3">
+        <label className="flex items-center justify-between gap-3">
           <span className="flex flex-col gap-0.5">
             <b className="text-[13px]">이미 실패한 횟수</b>
             <span className="text-[11px] text-pretty text-muted-foreground">
@@ -57,7 +57,7 @@ export function SoulTab() {
             </span>
           </span>
           <NumberField label="이미 실패한 횟수" value={failText} onChange={setFailText} suffix="번" inputClassName="w-16" />
-        </div>
+        </label>
         <div className="flex flex-col gap-1.5">
           <Label>에테르 시세 (1개, 억 메소)</Label>
           <div className="grid grid-cols-4 gap-2">

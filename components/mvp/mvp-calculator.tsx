@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState, type ReactNode } from "react";
+import { Fragment, useRef, useState, type ReactNode } from "react";
 import { ChevronDown, X } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { Chip, NumberField, Segment, parseNum } from "@/components/ev/ui";
@@ -28,6 +28,7 @@ import { useNow } from "@/lib/use-now";
 import { useStored } from "@/lib/use-stored";
 import { ZEBRA_HEAD, ZEBRA_ROW, ZEBRA_SCROLL, ZEBRA_TABLE } from "@/components/ui/zebra";
 import { Reveal, useReveal } from "@/components/ui/reveal";
+import { LEAVE_MS, useSelfGlide } from "@/components/ui/glide";
 import { Digits } from "@/components/ui/digits";
 import { SwapLabel } from "@/components/ui/swap-icon";
 import { cn } from "@/lib/utils";
@@ -174,7 +175,10 @@ export function MvpCalculator() {
   const [shopDraft, setShopDraft] = useState({ name: "", credit: "", price: "" });
 
   const s = upgrade(settings);
-  const boutique = useReveal(s.boutiqueShow);
+  const boutique = useReveal(s.boutiqueShow, LEAVE_MS);
+  // A row cannot be given a height: the box inside its one cell is, and the row follows it.
+  const boutiqueBox = useRef<HTMLDivElement>(null);
+  useSelfGlide(boutiqueBox, s.boutiqueShow);
   const update = (patch: Partial<Settings>) => setSettings((prev) => ({ ...upgrade(prev), ...patch }));
 
   if (now === 0) {
@@ -318,15 +322,15 @@ export function MvpCalculator() {
             <TierDot tier={base.now} />
             {base.now?.name ?? "등급 없음"}
           </b>
-          <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+          <label className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
             13주 합계
             {/* 16px on a phone (iOS zooms the page in on a field with smaller text), and wider there so eight digits still fit. */}
             <NumberField label="지금 13주 합계 (원)" value={s.sum13} onChange={(t) => update({ sum13: t })} suffix="원" inputClassName="h-7 w-28 text-base sm:w-24 sm:text-xs" />
-          </span>
-          <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+          </label>
+          <label className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
             다음 주에 빠짐
             <NumberField label="다음 목요일에 빠지는 주의 금액 (원)" value={s.drop} onChange={(t) => update({ drop: t })} suffix="원" inputClassName="h-7 w-28 text-base sm:w-24 sm:text-xs" />
-          </span>
+          </label>
         </div>
         <Stat
           label="이번 주 마감까지"
@@ -367,10 +371,10 @@ export function MvpCalculator() {
               );
             })}
             {/* The box keeps the corner of the chips next to it (10), so the field inside takes a smaller one. */}
-            <span className={cn("inline-flex h-10 items-center gap-2 rounded-lg border pr-1 pl-3 text-[13px]", target === "custom" ? "border-primary bg-primary-soft" : "tile-edge")}>
+            <label className={cn("inline-flex h-10 items-center gap-2 rounded-lg border pr-1 pl-3 text-[13px]", target === "custom" ? "border-primary bg-primary-soft" : "tile-edge")}>
               직접
               <NumberField label="결제할 금액 직접 입력 (원)" value={s.custom} onChange={(t) => update({ custom: t, target: "custom" })} suffix="원" inputClassName="h-8 w-28 rounded-md" />
-            </span>
+            </label>
           </div>
         </Row>
         <Row label="시세">
@@ -495,10 +499,10 @@ export function MvpCalculator() {
                   <td className="py-2.5 text-right">
                     {r.kind === "item" && r.id === BOUTIQUE_OPEN_ID ? (
                       <span className="inline-flex flex-col items-end gap-1">
-                        <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <label className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
                           티켓
                           <NumberField label="부티크 티켓 1개 가격 (만 메소)" value={r.item!.price} onChange={(t) => setItem(r.id, { price: t })} suffix="만" inputClassName="h-8 w-20 text-base sm:text-xs" />
-                        </span>
+                        </label>
                         <span className="text-[11px] whitespace-nowrap text-muted-foreground">
                           × {TICKETS_PER_10.toFixed(1)}개 = {koreanUnits(openedEok(parseNum(r.item!.price, 0)) * 1e8)}
                         </span>
@@ -553,7 +557,7 @@ export function MvpCalculator() {
                     <td colSpan={7} className="rounded-[10px] bg-muted/40 p-0">
                       {/* As wide as the visible box and pinned left (4px in, the scroll box's padding): on a phone the
                           table scrolls sideways, the panel does not. */}
-                      <div className="@container sticky left-1 w-[100cqw] px-3 py-3.5">
+                      <div ref={boutiqueBox} className="@container sticky left-1 w-[100cqw] px-3 py-3.5">
                         <BoutiquePanel
                           tab={s.boutiqueTab}
                           onTab={(tab) => update({ boutiqueTab: tab })}
@@ -651,7 +655,8 @@ export function MvpCalculator() {
                       <tr key={it.id} className={ZEBRA_ROW}>
                         <td className="py-2">
                           <b>{it.name}</b>
-                          {isTop && <span className="ml-1.5 rounded bg-primary px-1.5 py-0.5 text-[11px] font-bold whitespace-nowrap text-primary-foreground">가장 효율</span>}
+                          {/* 18px tall with 3px on top: the 11px words' ink in the middle on 1x and 2x screens (measured, design.md). */}
+                          {isTop && <span className="ml-1.5 inline-flex h-[18px] items-center rounded bg-primary px-1.5 pt-[3px] text-[11px] font-bold whitespace-nowrap text-primary-foreground">가장 효율</span>}
                         </td>
                         <td className="py-2 text-right">
                           <NumberField label={`${it.name} 크레딧`} value={it.credit} onChange={(t) => setShop(it.id, { credit: t })} className="justify-end" inputClassName="h-8 w-20 text-base sm:text-xs" />

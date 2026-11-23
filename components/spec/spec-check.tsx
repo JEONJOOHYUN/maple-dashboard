@@ -1,7 +1,7 @@
 "use client";
 
 import { asOfLabel } from "@/lib/spec/as-of";
-import { useEffect, useState, useTransition, type FormEvent } from "react";
+import { useEffect, useRef, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Check, ExternalLink, RotateCw, Search, ShieldAlert, ShieldCheck, X } from "lucide-react";
 import { refreshSpec } from "@/app/spec/actions";
@@ -14,7 +14,8 @@ import { SwapIcon, SwapLabel } from "@/components/ui/swap-icon";
 import type { Miss, SpecResult, Tier, Tile } from "@/lib/spec/check";
 import { periodGroups } from "@/lib/spec/period-rows";
 import { useStored } from "@/lib/use-stored";
-import { useReveal } from "@/components/ui/reveal";
+import { Reveal, useReveal } from "@/components/ui/reveal";
+import { LEAVE_MS, useSelfGlide } from "@/components/ui/glide";
 import { Digits } from "@/components/ui/digits";
 import { cn } from "@/lib/utils";
 // Static imports, like the menu icons: each address carries a content hash.
@@ -48,6 +49,13 @@ export const RECENT_PILL_ON = "border-primary bg-primary-soft text-primary-text 
 export const RECENT_PILL_OFF = "tile-edge bg-card [@media(hover:hover)]:has-[button:first-child:enabled:hover]:bg-muted";
 export const RECENT_NAME = "press-static rounded-l-full py-1.5 pr-1 pl-3 font-semibold disabled:opacity-50";
 export const RECENT_DROP = "press-static rounded-r-full py-1.5 pr-2.5 pl-1 opacity-60 transition-opacity hover:opacity-100";
+// The search field of both tabs: the box draws the edge (and the ring on focus), the input inside none. Searched with
+// nothing in it, the edge and the words in it turn red until something is typed.
+export const SEARCH_BOX =
+  "flex h-[50px] min-w-0 flex-1 items-center gap-2.5 rounded-lg tile-edge bg-card px-4 transition-[border-color,box-shadow] focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50";
+// Important: the edge's own rules (`tile-edge`, the focus ring) are as specific as these.
+export const SEARCH_BOX_EMPTY = "border-destructive! ring-destructive/40!";
+export const SEARCH_INPUT = "h-[46px] min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground aria-invalid:placeholder:text-destructive";
 
 const CHECKED =
   "공용 · 직업 0차 스킬 · 성향 · 유니온 아티팩트 · 칭호 · 주문서 강화 · 캐시 장비 · 펫 기간 · 펫 장비 · 마스터라벨 · 마스터라벨 플러스 · 5차 · 하이퍼 스탯 · 하이퍼 패시브 · 펫 버프 · 링크 · 어빌리티";
@@ -139,7 +147,8 @@ function TierChip({ tier, className }: { tier: Tier; className?: string }) {
   return (
     <span
       className={cn(
-        "inline-flex h-[22px] w-[68px] shrink-0 items-center justify-center rounded-full text-[11px] font-bold whitespace-nowrap",
+        // pt-0.5: the 11px words sit 1px high in the middle of a pill; this centres their ink (design.md).
+        "inline-flex h-[22px] w-[68px] shrink-0 items-center justify-center rounded-full pt-0.5 text-[11px] font-bold whitespace-nowrap",
         TIER[tier].className,
         className,
       )}
@@ -429,11 +438,17 @@ function Result({ result, at, asOf, optimizer, refreshing, refreshNote, onRefres
   const top = result.misses.filter(fitsCard).slice(0, CARD_MAX);
   const rest = result.misses.filter((m) => !top.includes(m));
   const under = cardsUnderCharacter(result, top.length, rest.length, !!optimizer);
-  // The lists fade out before the "open it" note comes in, so the two are never on the page together.
-  const list = useReveal(n > 0 && open);
+  // The lists and the "open it" note trade places: one shrinks away as the other grows in (useSelfGlide), so the column
+  // under them slides instead of jumping (user, 2026-11-23).
+  const listOpen = n > 0 && open;
+  const list = useReveal(listOpen, LEAVE_MS);
+  const cardsBox = useRef<HTMLDivElement>(null);
+  const restBox = useRef<HTMLDivElement>(null);
+  useSelfGlide(cardsBox, listOpen);
+  useSelfGlide(restBox, listOpen);
   const cards =
     list.shown && top.length > 0 ? (
-      <div {...list.attrs} className="reveal flex flex-col gap-3">
+      <div ref={cardsBox} {...list.attrs} className={cn("reveal flex flex-col gap-3", under && "mt-2")}>
         <ListTitle title="먼저 채울 것" note="보스 프리셋 기준" />
         <ul className="grid grid-cols-[minmax(0,1fr)] gap-2 @xl:grid-cols-3">
           {top.map((m, i) => (
@@ -539,13 +554,13 @@ function Result({ result, at, asOf, optimizer, refreshing, refreshNote, onRefres
             </a>
           )}
         </div>
-        {under && cards && <div className="mt-2 flex flex-col gap-3">{cards}</div>}
+        {under && cards}
       </div>
 
       <div className="@container flex min-w-0 flex-col gap-3">
         {!under && cards}
         {list.shown && rest.length > 0 && (
-          <div {...list.attrs} className="reveal flex flex-col gap-3">
+          <div ref={restBox} {...list.attrs} className="reveal flex flex-col gap-3">
             <div className={cn(!under && top.length > 0 && "mt-2")}>
               <ListTitle title={top.length ? `나머지 ${rest.length}개` : "놓친 스펙"} note={top.length ? "줄을 누르면 펼쳐짐" : "보스 프리셋 기준"} />
             </div>
@@ -561,9 +576,9 @@ function Result({ result, at, asOf, optimizer, refreshing, refreshNote, onRefres
             <span className="text-[13px] text-pretty text-muted-foreground">확인하는 항목 모두 채움</span>
           </div>
         )}
-        {n > 0 && !list.shown && (
-          <div className="tile px-4 py-9 text-center text-[13px] text-pretty text-muted-foreground">왼쪽 배지 → 목록 열기</div>
-        )}
+        <Reveal open={n > 0 && !open} className="tile px-4 py-9 text-center text-[13px] text-pretty text-muted-foreground">
+          왼쪽 배지 → 목록 열기
+        </Reveal>
         {result.tips.length > 0 && (
           <>
             <div className="mt-2">
@@ -593,10 +608,15 @@ export function SpecCheck({ name, view }: { name: string; view: SpecView }) {
 
   const go = (q: string) => startTransition(() => router.push(`/spec?name=${encodeURIComponent(q)}`));
 
+  // The button stays on with an empty field: pressing it says what is missing, in the field itself (no line pushed in).
+  const [empty, setEmpty] = useState(false);
+  const field = useRef<HTMLInputElement>(null);
   const submit = (e: FormEvent) => {
     e.preventDefault();
     const q = text.trim();
-    if (q) go(q);
+    if (q) return go(q);
+    setEmpty(true);
+    field.current?.focus();
   };
 
   const pick = (n: string) => {
@@ -619,22 +639,32 @@ export function SpecCheck({ name, view }: { name: string; view: SpecView }) {
 
       <form onSubmit={submit} className="flex gap-2" role="search">
         {/* The button's corner, and on focus the site's ring in place of the edge (the input itself draws none). */}
-        <label className="flex h-[50px] min-w-0 flex-1 items-center gap-2.5 rounded-lg tile-edge bg-card px-4 transition-[border-color,box-shadow] focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50">
+        <label className={cn(SEARCH_BOX, empty && SEARCH_BOX_EMPTY)}>
           <Search className="size-[18px] shrink-0 text-muted-foreground" aria-hidden="true" />
           <span className="sr-only">캐릭터 닉네임</span>
           <input
+            ref={field}
             value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="캐릭터 닉네임"
+            onChange={(e) => {
+              setText(e.target.value);
+              setEmpty(false);
+            }}
+            placeholder={empty ? "닉네임 먼저 입력" : "캐릭터 닉네임"}
+            aria-invalid={empty || undefined}
             maxLength={12}
             autoComplete="off"
             spellCheck={false}
-            className="h-[46px] min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
+            className={SEARCH_INPUT}
           />
+          {empty && (
+            <span role="alert" className="sr-only">
+              닉네임 먼저 입력
+            </span>
+          )}
         </label>
         <button
           type="submit"
-          disabled={pending || !text.trim()}
+          disabled={pending}
           className="flex h-[50px] shrink-0 items-center justify-center rounded-lg bg-primary px-[22px] text-[15px] font-bold text-primary-foreground disabled:opacity-50"
         >
           {/* Both states share one box, so the button keeps its width and the field beside it does not shrink. */}

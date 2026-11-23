@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useId, useMemo, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { Chip, Label, NumberField, Panel, RESULT_SHELL, Segment, arrowTurn, count, eok, parseNum, pct } from "@/components/ev/ui";
 import { FLAMES, armorChance, bestWeaponGrade, goalChips, hpScore, hpTarget, tierValues, weaponChance, DEFAULT_HP_WEIGHTS, DEFAULT_WEIGHTS, DEFAULT_XENON_WEIGHTS, type FlameJob } from "@/lib/ev/flame";
@@ -14,6 +14,8 @@ import { koreanUnits } from "@/lib/format";
 const FLAME_COLS = "grid-cols-[minmax(0,1fr)_72px_84px_84px]";
 
 export function FlameTab() {
+  // Ties each name in the 환산 grid to the field beside it.
+  const cid = useId();
   const [equip, setEquip] = useState<"weapon" | "armor">("weapon");
   const [levelText, setLevelText] = useState("200");
   const [grade, setGrade] = useState(1);
@@ -112,10 +114,10 @@ export function FlameTab() {
             { id: "armor", label: "방어구 · 장신구" },
           ]}
         />
-        <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold">
+        <label className="inline-flex items-center gap-1.5 text-[13px] font-semibold">
           장비 레벨
           <NumberField label="장비 레벨" value={levelText} onChange={setLevelText} inputClassName="w-16" />
-        </span>
+        </label>
 
         {equip === "weapon" ? (
           <div className="flex flex-col gap-2.5">
@@ -127,11 +129,11 @@ export function FlameTab() {
                 </Chip>
               ))}
             </div>
-            <span className="inline-flex flex-wrap items-center gap-1.5 text-[13px] font-semibold">
+            <label className="inline-flex flex-wrap items-center gap-1.5 text-[13px] font-semibold">
               {grade}추 +
               <NumberField label="보스 데미지 + 데미지 %" value={extraText} onChange={setExtraText} inputClassName="w-16" />
               %급 이상
-            </span>
+            </label>
             <div className="grid grid-cols-5 gap-1.5">
               {[0, 5, 10, 15, 20].map((n) => (
                 <Chip key={n} on={extra === n} onClick={() => setExtraText(String(n))} className="px-0">
@@ -166,12 +168,12 @@ export function FlameTab() {
                 the conversion below. */}
             {job === "hp" ? (
               <>
-                <span className="inline-flex flex-wrap items-center gap-1.5 text-[13px] font-semibold">
+                <label className="inline-flex flex-wrap items-center gap-1.5 text-[13px] font-semibold">
                   HP {hpAt(hpGrade).toLocaleString("ko-KR")} + 공
                   <NumberField label="공격력" value={hpAtkText} onChange={setHpAtkText} inputClassName="w-14" />
                   이상
                   <span className="font-normal text-muted-foreground">= 환산 {Math.round(hpNeed).toLocaleString("ko-KR")}</span>
-                </span>
+                </label>
                 {/* The two picks sit together, best first in both (공 7 under 1추); the chosen 공 comes off on a
                     second press = HP alone. */}
                 <div className="flex flex-col gap-1.5">
@@ -193,7 +195,7 @@ export function FlameTab() {
               </>
             ) : (
               <>
-                <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold">
+                <label className="inline-flex items-center gap-1.5 text-[13px] font-semibold">
                   <NumberField
                     label="목표"
                     value={pickedChip !== null ? String(pickedChip) : targetText}
@@ -204,7 +206,7 @@ export function FlameTab() {
                     inputClassName="w-20"
                   />
                   급 이상
-                </span>
+                </label>
                 <div className="grid grid-cols-4 gap-1.5">
                   {chips.map((n, i) => (
                     <Chip
@@ -259,14 +261,14 @@ export function FlameTab() {
                 <span className="text-right text-[11px] text-muted-foreground">환산 기준</span>
                 {job === "hp" ? (
                   <>
-                    <b>최대 HP</b>
-                    <NumberField label="최대 HP 값" value={now.hp} onChange={(t) => setNow({ ...now, hp: t })} inputClassName="w-full" />
+                    <label htmlFor={`${cid}-hp`} className="font-bold">최대 HP</label>
+                    <NumberField id={`${cid}-hp`} label="최대 HP 값" value={now.hp} onChange={(t) => setNow({ ...now, hp: t })} inputClassName="w-full" />
                     <span className="text-right text-xs text-muted-foreground">× 1</span>
-                    <b>공격력</b>
-                    <NumberField label="공격력 값" value={now.hAtk} onChange={(t) => setNow({ ...now, hAtk: t })} inputClassName="w-full" />
+                    <label htmlFor={`${cid}-hAtk`} className="font-bold">공격력</label>
+                    <NumberField id={`${cid}-hAtk`} label="공격력 값" value={now.hAtk} onChange={(t) => setNow({ ...now, hAtk: t })} inputClassName="w-full" />
                     <NumberField label="공격력 1 = HP" value={hw.attack} onChange={(t) => setHw({ ...hw, attack: t })} decimal className="justify-end" inputClassName="w-full border-primary/60" />
-                    <b>STR</b>
-                    <NumberField label="STR 값" value={now.hStr} onChange={(t) => setNow({ ...now, hStr: t })} inputClassName="w-full" />
+                    <label htmlFor={`${cid}-hStr`} className="font-bold">STR</label>
+                    <NumberField id={`${cid}-hStr`} label="STR 값" value={now.hStr} onChange={(t) => setNow({ ...now, hStr: t })} inputClassName="w-full" />
                     <NumberField label="STR 1 = HP" value={hw.str} onChange={(t) => setHw({ ...hw, str: t })} decimal className="justify-end" inputClassName="w-full border-primary/60" />
                   </>
                 ) : job === "xenon" ? (
@@ -279,31 +281,31 @@ export function FlameTab() {
                       ] as const
                     ).map(([k, name]) => (
                       <Fragment key={k}>
-                        <b>{name}</b>
-                        <NumberField label={`${name} 값`} value={now[k]} onChange={(t) => setNow({ ...now, [k]: t })} inputClassName="w-full" />
+                        <label htmlFor={`${cid}-${k}`} className="font-bold">{name}</label>
+                        <NumberField id={`${cid}-${k}`} label={`${name} 값`} value={now[k]} onChange={(t) => setNow({ ...now, [k]: t })} inputClassName="w-full" />
                         <span className="text-right text-xs text-muted-foreground">× 1</span>
                       </Fragment>
                     ))}
-                    <b>공격력</b>
-                    <NumberField label="공격력 값" value={now.xAtk} onChange={(t) => setNow({ ...now, xAtk: t })} inputClassName="w-full" />
+                    <label htmlFor={`${cid}-xAtk`} className="font-bold">공격력</label>
+                    <NumberField id={`${cid}-xAtk`} label="공격력 값" value={now.xAtk} onChange={(t) => setNow({ ...now, xAtk: t })} inputClassName="w-full" />
                     <NumberField label="공격력 1 = 스탯" value={xw.attack} onChange={(t) => setXw({ ...xw, attack: t })} decimal className="justify-end" inputClassName="w-full border-primary/60" />
-                    <b>올스탯 %</b>
-                    <NumberField label="올스탯 % 값" value={now.xAll} onChange={(t) => setNow({ ...now, xAll: t })} inputClassName="w-full" />
+                    <label htmlFor={`${cid}-xAll`} className="font-bold">올스탯 %</label>
+                    <NumberField id={`${cid}-xAll`} label="올스탯 % 값" value={now.xAll} onChange={(t) => setNow({ ...now, xAll: t })} inputClassName="w-full" />
                     <NumberField label="올스탯 1% = 스탯" value={xw.allStat} onChange={(t) => setXw({ ...xw, allStat: t })} decimal className="justify-end" inputClassName="w-full border-primary/60" />
                   </>
                 ) : (
                   <>
-                    <b>주스탯</b>
-                    <NumberField label="주스탯 값" value={now.main} onChange={(t) => setNow({ ...now, main: t })} inputClassName="w-full" />
+                    <label htmlFor={`${cid}-main`} className="font-bold">주스탯</label>
+                    <NumberField id={`${cid}-main`} label="주스탯 값" value={now.main} onChange={(t) => setNow({ ...now, main: t })} inputClassName="w-full" />
                     <span className="text-right text-xs text-muted-foreground">× 1</span>
-                    <b>부스탯 <span className="text-[11px] font-normal text-muted-foreground">÷</span></b>
-                    <NumberField label="부스탯 값" value={now.sub} onChange={(t) => setNow({ ...now, sub: t })} inputClassName="w-full" />
+                    <label htmlFor={`${cid}-sub`} className="font-bold">부스탯 <span className="text-[11px] font-normal text-muted-foreground">÷</span></label>
+                    <NumberField id={`${cid}-sub`} label="부스탯 값" value={now.sub} onChange={(t) => setNow({ ...now, sub: t })} inputClassName="w-full" />
                     <NumberField label="부스탯 몇 = 주스탯 1" value={w.sub} onChange={(t) => setW({ ...w, sub: t })} decimal className="justify-end" inputClassName="w-full border-primary/60" />
-                    <b>공격력 · 마력</b>
-                    <NumberField label="공격력 값" value={now.atk} onChange={(t) => setNow({ ...now, atk: t })} inputClassName="w-full" />
+                    <label htmlFor={`${cid}-atk`} className="font-bold">공격력 · 마력</label>
+                    <NumberField id={`${cid}-atk`} label="공격력 값" value={now.atk} onChange={(t) => setNow({ ...now, atk: t })} inputClassName="w-full" />
                     <NumberField label="공격력 1 = 주스탯" value={w.attack} onChange={(t) => setW({ ...w, attack: t })} decimal className="justify-end" inputClassName="w-full border-primary/60" />
-                    <b>올스탯 %</b>
-                    <NumberField label="올스탯 % 값" value={now.all} onChange={(t) => setNow({ ...now, all: t })} inputClassName="w-full" />
+                    <label htmlFor={`${cid}-all`} className="font-bold">올스탯 %</label>
+                    <NumberField id={`${cid}-all`} label="올스탯 % 값" value={now.all} onChange={(t) => setNow({ ...now, all: t })} inputClassName="w-full" />
                     <NumberField label="올스탯 1% = 주스탯" value={w.allStat} onChange={(t) => setW({ ...w, allStat: t })} decimal className="justify-end" inputClassName="w-full border-primary/60" />
                   </>
                 )}
@@ -380,7 +382,7 @@ export function FlameTab() {
                   {r.id === "eternal" && " · 1번 300만 메소"}
                 </span>
                 {(r.id === "abyss" || r.id === "strong") && (
-                  <span className="mt-1 inline-flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
+                  <label className="mt-1 inline-flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
                     <span className="whitespace-nowrap">1개 가격</span>
                     <NumberField
                       label={`${r.name} 1개 가격 (억 메소)`}
@@ -390,7 +392,7 @@ export function FlameTab() {
                       suffix="억"
                       inputClassName="h-7 w-14 text-xs"
                     />
-                  </span>
+                  </label>
                 )}
               </span>
               <span className="col-start-2 text-right font-num whitespace-nowrap @min-[28rem]:col-start-auto"><Digits>{pct(r.p)}</Digits></span>

@@ -260,7 +260,8 @@ function PicksBand({ picks, hits }: { picks: OddsView[]; hits: Hits }) {
             </b>
             <span className="flex min-w-0 flex-col gap-1.5">
               <span className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-                <span className="rounded-full bg-primary-soft px-2 py-0.5 text-[11px] font-bold text-primary-text">{KIND_LABEL[o.kind]}</span>
+                {/* A whole-pixel height and 2px on top: the 11px words' ink in the middle (design.md). */}
+                <span className="inline-flex h-5 items-center rounded-full bg-primary-soft px-2 pt-0.5 text-[11px] font-bold text-primary-text">{KIND_LABEL[o.kind]}</span>
                 <span className="text-xs text-muted-foreground">{ago(o)}</span>
               </span>
               <span className="flex items-baseline justify-between gap-2.5">
@@ -322,7 +323,8 @@ function HitStat({ label, hits, pick }: { label: string; hits: Hits; pick: HitKe
   );
 }
 
-const CHANGE_CHIP = "inline-flex h-[18px] items-center rounded-full bg-card px-2 text-[11px] font-bold whitespace-nowrap";
+// pt-0.5: the 11px words sit 1px high in a pill; this centres their ink (design.md).
+const CHANGE_CHIP = "inline-flex h-[18px] items-center rounded-full bg-card px-2 pt-0.5 text-[11px] font-bold whitespace-nowrap";
 const CHANGE_TONE = { none: "text-muted-foreground", same: "text-muted-foreground", up: "text-gain", down: "text-loss" } as const;
 
 /** "-" before there is a last week to compare, "유지" when the same, "▲ 2%" / "▼ 2%" (hits.ts hitChangeLabel). */

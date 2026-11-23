@@ -72,7 +72,8 @@ export function ThumbCarousel({ title, more, slides, empty }: { title: string; m
                 <img src={slide.img} alt="" loading="lazy" className="aspect-[14/5] w-full rounded-lg bg-muted object-cover image-line" />
                 <span className="mt-2.5 flex items-start gap-2">
                   <b className="line-clamp-2 min-w-0 flex-1 text-sm font-semibold text-balance transition-colors group-hover:text-primary-text">{slide.title}</b>
-                  {slide.badge && <span className="inline-flex h-[22px] min-w-11 shrink-0 items-center justify-center rounded-full bg-primary-soft px-[7px] text-[11px] font-bold whitespace-nowrap text-primary-text">{slide.badge}</span>}
+                  {/* pt-0.5: 11px words are drawn about 1px high in a pill; 2px on top puts their ink in the middle (measured, design.md). */}
+                  {slide.badge && <span className="inline-flex h-[22px] min-w-11 shrink-0 items-center justify-center rounded-full bg-primary-soft px-[7px] pt-0.5 text-[11px] font-bold whitespace-nowrap text-primary-text">{slide.badge}</span>}
                 </span>
                 {slide.meta && <span className="text-xs text-muted-foreground">{slide.meta}</span>}
               </a>

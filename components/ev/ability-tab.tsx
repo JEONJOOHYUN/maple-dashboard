@@ -1033,7 +1033,8 @@ function StepRow({
         <span className="text-[13px] text-pretty">
           <b>{label}</b>
           {tag && (
-            <span className="ml-1.5 rounded border border-emerald-500/40 bg-emerald-500/10 px-1 text-[10px] font-bold whitespace-nowrap text-emerald-700 dark:text-emerald-300">
+            // 16px tall with 1px under: the 10px words' ink in the middle (they sat low in the bare inline box, design.md).
+            <span className="ml-1.5 inline-flex h-4 items-center rounded border border-emerald-500/40 bg-emerald-500/10 px-1 pb-px text-[10px] font-bold whitespace-nowrap text-emerald-700 dark:text-emerald-300">
               {tag}
             </span>
           )}
@@ -1077,12 +1078,13 @@ function GoalLine({ legend, label, value }: { legend: boolean; label: string; va
       >
         {legend ? "L" : "U"}
       </span>
-      <span className="flex h-9 min-w-0 items-center justify-between gap-2 rounded-lg tile-edge bg-background pr-1 pl-3 text-[13px]">
+      {/* A label: the option's name goes to the list of wanted values beside it. */}
+      <label className="flex h-9 min-w-0 items-center justify-between gap-2 rounded-lg tile-edge bg-background pr-1 pl-3 text-[13px]">
         <span title={label} className="truncate">
           {label}
         </span>
         {value}
-      </span>
+      </label>
     </div>
   );
 }

@@ -6,13 +6,25 @@
 // line's right end.
 import { asOfLabel } from "@/lib/spec/as-of";
 import Link from "next/link";
-import { Fragment, useEffect, useMemo, useState, useTransition, type FormEvent, type ReactNode } from "react";
+import { Fragment, useEffect, useId, useMemo, useRef, useState, useTransition, type FormEvent, type ReactNode, type RefObject } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, CornerDownRight, Search, X } from "lucide-react";
 import { Chip } from "@/components/ev/ui";
 import { Message } from "@/components/message";
 import { PageHeader } from "@/components/page-header";
-import { Pieces, RECENT_DROP, RECENT_NAME, RECENT_PILL, RECENT_PILL_OFF, RECENT_PILL_ON, SPEC_DESCRIPTION, whatText } from "@/components/spec/spec-check";
+import {
+  Pieces,
+  RECENT_DROP,
+  RECENT_NAME,
+  RECENT_PILL,
+  RECENT_PILL_OFF,
+  RECENT_PILL_ON,
+  SEARCH_BOX,
+  SEARCH_BOX_EMPTY,
+  SEARCH_INPUT,
+  SPEC_DESCRIPTION,
+  whatText,
+} from "@/components/spec/spec-check";
 import { SpecTabs } from "@/components/spec/spec-tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Spinner } from "@/components/ui/spinner";
@@ -35,6 +47,7 @@ import {
 } from "@/lib/spec/guild-table";
 import { useStored } from "@/lib/use-stored";
 import { useReveal } from "@/components/ui/reveal";
+import { LEAVE_MS, useRowGlide } from "@/components/ui/glide";
 import { cn } from "@/lib/utils";
 
 /** count = characters; users = accounts (the in-game member count), null when NEXON gives none. */
@@ -201,11 +214,26 @@ function SubsToggle({ person, open, onToggle }: { person: Person; open: boolean;
  */
 type RevealAttrs = ReturnType<typeof useReveal>["attrs"];
 
-/** The other characters of a player: they fade out before they leave when the line is folded. */
-function SubLines({ open, subs, cols }: { open: boolean; subs: MemberRow[]; cols: readonly string[] }) {
-  const { shown, attrs } = useReveal(open);
+/**
+ * The other characters of a player: they fade out before they leave when the line is folded, and when the line's own
+ * button did it the rows under them slide instead of jumping (useRowGlide). `handRef` holds the player whose button
+ * was pressed last, taken by the one it names.
+ */
+function SubLines({ open, subs, cols, me, handRef }: { open: boolean; subs: MemberRow[]; cols: readonly string[]; me: string; handRef: RefObject<string | null> }) {
+  const { shown, attrs } = useReveal(open, LEAVE_MS);
+  const group = useId();
+  useRowGlide(
+    open,
+    shown,
+    () => [...document.querySelectorAll<HTMLElement>(`tr[data-sub="${CSS.escape(group)}"]`)],
+    () => {
+      const mine = handRef.current === me;
+      if (mine) handRef.current = null;
+      return mine;
+    },
+  );
   if (!shown) return null;
-  return subs.map((r) => <MemberLine key={r.name} row={r} cols={cols} sub reveal={attrs} />);
+  return subs.map((r) => <MemberLine key={r.name} row={r} cols={cols} sub reveal={attrs} group={group} />);
 }
 
 function MemberLine({
@@ -215,6 +243,7 @@ function MemberLine({
   away = null,
   end = null,
   reveal,
+  group,
 }: {
   row: MemberRow;
   cols: readonly string[];
@@ -222,10 +251,12 @@ function MemberLine({
   away?: string | null;
   end?: ReactNode;
   reveal?: RevealAttrs;
+  /** Marks a player's other characters, for SubLines to find them in the table. */
+  group?: string;
 }) {
   const ground = sub ? "bg-background" : "bg-card";
   return (
-    <tr {...reveal} className={cn("border-t border-border", sub && "border-dashed", ground, reveal && "reveal-row")}>
+    <tr {...reveal} data-sub={group} className={cn("border-t border-border", sub && "border-dashed", ground, reveal && "reveal-row")}>
       <th scope="row" className={cn("sticky left-0 z-[1] py-2 pr-3.5 text-left font-normal", sub ? "pl-4" : "pl-3.5", ground)}>
         <span className="flex items-center gap-1.5">
           {sub && <CornerDownRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />}
@@ -351,6 +382,8 @@ function GuildResult({ guild, pieces, others }: { guild: GuildInfo; pieces: Prom
   const shown = visible.slice(0, limit);
   const isOpen = (p: Person) => (openAll || subMatches(p, query)) !== flipped.has(p.key);
   const flip = (key: string) => change((v) => ({ flipped: v.flipped.includes(key) ? v.flipped.filter((k) => k !== key) : [...v.flipped, key] }));
+  // The player whose own button was pressed: only that line slides (SubLines).
+  const hand = useRef<string | null>(null);
   const search = (q: string) => change(() => ({ query: q, flipped: [] }));
 
   return (
@@ -483,8 +516,22 @@ function GuildResult({ guild, pieces, others }: { guild: GuildInfo; pieces: Prom
               const open = isOpen(p);
               return (
                 <Fragment key={p.key}>
-                  <MemberLine row={p.head} cols={cols} away={p.away} end={<SubsToggle person={p} open={open} onToggle={() => flip(p.key)} />} />
-                  <SubLines open={open} subs={p.subs} cols={cols} />
+                  <MemberLine
+                    row={p.head}
+                    cols={cols}
+                    away={p.away}
+                    end={
+                      <SubsToggle
+                        person={p}
+                        open={open}
+                        onToggle={() => {
+                          hand.current = p.key;
+                          flip(p.key);
+                        }}
+                      />
+                    }
+                  />
+                  <SubLines open={open} subs={p.subs} cols={cols} me={p.key} handRef={hand} />
                 </Fragment>
               );
             })}
@@ -560,10 +607,15 @@ export function GuildCheck({ name, view }: { name: string; view: GuildView }) {
   const recentList = (Array.isArray(recent) ? recent : []).filter(isRecent);
 
   const go = (href: string) => startTransition(() => router.push(href));
+  // As on the 캐릭터 tab: an empty search says what is missing, in the field.
+  const [empty, setEmpty] = useState(false);
+  const field = useRef<HTMLInputElement>(null);
   const submit = (e: FormEvent) => {
     e.preventDefault();
     const q = text.trim();
-    if (q) go(guildHref(q));
+    if (q) return go(guildHref(q));
+    setEmpty(true);
+    field.current?.focus();
   };
 
   return (
@@ -571,22 +623,32 @@ export function GuildCheck({ name, view }: { name: string; view: GuildView }) {
       <PageHeader title="숨은 스펙업" description={SPEC_DESCRIPTION} aside={<SpecTabs on="guild" />} />
 
       <form onSubmit={submit} className="flex gap-2" role="search">
-        <label className="flex h-[50px] min-w-0 flex-1 items-center gap-2.5 rounded-lg tile-edge bg-card px-4 transition-[border-color,box-shadow] focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50">
+        <label className={cn(SEARCH_BOX, empty && SEARCH_BOX_EMPTY)}>
           <Search className="size-[18px] shrink-0 text-muted-foreground" aria-hidden="true" />
           <span className="sr-only">길드 이름</span>
           <input
+            ref={field}
             value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="길드 이름"
+            onChange={(e) => {
+              setText(e.target.value);
+              setEmpty(false);
+            }}
+            placeholder={empty ? "길드 이름 먼저 입력" : "길드 이름"}
+            aria-invalid={empty || undefined}
             maxLength={MAX_GUILD_NAME}
             autoComplete="off"
             spellCheck={false}
-            className="h-[46px] min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
+            className={SEARCH_INPUT}
           />
+          {empty && (
+            <span role="alert" className="sr-only">
+              길드 이름 먼저 입력
+            </span>
+          )}
         </label>
         <button
           type="submit"
-          disabled={pending || !text.trim()}
+          disabled={pending}
           className="flex h-[50px] shrink-0 items-center justify-center rounded-lg bg-primary px-[22px] text-[15px] font-bold text-primary-foreground disabled:opacity-50"
         >
           <SwapLabel

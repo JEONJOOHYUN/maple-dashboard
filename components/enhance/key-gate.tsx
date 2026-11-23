@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useState, type FormEvent } from "react";
+import { Fragment, useEffect, useRef, useState, type FormEvent } from "react";
 import { Digits } from "@/components/ui/digits";
 import { Spinner } from "@/components/ui/spinner";
 import { SwapIcon, SwapLabel } from "@/components/ui/swap-icon";
@@ -21,6 +21,8 @@ const ERRORS: Record<ApiErrorKind, string> = {
   network: "넥슨 서버 연결 실패 → 잠시 뒤 다시",
   failed: "넥슨 API 응답 오류 → 잠시 뒤 다시",
 };
+/** Pressed with nothing in the field (the button stays on: a greyed one would not say why). */
+const NO_KEY = "API 키 먼저 붙여 넣기";
 
 // The order of NEXON's own registration page (마이 페이지 → 애플리케이션 등록, seen 2026-11-12).
 const STEPS = [
@@ -115,10 +117,17 @@ export function KeyGate({ saved, onConnect, onForgetAll }: { saved: SavedKey[]; 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
+  // The button stays on with an empty field: pressing it says what is missing and goes to the field.
+  const field = useRef<HTMLInputElement>(null);
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     const key = text.trim();
-    if (!key || busy) return;
+    if (busy) return;
+    if (!key) {
+      setError(NO_KEY);
+      field.current?.focus();
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -160,9 +169,13 @@ export function KeyGate({ saved, onConnect, onForgetAll }: { saved: SavedKey[]; 
             {saved.length > 0 ? "다른 넥슨 Open API 키" : "넥슨 Open API 키"}
           </span>
           <input
+            ref={field}
             type="password"
             value={text}
-            onChange={(e) => setText(e.target.value)}
+            onChange={(e) => {
+              setText(e.target.value);
+              if (error === NO_KEY) setError("");
+            }}
             data-clarity-mask="true"
             autoComplete="off"
             spellCheck={false}
@@ -178,7 +191,7 @@ export function KeyGate({ saved, onConnect, onForgetAll }: { saved: SavedKey[]; 
         </label>
         <button
           type="submit"
-          disabled={!text.trim() || busy}
+          disabled={busy}
           className="inline-flex h-12 items-center justify-center rounded-lg bg-primary text-[15px] font-bold text-primary-foreground outline-none hover:bg-primary/85 focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50"
         >
           {/* The spinner hangs to the left of the words: they stay in the middle whether it shows or not. */}

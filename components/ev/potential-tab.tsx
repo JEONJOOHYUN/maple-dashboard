@@ -424,10 +424,10 @@ export function PotentialTab() {
           // Level on the left, the potential kind at the right edge: in line with the switches under it (user, 2026-11-13).
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1">
-              <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold">
+              <label className="inline-flex items-center gap-1.5 text-[13px] font-semibold">
                 장비 레벨
                 <NumberField label="장비 레벨" value={levelText} onChange={setLevelText} inputClassName="w-16" />
-              </span>
+              </label>
               {level < 120 && <span className="text-xs text-destructive">120레벨 이상 장비만</span>}
             </span>
             <Segment
@@ -763,7 +763,7 @@ export function PotentialTab() {
             )}
             {/* Shown for every main-stat type (Codex review): e.g. HP 21 % (12 + 9) is not one of the chips. */}
             {target === "stat" && (
-              <span className="inline-flex flex-wrap items-center gap-1.5 text-[12px] font-semibold">
+              <label className="inline-flex flex-wrap items-center gap-1.5 text-[12px] font-semibold">
                 목표 직접
                 <NumberField
                   label={statMain === "all" || statMain === "hp" ? `${statMain === "all" ? "올스탯" : "HP"} 목표 직접 입력` : "주스탯 환산 목표 직접 입력"}
@@ -777,7 +777,7 @@ export function PotentialTab() {
                   inputClassName="h-8 w-20 text-xs"
                 />
                 <span className="font-normal text-muted-foreground">이상</span>
-              </span>
+              </label>
             )}
             {target === "stat" && (statMain === "str" || saleOn) && (
               <div className="flex flex-col gap-2 tile-sm p-2.5">
@@ -810,7 +810,7 @@ export function PotentialTab() {
                       ...(kind === "add" && slot.extra === "cool" ? ([["cool1", "쿨감 1초 = 주스탯", "%", ""]] as const) : []),
                     ] as const
                   ).map(([k, label, unit, hint]) => (
-                    <span key={k} className="flex items-center justify-between gap-2">
+                    <label key={k} className="flex items-center justify-between gap-2">
                       <span className="flex min-w-0 flex-col">
                         <span className="text-[12px] font-semibold">{label}</span>
                         {hint && <span className="font-num text-[11px] text-muted-foreground">{hint}</span>}
@@ -837,7 +837,7 @@ export function PotentialTab() {
                         suffix={unit || undefined}
                         inputClassName="h-8 w-20 text-xs"
                       />
-                    </span>
+                    </label>
                   ))}
                 </div>
                 <span className="flex flex-wrap items-center justify-end gap-2 text-[11px] text-muted-foreground">
@@ -985,7 +985,7 @@ export function PotentialTab() {
                     메소
                   </span>
                 ) : (
-                <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                <label className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
                   1번 가격
                   <NumberField
                     label={`${r.cube.name} 1번 가격 (억 메소)`}
@@ -996,7 +996,7 @@ export function PotentialTab() {
                     suffix="억"
                     inputClassName="h-8 w-16 text-xs"
                   />
-                </span>
+                </label>
                 )}
               </div>
             </div>

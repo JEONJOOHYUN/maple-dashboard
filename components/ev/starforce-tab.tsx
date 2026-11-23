@@ -504,7 +504,7 @@ export function StarforceTab() {
               <Chip on={item === CUSTOM} onClick={() => setItem(CUSTOM)}>
                 목록에 없는 장비
               </Chip>
-              <span className="inline-flex items-center gap-1 text-[13px] text-muted-foreground">
+              <label className="inline-flex items-center gap-1 text-[13px] text-muted-foreground">
                 Lv.
                 <NumberField
                   label="장비 레벨"
@@ -515,7 +515,7 @@ export function StarforceTab() {
                   }}
                   inputClassName="w-16"
                 />
-              </span>
+              </label>
             </div>
             <span className="text-[11px] text-pretty text-muted-foreground">
               Lv.{level} · 최대 {maxStar}성
@@ -609,7 +609,7 @@ export function StarforceTab() {
           <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2.5">
             <b className="text-[15px]">조건</b>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2.5 text-xs text-muted-foreground">
-              <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-foreground">
+              <label className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-foreground">
                 노작값
                 <NumberField
                   label="노작값 (억 메소)"
@@ -619,7 +619,7 @@ export function StarforceTab() {
                   decimal
                   inputClassName="w-16"
                 />
-              </span>
+              </label>
               <Segment
                 label="단위"
                 value={unit}
@@ -630,7 +630,7 @@ export function StarforceTab() {
                 ]}
                 className="w-32"
               />
-              <span className="inline-flex items-center gap-1">
+              <label className="inline-flex items-center gap-1">
                 1억 =
                 <NumberField
                   label="1억 메소당 원"
@@ -639,7 +639,7 @@ export function StarforceTab() {
                   suffix="원"
                   inputClassName="w-16"
                 />
-              </span>
+              </label>
             </div>
           </div>
           {/* Nothing to pick on an item that stops at 12 stars or under: no heading over an empty row. */}
@@ -975,7 +975,7 @@ export function StarforceTab() {
                   ×{m.toFixed(2)}
                 </Chip>
               ))}
-              <span className="inline-flex items-center gap-0.5 text-[13px] text-muted-foreground">
+              <label className="inline-flex items-center gap-0.5 text-[13px] text-muted-foreground">
                 ×
                 <NumberField
                   label="배율 직접 입력"
@@ -988,7 +988,7 @@ export function StarforceTab() {
                   }}
                   inputClassName="w-full"
                 />
-              </span>
+              </label>
             </div>
           </Panel>
           <div className={cn(RESULT_SHELL, "gap-1")}>
