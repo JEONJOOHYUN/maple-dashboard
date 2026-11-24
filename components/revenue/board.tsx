@@ -49,9 +49,22 @@ const PRICE_ITEMS = (Object.keys(ITEMS) as ItemId[]).map((id) => {
   return { id, from: ITEMS[id].cat === "ring" ? "보스 반지 상자에서" : [...from].join(" · ") + (mat ? ` · ${mat.name} 10개 = 1상자` : "") };
 });
 
+let warmed = false;
+/**
+ * Fetches the pictures a character's sheet shows, once, when the pointer first reaches a character row: the first
+ * sheet then slides in whole instead of filling in on the way (some fifty pictures were still loading).
+ */
+function warmPictures() {
+  if (warmed) return;
+  warmed = true;
+  const icons: Icon[] = [...CATEGORIES.map((c) => c.icon), ...Object.values(ITEMS).map((i) => i.icon), ...Object.values(BOXES).map((b) => b.icon)];
+  for (const src of new Set(icons.map(iconSrc))) new Image().src = src;
+}
+
 function ItemImg({ icon, className }: { icon: Icon; className?: string }) {
+  // decoding async: some fifty of these come in with a sheet, and decoding them must not hold its first frame.
   // eslint-disable-next-line @next/next/no-img-element -- tiny item pictures (ours or NEXON's icon host), shown as is
-  return <img src={iconSrc(icon)} alt="" loading="lazy" className={cn("object-contain", className)} />;
+  return <img src={iconSrc(icon)} alt="" loading="lazy" decoding="async" className={cn("object-contain", className)} />;
 }
 
 /** A popover whose content closes it after a pick: `children(close)`. */
@@ -356,6 +369,8 @@ export function Board({
                   if (el) rowRefs.current.set(v.c.ocid, el);
                   else rowRefs.current.delete(v.c.ocid);
                 }}
+                onPointerEnter={warmPictures}
+                onFocus={warmPictures}
                 aria-haspopup="dialog"
                 onClick={() => {
                   setSheetId(v.c.ocid);
