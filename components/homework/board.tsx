@@ -94,18 +94,6 @@ function Head({ time, pick }: { time?: string; pick?: { count: number; busy: boo
   );
 }
 
-/** While NEXON is being asked (app/homework/page.tsx). */
-export function Waiting() {
-  return (
-    <div className="flex flex-col gap-2">
-      <PageHeader title="숙제 현황" />
-      <div className="flex items-center justify-center gap-2 tile px-5 py-10 text-[13px] text-muted-foreground" aria-live="polite">
-        <Spinner /> 넥슨에서 숙제를 받는 중…
-      </div>
-    </div>
-  );
-}
-
 /** One of the four numbers at the top. On a phone the reset and the count go under the bar, so nothing is cut. */
 function Stat({ label, tally, reset }: { label: string; tally: Tally; reset: string }) {
   return (

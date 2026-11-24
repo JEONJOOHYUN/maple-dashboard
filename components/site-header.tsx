@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Brand } from "@/components/brand";
+import { IntentLink, NavLink } from "@/components/intent-link";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Badge } from "@/components/ui/badge";
 import { syncMemberHint } from "@/lib/auth/member-hint";
@@ -30,22 +31,21 @@ export function SiteHeader() {
       <span className="hidden text-[13px] font-medium text-muted-foreground lg:inline">{crumb}</span>
 
       {/* Both marks are in the page; CSS shows the one that fits (app/globals.css .when-guest / .when-member).
-          Not prefetched: both routes render per request, so a prefetch brings only the layout this page already has,
-          and costs two uncached requests on every public page view. */}
+          Both routes render per request: fetched ahead only once the link is pointed at (components/intent-link.tsx),
+          not from every public page view. The login page holds nothing of a member, so all of it. */}
       <div className="ml-auto flex items-center gap-2">
         <ThemeToggle />
         {pathname !== "/login" && (
-          <Link
+          <IntentLink
+            whole
             href="/login"
-            prefetch={false}
             className="when-guest flex h-10 items-center rounded-xl bg-card px-3.5 text-[13px] font-semibold whitespace-nowrap text-foreground transition-[background-color,scale] outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.96]"
           >
             로그인
-          </Link>
+          </IntentLink>
         )}
-        <Link
+        <IntentLink
           href="/me"
-          prefetch={false}
           aria-label="내 정보"
           aria-current={pathname === "/me" ? "page" : undefined}
           data-clarity-mask="true"
@@ -73,10 +73,9 @@ export function SiteHeader() {
             {active.group.items.map((item) => {
               const on = item.slug === active.item.slug;
               return (
-                <Link
+                <NavLink
                   key={item.slug}
-                  href={item.href}
-                  prefetch={item.prefetch}
+                  item={item}
                   aria-current={on ? "page" : undefined}
                   className={cn(
                     "flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[13px] transition-[background-color,color,scale] outline-none focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.96]",
@@ -89,7 +88,7 @@ export function SiteHeader() {
                       준비 중
                     </Badge>
                   )}
-                </Link>
+                </NavLink>
               );
             })}
           </div>

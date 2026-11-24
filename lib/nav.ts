@@ -30,8 +30,8 @@ export type NavItem = {
   /** false = placeholder "준비 중" page (app/[tool]/page.tsx). */
   ready: boolean;
   /**
-   * false = its links are not prefetched. For a member page: it is rendered per request, so a prefetch brings only the
-   * layout the visitor already has and costs two uncached requests on every page view.
+   * false = for a member page, rendered per request: its links are not prefetched from every page view (two uncached
+   * requests each), only once the visitor points at one (components/intent-link.tsx brings its loading.tsx).
    */
   prefetch?: false;
 };

@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Brand } from "@/components/brand";
+import { NavLink } from "@/components/intent-link";
 import { NavIcon } from "@/components/nav-icon";
 import { Badge } from "@/components/ui/badge";
 import { homeItem, navGroups, type NavItem } from "@/lib/nav";
@@ -10,9 +10,8 @@ import { cn } from "@/lib/utils";
 
 function SideLink({ item, active }: { item: NavItem; active: boolean }) {
   return (
-    <Link
-      href={item.href}
-      prefetch={item.prefetch}
+    <NavLink
+      item={item}
       aria-current={active ? "page" : undefined}
       className={cn(
         // after: the press area fills the 4px between two links (36px → 40px), never over a neighbour.
@@ -29,7 +28,7 @@ function SideLink({ item, active }: { item: NavItem; active: boolean }) {
           준비 중
         </Badge>
       )}
-    </Link>
+    </NavLink>
   );
 }
 
