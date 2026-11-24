@@ -14,7 +14,7 @@ import { MAX_PICKED, SCAN_MIN_LEVEL } from "@/lib/revenue/data";
 import { useNow } from "@/lib/use-now";
 import { useStored } from "@/lib/use-stored";
 import { cn } from "@/lib/utils";
-import { focus } from "@/components/revenue/styles";
+import { ACCOUNT_COLORS, focus } from "@/components/revenue/styles";
 
 const ERRORS: Record<ApiErrorKind, string> = {
   badKey: "API 키가 올바르지 않음 → 빼고 다시 추가",
@@ -25,7 +25,6 @@ const ERRORS: Record<ApiErrorKind, string> = {
   failed: "넥슨 API 응답 오류 → 잠시 뒤 다시",
 };
 /** One colour per account, in the order they were added. */
-const COLORS = ["oklch(0.72 0.16 45)", "oklch(0.70 0.13 230)", "oklch(0.70 0.14 150)", "oklch(0.70 0.15 320)", "oklch(0.75 0.13 95)"];
 
 /**
  * 보스 수익: this week's crystals and checked rewards of the characters the user follows, from the scheduler of every
@@ -59,7 +58,7 @@ export function RevenueApp() {
     return {
       account: k.account,
       label: name ? `${name} 계정` : keyLabel(k, i),
-      color: COLORS[i % COLORS.length],
+      color: ACCOUNT_COLORS[i % ACCOUNT_COLORS.length],
       chars,
       loading: !a,
       error: a?.status === "error" ? ERRORS[a.error ?? "failed"] : undefined,

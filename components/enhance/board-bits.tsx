@@ -463,26 +463,3 @@ export const PICK_W = {
 /** Cards on one page of a 모아보기 grid (four rows of three) and rows on one page of a 내역 list. */
 export const CARD_PAGE = 12;
 export const ROW_PAGE = 50;
-
-export function ViewTabs<T extends string>({ views, value, onChange }: { views: { id: T; label: string }[]; value: T; onChange: (id: T) => void }) {
-  return (
-    <div role="tablist" aria-label="강화 기록 보기" className="flex gap-0.5 overflow-x-auto border-b border-border [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      {views.map((v) => (
-        <button
-          key={v.id}
-          type="button"
-          role="tab"
-          aria-selected={value === v.id}
-          onClick={() => onChange(v.id)}
-          className={cn(
-            // The ring is drawn inside: the scrolling row would cut one drawn outside.
-            "h-10 shrink-0 px-3.5 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset",
-            value === v.id ? "font-bold text-primary-text shadow-[inset_0_-2px_0_var(--primary)]" : "text-muted-foreground hover:text-foreground"
-          )}
-        >
-          <SteadyText>{v.label}</SteadyText>
-        </button>
-      ))}
-    </div>
-  );
-}

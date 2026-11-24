@@ -1,10 +1,10 @@
 "use client";
 
 import { useMemo, useRef, useState, type ReactNode } from "react";
-import { ChevronDown, ChevronLeft, ChevronRight, Pencil, RotateCw, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Pencil, RotateCw } from "lucide-react";
 import { NumberField, parseNum } from "@/components/ev/ui";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Sheet, SheetClose, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Digits } from "@/components/ui/digits";
 import { Reveal } from "@/components/ui/reveal";
 import { Spinner } from "@/components/ui/spinner";
@@ -33,18 +33,12 @@ import {
 import { BOXES, CATEGORIES, DROPS, ITEMS, MATERIALS, iconSrc, isBox, item, maxParty, type Icon, type ItemId } from "@/lib/revenue/data";
 import { useStored } from "@/lib/use-stored";
 import { cn } from "@/lib/utils";
-import { chip, focus, hoverRing, openRing, pickedRing } from "@/components/revenue/styles";
+import { Face } from "@/components/revenue/face";
+import { SheetHead } from "@/components/revenue/sheet-head";
+import { DIFF_STYLE, chip, focus, hoverRing, openRing, pickedRing, problemLine, sheetPanel } from "@/components/revenue/styles";
 import type { Char } from "@/components/revenue/use-data";
 
 const won = (meso: number) => koreanUnits(meso);
-/** In-game difficulty badge colors (matches NEXON's boss difficulty banners), same in both themes: players read these at a glance. */
-const DIFF_STYLE: Record<string, { background: string; color: string }> = {
-  이지: { background: "linear-gradient(#888888, #666666)", color: "#ffffff" },
-  노멀: { background: "linear-gradient(#51b2cc, #319dbc)", color: "#ffffff" },
-  하드: { background: "linear-gradient(#bb4466, #aa3355)", color: "#ffffff" },
-  카오스: { background: "linear-gradient(#333333, #222233)", color: "#ffe1be" },
-  익스트림: { background: "#09090b", color: "#da1b1b" },
-};
 const mutedChip = cn(chip, "bg-muted text-muted-foreground");
 
 /** Every item that can be counted, with where it comes from, for the price list (data only: built once). */
@@ -58,22 +52,6 @@ const PRICE_ITEMS = (Object.keys(ITEMS) as ItemId[]).map((id) => {
 function ItemImg({ icon, className }: { icon: Icon; className?: string }) {
   // eslint-disable-next-line @next/next/no-img-element -- tiny item pictures (ours or NEXON's icon host), shown as is
   return <img src={iconSrc(icon)} alt="" loading="lazy" className={cn("object-contain", className)} />;
-}
-
-/**
- * A character's face: the middle of NEXON's 300×300 look picture, where the head stands. The initial until it is here.
- */
-function Face({ src, name }: { src?: string; name: string }) {
-  return (
-    <span className="relative grid size-9 shrink-0 place-items-center overflow-hidden rounded-xl bg-muted font-bold text-muted-foreground lg:size-10">
-      {src ? (
-        // eslint-disable-next-line @next/next/no-img-element -- NEXON's character picture, shown as is
-        <img src={src} alt="" className="absolute top-[-56px] left-[-56px] size-[150px] max-w-none lg:top-[-62px] lg:left-[-63px] lg:size-[167px]" />
-      ) : (
-        name[0]
-      )}
-    </span>
-  );
 }
 
 /** A popover whose content closes it after a pick: `children(close)`. */
@@ -236,7 +214,7 @@ export function Board({
           </button>
         </div>
       </div>
-      {failed > 0 && <p className="px-1 text-[13px] font-semibold text-destructive">{failed}명의 스케줄러를 못 받음 → 새로 고침</p>}
+      {failed > 0 && <p className={problemLine}>{failed}명의 스케줄러를 못 받음 → 새로 고침</p>}
 
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-[1.4fr_1fr_1fr]">
         <div className={cn(stat, "col-span-2 lg:col-span-1")}>
@@ -418,35 +396,13 @@ export function Board({
           showCloseButton={false}
           // Back to the row of the character on show, which prev / next may have changed.
           finalFocus={() => (sheetId && rowRefs.current.get(sheetId)) || true}
-          className="gap-0 bg-card p-0 data-[side=right]:w-full data-[side=right]:border-border data-[side=right]:sm:max-w-[720px]"
+          className={sheetPanel}
         >
           {sheet && (
             <>
-              <div className="flex items-center gap-3 border-b border-border py-3 pr-2.5 pl-4 lg:pl-5">
-                <Face src={faces[sheet.c.ocid]} name={sheet.c.name} />
-                <div className="flex min-w-0 flex-1 flex-col">
-                  <SheetTitle className="truncate text-[17px] font-bold">{sheet.c.name}</SheetTitle>
-                  <SheetDescription className="truncate text-[13px]">
-                    Lv.{sheet.c.level} · {sheet.c.job} · 주간 보스 <span className="font-num">{sheet.weeklyDone} / {sheet.limit}</span>
-                  </SheetDescription>
-                </div>
-                {views.length > 1 && (
-                  <div className="flex shrink-0 items-center">
-                    <button type="button" aria-label="이전 캐릭터" onClick={() => goSheet(-1)} className={sheetIcon}>
-                      <ChevronLeft className="size-[18px]" aria-hidden="true" />
-                    </button>
-                    <span className="min-w-9 text-center font-num text-[13px] text-muted-foreground">
-                      {sheetIdx + 1} / {views.length}
-                    </span>
-                    <button type="button" aria-label="다음 캐릭터" onClick={() => goSheet(1)} className={sheetIcon}>
-                      <ChevronRight className="size-[18px]" aria-hidden="true" />
-                    </button>
-                  </div>
-                )}
-                <SheetClose className={sheetIcon} aria-label="닫기">
-                  <X className="size-[18px]" aria-hidden="true" />
-                </SheetClose>
-              </div>
+              <SheetHead face={faces[sheet.c.ocid]} name={sheet.c.name} index={sheetIdx} count={views.length} onStep={goSheet}>
+                Lv.{sheet.c.level} · {sheet.c.job} · 주간 보스 <span className="font-num">{sheet.weeklyDone} / {sheet.limit}</span>
+              </SheetHead>
               <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 px-4 pt-4 pb-2 lg:px-5">
                 <span className="font-num text-[26px] leading-tight text-primary-text">{won(sheet.crystal + sheet.reward)}</span>
                 <span className="text-[13px] text-muted-foreground">
@@ -488,7 +444,6 @@ export function Board({
 
 const stat = "flex flex-col gap-1.5 tile px-4 py-[18px] lg:px-5";
 const statLabel = "text-[13px] font-semibold text-muted-foreground";
-const sheetIcon = cn("grid size-10 place-items-center rounded-[10px] text-muted-foreground hover:bg-muted hover:text-foreground", focus);
 /**
  * The sheet's table from 672px of room (wide enough for the boss name): crystal and drops share one money column so it
  * fits the 720px sheet. Below that each boss takes two lines.

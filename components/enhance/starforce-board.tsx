@@ -3,10 +3,11 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { Info } from "lucide-react";
 import { Segment, eok } from "@/components/ev/ui";
-import { BasisButton, BasisRow, PeriodBar, SyncBanners, Toggle, ViewTabs, WorldStrip, useGroupsOff, useKnownGroups, usePeriod, useSync } from "@/components/enhance/board-bits";
+import { BasisButton, BasisRow, PeriodBar, SyncBanners, Toggle, WorldStrip, useGroupsOff, useKnownGroups, usePeriod, useSync } from "@/components/enhance/board-bits";
 import { Card, Empty, signed, tone } from "@/components/enhance/parts";
 import { CalendarView, InsightView, ItemDialog, ItemsView, LogView } from "@/components/enhance/starforce-views";
 import { useItemDict, type Rolled } from "@/components/enhance/use-item-dict";
+import { ViewTabs } from "@/components/ui/view-tabs";
 import { resolveItem, type ItemInfo, type ItemOverrides } from "@/lib/enhance/items";
 import { NO_DISCOUNT, judge, trackCopies, type Discount } from "@/lib/enhance/judge";
 import type { MvpGrade } from "@/lib/ev/starforce";
@@ -187,7 +188,7 @@ export function StarforceBoard({ apiKey, account, onForget, switcher }: { apiKey
             </p>
           </Card>
 
-          <ViewTabs views={VIEWS} value={view} onChange={setView} />
+          <ViewTabs label="강화 기록 보기" views={VIEWS} value={view} onChange={setView} />
 
           {view === "insight" && <InsightView stats={stats} onOpen={openWith} />}
           {view === "log" && <LogView entries={entries} characters={stats.characters} hideLow={hideLow} onHideLow={setHideLow} />}

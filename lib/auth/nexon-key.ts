@@ -20,10 +20,12 @@ const PROBLEMS: Record<string, KeyProblem> = {
   OPENAPI00011: "busy",
 };
 
-async function ask<T>(path: string, key: string): Promise<{ body: T } | { problem: KeyProblem }> {
+/** One call to NEXON with a member's key (never cached by the fetch layer: the key is in its header). */
+export async function ask<T>(path: string, key: string, params?: Record<string, string>): Promise<{ body: T } | { problem: KeyProblem }> {
   let res: Response;
   try {
-    res = await fetch(`${BASE}/${path}`, { headers: { "x-nxopen-api-key": key }, cache: "no-store", signal: AbortSignal.timeout(TIMEOUT_MS) });
+    const query = params ? `?${new URLSearchParams(params)}` : "";
+    res = await fetch(`${BASE}/${path}${query}`, { headers: { "x-nxopen-api-key": key }, cache: "no-store", signal: AbortSignal.timeout(TIMEOUT_MS) });
   } catch {
     return { problem: "failed" };
   }

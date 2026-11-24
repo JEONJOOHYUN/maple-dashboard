@@ -1,12 +1,13 @@
 "use server";
 
 import { cookies } from "next/headers";
-import { refresh } from "next/cache";
+import { refresh, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { ouidHash } from "@/lib/auth/key-crypto";
 import { checkNexonKey, sealMemberKey, type KeyProblem } from "@/lib/auth/nexon-key";
 import { MAX_NEXON_ACCOUNTS, isKeyShape, packLabel } from "@/lib/auth/rules";
 import { clearHintCookie, getMember, sessionClient } from "@/lib/auth/server";
+import { homeworkTag } from "@/lib/homework/server";
 import { allowAttempt, clientIp } from "@/lib/rate-limit";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
@@ -101,6 +102,8 @@ export async function removeKey(_prev: FormState, form: FormData): Promise<FormS
   if (row === null) return { error: "삭제 실패 → 새로 고침" };
   const gone = await supabaseAdmin().from("nexon_accounts").delete().eq("id", row).eq("user_id", member.id);
   if (gone.error) return { error: "삭제 실패 → 잠시 뒤 다시" };
+  // What NEXON said for that account is not shown again (lib/homework/server.ts keeps it for a few minutes).
+  updateTag(homeworkTag(member.id));
   refresh();
   return { done: "삭제됨" };
 }
@@ -111,6 +114,7 @@ export async function leave(): Promise<FormState> {
   if (!member) redirect("/login");
   const gone = await supabaseAdmin().auth.admin.deleteUser(member.id);
   if (gone.error) return { error: "탈퇴 실패 → 잠시 뒤 다시" };
+  updateTag(homeworkTag(member.id));
 
   // The account is gone, so the auth server may refuse the sign-out: the session cookies are dropped either way.
   const supabase = await sessionClient();

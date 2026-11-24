@@ -21,7 +21,7 @@ const processors = [
   { company: "Vercel", job: "호스팅 · 접속 기록", place: "미국 (함수 실행은 서울)" },
   { company: "Google", job: "구글 로그인 (계정 확인)", place: "미국 등" },
   { company: "Supabase", job: "회원 정보 · 암호화한 API 키 보관", place: "한국 (AWS 서울)" },
-  { company: "넥슨 (Open API)", job: "닉네임 조회 · 강화 기록 조회 · 등록한 키의 계정 확인", place: "한국" },
+  { company: "넥슨 (Open API)", job: "닉네임 조회 · 강화 기록 조회 · 등록한 키의 계정 확인 · 숙제 조회", place: "한국" },
 ];
 
 const list = "flex list-disc flex-col gap-1 pl-[18px] text-sm leading-relaxed";
@@ -60,7 +60,7 @@ export default function PrivacyPage() {
               <b>구글 계정 정보</b> (로그인할 때): 이메일 · 이름 · 프로필 사진 주소 → 계정 구분 · 로그인 유지
             </li>
             <li>
-              <b>넥슨 Open API 키</b> (내 정보에 등록할 때): 암호화해서 서버에 보관 → 등록한 넥슨 계정의 정보 조회. 함께 저장 = 넥슨 계정 고유값을 되돌릴 수 없게 바꾼 값 · 대표 캐릭터 이름 · 월드
+              <b>넥슨 Open API 키</b> (내 정보에 등록할 때): 암호화해서 서버에 보관 → 등록한 넥슨 계정의 정보 · 숙제 (게임 스케줄러) 조회. 함께 저장 = 넥슨 계정 고유값을 되돌릴 수 없게 바꾼 값 · 대표 캐릭터 이름 · 월드
             </li>
             <li>
               <b>방문 기록</b> (자동 수집): 클릭 · 스크롤 · 마우스 움직임, 기기 · 브라우저, 국가, 쿠키 식별자 → 화면 개선
@@ -90,6 +90,7 @@ export default function PrivacyPage() {
             </li>
             <li>방문 기록: 녹화 30일 · 집계 13개월 뒤 Clarity 에서 삭제</li>
             <li>닉네임 조회 결과: 서버 임시 캐시. 3시간이 지나면 다음 조회 때 새 결과로 교체, 정해진 삭제 기한 없음 → 요청하면 삭제</li>
+            <li>숙제 현황: 넥슨에서 받은 숙제를 서버 임시 캐시에 5분 (API 키는 캐시에 안 들어감). 지나면 다음에 볼 때 새 결과로 교체, 정해진 삭제 기한 없음 → 요청하면 삭제</li>
             <li>접속 기록: Vercel 에서 1시간 뒤 삭제 (현재 요금제 기준)</li>
             <li>아이템 사전: 누구의 것인지 알 수 없는 아이템 정보라 계속 보관</li>
             <li>
@@ -128,6 +129,7 @@ export default function PrivacyPage() {
           <ul className={list}>
             <li>Clarity 쿠키: 같은 방문자 구분용. 브라우저에서 차단해도 로그인 없는 도구는 모두 사용 가능</li>
             <li>로그인 쿠키 (로그인했을 때만): 로그인 유지 · 헤더의 로그인 표시. 로그아웃 · 탈퇴하면 삭제</li>
+            <li>숙제 현황 쿠키 (캐릭터를 골랐을 때만): 고른 캐릭터를 이 브라우저에 기억. 모두 빼고 저장하면 삭제</li>
             <li>
               계산기 설정 · 입력값: <b>이 브라우저에만</b> 저장, 서버로 안 보냄. 브라우저의 사이트 데이터 삭제로 지움
             </li>
@@ -145,7 +147,7 @@ export default function PrivacyPage() {
 
         <Section index={6} {...sections[5]}>
           <p className={text}>
-            모든 접속 HTTPS. 서버 비밀 키는 서버에만. 등록한 API 키는 암호화 (AES-256-GCM) 해 보관하고 화면에 다시 안 보임. 강화 기록 화면 · 내 정보의 이메일과
+            모든 접속 HTTPS. 서버 비밀 키는 서버에만. 등록한 API 키는 암호화 (AES-256-GCM) 해 보관하고 화면에 다시 안 보임. 강화 기록 화면 · 숙제 현황 화면 · 내 정보의 이메일과
             넥슨 계정 · API 키 입력칸은 Clarity 녹화에서 가림.
           </p>
         </Section>

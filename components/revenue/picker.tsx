@@ -1,71 +1,21 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, Check, Plus, Search } from "lucide-react";
+import { Plus } from "lucide-react";
 import { Reveal } from "@/components/ui/reveal";
 import { Spinner } from "@/components/ui/spinner";
 import { bossRows, type SchedulerState } from "@/lib/revenue/calc";
 import { MAX_PICKED, SCAN_MIN_LEVEL } from "@/lib/revenue/data";
 import { cn } from "@/lib/utils";
-import { chip, focus, hoverRing, pickedRing } from "@/components/revenue/styles";
+import { CharCard, GoButton, NameSearch, Tabs, charGrid, headBtn, pickCard as card } from "@/components/revenue/pick-parts";
+import { focus } from "@/components/revenue/styles";
 import type { Char } from "@/components/revenue/use-data";
 
 /** A NEXON account in use: its key's name, its colour dot and how its character list came back. */
 export type AccountView = { account: string; label: string; color: string; chars: Char[]; error?: string; loading: boolean };
 
-const tab = cn("h-[34px] rounded-[9px] px-3 text-[13px] font-semibold whitespace-nowrap text-muted-foreground hover:text-foreground", focus);
-/** A card in the lists: an account, a character. */
-const card = "flex min-h-[60px] items-center gap-2.5 rounded-xl bg-background px-3 py-2.5";
-/** A text button in a section's head. */
-const headBtn = cn("h-8 rounded-lg px-1.5 text-[13px] font-bold text-primary-text", focus);
 /** A small button on an account card. */
 const cardBtn = cn("h-[30px] shrink-0 rounded-lg px-2 text-xs hover:bg-muted", focus);
-const charGrid = "grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-4";
-const tabOn = "bg-card text-foreground shadow-(--tile-shadow)";
-
-function Tabs({ items, value, onChange, label }: { items: { id: string; label: string }[]; value: string; onChange: (id: string) => void; label: string }) {
-  return (
-    <div role="radiogroup" aria-label={label} className="flex gap-[3px] overflow-x-auto rounded-xl bg-muted p-[3px]">
-      {items.map((t) => (
-        <button key={t.id} type="button" role="radio" aria-checked={value === t.id} onClick={() => onChange(t.id)} className={cn(tab, value === t.id && tabOn)}>
-          {t.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function CharCard({ c, on, boss, color, onToggle, disabled }: { c: Char; on: boolean; boss?: number; color?: string; onToggle: () => void; disabled: boolean }) {
-  return (
-    <button
-      type="button"
-      aria-pressed={on}
-      disabled={disabled && !on}
-      onClick={onToggle}
-      className={cn(
-        card,
-        "text-left disabled:opacity-45",
-        focus,
-        on ? pickedRing : hoverRing
-      )}
-    >
-      <span className={cn("grid size-[18px] shrink-0 place-items-center rounded-[5px] border-[1.5px]", on ? "border-primary bg-primary text-primary-foreground" : "border-input")}>
-        {on && <Check className="size-3" strokeWidth={3.5} aria-hidden="true" />}
-      </span>
-      <span className="flex min-w-0 flex-col">
-        <span className="truncate text-sm font-bold" title={c.name}>{c.name}</span>
-        <span className="truncate text-xs text-muted-foreground">
-          Lv.{c.level} · {c.job} ·{" "}
-          <span className="inline-flex items-center gap-1">
-            {color && <i aria-hidden="true" className="inline-block size-[7px] rounded-full" style={{ background: color }} />}
-            {c.world}
-          </span>
-        </span>
-      </span>
-      {!!boss && <span className={cn(chip, "ml-auto bg-primary/14 text-primary-text")}>보스 {boss}</span>}
-    </button>
-  );
-}
 
 /**
  * Who the revenue page follows: the characters of every key in use, those with a weekly boss list first (picked for
@@ -165,10 +115,7 @@ export function Picker({
           <p className="text-[13px] text-muted-foreground">스케줄러에 주간 보스가 있는 캐릭터를 골라 뒀어요 · 최대 {MAX_PICKED}명</p>
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-          <label className="flex h-10 w-full items-center gap-2 rounded-[10px] border border-input bg-background px-3 text-muted-foreground focus-within:border-ring sm:w-[200px]">
-            <Search className="size-4 shrink-0" aria-hidden="true" />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="캐릭터 이름" aria-label="캐릭터 이름으로 찾기" className="min-w-0 flex-1 bg-transparent text-base text-foreground outline-none sm:text-sm" />
-          </label>
+          <NameSearch value={q} onChange={setQ} />
           {accounts.length > 1 && <Tabs label="계정" value={acc} onChange={setAcc} items={[{ id: "all", label: "모든 계정" }, ...accounts.map((a) => ({ id: a.account, label: a.label }))]} />}
           {worlds.length > 1 && <Tabs label="월드" value={world} onChange={setWorld} items={[{ id: "all", label: "전체" }, ...worlds.map((w) => ({ id: w, label: w }))]} />}
         </div>
@@ -220,15 +167,9 @@ export function Picker({
           <b className="font-num text-lg">{picked.length}</b>
           <span className="text-muted-foreground"> 명 골랐어요{accounts.length > 1 ? ` · 계정 ${accounts.length}개 합쳐서` : ""} · 다음에도 이대로</span>
         </div>
-        <button
-          type="button"
-          onClick={onDone}
-          disabled={!picked.length}
-          className={cn("inline-flex h-11 shrink-0 items-center gap-2 rounded-[10px] bg-primary px-[18px] text-sm font-bold text-primary-foreground hover:bg-primary/85 disabled:opacity-50", focus)}
-        >
+        <GoButton onClick={onDone} disabled={!picked.length} className="shrink-0">
           보스 수익 보기
-          <ArrowRight className="size-4" strokeWidth={2.2} aria-hidden="true" />
-        </button>
+        </GoButton>
       </div>
     </div>
   );

@@ -29,6 +29,11 @@ export type NavItem = {
   needs?: "로그인" | "API 키" | "PC";
   /** false = placeholder "준비 중" page (app/[tool]/page.tsx). */
   ready: boolean;
+  /**
+   * false = its links are not prefetched. For a member page: it is rendered per request, so a prefetch brings only the
+   * layout the visitor already has and costs two uncached requests on every page view.
+   */
+  prefetch?: false;
 };
 
 export type NavGroup = {
@@ -70,8 +75,9 @@ export const navGroups: NavGroup[] = [
         href: "/homework",
         icon: ListChecks,
         card: { title: "숙제 현황", description: "스케줄러로 남은 숙제를 자동으로" },
-        needs: "API 키",
-        ready: false,
+        needs: "로그인",
+        ready: true,
+        prefetch: false,
       },
       {
         slug: "revenue",

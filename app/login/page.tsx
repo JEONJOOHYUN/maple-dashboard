@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { safeNext } from "@/lib/auth/rules";
 import { getMember } from "@/lib/auth/server";
+import { allNavItems } from "@/lib/nav";
 import { signInWithGoogle } from "./actions";
 
 export const metadata: Metadata = { title: "로그인" };
@@ -25,6 +26,9 @@ const PERKS = [
   { slug: "homework", title: "숙제 현황", line: "스케줄러로 남은 숙제를 자동으로" },
   { slug: "alerts", title: "알림 설정", line: "보스 · 숙제를 원하는 시각에" },
 ];
+
+/** The ones that are open, as the menu knows them: the badge goes when a tool does. */
+const READY = new Set(allNavItems.filter((item) => item.ready).map((item) => item.slug));
 
 type Props = { searchParams: Promise<{ error?: string | string[]; next?: string | string[] }> };
 
@@ -83,9 +87,11 @@ export default async function LoginPage({ searchParams }: Props) {
                 {/* Balanced: on a phone the longest line breaks in two, not into a line and one last word. */}
                 <span className="text-[13px] text-balance text-muted-foreground">{p.line}</span>
               </div>
-              <Badge variant="outline" className="ml-auto h-[18px] px-1.5 text-[10px] font-medium text-muted-foreground">
-                준비 중
-              </Badge>
+              {!READY.has(p.slug) && (
+                <Badge variant="outline" className="ml-auto h-[18px] px-1.5 text-[10px] font-medium text-muted-foreground">
+                  준비 중
+                </Badge>
+              )}
             </div>
           ))}
           <p className="border-t border-border pt-3.5 text-xs text-muted-foreground">보스 수익 · 강화 기록 = 로그인 없이 지금처럼</p>

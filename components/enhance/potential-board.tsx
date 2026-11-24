@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Package, Split } from "lucide-react";
 import { NumberField, eok, parseNum } from "@/components/ev/ui";
-import { BasisButton, BasisRow, CARD_PAGE, CharacterFilter, ItemFilter, NO_ITEM_FILTER, PICK_W, PeriodBar, ROW_PAGE, SyncBanners, ViewTabs, WorldStrip, itemMatches, liveFilter, useGroupsOff, useKnownGroups, usePeriod, useSync } from "@/components/enhance/board-bits";
+import { BasisButton, BasisRow, CARD_PAGE, CharacterFilter, ItemFilter, NO_ITEM_FILTER, PICK_W, PeriodBar, ROW_PAGE, SyncBanners, WorldStrip, itemMatches, liveFilter, useGroupsOff, useKnownGroups, usePeriod, useSync } from "@/components/enhance/board-bits";
 import { Card, Delta, Empty, Gauge, EventFields, EventStrip, ItemIcon, PickedTotal, RankCard, RoundsIn, Select, type EventTally, SortMenu, Tile, signed, type Sort } from "@/components/enhance/parts";
 import { Pager, usePage } from "@/components/pager";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -20,6 +20,7 @@ import { STAT_CONV_DEFAULT } from "@/lib/ev/defaults";
 import { GRADE_LABEL, NEXT_GRADE, convFromText, type ConvText, type Grade } from "@/lib/ev/potential";
 import { useStored } from "@/lib/use-stored";
 import { Digits } from "@/components/ui/digits";
+import { ViewTabs } from "@/components/ui/view-tabs";
 import { cn } from "@/lib/utils";
 
 type View = "insight" | "log" | "items";
@@ -707,7 +708,7 @@ export function PotentialBoard({ apiKey, account, onForget, switcher }: { apiKey
             </div>
           </Card>
 
-          <ViewTabs views={VIEWS} value={view} onChange={setView} />
+          <ViewTabs label="강화 기록 보기" views={VIEWS} value={view} onChange={setView} />
 
           {view === "insight" && <PotInsight stats={stats} found={icons} onOpen={openWith} />}
           {view === "log" && <RollsView entries={entries} characters={stats.characters} found={icons} />}

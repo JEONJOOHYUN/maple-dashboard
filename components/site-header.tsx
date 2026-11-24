@@ -29,12 +29,15 @@ export function SiteHeader() {
       <Brand compact className="lg:hidden" />
       <span className="hidden text-[13px] font-medium text-muted-foreground lg:inline">{crumb}</span>
 
-      {/* Both marks are in the page; CSS shows the one that fits (app/globals.css .when-guest / .when-member). */}
+      {/* Both marks are in the page; CSS shows the one that fits (app/globals.css .when-guest / .when-member).
+          Not prefetched: both routes render per request, so a prefetch brings only the layout this page already has,
+          and costs two uncached requests on every public page view. */}
       <div className="ml-auto flex items-center gap-2">
         <ThemeToggle />
         {pathname !== "/login" && (
           <Link
             href="/login"
+            prefetch={false}
             className="when-guest flex h-10 items-center rounded-xl bg-card px-3.5 text-[13px] font-semibold whitespace-nowrap text-foreground transition-[background-color,scale] outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.96]"
           >
             로그인
@@ -42,6 +45,7 @@ export function SiteHeader() {
         )}
         <Link
           href="/me"
+          prefetch={false}
           aria-label="내 정보"
           aria-current={pathname === "/me" ? "page" : undefined}
           data-clarity-mask="true"
@@ -72,6 +76,7 @@ export function SiteHeader() {
                 <Link
                   key={item.slug}
                   href={item.href}
+                  prefetch={item.prefetch}
                   aria-current={on ? "page" : undefined}
                   className={cn(
                     "flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[13px] transition-[background-color,color,scale] outline-none focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.96]",
