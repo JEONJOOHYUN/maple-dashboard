@@ -19,15 +19,15 @@ import type { Item, Tally } from "@/lib/homework/model";
 import { startingPick } from "@/lib/homework/pick";
 import type { AccountBoard, AccountProblem, BoardData, Card, PickData, Sum } from "@/lib/homework/server";
 import { useStored } from "@/lib/use-stored";
+import { KEPT_KEY_PROBLEMS } from "@/lib/auth/key-problems";
 import { cn } from "@/lib/utils";
 
 const NONE: RefreshState = {};
 const PROBLEMS: Record<AccountProblem, string> = {
-  badKey: "API 키가 올바르지 않음 → 내 정보에서 키 교체",
+  ...KEPT_KEY_PROBLEMS,
   quota: "이 키의 호출 한도 초과 → 잠시 뒤 새로 고침",
   busy: "넥슨 API 점검 중 → 잠시 뒤 새로 고침",
   failed: "넥슨 서버 연결 실패 → 새로 고침",
-  locked: "보관한 키를 열 수 없음 → 내 정보에서 다시 등록",
 };
 /** The four bars of a card, in the in-game scheduler's order. */
 const METERS = [

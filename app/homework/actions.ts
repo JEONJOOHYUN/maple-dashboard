@@ -8,6 +8,7 @@ import { PICK_COOKIE, cleanPick, packPick } from "@/lib/homework/pick";
 import { homeworkTag, memberCharacters, pickedHere, type PickData } from "@/lib/homework/server";
 import { allowAttempt } from "@/lib/rate-limit";
 import { MAX_PICKED } from "@/lib/revenue/data";
+import { readSettings } from "@/lib/revenue/server";
 
 export type RefreshState = { error?: string };
 
@@ -36,7 +37,8 @@ export async function refreshHomework(): Promise<RefreshState> {
 /** Every character of the member's accounts, for the picker. null = they could not be read. */
 export async function loadCharacters(): Promise<PickData | null> {
   const { id } = await member();
-  return memberCharacters(id, await pickedHere());
+  const [found, revenue] = await Promise.all([memberCharacters(id, await pickedHere()), readSettings(id)]);
+  return found && { ...found, revenue: revenue?.picked ?? null };
 }
 
 /**

@@ -12,6 +12,8 @@ export const DIFF_STYLE: Record<string, { background: string; color: string }> =
 export const focus = "outline-none focus-visible:ring-3 focus-visible:ring-ring/50";
 /** A line that says something did not arrive (an account's key, some characters' schedulers). */
 export const problemLine = "px-1 text-[13px] font-semibold text-destructive";
+/** A one-line tile: what it says on the left, what to do about it on the right (the two wrap on a phone). */
+export const lineTile = "flex flex-wrap items-center justify-between gap-x-3 gap-y-1 tile px-4 py-3";
 /** Outline of a pressable card or cell under the pointer. */
 export const hoverRing = "hover:shadow-[inset_0_0_0_1px_var(--input)]";
 /** A picked card or cell. */

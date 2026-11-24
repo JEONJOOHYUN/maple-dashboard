@@ -18,8 +18,10 @@ export function Picker({ data, onDone }: { data: PickData; onDone: () => void })
   const [acc, setAcc] = useState("all");
   const [world, setWorld] = useState("all");
   const [saving, startSaving] = useTransition();
-  // What boss revenue follows in this browser: one press picks the same characters here.
-  const [revenue] = useStored<string[]>("revenue:picked", []);
+  // What boss revenue follows: one press picks the same characters here. The member's account holds it once the
+  // member has opened boss revenue signed in; until then, what this browser kept.
+  const [here] = useStored<string[]>("revenue:picked", []);
+  const revenue = data.revenue ?? here;
 
   const several = data.accounts.length > 1;
   // The ones on show when the picker opened come first and stay there: nothing jumps while picking.

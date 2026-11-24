@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Plus } from "lucide-react";
+import { IntentLink } from "@/components/intent-link";
 import { Reveal } from "@/components/ui/reveal";
 import { Spinner } from "@/components/ui/spinner";
 import { bossRows, type SchedulerState } from "@/lib/revenue/calc";
@@ -16,6 +17,9 @@ export type AccountView = { account: string; label: string; color: string; chars
 
 /** A small button on an account card. */
 const cardBtn = cn("h-[30px] shrink-0 rounded-lg px-2 text-xs hover:bg-muted", focus);
+const plus = <Plus className="size-4" strokeWidth={2.4} aria-hidden="true" />;
+/** The tile after the account cards: one more account. */
+const addTile = cn("flex min-h-[60px] items-center justify-center gap-2 rounded-xl text-[13px] font-bold text-primary-text shadow-[inset_0_0_0_1.5px_var(--border)] hover:bg-primary/14 hover:shadow-[inset_0_0_0_1.5px_var(--primary)]", focus);
 
 /**
  * Who the revenue page follows: the characters of every key in use, those with a weekly boss list first (picked for
@@ -31,6 +35,7 @@ export function Picker({
   onAdd,
   onRemove,
   onRetry,
+  registered,
 }: {
   accounts: AccountView[];
   /** Every character on screen, each once. */
@@ -43,6 +48,8 @@ export function Picker({
   onRemove: (account: string) => void;
   /** Asks again for the character lists that failed. */
   onRetry: () => void;
+  /** The accounts are the ones connected to the signed-in member: added and deleted on 내 정보, not here. */
+  registered?: boolean;
 }) {
   const [q, setQ] = useState("");
   const [acc, setAcc] = useState("all");
@@ -75,8 +82,8 @@ export function Picker({
     <div className="flex flex-col gap-2">
       <section className="flex flex-col gap-2.5 tile p-4">
         <div className="flex flex-col gap-0.5 px-0.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-2">
-          <h2 className="text-[15px] font-bold">등록한 API 키</h2>
-          <span className="text-[13px] text-muted-foreground">키 하나 = 그 키를 만든 넥슨 계정 · 이 브라우저에만 저장</span>
+          <h2 className="text-[15px] font-bold">{registered ? "연결한 넥슨 계정" : "등록한 API 키"}</h2>
+          <span className="text-[13px] text-muted-foreground">{registered ? "내 정보에 등록한 키 · 어느 기기에서든 같이 봄" : "키 하나 = 그 키를 만든 넥슨 계정 · 이 브라우저에만 저장"}</span>
         </div>
         <div className="grid gap-2 sm:grid-cols-[repeat(auto-fill,minmax(250px,1fr))]">
           {accounts.map((a) => (
@@ -93,19 +100,24 @@ export function Picker({
                   다시
                 </button>
               )}
-              <button type="button" onClick={() => onRemove(a.account)} className={cn(cardBtn, "font-semibold text-muted-foreground hover:text-foreground")}>
-                빼기
-              </button>
+              {!registered && (
+                <button type="button" onClick={() => onRemove(a.account)} className={cn(cardBtn, "font-semibold text-muted-foreground hover:text-foreground")}>
+                  빼기
+                </button>
+              )}
             </div>
           ))}
-          <button
-            type="button"
-            onClick={onAdd}
-            className={cn("flex min-h-[60px] items-center justify-center gap-2 rounded-xl text-[13px] font-bold text-primary-text shadow-[inset_0_0_0_1.5px_var(--border)] hover:bg-primary/14 hover:shadow-[inset_0_0_0_1.5px_var(--primary)]", focus)}
-          >
-            <Plus className="size-4" strokeWidth={2.4} aria-hidden="true" />
-            API 키 추가
-          </button>
+          {registered ? (
+            <IntentLink href="/me" className={addTile}>
+              {plus}
+              내 정보에서 추가 · 삭제
+            </IntentLink>
+          ) : (
+            <button type="button" onClick={onAdd} className={addTile}>
+              {plus}
+              API 키 추가
+            </button>
+          )}
         </div>
       </section>
 

@@ -12,7 +12,7 @@ import { ask, type KeyProblem } from "@/lib/auth/nexon-key";
 import { unpackLabel } from "@/lib/auth/rules";
 import type { RawCharacterList } from "@/lib/enhance/client";
 import { kstStamp } from "@/lib/enhance/kst";
-import { untilReset } from "@/lib/revenue/calc";
+import { bossLines, untilReset, type SchedulerBoss } from "@/lib/revenue/calc";
 import { MAX_PICKED } from "@/lib/revenue/data";
 import { FAST, REFUSED_RETRIES, SLOW, once, pacerPool, refusedWait } from "@/lib/nexon/open-api";
 import { supabaseAdmin } from "@/lib/supabase-admin";
@@ -91,22 +91,22 @@ function paced(key: string, line: ReturnType<typeof lineFor>) {
     }
   };
 }
-type Get = ReturnType<typeof paced>;
+export type Get = ReturnType<typeof paced>;
 
-class Refused extends Error {
+export class Refused extends Error {
   readonly problem: KeyProblem;
   constructor(problem: KeyProblem) {
     super(problem);
     this.problem = problem;
   }
 }
-const problemOf = (e: unknown): KeyProblem => (e instanceof Refused ? e.problem : "failed");
+export const problemOf = (e: unknown): KeyProblem => (e instanceof Refused ? e.problem : "failed");
 
 /** One of the member's connected accounts, its key opened (null = it does not open). */
-type Opened = { id: number; name: string; stamp: string; get: Get | null };
+export type Opened = { id: number; name: string; stamp: string; get: Get | null };
 
 /** Rows are read with the service role key (members cannot read the sealed key), so the query names the member. */
-async function openAccounts(memberId: string): Promise<Opened[] | null> {
+export async function openAccounts(memberId: string): Promise<Opened[] | null> {
   const rows = await supabaseAdmin().from("nexon_accounts").select("id, label, key_cipher, updated_at").eq("user_id", memberId).order("created_at");
   if (rows.error) return null;
   return rows.data.map((row) => {
@@ -125,9 +125,10 @@ async function openAccounts(memberId: string): Promise<Opened[] | null> {
  * what is kept. A new window every `keepMs`: a stale answer is never served while a new one is fetched behind it.
  * A refusal is thrown, so it is not kept and the next visit asks again.
  */
-function kept<T>(memberId: string, account: Opened, what: string, read: () => Promise<T>, keepMs = KEEP_MS): Promise<T> {
+export function kept<T>(memberId: string, account: Opened, what: string, read: () => Promise<T>, keepMs = KEEP_MS): Promise<T> {
   const window = Math.floor(Date.now() / keepMs);
-  const parts = ["homework", memberId, String(account.id), account.stamp, what, String(window)];
+  // "2": what is kept per character grew (the boss lines), and an answer kept by an older build must not be read.
+  const parts = ["homework", "2", memberId, String(account.id), account.stamp, what, String(window)];
   return once(reading, parts.join("|"), () => unstable_cache(read, parts, { revalidate: keepMs / 1000, tags: [homeworkTag(memberId)] })());
 }
 
@@ -145,21 +146,21 @@ function listOf(memberId: string, account: Opened, get: Get): Promise<Listed[]> 
   }
 }
 
-type Answer = { at: number; /** As the scheduler says it now; 0 = it does not. */ level: number; hw: CharHomework; shared: AccountHomework; clears: number; limit: number };
+export type Answer = { at: number; /** As the scheduler says it now; 0 = it does not. */ level: number; hw: CharHomework; shared: AccountHomework; clears: number; limit: number; /** The boss lines boss revenue reads (lib/revenue/server.ts): one answer serves both pages. */ boss: SchedulerBoss[] };
 
 /** One character's scheduler, already worked out (the raw answer is some 15 KB a character; this is what the page needs). */
-function answerOf(memberId: string, account: Opened, get: Get, ocid: string): Promise<Answer> {
+export function answerOf(memberId: string, account: Opened, get: Get, ocid: string): Promise<Answer> {
   return kept(memberId, account, ocid, async () => {
     const answer = await get<HomeworkState>("scheduler/character-state", { ocid });
     if ("problem" in answer) throw new Refused(answer.problem);
     const state = answer.body;
-    return { at: Date.now(), level: state.character_level ?? 0, hw: charHomework(state), shared: accountHomework([state]), clears: state.weekly_boss_clear_count ?? 0, limit: state.weekly_boss_clear_limit_count ?? 0 };
+    return { at: Date.now(), level: state.character_level ?? 0, hw: charHomework(state), shared: accountHomework([state]), clears: state.weekly_boss_clear_count ?? 0, limit: state.weekly_boss_clear_limit_count ?? 0, boss: bossLines(state) };
   });
 }
 
-type Lists = { account: Opened; list: Listed[]; problem?: AccountProblem }[];
+export type Lists = { account: Opened; list: Listed[]; problem?: AccountProblem }[];
 
-async function listsOf(memberId: string, accounts: Opened[]): Promise<Lists> {
+export async function listsOf(memberId: string, accounts: Opened[]): Promise<Lists> {
   return Promise.all(
     accounts.map(async (account) => {
       if (!account.get) return { account, list: [], problem: "locked" as const };
@@ -232,6 +233,8 @@ export type PickData = {
   /** `picked` is the member's own pick (read now, not what the page showed). */
   picking: boolean;
   max: number;
+  /** The characters boss revenue follows, as kept with the member's account (absent or null = none kept there). */
+  revenue?: string[] | null;
 };
 
 /** Every character the member could pick, for the picker (the lists are the kept ones: no call when the page just showed). */

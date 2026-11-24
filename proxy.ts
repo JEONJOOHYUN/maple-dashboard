@@ -32,5 +32,6 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/login", "/me/:path*", "/homework"],
+  // 보스 수익 is a public, static page: only its Server Action calls (a member's data and settings) pass here.
+  matcher: ["/login", "/me/:path*", "/homework", { source: "/revenue", has: [{ type: "header", key: "next-action" }] }],
 };

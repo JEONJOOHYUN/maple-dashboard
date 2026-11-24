@@ -24,11 +24,16 @@ export function bossRows(state: SchedulerState | null | undefined): BossRow[] {
   return rows;
 }
 const rowsOf = new WeakMap<SchedulerState, BossRow[]>();
-function readRows(state: SchedulerState): BossRow[] {
-  const rows = (state.boss_contents ?? [])
+/**
+ * The lines of `boss_contents` the screens read: weekly and monthly bosses, cleared or registered. The server sends a
+ * member's scheduler down to these (a tenth of the answer); `bossRows` of them is the same as of the whole answer.
+ */
+export const bossLines = (state: SchedulerState): SchedulerBoss[] =>
+  (state.boss_contents ?? [])
     .filter((b) => (b.cycle === "bossWeekly" || b.cycle === "bossMonthly") && b.content_name && b.difficulty)
-    .filter((b) => b.complete_flag === "true" || b.registration_flag === "true")
-    .sort((a, b) => (a.list_order_no ?? 0) - (b.list_order_no ?? 0));
+    .filter((b) => b.complete_flag === "true" || b.registration_flag === "true");
+function readRows(state: SchedulerState): BossRow[] {
+  const rows = bossLines(state).sort((a, b) => (a.list_order_no ?? 0) - (b.list_order_no ?? 0));
   const cleared = new Set(rows.filter((b) => b.complete_flag === "true").map((b) => b.content_name));
   return rows.filter((b) => b.complete_flag === "true" || !cleared.has(b.content_name)).map((b) => {
     const boss = b.content_name as string;

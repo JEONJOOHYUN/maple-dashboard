@@ -174,3 +174,5 @@ export const MATERIALS: Record<string, Material> = {
 export const SCAN_MIN_LEVEL = 190;
 /** Most characters the revenue page follows (user, 2026-11-07). */
 export const MAX_PICKED = 36;
+/** Characters one call to our server asks NEXON about (a member's accounts): the page sends more in several calls. */
+export const MAX_ASKED = 300;

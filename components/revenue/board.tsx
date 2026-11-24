@@ -26,7 +26,6 @@ import {
   withParty,
   type Cell,
   type Marks,
-  type PartyStore,
   type Prices,
   type SchedulerState,
 } from "@/lib/revenue/calc";
@@ -35,8 +34,9 @@ import { useStored } from "@/lib/use-stored";
 import { cn } from "@/lib/utils";
 import { Face } from "@/components/revenue/face";
 import { SheetHead } from "@/components/revenue/sheet-head";
-import { DIFF_STYLE, chip, focus, hoverRing, openRing, pickedRing, problemLine, sheetPanel } from "@/components/revenue/styles";
+import { DIFF_STYLE, chip, focus, hoverRing, lineTile, openRing, pickedRing, problemLine, sheetPanel } from "@/components/revenue/styles";
 import type { Char } from "@/components/revenue/use-data";
+import type { RevenueSettings } from "@/components/revenue/use-settings";
 
 const won = (meso: number) => koreanUnits(meso);
 const mutedChip = cn(chip, "bg-muted text-muted-foreground");
@@ -117,6 +117,7 @@ export function Board({
   loadedAt,
   now,
   onRefresh,
+  settings,
 }: {
   chars: Char[];
   states: Record<string, SchedulerState | null>;
@@ -127,13 +128,11 @@ export function Board({
   loadedAt: number;
   now: number;
   onRefresh: () => void;
+  /** Party sizes, prices and checked rewards: kept in this browser, or with a member's account. */
+  settings: RevenueSettings;
 }) {
-  const [party, setParty] = useStored<PartyStore>("revenue:party", {});
-  const [got, setGot] = useStored<{ week: string; marks: Marks }>("revenue:got", { week: "", marks: {} });
-  const [priceText, setPriceText] = useStored<Partial<Record<ItemId, string>>>("revenue:pricesEok", {});
-  const [withMat, setWithMat] = useStored<boolean>("revenue:material", true);
   // Auction fee the drops are sold with, shared like the split calculator (its default first).
-  const [feeStored, setFee] = useStored<number>("revenue:fee", AUCTION_FEE_OPTIONS[0]);
+  const { party, setParty, got, setGot, priceText, setPriceText, withMat, setWithMat, fee: feeStored, setFee } = settings;
   const fee: AuctionFee = (AUCTION_FEE_OPTIONS as readonly number[]).includes(feeStored) ? (feeStored as AuctionFee) : AUCTION_FEE_OPTIONS[0];
   const [pricesOpen, setPricesOpen] = useStored<boolean>("revenue:pricesOpen", false);
   // A character's bosses open in a side sheet (user 2026-11-24, instead of rows opening one by one down the page).
@@ -207,7 +206,7 @@ export function Board({
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 tile px-4 py-3">
+      <div className={lineTile}>
         <div>
           이번 주 ·{" "}
           <b>
@@ -369,9 +368,9 @@ export function Board({
                   if (el) rowRefs.current.set(v.c.ocid, el);
                   else rowRefs.current.delete(v.c.ocid);
                 }}
+                aria-haspopup="dialog"
                 onPointerEnter={warmPictures}
                 onFocus={warmPictures}
-                aria-haspopup="dialog"
                 onClick={() => {
                   setSheetId(v.c.ocid);
                   setSheetOpen(true);

@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "개인정보처리방침" };
 
-// Set to the day this version goes live on main (2026-11-24: sign-in with Google and the kept API keys).
-const EFFECTIVE_DATE = "2026-11-24";
+// Set to the day this version goes live on main (2026-11-24: sign-in with Google and the kept API keys;
+// 2026-11-25: a member's boss revenue settings kept with the account).
+const EFFECTIVE_DATE = "2026-11-25";
 const CONTACT_EMAIL = "maplestorydashboard@gmail.com";
 
 const sections = [
@@ -20,8 +21,8 @@ const processors = [
   { company: "Microsoft (Clarity)", job: "방문 기록 분석", place: "미국 등 (Microsoft Azure)" },
   { company: "Vercel", job: "호스팅 · 접속 기록", place: "미국 (함수 실행은 서울)" },
   { company: "Google", job: "구글 로그인 (계정 확인)", place: "미국 등" },
-  { company: "Supabase", job: "회원 정보 · 암호화한 API 키 보관", place: "한국 (AWS 서울)" },
-  { company: "넥슨 (Open API)", job: "닉네임 조회 · 강화 기록 조회 · 등록한 키의 계정 확인 · 숙제 조회", place: "한국" },
+  { company: "Supabase", job: "회원 정보 · 암호화한 API 키 · 보스 수익 설정 보관", place: "한국 (AWS 서울)" },
+  { company: "넥슨 (Open API)", job: "닉네임 조회 · 강화 기록 조회 · 등록한 키의 계정 확인 · 숙제 · 보스 수익 조회", place: "한국" },
 ];
 
 const list = "flex list-disc flex-col gap-1 pl-[18px] text-sm leading-relaxed";
@@ -60,7 +61,10 @@ export default function PrivacyPage() {
               <b>구글 계정 정보</b> (로그인할 때): 이메일 · 이름 · 프로필 사진 주소 → 계정 구분 · 로그인 유지
             </li>
             <li>
-              <b>넥슨 Open API 키</b> (내 정보에 등록할 때): 암호화해서 서버에 보관 → 등록한 넥슨 계정의 정보 · 숙제 (게임 스케줄러) 조회. 함께 저장 = 넥슨 계정 고유값을 되돌릴 수 없게 바꾼 값 · 대표 캐릭터 이름 · 월드
+              <b>넥슨 Open API 키</b> (내 정보에 등록할 때): 암호화해서 서버에 보관 → 등록한 넥슨 계정의 정보 · 숙제 · 보스 수익 (게임 스케줄러) 조회. 함께 저장 = 넥슨 계정 고유값을 되돌릴 수 없게 바꾼 값 · 대표 캐릭터 이름 · 월드
+            </li>
+            <li>
+              <b>보스 수익 설정</b> (로그인하고 보스 수익을 쓸 때): 고른 캐릭터 (넥슨의 캐릭터 식별값) · 파티원 수 · 고친 보상 가격 · 먹은 보상 표시 → 다른 기기에서 로그인해도 같은 화면
             </li>
             <li>
               <b>방문 기록</b> (자동 수집): 클릭 · 스크롤 · 마우스 움직임, 기기 · 브라우저, 국가, 쿠키 식별자 → 화면 개선
@@ -86,11 +90,11 @@ export default function PrivacyPage() {
         <Section index={2} {...sections[1]}>
           <ul className={list}>
             <li>
-              회원 정보 · 등록한 API 키: 탈퇴할 때까지. 내 정보의 <b>회원 탈퇴</b>로 전부 바로 삭제, 키는 계정마다 <b>삭제</b> 가능
+              회원 정보 · 등록한 API 키 · 보스 수익 설정: 탈퇴할 때까지. 내 정보의 <b>회원 탈퇴</b>로 전부 바로 삭제, 키는 계정마다 <b>삭제</b> 가능
             </li>
             <li>방문 기록: 녹화 30일 · 집계 13개월 뒤 Clarity 에서 삭제</li>
             <li>닉네임 조회 결과: 서버 임시 캐시. 3시간이 지나면 다음 조회 때 새 결과로 교체, 정해진 삭제 기한 없음 → 요청하면 삭제</li>
-            <li>숙제 현황: 넥슨에서 받은 숙제를 서버 임시 캐시에 5분 (API 키는 캐시에 안 들어감). 지나면 다음에 볼 때 새 결과로 교체, 정해진 삭제 기한 없음 → 요청하면 삭제</li>
+            <li>숙제 현황 · 보스 수익 (로그인했을 때): 넥슨에서 받은 숙제 · 보스 기록을 서버 임시 캐시에 5분, 캐릭터 목록 · 캐릭터 그림 주소는 1시간 (API 키는 캐시에 안 들어감). 지나면 다음에 볼 때 새 결과로 교체, 정해진 삭제 기한 없음 → 요청하면 삭제</li>
             <li>접속 기록: Vercel 에서 1시간 뒤 삭제 (현재 요금제 기준)</li>
             <li>아이템 사전: 누구의 것인지 알 수 없는 아이템 정보라 계속 보관</li>
             <li>
