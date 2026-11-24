@@ -9,6 +9,7 @@ import { Clarity } from "@/components/clarity";
 import { SideNav } from "@/components/side-nav";
 import { SiteHeader } from "@/components/site-header";
 import { ThemeProvider } from "@/components/theme-provider";
+import { MEMBER_HINT_SCRIPT } from "@/lib/auth/member-hint";
 
 // Big numbers only (font-num). Official NEXON files, unmodified (license: fonts/Maplestory/LICENSE.md).
 // unicode-range keeps it to ASCII so units like 억 or 명 fall through to Pretendard
@@ -44,6 +45,8 @@ export default function RootLayout({
   return (
     <html lang="ko" suppressHydrationWarning className={maple.variable}>
       <body>
+        {/* Before anything is painted: the header's login mark (static pages cannot read the cookie on the server). */}
+        <script dangerouslySetInnerHTML={{ __html: MEMBER_HINT_SCRIPT }} />
         {/* Dark unless the visitor picked light with the toggle (user, 2026-11-12). The system setting is not followed. */}
         <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
           <div className="flex min-h-dvh">

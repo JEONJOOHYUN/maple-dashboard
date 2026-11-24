@@ -190,22 +190,15 @@ export const navGroups: NavGroup[] = [
 
 export const allNavItems: NavItem[] = navGroups.flatMap((g) => g.items);
 
-/** Pages that exist only as "준비 중" placeholders (menu tools + the login page). */
-export const placeholderPages: { slug: string; title: string; description: string; icon?: LucideIcon }[] = [
-  ...allNavItems
-    .filter((item) => !item.ready)
-    .map((item) => ({
-      slug: item.slug,
-      title: item.label,
-      description: item.card?.description ?? "",
-      icon: item.icon,
-    })),
-  {
-    slug: "login",
-    title: "로그인",
-    description: "아이디 또는 API 키 로그인 · 준비 중",
-  },
-];
+/** Pages that exist only as "준비 중" placeholders (the menu tools not built yet). */
+export const placeholderPages: { slug: string; title: string; description: string; icon?: LucideIcon }[] = allNavItems
+  .filter((item) => !item.ready)
+  .map((item) => ({
+    slug: item.slug,
+    title: item.label,
+    description: item.card?.description ?? "",
+    icon: item.icon,
+  }));
 
 function matches(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(href + "/");

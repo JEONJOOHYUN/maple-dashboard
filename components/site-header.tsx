@@ -1,33 +1,52 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Brand } from "@/components/brand";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Badge } from "@/components/ui/badge";
+import { syncMemberHint } from "@/lib/auth/member-hint";
 import { findActive, navGroups } from "@/lib/nav";
 import { cn } from "@/lib/utils";
+
+/** Pages outside the menu. */
+const PLAIN_CRUMBS: Record<string, string> = { "/privacy": "개인정보처리방침", "/login": "로그인", "/me": "내 정보" };
 
 export function SiteHeader() {
   const pathname = usePathname();
   const active = findActive(pathname);
   const isHome = pathname === "/";
-  const crumb = isHome
-    ? "홈"
-    : active
-      ? `${active.group.label} · ${active.item.label}`
-      : pathname === "/privacy"
-        ? "개인정보처리방침"
-        : "";
+  const crumb = isHome ? "홈" : active ? `${active.group.label} · ${active.item.label}` : (PLAIN_CRUMBS[pathname] ?? "");
+
+  // Signing out moves here without a page load: the mark set by the inline script is read again.
+  useEffect(() => {
+    syncMemberHint();
+  }, [pathname]);
 
   return (
     <header className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-3 lg:px-8 lg:py-3.5">
       <Brand compact className="lg:hidden" />
       <span className="hidden text-[13px] font-medium text-muted-foreground lg:inline">{crumb}</span>
 
-      {/* Login button stays hidden until member features ship (kept on the `members` branch). */}
+      {/* Both marks are in the page; CSS shows the one that fits (app/globals.css .when-guest / .when-member). */}
       <div className="ml-auto flex items-center gap-2">
         <ThemeToggle />
+        {pathname !== "/login" && (
+          <Link
+            href="/login"
+            className="when-guest flex h-10 items-center rounded-xl bg-card px-3.5 text-[13px] font-semibold whitespace-nowrap text-foreground transition-[background-color,scale] outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.96]"
+          >
+            로그인
+          </Link>
+        )}
+        <Link
+          href="/me"
+          aria-label="내 정보"
+          aria-current={pathname === "/me" ? "page" : undefined}
+          data-clarity-mask="true"
+          className="when-member member-letter flex size-10 items-center justify-center rounded-full bg-primary-soft text-[15px] font-bold text-primary-text inset-ring inset-ring-primary transition-[background-color,scale] outline-none focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.96]"
+        />
       </div>
 
       {/* Mobile: group tabs, then the tools inside the chosen group. */}

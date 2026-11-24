@@ -243,6 +243,16 @@
   }
 }
 
+/* The header's login mark (lib/auth/member-hint.ts): <html data-member> is set before the first paint, so neither the
+   login button nor the avatar flashes or moves on a static page. The letter comes from the same script. */
+html[data-member] .when-guest,
+html:not([data-member]) .when-member {
+  display: none;
+}
+.member-letter::after {
+  content: var(--member-letter, "");
+}
+
 /* Light ↔ dark (components/theme-toggle.tsx): every colour on the page changes in the same frame, instead of each
    button and chip fading at its own pace. The toggle alone keeps its motion: the press giving back, the sun ↔ moon. */
 .theme-switching :not([data-theme-toggle], [data-theme-toggle] *),

@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = { title: "개인정보처리방침" };
 
-// Set to the day this version goes live on main.
-const EFFECTIVE_DATE = "2026-11-12";
+// Set to the day this version goes live on main (2026-11-24: sign-in with Google and the kept API keys).
+const EFFECTIVE_DATE = "2026-11-24";
 const CONTACT_EMAIL = "maplestorydashboard@gmail.com";
 
 const sections = [
@@ -19,7 +19,9 @@ const sections = [
 const processors = [
   { company: "Microsoft (Clarity)", job: "방문 기록 분석", place: "미국 등 (Microsoft Azure)" },
   { company: "Vercel", job: "호스팅 · 접속 기록", place: "미국 (함수 실행은 서울)" },
-  { company: "넥슨 (Open API)", job: "닉네임 조회 · 강화 기록 조회", place: "한국" },
+  { company: "Google", job: "구글 로그인 (계정 확인)", place: "미국 등" },
+  { company: "Supabase", job: "회원 정보 · 암호화한 API 키 보관", place: "한국 (AWS 서울)" },
+  { company: "넥슨 (Open API)", job: "닉네임 조회 · 강화 기록 조회 · 등록한 키의 계정 확인", place: "한국" },
 ];
 
 const list = "flex list-disc flex-col gap-1 pl-[18px] text-sm leading-relaxed";
@@ -52,8 +54,14 @@ export default function PrivacyPage() {
         </header>
 
         <Section index={1} {...sections[0]}>
-          <p className={text}>회원 가입 없음. 이름 · 이메일 · 전화번호 안 받음.</p>
+          <p className={text}>로그인 없이 쓰는 도구는 이름 · 이메일 · 전화번호 안 받음. 로그인 (구글 계정) 은 선택.</p>
           <ul className={list}>
+            <li>
+              <b>구글 계정 정보</b> (로그인할 때): 이메일 · 이름 · 프로필 사진 주소 → 계정 구분 · 로그인 유지
+            </li>
+            <li>
+              <b>넥슨 Open API 키</b> (내 정보에 등록할 때): 암호화해서 서버에 보관 → 등록한 넥슨 계정의 정보 조회. 함께 저장 = 넥슨 계정 고유값을 되돌릴 수 없게 바꾼 값 · 대표 캐릭터 이름 · 월드
+            </li>
             <li>
               <b>방문 기록</b> (자동 수집): 클릭 · 스크롤 · 마우스 움직임, 기기 · 브라우저, 국가, 쿠키 식별자 → 화면 개선
             </li>
@@ -69,17 +77,23 @@ export default function PrivacyPage() {
             <li>
               <b>접속 기록</b> (자동 수집): IP · 요청 주소 · 시각 · 브라우저 → 오류 · 공격 확인
             </li>
+            <li>
+              <b>시도 횟수</b> (API 키 등록 · 아이템 사전에 보낼 때): IP · 계정을 되돌릴 수 없게 바꾼 값과 횟수 → 지나친 요청 막기
+            </li>
           </ul>
         </Section>
 
         <Section index={2} {...sections[1]}>
           <ul className={list}>
+            <li>
+              회원 정보 · 등록한 API 키: 탈퇴할 때까지. 내 정보의 <b>회원 탈퇴</b>로 전부 바로 삭제, 키는 계정마다 <b>삭제</b> 가능
+            </li>
             <li>방문 기록: 녹화 30일 · 집계 13개월 뒤 Clarity 에서 삭제</li>
             <li>닉네임 조회 결과: 서버 임시 캐시. 3시간이 지나면 다음 조회 때 새 결과로 교체, 정해진 삭제 기한 없음 → 요청하면 삭제</li>
             <li>접속 기록: Vercel 에서 1시간 뒤 삭제 (현재 요금제 기준)</li>
             <li>아이템 사전: 누구의 것인지 알 수 없는 아이템 정보라 계속 보관</li>
             <li>
-              API 키 · 강화 기록: 우리 서버에 없음. 브라우저에 저장된 것은 강화 기록의 <b>키 · 기록 지우기</b> 버튼으로 그 키의 것을, 키 입력 화면의 <b>모두 지우기</b>로 전부 삭제
+              강화 기록에 넣은 API 키 · 강화 기록: 우리 서버에 없음. 브라우저에 저장된 것은 강화 기록의 <b>키 · 기록 지우기</b> 버튼으로 그 키의 것을, 키 입력 화면의 <b>모두 지우기</b>로 전부 삭제
             </li>
           </ul>
         </Section>
@@ -112,7 +126,8 @@ export default function PrivacyPage() {
 
         <Section index={4} {...sections[3]}>
           <ul className={list}>
-            <li>Clarity 쿠키: 같은 방문자 구분용. 브라우저에서 차단해도 모든 도구 사용 가능</li>
+            <li>Clarity 쿠키: 같은 방문자 구분용. 브라우저에서 차단해도 로그인 없는 도구는 모두 사용 가능</li>
+            <li>로그인 쿠키 (로그인했을 때만): 로그인 유지 · 헤더의 로그인 표시. 로그아웃 · 탈퇴하면 삭제</li>
             <li>
               계산기 설정 · 입력값: <b>이 브라우저에만</b> 저장, 서버로 안 보냄. 브라우저의 사이트 데이터 삭제로 지움
             </li>
@@ -129,7 +144,10 @@ export default function PrivacyPage() {
         </Section>
 
         <Section index={6} {...sections[5]}>
-          <p className={text}>모든 접속 HTTPS. 서버 비밀 키는 서버에만. 강화 기록 화면 · API 키 입력칸은 Clarity 녹화에서 가림.</p>
+          <p className={text}>
+            모든 접속 HTTPS. 서버 비밀 키는 서버에만. 등록한 API 키는 암호화 (AES-256-GCM) 해 보관하고 화면에 다시 안 보임. 강화 기록 화면 · 내 정보의 이메일과
+            넥슨 계정 · API 키 입력칸은 Clarity 녹화에서 가림.
+          </p>
         </Section>
 
         <Section index={7} {...sections[6]}>
@@ -142,7 +160,7 @@ export default function PrivacyPage() {
               {CONTACT_EMAIL}
             </a>
           </p>
-          <p className={text}>회원 가입 기능을 열기 전에 이 문서부터 고치고 시행일 표시.</p>
+          <p className={text}>내용이 바뀌면 시행일과 함께 이 화면에 표시.</p>
         </Section>
       </article>
     </div>
