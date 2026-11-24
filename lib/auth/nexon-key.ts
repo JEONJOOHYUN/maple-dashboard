@@ -2,36 +2,29 @@
 // The key is never logged, never sent back to the browser and never cached.
 import "server-only";
 import { characterWorldsOf, mainCharacter, type RawCharacterList } from "@/lib/enhance/client";
+import { BASE, CODE_KINDS, KEY_HEADER } from "@/lib/nexon/open-api";
 import { sealKey } from "./key-crypto";
 
-const BASE = "https://open.api.nexon.com/maplestory/v1";
 const TIMEOUT_MS = 8000;
 
 /** badKey = wrong or revoked key · quota = the key's call limit · busy = NEXON under maintenance. */
 export type KeyProblem = "badKey" | "quota" | "busy" | "failed";
 export type KeyCheck = { ok: true; ouid: string; name: string; world: string } | { ok: false; problem: KeyProblem };
 
-const PROBLEMS: Record<string, KeyProblem> = {
-  OPENAPI00002: "badKey",
-  OPENAPI00005: "badKey",
-  OPENAPI00007: "quota",
-  OPENAPI00009: "busy",
-  OPENAPI00010: "busy",
-  OPENAPI00011: "busy",
-};
-
 /** One call to NEXON with a member's key (never cached by the fetch layer: the key is in its header). */
 export async function ask<T>(path: string, key: string, params?: Record<string, string>): Promise<{ body: T } | { problem: KeyProblem }> {
   let res: Response;
   try {
     const query = params ? `?${new URLSearchParams(params)}` : "";
-    res = await fetch(`${BASE}/${path}${query}`, { headers: { "x-nxopen-api-key": key }, cache: "no-store", signal: AbortSignal.timeout(TIMEOUT_MS) });
+    res = await fetch(`${BASE}/${path}${query}`, { headers: { [KEY_HEADER]: key }, cache: "no-store", signal: AbortSignal.timeout(TIMEOUT_MS) });
   } catch {
     return { problem: "failed" };
   }
   const body = (await res.json().catch(() => null)) as (T & { error?: { name?: string } }) | null;
   if (res.ok && body) return { body };
-  return { problem: PROBLEMS[body?.error?.name ?? ""] ?? (res.status === 429 ? "quota" : "failed") };
+  // A value NEXON does not take ("param") is not the member's to fix: it is a failure here.
+  const kind = CODE_KINDS[body?.error?.name ?? ""];
+  return { problem: kind && kind !== "param" ? kind : res.status === 429 ? "quota" : "failed" };
 }
 
 /**

@@ -6,16 +6,14 @@
 // spaced pace for a minute (2026-11-09 measured: seven calls at once made some fail). It used to last for the
 // instance's whole life, which one busy second (a guild search) could set off for good (2026-11-19).
 //
-// Guild searches fire hundreds of calls (seven a member, lib/spec/guild.ts): those go through nexonGetBulk, which keeps
-// this instance to BULK_PER_SEC starts a second so two searches at once stay under the key's 500, and waits out a
-// refusal on its own instead of slowing every other caller.
+// Guild searches fire hundreds of calls (seven a member, lib/spec/guild.ts): those go through nexonGetBulk, a line
+// of its own at the same rate a tenth of a second at a time (SMOOTH), so two searches at once stay under the key's
+// 500 and a refusal there does not slow every other caller. The pace, the line and the retries are ./open-api.ts,
+// shared with the other callers.
 import { DAY, kstDate } from "../enhance/kst.ts";
+import { BASE, FAST, KEY_HEADER, REFUSED_RETRIES, SLOW, SMOOTH, isRefusal, pacer, refusedWait } from "./open-api.ts";
 
-const BASE = "https://open.api.nexon.com/maplestory/v1";
-const SLOW_GAP_MS = 220;
 const SLOW_FOR_MS = 60_000;
-let slowUntil = 0;
-const BULK_PER_SEC = 250;
 const BULK_RETRIES = 4;
 
 /** "maintenance" = NEXON is not giving live data now (see MAINTENANCE_CODES): the same call with a date may still answer. */
@@ -41,53 +39,25 @@ export class NexonError extends Error {
   }
 }
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+// One line for every ordinary request start (retries included). After a refusal it is held to the spaced pace for
+// SLOW_FOR_MS: each start then waits for the previous *actual* one, so a delayed timer cannot release several
+// requests at once (Codex review 2026-11-09). Responses still overlap.
+const ordinary = pacer(FAST);
+// The line of the guild searches: at most a tenth of a second's worth together, so coarse timers (Windows ticks
+// every ~15 ms) still reach the rate and timers that fire late (a busy server) cannot let a pile of starts out.
+const bulk = pacer(SMOOTH);
 
-// One queue for every request start (retries included). At the spaced pace each turn waits until SLOW_GAP_MS after
-// the previous *actual* start, so a delayed timer cannot release several requests at once (Codex review 2026-11-09).
-// Responses still overlap.
-let lastStart = 0;
-let queue: Promise<void> = Promise.resolve();
-function waitTurn(): Promise<void> {
-  const turn = queue.then(async () => {
-    if (Date.now() < slowUntil) {
-      const wait = lastStart + SLOW_GAP_MS - Date.now();
-      if (wait > 0) await sleep(wait);
-    }
-    lastStart = Date.now();
-  });
-  queue = turn;
-  return turn;
-}
-
-// Bulk starts, one line of turns over a token bucket: BULK_PER_SEC a second on average, and at most BULK_BURST (a
-// tenth of a second's worth) together — so coarse timers (Windows ticks every ~15 ms) still reach the rate, and
-// timers that fire late (a busy server) cannot let a pile of starts out at once: any second holds at most
-// BULK_PER_SEC + BULK_BURST starts.
-const BULK_BURST = 25;
-let bulkTokens = BULK_BURST;
-let bulkRefilled = 0;
-let bulkQueue: Promise<void> = Promise.resolve();
-function bulkTurn(): Promise<void> {
-  const turn = bulkQueue.then(async () => {
-    for (;;) {
-      const now = Date.now();
-      bulkTokens = Math.min(BULK_BURST, bulkTokens + ((now - bulkRefilled) * BULK_PER_SEC) / 1000);
-      bulkRefilled = now;
-      if (bulkTokens >= 1) {
-        bulkTokens -= 1;
-        return;
-      }
-      await sleep(Math.ceil(((1 - bulkTokens) * 1000) / BULK_PER_SEC));
-    }
-  });
-  bulkQueue = turn;
-  return turn;
-}
-
-type Pace = { turn: () => Promise<void>; retries: number; refused: () => void };
-const NORMAL: Pace = { turn: waitTurn, retries: 2, refused: () => (slowUntil = Date.now() + SLOW_FOR_MS) };
-const BULK: Pace = { turn: bulkTurn, retries: BULK_RETRIES, refused: () => {} };
+/** `refused` = NEXON said "too many" to try number `attempt`: the line waits before the next start. */
+type Pace = { turn: () => Promise<unknown>; retries: number; refused: (attempt: number) => void };
+const NORMAL: Pace = {
+  turn: () => ordinary.turn(),
+  retries: REFUSED_RETRIES,
+  refused(attempt) {
+    ordinary.limitTo(SLOW, SLOW_FOR_MS);
+    ordinary.backOff(refusedWait(attempt));
+  },
+};
+const BULK: Pace = { turn: () => bulk.turn(), retries: BULK_RETRIES, refused: (attempt) => bulk.backOff(refusedWait(attempt)) };
 
 async function request<T>(path: string, params: Record<string, string>, pace: Pace): Promise<T> {
   const key = process.env.NEXON_API_KEY;
@@ -98,17 +68,14 @@ async function request<T>(path: string, params: Record<string, string>, pace: Pa
   const url = `${BASE}/${path}?${new URLSearchParams(params)}`;
   for (let attempt = 0; ; attempt++) {
     await pace.turn();
-    const res = await fetch(url, { headers: { "x-nxopen-api-key": key }, cache: "no-store" });
+    const res = await fetch(url, { headers: { [KEY_HEADER]: key }, cache: "no-store" });
     if (res.ok) return (await res.json()) as T;
     const body = (await res.json().catch(() => null)) as { error?: { name?: string; message?: string } } | null;
     const code = body?.error?.name ?? "";
-    if (res.status === 429 || code === "OPENAPI00007") {
-      pace.refused();
-      if (attempt < pace.retries) {
-        // A little spread so the calls refused together do not all come back in the same millisecond.
-        await sleep(1100 + Math.random() * 400);
-        continue;
-      }
+    if (isRefusal(res.status, code)) {
+      // The line is held, so the calls refused together come back one turn at a time.
+      pace.refused(attempt);
+      if (attempt < pace.retries) continue;
       throw new NexonError("quota", `${path}: ${code || res.status}`, code);
     }
     if (MAINTENANCE_CODES.includes(code)) {
@@ -124,7 +91,7 @@ export function nexonGet<T>(path: string, params: Record<string, string>): Promi
   return request<T>(path, params, NORMAL);
 }
 
-/** nexonGet for the many calls of one guild search: paced to BULK_PER_SEC, a refusal waited out and retried. */
+/** nexonGet for the many calls of one guild search: its own line (SMOOTH), a refusal waited out and retried. */
 export function nexonGetBulk<T>(path: string, params: Record<string, string>): Promise<T> {
   return request<T>(path, params, BULK);
 }

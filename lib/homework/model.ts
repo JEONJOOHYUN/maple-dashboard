@@ -15,7 +15,7 @@ export type SchedulerContent = {
   /** Quests only: "0" not started · "1" under way · "2" done. */
   quest_state?: string | null;
 };
-export type HomeworkState = BossState & { daily_contents?: SchedulerContent[]; weekly_contents?: SchedulerContent[] };
+export type HomeworkState = BossState & { character_level?: number; daily_contents?: SchedulerContent[]; weekly_contents?: SchedulerContent[] };
 
 export type Item = { name: string; done: boolean; /** "2/5": shown when the game counts more than one run. */ progress?: string; /** Bosses only. */ diff?: string };
 export type Group = { items: Item[]; done: number; total: number };

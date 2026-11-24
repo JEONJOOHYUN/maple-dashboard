@@ -1,8 +1,9 @@
 // A member's homework, read on the server: the keys kept for the member are opened here and never leave it.
-// NEXON is asked with the member's own key (the scheduler only answers for the key owner's characters), a
-// development-stage key allows 5 calls a second and 1,000 a day, so the calls are paced and every answer is kept
-// for a few minutes: the character list per account, the scheduler per character (picking one more character
-// costs one call).
+// NEXON is asked with the member's own key (the scheduler only answers for the key owner's characters). Members are
+// told to register a service-stage key, so the characters are asked together; a key that refuses that (a
+// development-stage one: 5 calls a second, 1,000 a day) is asked one at a time from then on (lib/nexon/open-api.ts).
+// Every answer is kept: the scheduler per character for a few minutes (picking one more character costs one call),
+// the character list per account for an hour.
 import "server-only";
 import { unstable_cache } from "next/cache";
 import { cookies } from "next/headers";
@@ -13,17 +14,20 @@ import type { RawCharacterList } from "@/lib/enhance/client";
 import { kstStamp } from "@/lib/enhance/kst";
 import { untilReset } from "@/lib/revenue/calc";
 import { MAX_PICKED } from "@/lib/revenue/data";
+import { FAST, REFUSED_RETRIES, SLOW, once, pacerPool, refusedWait } from "@/lib/nexon/open-api";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { accountHomework, charHomework, leftChips, mergeShared, summarize, untilDailyReset, type AccountHomework, type CharHomework, type HomeworkState } from "./model";
-import { once, pacerPool } from "./pace";
 import { PICK_COOKIE, cleanPick } from "./pick";
 
 /** Without a pick of the member's own: the highest characters of each account (one call each). */
 export const PER_ACCOUNT = 12;
-/** How long an answer is kept. */
+/** How long a character's scheduler is kept. */
 const KEEP_MS = 5 * 60_000;
-/** Under 5 request starts a second, whatever the key's stage. */
-const GAP_MS = 220;
+/**
+ * How long an account's character list is kept. It rarely changes, and every scheduler call waits for it: asked
+ * for again each time the schedulers ran out, it put one answer's time before all of them.
+ */
+const LIST_KEEP_MS = 60 * 60_000;
 
 /** locked = the kept key does not open (another secret, or the row was changed). */
 export type AccountProblem = KeyProblem | "locked";
@@ -52,19 +56,35 @@ export async function pickedHere(): Promise<string[]> {
 }
 
 /** One line of request starts per connected account (and key version), shared by every request this instance serves. */
-const lineOf = pacerPool(GAP_MS, 10 * 60_000);
+const lineOf = pacerPool(FAST, 10 * 60_000);
+/** The lines whose key refused the fast pace. Kept apart from the pool: an idle line is dropped, what was learnt is not. */
+const slowLines = new Set<string>();
+/** The line of one connected account (and key version), at the pace its key takes. */
+function lineFor(id: string) {
+  const line = lineOf(id);
+  if (slowLines.has(id)) line.limitTo(SLOW);
+  return {
+    turn: line.turn,
+    /** NEXON said "too many": the development-stage pace from here on, after the limit's second has passed. */
+    refused(waitMs: number) {
+      slowLines.add(id);
+      line.limitTo(SLOW);
+      line.backOff(waitMs);
+    },
+  };
+}
 /** Reads that are under way, so the same character asked for by two requests at once is one call. */
 const reading = new Map<string, Promise<unknown>>();
 
-/** `ask` for one key, its request starts spaced out (lib/homework/pace.ts), a refusal for pace tried twice more. */
-function paced(key: string, line: ReturnType<typeof lineOf>) {
+/** `ask` for one key, its request starts kept to the limit (lib/nexon/open-api.ts), a refusal for pace tried again. */
+function paced(key: string, line: ReturnType<typeof lineFor>) {
   return async function get<T>(path: string, params?: Record<string, string>) {
     for (let attempt = 0; ; attempt++) {
       await line.turn();
       const answer = await ask<T>(path, key, params);
-      if ("problem" in answer && answer.problem === "quota" && attempt < 2) {
+      if ("problem" in answer && answer.problem === "quota" && attempt < REFUSED_RETRIES) {
         // The per-second limit clears in a second (the member may have another screen calling with this key).
-        line.backOff(1200 * (attempt + 1));
+        line.refused(refusedWait(attempt));
         continue;
       }
       return answer;
@@ -92,7 +112,7 @@ async function openAccounts(memberId: string): Promise<Opened[] | null> {
   return rows.data.map((row) => {
     let get: Get | null = null;
     try {
-      get = paced(openKey(row.key_cipher, process.env.MAPLE_KEY_SECRET, memberId), lineOf(`${memberId}|${row.id}|${row.updated_at}`));
+      get = paced(openKey(row.key_cipher, process.env.MAPLE_KEY_SECRET, memberId), lineFor(`${memberId}|${row.id}|${row.updated_at}`));
     } catch {
       // Sealed with another secret, or changed: shown as a problem of this account.
     }
@@ -101,19 +121,20 @@ async function openAccounts(memberId: string): Promise<Opened[] | null> {
 }
 
 /**
- * What NEXON said, kept for five minutes under the member's tag. The key is never part of what is kept. A new
- * window every five minutes: a stale answer is never served while a new one is fetched behind it. A refusal is
- * thrown, so it is not kept and the next visit asks again.
+ * What NEXON said, kept for `keepMs` under the member's tag (새로 고침 drops it all). The key is never part of
+ * what is kept. A new window every `keepMs`: a stale answer is never served while a new one is fetched behind it.
+ * A refusal is thrown, so it is not kept and the next visit asks again.
  */
-function kept<T>(memberId: string, account: Opened, what: string, read: () => Promise<T>): Promise<T> {
-  const window = Math.floor(Date.now() / KEEP_MS);
+function kept<T>(memberId: string, account: Opened, what: string, read: () => Promise<T>, keepMs = KEEP_MS): Promise<T> {
+  const window = Math.floor(Date.now() / keepMs);
   const parts = ["homework", memberId, String(account.id), account.stamp, what, String(window)];
-  return once(reading, parts.join("|"), () => unstable_cache(read, parts, { revalidate: KEEP_MS / 1000, tags: [homeworkTag(memberId)] })());
+  return once(reading, parts.join("|"), () => unstable_cache(read, parts, { revalidate: keepMs / 1000, tags: [homeworkTag(memberId)] })());
 }
 
-/** Every character of the account, highest first. */
+/** Every character of the account, highest first (as of the last hour: a level on show comes from the scheduler's answer). */
 function listOf(memberId: string, account: Opened, get: Get): Promise<Listed[]> {
-  return kept(memberId, account, "list", async () => {
+  return kept(memberId, account, "list", readList, LIST_KEEP_MS);
+  async function readList() {
     const list = await get<RawCharacterList>("character/list");
     if ("problem" in list) throw new Refused(list.problem);
     return (list.body.account_list ?? [])
@@ -121,10 +142,10 @@ function listOf(memberId: string, account: Opened, get: Get): Promise<Listed[]> 
       .filter((c) => c.ocid && c.character_name)
       .map((c) => ({ ocid: c.ocid as string, name: c.character_name as string, world: c.world_name ?? "", job: c.character_class ?? "", level: c.character_level ?? 0 }))
       .sort((a, b) => b.level - a.level);
-  });
+  }
 }
 
-type Answer = { at: number; hw: CharHomework; shared: AccountHomework; clears: number; limit: number };
+type Answer = { at: number; /** As the scheduler says it now; 0 = it does not. */ level: number; hw: CharHomework; shared: AccountHomework; clears: number; limit: number };
 
 /** One character's scheduler, already worked out (the raw answer is some 15 KB a character; this is what the page needs). */
 function answerOf(memberId: string, account: Opened, get: Get, ocid: string): Promise<Answer> {
@@ -132,7 +153,7 @@ function answerOf(memberId: string, account: Opened, get: Get, ocid: string): Pr
     const answer = await get<HomeworkState>("scheduler/character-state", { ocid });
     if ("problem" in answer) throw new Refused(answer.problem);
     const state = answer.body;
-    return { at: Date.now(), hw: charHomework(state), shared: accountHomework([state]), clears: state.weekly_boss_clear_count ?? 0, limit: state.weekly_boss_clear_limit_count ?? 0 };
+    return { at: Date.now(), level: state.character_level ?? 0, hw: charHomework(state), shared: accountHomework([state]), clears: state.weekly_boss_clear_count ?? 0, limit: state.weekly_boss_clear_limit_count ?? 0 };
   });
 }
 
@@ -194,7 +215,7 @@ export async function memberHomework(memberId: string, picked: string[]): Promis
         if (typeof a === "string") return;
         // The member's own pick is shown whatever it holds; the automatic one only where there is homework.
         if (!pick && a.hw.today.total + a.hw.week.total + a.hw.bosses.total + a.hw.monthly.total === 0) return;
-        chars.push({ ...c, hw: a.hw, clears: a.clears, limit: a.limit });
+        chars.push({ ...c, level: a.level || c.level, hw: a.hw, clears: a.clears, limit: a.limit });
       });
       return { ...base, chars, shared: mergeShared(good.map((a) => a.shared)), failed: answers.length - good.length, at: good.length ? Math.min(...good.map((a) => a.at)) : 0 };
     })

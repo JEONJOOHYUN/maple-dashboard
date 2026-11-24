@@ -5,15 +5,11 @@
 // Visitors are told to register a service-stage application (500 calls per second, 20,000,000 per day), so calls
 // start close together. A development-stage key allows 5 per second and 1,000 per day: the first "too many requests"
 // answer drops this key to that pace, and the browser remembers it for the key.
+import { BASE, CODE_KINDS, FAST, KEY_HEADER, REFUSED_RETRIES, SLOW, pacer, refusedWait } from "../nexon/open-api.ts";
 import type { FoundItem } from "./items.ts";
 
-const BASE = "https://open.api.nexon.com/maplestory/v1";
-/** Service stage: at most this many request starts in any one second, half of the 500 allowed (the allowance is per application). */
-const FAST_PER_SECOND = 250;
 /** A refusal while this few requests were started in the last second can only be a development-stage key. */
 const SURELY_DEV = 100;
-/** Development stage: under 5 request starts a second. */
-const SLOW_GAP_MS = 230;
 
 const paceKey = (account: string) => `enhance:pace:${account}`;
 function knownSlow(account: string | undefined): boolean {
@@ -53,63 +49,23 @@ export class ApiError extends Error {
   }
 }
 
-const KINDS: Record<string, ApiErrorKind> = {
-  OPENAPI00002: "badKey",
-  OPENAPI00003: "param",
-  OPENAPI00004: "param",
-  OPENAPI00005: "badKey",
-  OPENAPI00007: "quota",
-  OPENAPI00009: "busy",
-  OPENAPI00010: "busy",
-  OPENAPI00011: "busy",
-};
-
-const sleep = (ms: number, signal?: AbortSignal) =>
-  new Promise<void>((resolve, reject) => {
-    if (signal?.aborted) return reject(signal.reason);
-    const timer = setTimeout(resolve, ms);
-    signal?.addEventListener("abort", () => (clearTimeout(timer), reject(signal.reason)), { once: true });
-  });
-
 export type Api = { get<T>(path: string, params: Record<string, string>, signal?: AbortSignal): Promise<T> };
 
 /** `account` = the key's id: with it the pace found for this key is remembered across visits. */
 export function createApi(key: string, account?: string): Api {
   let slow = knownSlow(account);
-  // One line for every request start (retries too), so a burst can never pass the pace of the key's stage.
-  let last = 0;
-  /** When the requests of the last second or so were started. */
-  let started: number[] = [];
-  let line: Promise<void> = Promise.resolve();
-  const turn = () => {
-    const mine = line.then(async () => {
-      if (slow) {
-        const wait = last + SLOW_GAP_MS - Date.now();
-        if (wait > 0) await sleep(wait);
-      }
-      // Counted over the last second rather than spaced by a few ms each: timers are too coarse for that.
-      for (;;) {
-        const now = Date.now();
-        started = started.filter((t) => now - t < 1000);
-        if (started.length < FAST_PER_SECOND) break;
-        await sleep(started[0] + 1001 - now);
-      }
-      last = Date.now();
-      started.push(last);
-    });
-    line = mine;
-    return mine;
-  };
+  // One line for every request start (retries too), so a burst can never pass the pace of the key's stage. The fast
+  // pace is counted over a whole second rather than spaced by a few ms each: timers are too coarse for that.
+  const line = pacer(slow ? SLOW : FAST);
 
   return {
     async get<T>(path: string, params: Record<string, string>, signal?: AbortSignal): Promise<T> {
       const url = `${BASE}/${path}?${new URLSearchParams(params)}`;
       for (let attempt = 0; ; attempt++) {
-        await turn();
-        signal?.throwIfAborted();
+        await line.turn(signal);
         let res: Response;
         try {
-          res = await fetch(url, { headers: { "x-nxopen-api-key": key }, cache: "no-store", signal });
+          res = await fetch(url, { headers: { [KEY_HEADER]: key }, cache: "no-store", signal });
         } catch (e) {
           if (signal?.aborted) throw e;
           throw new ApiError("network");
@@ -117,18 +73,18 @@ export function createApi(key: string, account?: string): Api {
         if (res.ok) return (await res.json()) as T;
         const body = (await res.json().catch(() => null)) as { error?: { name?: string } } | null;
         const code = body?.error?.name ?? "";
-        const kind = KINDS[code] ?? (res.status === 429 ? "quota" : "failed");
+        const kind: ApiErrorKind = CODE_KINDS[code] ?? (res.status === 429 ? "quota" : "failed");
         // Refused: from here on the development-stage pace. It is remembered for the key only when it cannot have
         // been a service-stage key going over 500 a second (another tab fetching with the same key).
         if (kind === "quota" && !slow) {
           slow = true;
-          const now = Date.now();
-          if (started.filter((t) => now - t < 1000).length <= SURELY_DEV) rememberSlow(account);
+          if (line.recent(1000) <= SURELY_DEV) rememberSlow(account);
+          line.limitTo(SLOW);
         }
         // The per-second limit clears in a second (another tab may be calling too); the daily one does not,
-        // so wait and try twice more before giving up.
-        if (kind === "quota" && attempt < 2) {
-          await sleep(1200 * (attempt + 1), signal);
+        // so the line waits and the call is tried twice more before giving up.
+        if (kind === "quota" && attempt < REFUSED_RETRIES) {
+          line.backOff(refusedWait(attempt));
           continue;
         }
         throw new ApiError(kind, code);

@@ -21,7 +21,7 @@ test("service-stage key: request starts are not spaced", async () => {
   assert.ok(Math.max(...starts) - Math.min(...starts) < 150, `13 starts within ${Math.max(...starts) - Math.min(...starts)} ms`);
 });
 
-test("a refusal drops to the spaced pace: starts 220 ms apart even when timers fire late (Codex review case)", async () => {
+test("a refusal drops to the spaced pace: starts a gap (SLOW_GAP_MS, 230 ms) apart even when timers fire late (Codex review case)", async () => {
   process.env.NEXON_API_KEY = "test-key";
   const starts: number[] = [];
   const realFetch = globalThis.fetch;
@@ -46,6 +46,6 @@ test("a refusal drops to the spaced pace: starts 220 ms apart even when timers f
   }
   assert.equal(starts.length, 8, "refused + retry + 6 calls");
   const spaced = starts.slice(1);
-  for (let i = 1; i < spaced.length; i++) assert.ok(spaced[i] - spaced[i - 1] >= 215, `gap ${i}: ${spaced[i] - spaced[i - 1]} ms`);
+  for (let i = 1; i < spaced.length; i++) assert.ok(spaced[i] - spaced[i - 1] >= 225, `gap ${i}: ${spaced[i] - spaced[i - 1]} ms`);
   for (const s of spaced) assert.ok(spaced.filter((x) => x >= s && x < s + 1000).length <= 5, "at most 5 starts in any 1 s window");
 });
