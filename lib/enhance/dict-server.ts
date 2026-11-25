@@ -6,7 +6,7 @@ import "server-only";
 import { unstable_cache } from "next/cache";
 import { supabase } from "@/lib/supabase";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { fillOf, plainName, type Dict, type DictItem, type ReportItem } from "./dict";
+import { fillOf, type Dict, type DictItem, type ReportItem } from "./dict";
 
 export const ITEM_DICT_TAG = "item-dict";
 const PAGE = 1000;
@@ -42,39 +42,27 @@ export async function lookupDict(names: string[]): Promise<Dict> {
 }
 
 /**
- * Dictionary items whose name has `query` in it (spaces ignored), names starting with it first. For the admin
- * page's "add an item" search; `skip` = names it already lists.
+ * Whether this server may write what browsers report. Only the live site does: a local or preview build shares the
+ * database, and test runs once filled the dictionary with made-up names (190 rows, removed 2026-11-25).
+ * `ITEM_DICT_WRITE=1` turns it on elsewhere, for checking the reports themselves.
  */
-export async function searchDict(query: string, limit: number, skip: ReadonlySet<string> = new Set()): Promise<ReportItem[]> {
-  const q = plainName(query);
-  if (!q) return [];
-  const all = await loadAll();
-  const starts: ReportItem[] = [];
-  const holds: ReportItem[] = [];
-  for (const name of Object.keys(all)) {
-    if (skip.has(name)) continue;
-    const at = plainName(name).indexOf(q);
-    if (at < 0) continue;
-    (at === 0 ? starts : holds).push({ name, ...all[name] });
-    if (starts.length >= limit) break;
-  }
-  return [...starts, ...holds].slice(0, limit);
-}
+export const DICT_WRITES = process.env.VERCEL_ENV === "production" || process.env.ITEM_DICT_WRITE === "1";
 
 /**
  * Save a checked report. New names are inserted (a name someone else inserted in the meantime is left alone: the
- * first level stays); saved items only get an icon or a part they did not have. Returns how many rows changed and
- * how many of them are new.
+ * first level stays); saved items only get an icon or a part they did not have. A name the admin blocked is a row
+ * that is still there: it is neither added again nor filled in. Returns how many rows changed, how many of them are
+ * new, and `taken` = the reported names the dictionary holds (every one that is not blocked).
  */
-export async function saveDict(items: ReportItem[]): Promise<{ changed: number; added: number }> {
-  if (items.length === 0) return { changed: 0, added: 0 };
+export async function saveDict(items: ReportItem[]): Promise<{ changed: number; added: number; taken: string[] }> {
+  if (items.length === 0) return { changed: 0, added: 0, taken: [] };
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("item_dict")
-    .select("name, level, icon, part")
+    .select("name, level, icon, part, blocked")
     .in("name", items.map((it) => it.name));
   if (error) throw error;
-  const saved = new Map((data ?? []).map((row) => [row.name as string, row as unknown as DictItem]));
+  const saved = new Map((data ?? []).map((row) => [row.name as string, row as unknown as DictItem & { blocked: boolean }]));
 
   let changed = 0;
   const fresh = items.filter((it) => !saved.has(it.name));
@@ -86,7 +74,7 @@ export async function saveDict(items: ReportItem[]): Promise<{ changed: number; 
   const added = changed;
   for (const it of items) {
     const old = saved.get(it.name);
-    const fill = old ? fillOf(old, it) : null;
+    const fill = old && !old.blocked ? fillOf(old, it) : null;
     if (!fill) continue;
     // Each column only where it is still empty, so two reports arriving together cannot overwrite each other.
     for (const column of ["icon", "part"] as const) {
@@ -96,11 +84,19 @@ export async function saveDict(items: ReportItem[]): Promise<{ changed: number; 
         .from("item_dict")
         .update({ [column]: value, updated_at: new Date().toISOString() })
         .eq("name", it.name)
+        .eq("blocked", false)
         .eq(column, "")
         .select("name");
       if (updateError) throw updateError;
       changed += updated?.length ?? 0;
     }
   }
-  return { changed, added };
+  // Read again after the writes: a name that was blocked (or made as a blocked row) in between was not taken.
+  const { data: after, error: afterError } = await db
+    .from("item_dict")
+    .select("name")
+    .in("name", items.map((it) => it.name))
+    .eq("blocked", false);
+  if (afterError) throw afterError;
+  return { changed, added, taken: (after ?? []).map((row) => row.name as string) };
 }

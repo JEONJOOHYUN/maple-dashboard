@@ -18,5 +18,5 @@ export default async function AdminPage() {
   if (!admin) notFound();
   const data = await adminData();
   if (!data) return <Message heading title="값을 못 불러옴" sub="잠시 뒤 새로 고침" />;
-  return <AdminBoard values={data.values} history={data.history} admins={data.admins} today={data.today} />;
+  return <AdminBoard values={data.values} dict={data.dict} history={data.history} admins={data.admins} me={{ id: admin.id, owner: admin.role === "owner" }} today={data.today} />;
 }

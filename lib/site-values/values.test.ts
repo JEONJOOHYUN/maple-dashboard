@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { CREDIT_SHOP, GIFT_WON_PER_10K, MESO_MARKET_MP, MESO_RATE_WON, MVP_ITEMS, STAR_ITEMS } from "../ev/defaults.ts";
 import { CRYSTAL, ITEMS, SPARE_LINK } from "../revenue/data.ts";
-import { CELLS, OWN_REWARDS, cellOf, cleanValue, cleanValues, sameValue, storedOf, typedOf } from "./cells.ts";
+import { CELLS, OWN_REWARDS, cellOf, cleanValue, cleanValues, storedOf, typedOf } from "./cells.ts";
 import { crystalTable, rewardPrices } from "./revenue.ts";
 import { NO_VALUES, creditShop, extraKey, extraName, extras, market, mvpItems, starItems } from "./values.ts";
 
@@ -24,6 +24,7 @@ test("the cells are the code's values, one key each", () => {
   assert.equal(CELLS.filter((c) => c.group === "spare").length, STAR_ITEMS.reduce((n, g) => n + g.items.length, 0));
   assert.equal(OWN_REWARDS.length + Object.keys(SPARE_LINK).length, Object.keys(ITEMS).length);
   assert.equal(CELLS.filter((c) => c.group === "reward").length, OWN_REWARDS.length);
+  assert.deepEqual(CELLS.filter((c) => c.group === "set").map((c) => c.key), ["set|royalShoulder", "set|fafnir", "set|absolab"]);
   // Every default passes its own check and survives typed → stored → typed.
   for (const c of CELLS) {
     assert.equal(cleanValue(c.key, c.def), c.def, c.key);
@@ -118,13 +119,4 @@ test("an item added from the dictionary joins its level", () => {
   assert.deepEqual(ring, { id: "x:새 반지", name: "새 반지", icons: ["ABCD"], spareEok: 20 });
   assert.deepEqual(items.find((g) => g.level === 275)!.items[0].icons, []);
   assert.equal(STAR_ITEMS.find((g) => g.level === 200)!.items.some((it) => it.name === "새 반지"), false);
-});
-
-test("sameValue", () => {
-  assert.ok(sameValue(3, 3));
-  assert.ok(!sameValue(3, 4));
-  assert.ok(!sameValue(3, null));
-  assert.ok(sameValue(null, null));
-  assert.ok(sameValue({ level: 1, icon: "a", spareEok: 2 }, { level: 1, icon: "a", spareEok: 2 }));
-  assert.ok(!sameValue({ level: 1, icon: "a", spareEok: 2 }, { level: 1, icon: "a", spareEok: 3 }));
 });

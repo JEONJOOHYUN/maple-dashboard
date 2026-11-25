@@ -3,21 +3,24 @@
 import { memo, useCallback, useMemo, useState, useTransition, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { useRouter } from "next/navigation";
-import { X } from "lucide-react";
-import { applySiteValues } from "@/app/admin/actions";
-import { ItemSearch, Pic, type DictHit, type RowHit } from "@/components/admin/item-search";
-import { NumberField, parseNum } from "@/components/ev/ui";
+import { addSiteAdmin, applySiteValues, removeSiteAdmin } from "@/app/admin/actions";
+import { DictSection } from "@/components/admin/dict-section";
+import { ItemSearch, Pic, type RowHit } from "@/components/admin/item-search";
+import { NumberField, Segment, parseNum } from "@/components/ev/ui";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Reveal } from "@/components/ui/reveal";
 import { Spinner } from "@/components/ui/spinner";
-import { iconUrl, plainName } from "@/lib/enhance/dict";
+import { plainName } from "@/lib/enhance/dict";
+import { knownItem } from "@/lib/enhance/items";
 import { DAY, dayStart, kstDate, kstFull, kstShort } from "@/lib/enhance/kst";
 import { CREDIT_SHOP, MVP_ITEMS, itemImage } from "@/lib/ev/defaults";
 import { CRYSTAL, ITEMS, iconSrc } from "@/lib/revenue/data";
+import { CELLS, CODE_DATES, OWN_REWARDS, cellOf, numberAt, sectionOf, storedOf, typedOf, unitFor, type Cell, type CrystalUnit, type Section } from "@/lib/site-values/cells";
 import { changeName, changeText, describeChange, num } from "@/lib/site-values/describe";
+import { dictKey, editedState, sameDict, stateOf, type DictEdit, type DictRow } from "@/lib/site-values/dict-edit";
 import type { AdminRow, Change, HistoryRow } from "@/lib/site-values/server";
-import { CELLS, CODE_DATES, OWN_REWARDS, cellOf, numberAt, sectionOf, storedOf, typedOf, type Cell, type Section } from "@/lib/site-values/cells";
-import { extraId, extraKey, extras, starItems, type SiteValues } from "@/lib/site-values/values";
+import { starItems, type SiteValues } from "@/lib/site-values/values";
+import { useStored } from "@/lib/use-stored";
 import { cn } from "@/lib/utils";
 
 // The admin page: every default value on one sheet, top to bottom. A changed cell turns orange and joins the bar
@@ -34,6 +37,7 @@ const MARKET = [
   { cell: cellOf("market|mesoMp")!, title: "메소마켓 1억 = 메이플포인트" },
   { cell: cellOf("market|giftWon")!, title: "선물 1만 캐시 = 원" },
 ];
+const SETS = CELLS.filter((c) => c.group === "set");
 const REWARDS = OWN_REWARDS.map((id) => ({ cell: cellOf(`reward|${id}`)!, img: iconSrc(ITEMS[id].icon) }));
 type ShopRow = { id: string; name: string; where: string; cost: Cell; price?: Cell };
 const SHOP: ShopRow[] = [
@@ -46,16 +50,22 @@ const SHOP: ShopRow[] = [
     price: cellOf(`mvp|${it.id}|${it.ticketMan !== undefined ? "ticket" : "auction"}`),
   })),
 ];
-/** The price of an added item is checked like a spare price (억, four decimals). */
-const EXTRA_PRICE: Cell = { key: "", group: "spare", name: "", unit: "억", def: 0, scale: 1, digits: 4, max: 1_000_000 };
 
 const fieldId = (key: string) => `v-${key}`;
 
+/** The unit the crystal table is typed in: by the size of each value, one unit for every cell, or meso as it is. */
+const CRYSTAL_UNITS: { id: CrystalUnit; label: string; hint?: string }[] = [
+  { id: "auto", label: "자동", hint: "1억부터 억, 그 아래는 만" },
+  { id: "만", label: "만" },
+  { id: "억", label: "억" },
+  { id: "메소", label: "원본", hint: "메소 그대로 (9억 = 900,000,000)" },
+];
+
 type Look = "plain" | "changed" | "invalid";
 /** How a cell looks for what is typed in it (nothing typed, or the value it already has = plain). */
-function lookOf(cell: Cell, current: number | null, text: string | undefined): Look {
+function lookOf(cell: Cell, current: number, text: string | undefined, scale: number): Look {
   if (text === undefined || text.trim() === "") return "plain";
-  const stored = storedOf(cell, parseNum(text, Number.NaN));
+  const stored = storedOf(cell, parseNum(text, Number.NaN), scale);
   return stored === null ? "invalid" : stored !== current ? "changed" : "plain";
 }
 
@@ -68,7 +78,7 @@ const Field = memo(function Field({
   look,
   decimal,
   suffix,
-  disabled,
+  scale,
   onText,
   className,
 }: {
@@ -79,8 +89,9 @@ const Field = memo(function Field({
   look: Look;
   decimal: boolean;
   suffix?: string;
-  disabled?: boolean;
-  onText: (key: string, text: string) => void;
+  /** The unit the cell is typed in: handed back with the text, so the text is always read in it. */
+  scale: number;
+  onText: (key: string, text: string, scale: number) => void;
   className?: string;
 }) {
   return (
@@ -88,33 +99,48 @@ const Field = memo(function Field({
       id={fieldId(cellKey)}
       label={label}
       value={text}
-      onChange={(t) => onText(cellKey, t)}
+      onChange={(t) => onText(cellKey, t, scale)}
       placeholder={placeholder}
       decimal={decimal}
       suffix={suffix}
-      disabled={disabled}
       className={cn("flex min-w-0 whitespace-nowrap", className)}
-      inputClassName={cn("w-full disabled:opacity-50", look === "changed" && "border-primary text-primary-text ring-1 ring-primary", look === "invalid" && "border-destructive text-destructive")}
+      inputClassName={cn("w-full", look === "changed" && "border-primary text-primary-text ring-1 ring-primary", look === "invalid" && "border-destructive text-destructive")}
     />
   );
 });
 
-type Editing = { values: SiteValues; edits: Record<string, string>; onText: (key: string, text: string) => void };
+type Editing = {
+  values: SiteValues;
+  edits: Record<string, string>;
+  /** The scale each typed text was typed in (crystals: their unit can change under the text). */
+  typedIn: Record<string, number>;
+  onText: (key: string, text: string, scale: number) => void;
+  crystal: CrystalUnit;
+};
+/** The unit a cell shows and reads now. */
+const unitOf = (cell: Cell, current: number, e: Pick<Editing, "edits" | "typedIn" | "crystal">) => unitFor(cell, current, e.crystal, e.edits[cell.key] !== undefined ? e.typedIn[cell.key] : undefined);
 
-/** A cell the code defines, showing the value in force until something is typed. */
-function CellField({ cell, label, suffix, className, values, edits, onText }: { cell: Cell; label: string; suffix?: string; className?: string } & Editing) {
+/**
+ * A cell the code defines, showing the value in force until something is typed. `unit` = write the unit it is typed
+ * in after it (a crystal is typed in 억 from 1억 up, in 만 under it: the unit differs from cell to cell).
+ */
+function CellField({ cell, label, suffix, unit, className, ...editing }: { cell: Cell; label: string; suffix?: string; unit?: boolean; className?: string } & Editing) {
+  const { values, edits, onText } = editing;
   const current = numberAt(values, cell);
+  const as = unitOf(cell, current, editing);
   const text = edits[cell.key];
-  const now = String(typedOf(cell, current));
+  const now = typedOf(cell, current, as.scale);
   return (
     <Field
       cellKey={cell.key}
-      label={label}
-      text={text ?? now}
-      placeholder={num(typedOf(cell, current))}
-      look={lookOf(cell, current, text)}
-      decimal={cell.digits > 0 || cell.scale > 1}
-      suffix={suffix}
+      label={unit ? `${label}, ${as.unit} 메소` : label}
+      text={text ?? String(now)}
+      placeholder={num(now)}
+      look={lookOf(cell, current, text, as.scale)}
+      decimal={cell.digits > 0 || as.scale > 1}
+      // Plain meso needs the whole cell for its digits: the choice above the table says the unit.
+      suffix={unit ? (as.scale === 1 ? undefined : as.unit) : suffix}
+      scale={as.scale}
       onText={onText}
       className={className}
     />
@@ -128,6 +154,14 @@ const PROBLEMS = {
   denied: "관리자 로그인이 풀림 → 다시 로그인",
   limited: "너무 자주 반영함 → 10분 뒤 다시",
 };
+const ADMIN_PROBLEMS = {
+  denied: "주인만 할 수 있음",
+  invalid: "이메일 · 이름을 다시 확인",
+  notMember: "그 이메일로 로그인한 회원이 없음 → 먼저 구글 로그인을 한 번",
+  already: "이미 관리자",
+  last: "주인은 뺄 수 없음",
+  failed: "저장 못 함 → 잠시 뒤 다시",
+};
 
 const tile = "flex scroll-mt-4 flex-col gap-3 tile px-4 py-4 sm:px-5";
 const h2 = "text-[15px] leading-tight font-bold";
@@ -138,90 +172,117 @@ const aside = "text-[13px] font-medium text-muted-foreground";
  */
 const stuck = "sticky -left-1 z-10 -my-1.5 -ml-2.5 flex min-w-0 items-center self-stretch py-1.5 pl-2.5";
 const topButton = "inline-flex h-9 items-center rounded-[10px] tile-edge bg-card px-3.5 text-[13px] font-bold whitespace-nowrap";
+const textInput = "h-10 min-w-0 rounded-lg border border-input bg-background px-3 text-base outline-none focus:border-ring focus:ring-3 focus:ring-ring/50 sm:text-sm";
+const CRYSTAL_COLS = "grid grid-cols-[minmax(140px,1.2fr)_repeat(5,minmax(0,1fr))]";
 
-type ItemRow = { key: string; name: string; img?: string; /** 억; null = picked from the dictionary, no price yet. */ current: number | null; extra?: "saved" | "new" };
-
-export function AdminBoard({ values, history, admins, today }: { values: SiteValues; history: HistoryRow[]; admins: AdminRow[]; /** The server's day (KST), so the first HTML and the browser agree. */ today: string }) {
+export function AdminBoard({
+  values,
+  dict,
+  history,
+  admins,
+  me,
+  today,
+}: {
+  values: SiteValues;
+  dict: DictRow[];
+  history: HistoryRow[];
+  admins: AdminRow[];
+  /** The admin looking at the page: only an owner adds and removes admins. */
+  me: { id: string; owner: boolean };
+  /** The server's day (KST), so the first HTML and the browser agree. */
+  today: string;
+}) {
   const router = useRouter();
   // What is typed, by key. A cell is "changed" only while its text is a value other than the one in force.
   const [edits, setEdits] = useState<Record<string, string>>({});
-  // Items picked from the dictionary that are not saved yet, and saved ones marked to be taken out.
-  const [added, setAdded] = useState<Record<string, DictHit>>({});
-  const [removed, setRemoved] = useState<string[]>([]);
+  // The dictionary: what is typed in a row, rows marked as looked at, and names it does not have yet.
+  const [dictEdits, setDictEdits] = useState<Record<string, DictEdit>>({});
+  const [checks, setChecks] = useState<string[]>([]);
+  const [fresh, setFresh] = useState<string[]>([]);
+  const [dictQuery, setDictQuery] = useState("");
+  // A jump from the item search opens the dictionary with its filters cleared (a new key = a new section).
+  const [jump, setJump] = useState(0);
   const [note, setNote] = useState("");
   const [filter, setFilter] = useState("");
-  const [lowOpen, setLowOpen] = useState(false);
+  // How the admin likes the crystal table (its unit, the lower bosses open or not): kept in this browser.
+  const [lowOpen, setLowOpen] = useStored<boolean>("admin:lowBosses", false);
+  const [unitKept, setCrystal] = useStored<CrystalUnit>("admin:crystalUnit", "auto");
+  const crystal: CrystalUnit = CRYSTAL_UNITS.some((u) => u.id === unitKept) ? unitKept : "auto";
   const [problem, setProblem] = useState<keyof typeof PROBLEMS | "">("");
   const [done, setDone] = useState("");
   const [historyOpen, setHistoryOpen] = useState(false);
   const [adminsOpen, setAdminsOpen] = useState(false);
   const [sending, startSending] = useTransition();
 
-  const onText = useCallback((key: string, text: string) => {
+  const [typedIn, setTypedIn] = useState<Record<string, number>>({});
+  const onText = useCallback((key: string, text: string, scale: number) => {
     setEdits((prev) => ({ ...prev, [key]: text }));
+    setTypedIn((prev) => (prev[key] === scale ? prev : { ...prev, [key]: scale }));
     setDone("");
   }, []);
-  const editing: Editing = { values, edits, onText };
-
-  const saved = extras(values);
-  const itemGroups = useMemo(() => {
-    const byLevel = new Map<number, ItemRow[]>();
-    for (const g of starItems(values)) {
-      byLevel.set(
-        g.level,
-        g.items.map((it) => {
-          const extra = it.id === extraId(it.name) && it.name in saved;
-          return { key: extra ? extraKey(it.name) : `spare|${it.id}`, name: it.name, img: it.icons[0] ? itemImage(it.icons[0]) : undefined, current: it.spareEok, extra: extra ? ("saved" as const) : undefined };
-        })
-      );
+  const editing: Editing = { values, edits, typedIn, onText, crystal };
+  /** Another unit for the crystal table: what was typed there keeps its worth (78 억 becomes 780,000 만). */
+  const pickCrystal = (next: CrystalUnit) => {
+    const texts = { ...edits };
+    const scales = { ...typedIn };
+    for (const cell of CELLS) {
+      const text = edits[cell.key];
+      if (cell.group !== "crystal" || text === undefined) continue;
+      const current = numberAt(values, cell);
+      const typed = parseNum(text, Number.NaN);
+      const written = text.trim() !== "" && Number.isFinite(typed);
+      const meso = written ? typed * unitOf(cell, current, editing).scale : current;
+      const to = unitFor(cell, meso, next).scale;
+      if (written) texts[cell.key] = String(typedOf(cell, meso, to));
+      scales[cell.key] = to;
     }
-    for (const hit of Object.values(added)) {
-      if (hit.name in saved) continue;
-      const rows = byLevel.get(hit.level) ?? [];
-      rows.push({ key: extraKey(hit.name), name: hit.name, img: iconUrl(hit.icon) || undefined, current: null, extra: "new" });
-      byLevel.set(hit.level, rows);
-    }
-    return [...byLevel].sort((a, b) => a[0] - b[0]).map(([level, rows]) => ({ level, rows }));
-  }, [values, saved, added]);
-  const itemCount = itemGroups.reduce((n, g) => n + g.rows.length, 0) + REWARDS.length;
+    setEdits(texts);
+    setTypedIn(scales);
+    setCrystal(next);
+  };
 
+  const catalog = starItems(values);
+  const itemGroups = useMemo(
+    () => catalog.map((g) => ({ level: g.level, rows: g.items.map((it) => ({ cell: cellOf(`spare|${it.id}`)!, img: it.icons[0] ? itemImage(it.icons[0]) : undefined })) })),
+    [catalog]
+  );
+  const itemCount = itemGroups.reduce((n, g) => n + g.rows.length, 0) + SETS.length + REWARDS.length;
+  const worth = (cell: Cell) => `${num(typedOf(cell, numberAt(values, cell)))}억`;
   const searchRows = useMemo<RowHit[]>(
     () => [
-      ...itemGroups.flatMap((g) => g.rows.map((r) => ({ kind: "row" as const, key: r.key, name: r.name, group: `${g.level}제`, value: r.current === null ? "가격 없음" : `${num(r.current)}억`, img: r.img }))),
-      ...REWARDS.map(({ cell, img }) => ({ kind: "row" as const, key: cell.key, name: cell.name, group: "보스 보상", value: `${num(typedOf(cell, numberAt(values, cell)))}억`, img })),
+      ...itemGroups.flatMap((g) => g.rows.map(({ cell, img }) => ({ key: cell.key, name: cell.name, group: `${g.level}제`, value: worth(cell), img }))),
+      ...SETS.map((cell) => ({ key: cell.key, name: cell.name, group: "세트 장비", value: worth(cell) })),
+      ...REWARDS.map(({ cell, img }) => ({ key: cell.key, name: cell.name, group: "보스 보상", value: worth(cell), img })),
     ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `worth` reads `values` only
     [itemGroups, values]
   );
-  const taken = useMemo(() => new Set(itemGroups.flatMap((g) => g.rows.map((r) => r.name))), [itemGroups]);
 
+  const byName = useMemo(() => new Map(dict.map((r) => [r.name, r])), [dict]);
   const changes = useMemo(() => {
     const out: Change[] = [];
     for (const cell of CELLS) {
       const text = edits[cell.key];
       if (text === undefined || text.trim() === "") continue;
-      const stored = storedOf(cell, parseNum(text, Number.NaN));
       const current = numberAt(values, cell);
+      const stored = storedOf(cell, parseNum(text, Number.NaN), unitOf(cell, current, { edits, typedIn, crystal }).scale);
       if (stored !== null && stored !== current) out.push({ key: cell.key, from: current, to: stored });
     }
-    const price = (key: string) => {
-      const text = edits[key];
-      return text === undefined || text.trim() === "" ? null : storedOf(EXTRA_PRICE, parseNum(text, Number.NaN));
-    };
-    for (const [name, extra] of Object.entries(saved)) {
-      const key = extraKey(name);
-      if (removed.includes(name)) out.push({ key, from: extra, to: null });
-      else {
-        const spareEok = price(key);
-        if (spareEok !== null && spareEok !== extra.spareEok) out.push({ key, from: extra, to: { ...extra, spareEok } });
-      }
-    }
-    for (const hit of Object.values(added)) {
-      if (hit.name in saved) continue;
-      const spareEok = price(extraKey(hit.name));
-      if (spareEok !== null) out.push({ key: extraKey(hit.name), from: null, to: { level: hit.level, icon: hit.icon, spareEok } });
+    for (const [name, edit] of Object.entries(dictEdits)) {
+      const row = byName.get(name);
+      if (!row && !fresh.includes(name)) continue;
+      const result = editedState(row ? stateOf(row) : null, edit, name);
+      if ("bad" in result) continue;
+      const from = row ? stateOf(row) : null;
+      if (!sameDict(from, result.state)) out.push({ key: dictKey(name), from, to: result.state });
     }
     return out;
-  }, [edits, values, saved, removed, added]);
+  }, [edits, typedIn, values, crystal, dictEdits, byName, fresh]);
+  // A changed row is marked as looked at by the change itself.
+  const marks = useMemo(() => {
+    const changed = new Set(changes.map((c) => c.key));
+    return checks.filter((name) => !changed.has(dictKey(name)));
+  }, [checks, changes]);
 
   // Days since each part was last changed: here, or (nothing in the history shown) in the code.
   const ages = useMemo(() => {
@@ -240,8 +301,8 @@ export function AdminBoard({ values, history, admins, today }: { values: SiteVal
     return days === 0 ? "오늘 고침" : `${days}일 전에 고침`;
   };
 
-  /** Moves to a row of the item list (after the search list has closed and handed the focus back to its box). */
-  const focusRow = (key: string) =>
+  /** Moves to a cell (after the search list has closed and handed the focus back to its box). */
+  const focusCell = (key: string) =>
     setTimeout(() => {
       const el = document.getElementById(fieldId(key)) as HTMLInputElement | null;
       if (!el) return;
@@ -251,58 +312,74 @@ export function AdminBoard({ values, history, admins, today }: { values: SiteVal
     }, 0);
   const goRow = (key: string) => {
     flushSync(() => setFilter(""));
-    focusRow(key);
+    focusCell(key);
   };
-  const addItem = (hit: DictHit) => {
+  const goDict = (name: string) => {
     flushSync(() => {
-      setAdded((prev) => ({ ...prev, [hit.name]: hit }));
-      setFilter("");
+      setDictQuery(name);
+      setJump((n) => n + 1);
     });
-    focusRow(extraKey(hit.name));
+    focusCell(dictKey(name));
   };
-  const dropNew = (name: string) => {
-    setAdded((prev) => Object.fromEntries(Object.entries(prev).filter(([n]) => n !== name)));
-    setEdits((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => k !== extraKey(name))));
-  };
-  const toggleRemoved = (name: string) => {
-    setRemoved((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]));
+
+  const editDict = useCallback((name: string, patch: DictEdit) => {
+    setDictEdits((prev) => ({ ...prev, [name]: { ...prev[name], ...patch } }));
     setDone("");
-  };
+  }, []);
+  const checkDict = useCallback((names: string[], on: boolean) => {
+    setChecks((prev) => (on ? [...new Set([...prev, ...names])] : prev.filter((n) => !names.includes(n))));
+    setDone("");
+  }, []);
+  const freshDict = useCallback((name: string, on: boolean) => {
+    setFresh((prev) => (on ? [...prev.filter((n) => n !== name), name] : prev.filter((n) => n !== name)));
+    if (!on) setDictEdits((prev) => Object.fromEntries(Object.entries(prev).filter(([n]) => n !== name)));
+  }, []);
+  /** What 강화 기록 counts for an item that has no price of its own: its set's price (억), or nothing. */
+  const inherited = useCallback(
+    (name: string) => {
+      const spare = knownItem(name, catalog, values)?.spare ?? 0;
+      return spare > 0 ? spare / 1e8 : null;
+    },
+    [catalog, values]
+  );
 
   const reset = () => {
     setEdits({});
-    setAdded({});
-    setRemoved([]);
+    setDictEdits({});
+    setChecks([]);
+    setFresh([]);
     setProblem("");
   };
   const apply = () =>
     startSending(async () => {
       // What is sent, as it is now: a cell typed in while the request is on its way is not part of it and stays.
-      // The same for an item: only an adding or a taking out that was itself sent is done with.
       const sent = new Set(changes.map((c) => c.key));
-      const sentNew = new Set(changes.filter((c) => c.from === null).map((c) => c.key));
-      const sentOut = new Set(changes.filter((c) => c.to === null).map((c) => c.key));
+      const sentMarks = new Set(marks);
       const texts = edits;
-      const result = await applySiteValues(note, changes);
+      const rows = dictEdits;
+      const result = await applySiteValues(note, changes, marks);
       if (result === "ok") {
         setEdits((prev) => Object.fromEntries(Object.entries(prev).filter(([key, text]) => !sent.has(key) || text !== texts[key])));
-        setAdded((prev) => Object.fromEntries(Object.entries(prev).filter(([name]) => !sentNew.has(extraKey(name)))));
-        setRemoved((prev) => prev.filter((name) => !sentOut.has(extraKey(name))));
+        setDictEdits((prev) => Object.fromEntries(Object.entries(prev).filter(([name, edit]) => !sent.has(dictKey(name)) || edit !== rows[name])));
+        setFresh((prev) => prev.filter((name) => !sent.has(dictKey(name))));
+        setChecks((prev) => prev.filter((name) => !sentMarks.has(name) && !sent.has(dictKey(name))));
         setProblem("");
         setNote("");
-        setDone(`${sent.size}개 반영됨`);
+        setDone([sent.size > 0 && `${sent.size}개 반영됨`, sentMarks.size > 0 && `확인 표시 ${sentMarks.size}줄`].filter(Boolean).join(" · "));
       } else setProblem(result);
     });
 
   const q = plainName(filter);
   const match = (name: string) => !q || plainName(name).includes(q);
-  const shownGroups = itemGroups.map((g) => ({ ...g, rows: g.rows.filter((r) => match(r.name)) })).filter((g) => g.rows.length > 0);
+  const shownGroups = itemGroups.map((g) => ({ ...g, rows: g.rows.filter((r) => match(r.cell.name)) })).filter((g) => g.rows.length > 0);
+  const shownSets = SETS.filter((cell) => match(cell.name));
   const shownRewards = REWARDS.filter(({ cell }) => match(cell.name));
   const last = history[0];
   const SUMMARY = 3;
+  const waiting = changes.length + marks.length;
 
   const bossRow = (b: (typeof BOSSES)[number], index: number) => (
-    <div key={b.boss} className={cn("grid grid-cols-[minmax(150px,1.4fr)_repeat(5,minmax(0,1fr))] items-center gap-2 rounded-[10px] px-2.5 py-1.5", index % 2 === 1 && "bg-background")}>
+    <div key={b.boss} className={cn(CRYSTAL_COLS, "items-center gap-2 rounded-[10px] px-2.5 py-1.5", index % 2 === 1 && "bg-background")}>
       {/* Stays at the left edge while the table is scrolled sideways (a phone), on the row's own fill. */}
       <span className={cn(stuck, "rounded-l-[10px]", index % 2 === 1 ? "bg-background" : "bg-card")}>
         <span className="truncate text-[13px] font-bold" title={b.boss}>
@@ -311,57 +388,20 @@ export function AdminBoard({ values, history, admins, today }: { values: SiteVal
       </span>
       {b.cells.map((cell, i) =>
         cell ? (
-          <CellField key={DIFFS[i]} cell={cell} label={`${cell.name} 결정석, 만 메소`} {...editing} />
+          <CellField key={DIFFS[i]} cell={cell} label={`${cell.name} 결정석`} unit {...editing} />
         ) : (
-          <span key={DIFFS[i]} aria-hidden="true" className="pr-3 text-right text-border">
+          <span key={DIFFS[i]} aria-hidden="true" className="pr-7 text-right text-border">
             ·
           </span>
         )
       )}
     </div>
   );
-
-  const itemRow = (r: ItemRow) => {
-    const gone = r.extra === "saved" && removed.includes(r.name);
-    const text = edits[r.key];
-    return (
-      <ItemLine
-        key={r.key}
-        fieldKey={r.key}
-        name={r.name}
-        img={r.img}
-        gone={gone}
-        action={
-          r.extra &&
-            (gone ? (
-              <button type="button" onClick={() => toggleRemoved(r.name)} className="relative shrink-0 text-xs font-bold whitespace-nowrap text-primary-text after:absolute after:-inset-2">
-                빼기 취소
-              </button>
-            ) : (
-              <button
-                type="button"
-                aria-label={`${r.name} 목록에서 빼기`}
-                onClick={() => (r.extra === "new" ? dropNew(r.name) : toggleRemoved(r.name))}
-                className="relative grid size-6 shrink-0 place-items-center rounded-md text-muted-foreground after:absolute after:-inset-2 hover:bg-muted hover:text-foreground"
-              >
-                <X className="size-3.5" aria-hidden="true" />
-              </button>
-            ))
-        }
-      >
-        <Field
-          cellKey={r.key}
-          label={`${r.name} 노작값, 억 메소`}
-          text={text ?? (r.current === null ? "" : String(r.current))}
-          placeholder={r.current === null ? "가격" : num(r.current)}
-          look={gone ? "plain" : lookOf(EXTRA_PRICE, r.current, text)}
-          decimal
-          disabled={gone}
-          onText={onText}
-        />
-      </ItemLine>
-    );
-  };
+  const itemLine = (cell: Cell, img: string | undefined, what: string) => (
+    <ItemLine key={cell.key} fieldKey={cell.key} name={cell.name} img={img}>
+      <CellField cell={cell} label={`${cell.name} ${what}, 억 메소`} {...editing} />
+    </ItemLine>
+  );
 
   return (
     <div className="flex flex-col gap-2">
@@ -394,6 +434,7 @@ export function AdminBoard({ values, history, admins, today }: { values: SiteVal
           { href: "#crystal", name: "보스 결정석", count: CRYSTAL_COUNT },
           { href: "#items", name: "아이템 노작값", count: itemCount },
           { href: "#shop", name: "큐브 · 캐시", count: SHOP.length },
+          { href: "#dict", name: "아이템 사전", count: dict.filter((r) => !r.blocked).length },
         ].map((j) => (
           <a key={j.href} href={j.href} className="inline-flex h-[34px] items-center gap-1.5 rounded-full tile-edge bg-card px-3.5 text-[13px] font-bold whitespace-nowrap">
             {j.name} <span className="font-medium text-muted-foreground">{j.count}</span>
@@ -413,7 +454,7 @@ export function AdminBoard({ values, history, admins, today }: { values: SiteVal
                 </label>
                 <CellField cell={cell} label={`${cell.name}, ${cell.unit}`} suffix={cell.unit} {...editing} />
                 {/* Its room is always there, so the three cards keep one height. */}
-                <span className="min-h-4 text-xs text-primary-text">{lookOf(cell, current, edits[cell.key]) === "changed" && `지금 ${num(current)}${cell.unit}`}</span>
+                <span className="min-h-4 text-xs text-primary-text">{lookOf(cell, current, edits[cell.key], cell.scale) === "changed" && `지금 ${num(current)}${cell.unit}`}</span>
               </div>
             );
           })}
@@ -421,14 +462,27 @@ export function AdminBoard({ values, history, admins, today }: { values: SiteVal
       </section>
 
       <section id="crystal" className={cn(tile, "px-2 sm:px-3")}>
-        <Head className="px-2" title="보스 결정석 가격" sub={`만 메소 · ${CRYSTAL_COUNT}칸`} right={`${age("crystal")} · 빈칸 = 그 난이도 없음`} />
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-2">
+          <Head className="min-w-0 flex-1 basis-60" title="보스 결정석 가격" sub={`${CRYSTAL_COUNT}칸`} right={`${age("crystal")} · 빈칸 = 그 난이도 없음`} />
+          <div className="flex items-center gap-2">
+            <span className="text-[13px] text-muted-foreground">적는 단위</span>
+            <Segment
+              label="결정석을 적는 단위"
+              value={crystal}
+              onChange={pickCrystal}
+              options={CRYSTAL_UNITS}
+              className="w-[216px]"
+            />
+          </div>
+        </div>
         {/* The padding keeps a focus ring inside the scroll box; the negative margin gives its room back. */}
         <div className="-m-1 overflow-x-auto p-1">
-          <div className="min-w-[720px]">
-            <div className="grid grid-cols-[minmax(150px,1.4fr)_repeat(5,minmax(0,1fr))] gap-2 px-2.5 py-1.5 text-xs font-bold text-muted-foreground">
+          {/* Plain meso runs to thirteen characters: the table gets the room, and scrolls on a narrow screen. */}
+          <div className={crystal === "메소" ? "min-w-[900px]" : "min-w-[780px]"}>
+            <div className={cn(CRYSTAL_COLS, "gap-2 px-2.5 py-1.5 text-xs font-bold text-muted-foreground")}>
               <span className={cn(stuck, "bg-card")}>보스</span>
               {DIFFS.map((d) => (
-                <span key={d} className="text-right">
+                <span key={d} className="pr-7 text-right">
                   {d}
                 </span>
               ))}
@@ -447,27 +501,16 @@ export function AdminBoard({ values, history, admins, today }: { values: SiteVal
       <section id="items" className={tile}>
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
           <Head className="min-w-0 flex-1 basis-60" title="아이템 노작값" sub={`억 메소 · ${itemCount}개`} right={age("items")} below="기댓값 계산기 · 강화 기록 · 보스 수익 보상 가격이 같이 씀" />
-          <ItemSearch rows={searchRows} taken={taken} onGo={goRow} onAdd={addItem} onFilter={setFilter} />
+          <ItemSearch rows={searchRows} dict={dict} onGo={goRow} onDict={goDict} onFilter={setFilter} />
         </div>
-        {q && shownGroups.length === 0 && shownRewards.length === 0 && <p className="py-6 text-center text-[13px] text-muted-foreground">“{filter}”가 든 줄 없음</p>}
+        {q && shownGroups.length === 0 && shownSets.length === 0 && shownRewards.length === 0 && <p className="py-6 text-center text-[13px] text-muted-foreground">“{filter}”가 든 줄 없음</p>}
         {shownGroups.map((g) => (
-          <div key={g.level} className="flex flex-col gap-1">
-            <span className="text-xs font-bold text-muted-foreground">{g.level}제</span>
-            <div className={ITEM_GRID}>{g.rows.map(itemRow)}</div>
-          </div>
+          <Group key={g.level} label={`${g.level}제`}>
+            {g.rows.map(({ cell, img }) => itemLine(cell, img, "노작값"))}
+          </Group>
         ))}
-        {shownRewards.length > 0 && (
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-bold text-muted-foreground">보스 보상 · 보스 수익만 씀</span>
-            <div className={ITEM_GRID}>
-              {shownRewards.map(({ cell, img }) => (
-                <ItemLine key={cell.key} fieldKey={cell.key} name={cell.name} img={img}>
-                  <CellField cell={cell} label={`${cell.name} 가격, 억 메소`} {...editing} />
-                </ItemLine>
-              ))}
-            </div>
-          </div>
-        )}
+        {shownSets.length > 0 && <Group label="세트 장비 · 강화 기록만 씀 (조각마다 값이 없을 때)">{shownSets.map((cell) => itemLine(cell, undefined, "노작값"))}</Group>}
+        {shownRewards.length > 0 && <Group label="보스 보상 · 보스 수익만 씀">{shownRewards.map(({ cell, img }) => itemLine(cell, img, "가격"))}</Group>}
       </section>
 
       <section id="shop" className={tile}>
@@ -491,13 +534,30 @@ export function AdminBoard({ values, history, admins, today }: { values: SiteVal
         </div>
       </section>
 
-      {(changes.length > 0 || problem || done) && (
+      <section id="dict" className={tile}>
+        <DictSection
+          key={jump}
+          head={<Head title="아이템 사전" sub={`${dict.filter((r) => !r.blocked).length}줄`} right={age("dict")} below="방문자 브라우저가 올린 이름 · 레벨 · 그림 · 부위 — 강화 기록의 그림 · 레벨. 노작값을 적으면 강화 기록 · 기댓값 계산기 목록의 기본값" />}
+          rows={dict}
+          fresh={fresh}
+          edits={dictEdits}
+          checks={checks}
+          query={dictQuery}
+          onQuery={setDictQuery}
+          onEdit={editDict}
+          onCheck={checkDict}
+          onFresh={freshDict}
+          inherited={inherited}
+        />
+      </section>
+
+      {(waiting > 0 || problem || done) && (
         // Only "n개 반영됨" to say: a small pill in the middle instead of the whole bar.
-        <div className={cn("sticky bottom-4 z-20 mt-2 flex flex-col gap-2.5 rounded-2xl bg-popover px-4 py-3 text-popover-foreground shadow-lift sm:px-5", changes.length === 0 && !problem && "w-fit self-center")}>
-          {changes.length > 0 ? (
+        <div className={cn("sticky bottom-4 z-20 mt-2 flex flex-col gap-2.5 rounded-2xl bg-popover px-4 py-3 text-popover-foreground shadow-lift sm:px-5", waiting === 0 && !problem && "w-fit self-center")}>
+          {waiting > 0 ? (
             <>
               <p className="text-[13px] leading-relaxed text-pretty">
-                <b className="text-primary-text">{changes.length}개 바뀜</b>
+                <b className="text-primary-text">{[changes.length > 0 && `${changes.length}개 바뀜`, marks.length > 0 && `확인 표시 ${marks.length}줄`].filter(Boolean).join(" · ")}</b>
                 <span className="text-muted-foreground">
                   {changes.slice(0, SUMMARY).map((c) => ` · ${describeChange(c.key, c.from, c.to)}`)}
                   {changes.length > SUMMARY && ` · 외 ${changes.length - SUMMARY}개`}
@@ -511,14 +571,14 @@ export function AdminBoard({ values, history, admins, today }: { values: SiteVal
                   maxLength={200}
                   onChange={(e) => setNote(e.target.value)}
                   // 16px on a phone: a smaller input makes iOS zoom the page in on focus.
-                  className="h-11 min-w-0 flex-1 basis-56 rounded-xl border border-input bg-background px-3 text-base outline-none focus:border-ring focus:ring-3 focus:ring-ring/50 sm:text-sm"
+                  className={cn(textInput, "h-11 flex-1 basis-56 rounded-xl")}
                 />
                 <button type="button" onClick={reset} disabled={sending} className="h-11 rounded-xl px-4 text-sm font-bold text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50">
                   되돌리기
                 </button>
                 <button type="button" onClick={apply} disabled={sending} className="inline-flex h-11 items-center gap-2 rounded-xl bg-primary px-5 text-sm font-bold whitespace-nowrap text-primary-foreground disabled:opacity-60">
                   {sending && <Spinner />}
-                  {changes.length}개 반영하기
+                  {waiting}개 반영하기
                 </button>
               </div>
             </>
@@ -579,36 +639,118 @@ export function AdminBoard({ values, history, admins, today }: { values: SiteVal
         <DialogContent>
           <DialogTitle className="font-bold">관리자 {admins.length}명</DialogTitle>
           <DialogDescription className="sr-only">기본값을 고칠 수 있는 사람</DialogDescription>
-          <ul className="flex flex-col" data-clarity-mask="true">
-            {admins.map((a, i) => (
-              <li key={i} className="flex items-center justify-between gap-3 border-t border-border py-2.5 first:border-t-0 first:pt-0">
-                <b className="truncate text-[13px]">{a.name || "이름 없음"}</b>
-                <span className="text-xs whitespace-nowrap text-muted-foreground">
-                  {a.role === "owner" ? "주인" : "편집"} · {kstDate(Date.parse(a.since))}부터
-                </span>
-              </li>
-            ))}
-          </ul>
+          <AdminList admins={admins} me={me} />
         </DialogContent>
       </Dialog>
     </div>
   );
 }
 
-/** The rows of one level, or of the boss rewards: one column on a phone, as many as fit from there. */
-const ITEM_GRID = "grid grid-cols-1 gap-x-7 sm:grid-cols-[repeat(auto-fill,minmax(300px,1fr))]";
+/** Who may change the values. An owner adds a member by the address they sign in with, and takes editors out. */
+function AdminList({ admins, me }: { admins: AdminRow[]; me: { id: string; owner: boolean } }) {
+  const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
+  const [said, setSaid] = useState<{ bad?: keyof typeof ADMIN_PROBLEMS; done?: string }>({});
+  const [busy, start] = useTransition();
+  // A second press takes an editor out: the first only asks.
+  const [asking, setAsking] = useState("");
+  const add = () =>
+    start(async () => {
+      const result = await addSiteAdmin(email, name);
+      if (result === "ok") {
+        setSaid({ done: `${name.trim()} 추가됨` });
+        setEmail("");
+        setName("");
+      } else setSaid({ bad: result });
+    });
+  const remove = (id: string, who: string) =>
+    start(async () => {
+      const result = await removeSiteAdmin(id);
+      setAsking("");
+      setSaid(result === "ok" ? { done: `${who} 뺌` } : { bad: result });
+    });
+  return (
+    <div className="flex flex-col gap-3" data-clarity-mask="true">
+      <ul className="flex flex-col">
+        {admins.map((a) => (
+          <li key={a.id} className="flex min-h-11 items-center justify-between gap-3 border-t border-border py-1.5 first:border-t-0">
+            <span className="flex min-w-0 flex-col">
+              <b className="truncate text-[13px]">
+                {a.name || "이름 없음"}
+                {a.id === me.id && <span className="font-medium text-muted-foreground"> · 나</span>}
+              </b>
+              <span className="text-xs text-muted-foreground">
+                {a.role === "owner" ? "주인" : "편집"} · {kstDate(Date.parse(a.since))}부터
+              </span>
+            </span>
+            {me.owner && a.role !== "owner" && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => (asking === a.id ? remove(a.id, a.name) : setAsking(a.id))}
+                onBlur={() => setAsking("")}
+                className={cn("h-8 shrink-0 rounded-lg px-2.5 text-xs font-bold whitespace-nowrap disabled:opacity-50", asking === a.id ? "bg-destructive/15 text-destructive" : "text-muted-foreground hover:bg-muted hover:text-foreground")}
+              >
+                {asking === a.id ? "한 번 더 누르면 뺌" : "빼기"}
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+      {me.owner ? (
+        <form
+          className="flex flex-col gap-2 border-t border-border pt-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            add();
+          }}
+        >
+          <b className="text-[13px]">관리자 추가</b>
+          <input aria-label="추가할 사람의 구글 이메일" type="email" required placeholder="구글 이메일 (한 번 로그인한 사람)" value={email} onChange={(e) => setEmail(e.target.value)} className={textInput} />
+          <div className="flex gap-2">
+            <input aria-label="기록에 남을 이름" required maxLength={40} placeholder="기록에 남을 이름" value={name} onChange={(e) => setName(e.target.value)} className={cn(textInput, "flex-1")} />
+            <button type="submit" disabled={busy} className="inline-flex h-10 shrink-0 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-bold whitespace-nowrap text-primary-foreground disabled:opacity-60">
+              {busy && <Spinner />}
+              추가
+            </button>
+          </div>
+          <span className="text-xs text-pretty text-muted-foreground">추가한 사람 = 편집(값 고치기 · 반영). 관리자를 넣고 빼는 것은 주인만</span>
+        </form>
+      ) : (
+        <p className="border-t border-border pt-3 text-xs text-muted-foreground">관리자를 넣고 빼는 것은 주인만</p>
+      )}
+      {said.bad && (
+        <p role="alert" className="text-[13px] font-semibold text-destructive">
+          {ADMIN_PROBLEMS[said.bad]}
+        </p>
+      )}
+      {said.done && (
+        <p role="status" className="text-[13px] font-bold">
+          {said.done}
+        </p>
+      )}
+    </div>
+  );
+}
 
-/** One priced thing of the item part: picture, name (with what can be done to it), its price cell in 억. */
-function ItemLine({ fieldKey, name, img, gone, action, children }: { fieldKey: string; name: string; img?: string; gone?: boolean; action?: ReactNode; children: ReactNode }) {
+/** The rows of one level, of the sets or of the boss rewards: one column on a phone, as many as fit from there. */
+function Group({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-xs font-bold text-muted-foreground">{label}</span>
+      <div className="grid grid-cols-1 gap-x-7 sm:grid-cols-[repeat(auto-fill,minmax(300px,1fr))]">{children}</div>
+    </div>
+  );
+}
+
+/** One priced thing of the item part: picture, name, its price cell in 억. */
+function ItemLine({ fieldKey, name, img, children }: { fieldKey: string; name: string; img?: string; children: ReactNode }) {
   return (
     <div className="grid min-h-[52px] grid-cols-[32px_minmax(0,1fr)_104px_16px] items-center gap-2.5 border-t border-border">
       <Pic src={img} />
-      <span className="flex min-w-0 items-center gap-1.5">
-        <label htmlFor={fieldId(fieldKey)} className={cn("truncate text-[13px] font-semibold", gone && "text-muted-foreground line-through")} title={name}>
-          {name}
-        </label>
-        {action}
-      </span>
+      <label htmlFor={fieldId(fieldKey)} className="truncate text-[13px] font-semibold" title={name}>
+        {name}
+      </label>
       {children}
       <span className="text-[13px] text-muted-foreground">억</span>
     </div>
@@ -626,7 +768,7 @@ function Head({ title, sub, right, below, className }: { title: string; sub?: st
         </h2>
         {right && <span className={aside}>{right}</span>}
       </div>
-      {below && <span className="text-[13px] text-muted-foreground">{below}</span>}
+      {below && <span className="text-[13px] text-pretty text-muted-foreground">{below}</span>}
     </div>
   );
 }

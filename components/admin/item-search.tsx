@@ -1,22 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Search, X } from "lucide-react";
-import { searchItemDict } from "@/app/admin/actions";
 import { Combobox, ComboboxCollection, ComboboxContent, ComboboxEmpty, ComboboxGroup, ComboboxInput, ComboboxItem, ComboboxLabel, ComboboxList } from "@/components/ui/combobox";
 import { InputGroupAddon, InputGroupButton } from "@/components/ui/input-group";
 import { iconUrl, plainName } from "@/lib/enhance/dict";
+import type { DictRow } from "@/lib/site-values/dict-edit";
 
 /** A row of the item list, as the search offers it. */
-export type RowHit = { kind: "row"; key: string; name: string; group: string; value: string; img?: string };
-/** An item of the shared dictionary that is not on the list yet. */
-export type DictHit = { kind: "dict"; name: string; level: number; part: string; icon: string };
-type Hit = RowHit | DictHit;
+export type RowHit = { key: string; name: string; group: string; value: string; img?: string };
+type Hit = ({ kind: "row" } & RowHit) | { kind: "dict"; name: string; level: number; part: string; icon: string };
 type HitGroup = { value: string; items: Hit[] };
 
-/** Rows of the list offered at most: the box is for finding one, Enter narrows the whole list. */
+/** Offered at most from each: the box is for finding one, Enter narrows the whole list. */
 const ROWS_SHOWN = 4;
-const TYPING_MS = 250;
+const DICT_SHOWN = 6;
 
 export function Pic({ src, className = "size-8" }: { src?: string; className?: string }) {
   if (!src) return <span aria-hidden="true" className={`${className} shrink-0 rounded-lg bg-muted`} />;
@@ -26,53 +24,42 @@ export function Pic({ src, className = "size-8" }: { src?: string; className?: s
 }
 
 /**
- * The search of the item part: a name on the list jumps to its row, a name from the shared dictionary adds a row,
- * and Enter keeps only the rows that have the typed text.
+ * The search of the item part: a name on the list jumps to its row, a name of the shared dictionary jumps to its row
+ * there (where it gets a price of its own), and Enter keeps only the rows that have the typed text.
  */
 export function ItemSearch({
   rows,
-  taken,
+  dict,
   onGo,
-  onAdd,
+  onDict,
   onFilter,
 }: {
   rows: RowHit[];
-  /** Names on the list already (waiting ones too): not offered from the dictionary. */
-  taken: ReadonlySet<string>;
+  dict: DictRow[];
   onGo: (key: string) => void;
-  onAdd: (item: DictHit) => void;
+  onDict: (name: string) => void;
   /** "" = show every row again. */
   onFilter: (text: string) => void;
 }) {
   const [text, setText] = useState("");
   const [open, setOpen] = useState(false);
-  // What the dictionary answered, with the text it was asked for (an answer to older text is not shown).
-  const [found, setFound] = useState<{ q: string; items: DictHit[] }>({ q: "", items: [] });
   const highlighted = useRef<Hit | undefined>(undefined);
   const q = plainName(text);
 
-  useEffect(() => {
-    if (!q) return;
-    let live = true;
-    const timer = setTimeout(async () => {
-      const items = await searchItemDict(q, [...taken]);
-      if (live) setFound({ q, items: items.map((it) => ({ kind: "dict", name: it.name, level: it.level, part: it.part, icon: it.icon })) });
-    }, TYPING_MS);
-    return () => {
-      live = false;
-      clearTimeout(timer);
-    };
-  }, [q, taken]);
-
   const groups = useMemo<HitGroup[]>(() => {
     if (!q) return [];
-    const listed: Hit[] = rows.filter((r) => plainName(r.name).includes(q)).slice(0, ROWS_SHOWN);
-    const fresh: Hit[] = found.q === q ? found.items.filter((d) => !taken.has(d.name)) : [];
+    const listed: Hit[] = rows.filter((r) => plainName(r.name).includes(q)).slice(0, ROWS_SHOWN).map((r) => ({ kind: "row", ...r }));
+    const more: Hit[] = [];
+    for (const d of dict) {
+      if (d.blocked || !plainName(d.name).includes(q)) continue;
+      more.push({ kind: "dict", name: d.name, level: d.level, part: d.part, icon: d.icon });
+      if (more.length >= DICT_SHOWN) break;
+    }
     return [
       { value: "목록에 있는 아이템 · 누르면 그 줄로", items: listed },
-      { value: "아이템 사전에서 새로 넣기", items: fresh },
+      { value: "아이템 사전 · 누르면 사전의 그 줄로", items: more },
     ].filter((g) => g.items.length > 0);
-  }, [q, rows, found, taken]);
+  }, [q, rows, dict]);
 
   const close = () => {
     setOpen(false);
@@ -89,7 +76,7 @@ export function ItemSearch({
         setText("");
         close();
         if (hit.kind === "row") onGo(hit.key);
-        else onAdd(hit);
+        else onDict(hit.name);
       }}
       inputValue={text}
       onInputValueChange={(next, details) => {
@@ -160,7 +147,7 @@ export function ItemSearch({
                       </b>
                       <span className="truncate text-xs text-muted-foreground">{hit.kind === "row" ? hit.group : [`${hit.level}제`, hit.part].filter(Boolean).join(" · ")}</span>
                     </span>
-                    {hit.kind === "row" ? <b className="font-num text-[13px] whitespace-nowrap">{hit.value}</b> : <span className="text-[13px] font-bold whitespace-nowrap text-primary-text">＋ 넣기</span>}
+                    {hit.kind === "row" && <b className="font-num text-[13px] whitespace-nowrap">{hit.value}</b>}
                   </ComboboxItem>
                 )}
               </ComboboxCollection>

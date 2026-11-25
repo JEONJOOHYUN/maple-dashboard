@@ -14,7 +14,10 @@ type Saved = { items: Dict; asked: Record<string, number> };
 const NOTHING: Saved = { items: {}, asked: {} };
 /** What is in storage may be anything (an older shape, a hand-edited value): only the expected shape is used. */
 const sane = (v: Saved | null | undefined): Saved => (v && typeof v.items === "object" && v.items !== null && typeof v.asked === "object" && v.asked !== null ? v : NOTHING);
-/** A name the dictionary has no picture for is asked again after this long: someone else may have added it. */
+/**
+ * Every name is asked about again after this long: someone else may have added its picture, and the admin page may
+ * have corrected its level or taken the name out (the answer replaces what this browser kept).
+ */
 const ASK_AGAIN = 24 * 3600_000;
 /** Reports sent for one load of the records (the server takes 30 an hour from one address). */
 const MAX_CHUNKS = 4;
@@ -41,14 +44,21 @@ async function exchange(names: string[], found: Record<string, FoundItem>, rolle
   const at = Date.now();
   // Every name this browser can say something about, or wants something for.
   const all = [...new Set([...names, ...Object.keys(found)])].filter((n) => cleanName(n) === n);
-  const ask = all.filter((n) => !items[n]?.icon && !(asked[n] > at - ASK_AGAIN)).slice(0, MAX_NAMES);
+  const ask = all.filter((n) => !(asked[n] > at - ASK_AGAIN)).slice(0, MAX_NAMES);
   if (ask.length > 0) {
     const got = await lookupItems(ask);
-    Object.assign(items, got);
-    for (const n of ask) asked[n] = at;
+    // Not read (the server or the database is away): what this browser has stays, and it asks again next time.
+    if (got === null) return;
+    // The answer is the dictionary as it is now: a name it does not hold any more goes from this browser too.
+    for (const n of ask) {
+      if (Object.hasOwn(got, n)) items[n] = got[n];
+      else delete items[n];
+      asked[n] = at;
+    }
     update((before) => {
       const prev = sane(before);
-      return { items: { ...prev.items, ...got }, asked: { ...prev.asked, ...Object.fromEntries(ask.map((n) => [n, at])) } };
+      const kept = Object.fromEntries(Object.entries(prev.items).filter(([n]) => !ask.includes(n)));
+      return { items: { ...kept, ...got }, asked: { ...prev.asked, ...Object.fromEntries(ask.map((n) => [n, at])) } };
     });
   }
 
@@ -57,12 +67,15 @@ async function exchange(names: string[], found: Record<string, FoundItem>, rolle
   for (let i = 0; i < report.length && i < MAX_CHUNKS * MAX_REPORT; i += MAX_REPORT) {
     const chunk = report.slice(i, i + MAX_REPORT);
     for (const it of chunk) sent.add(it.name);
-    if (!(await reportItems(chunk))) return;
+    const taken = await reportItems(chunk);
+    if (!taken) return;
     // What the dictionary now has, the way the server merges it: a saved level stays, empty fields are filled.
+    // Only the names it took: one that was taken out of the dictionary is not kept here either.
     update((before) => {
       const prev = sane(before);
       const merged = { ...prev.items };
       for (const { name, ...fact } of chunk) {
+        if (!taken.includes(name)) continue;
         const old = merged[name];
         merged[name] = old ? { ...old, ...fillOf(old, fact) } : fact;
       }

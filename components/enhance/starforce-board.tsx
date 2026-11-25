@@ -44,7 +44,8 @@ export function StarforceBoard({ apiKey, account, onForget, switcher }: { apiKey
   const period = usePeriod();
   const { from, to } = period;
   // Levels and spare prices of the calculator's list, as the site has them now.
-  const catalog = starItems(useSiteValues());
+  const values = useSiteValues();
+  const catalog = starItems(values);
   const [view, setView] = useState<View>("insight");
   // One switch for the log and the item cards (tries · items under 12 stars). Checked every time the board opens
   // (user, 2026-11-13): it used to be remembered, and the link to the cards waiting for a level unchecks it, so one
@@ -82,10 +83,10 @@ export function StarforceBoard({ apiKey, account, onForget, switcher }: { apiKey
     const infos = new Map<string, ItemInfo>();
     return inPeriod.map((row) => {
       let info = infos.get(row.item);
-      if (!info) infos.set(row.item, (info = resolveItem(row.item, snap.found, overrides, dict, catalog)));
+      if (!info) infos.set(row.item, (info = resolveItem(row.item, snap.found, overrides, dict, catalog, values)));
       return { row, info, j: judge(row, info, tracked.restored.has(row.id), discount), copy: tracked.copy.get(row.id) ?? 1 };
     });
-  }, [inPeriod, snap.found, overrides, dict, catalog, tracked, discount]);
+  }, [inPeriod, snap.found, overrides, dict, catalog, values, tracked, discount]);
   const tallies = useMemo(() => groupTallies(judged.map((e) => ({ world: e.row.world, spent: e.j.ok ? e.j.cost : 0 }))), [judged]);
   const groups = useKnownGroups(account, tallies);
   const entries = useMemo(() => judged.filter((e) => !groupsOff.includes(worldGroup(e.row.world))), [judged, groupsOff]);
