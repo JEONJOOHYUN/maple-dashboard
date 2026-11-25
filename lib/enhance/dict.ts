@@ -54,6 +54,12 @@ export function cleanNames(input: unknown): string[] {
 }
 
 /**
+ * One name for a part NEXON spells two ways: the equipment answer says "기계 심장", the potential history "기계심장"
+ * (the dictionary had both, 2026-11-26). The history's spelling is the one the code reads (potential.ts SLOT).
+ */
+const PART_ALIAS: Record<string, string> = { "기계 심장": "기계심장" };
+
+/**
  * One item fact as it arrives from a browser, or null when it is not exactly that: a level outside 1~300 or a part
  * that is too long drops the item; an icon that is not a NEXON icon code is left empty.
  */
@@ -65,7 +71,7 @@ export function cleanItem(value: unknown): ReportItem | null {
   if (typeof level !== "number" || !Number.isInteger(level) || level < 1 || level > MAX_LEVEL) return null;
   const part = cleanText(rawPart ?? "", MAX_PART);
   if (part === null) return null;
-  return { name, level, icon: typeof icon === "string" && ICON_CODE.test(icon) ? icon : "", part };
+  return { name, level, icon: typeof icon === "string" && ICON_CODE.test(icon) ? icon : "", part: PART_ALIAS[part] ?? part };
 }
 
 /** A report as it arrives from a browser: the items that pass cleanItem(), one per name. Too many items = none. */

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ICON_BASE, MAX_NAMES, MAX_REPORT, cleanNames, cleanReport, fillOf, iconCode, iconUrl, reportOf } from "./dict.ts";
+import { ICON_BASE, MAX_NAMES, MAX_REPORT, cleanItem, cleanNames, cleanReport, fillOf, iconCode, iconUrl, reportOf } from "./dict.ts";
 import { itemIcon, resolveItem } from "./items.ts";
 
 const icon = (code: string) => ICON_BASE + code;
@@ -109,4 +109,10 @@ test("the dictionary comes after everything the account itself knows", () => {
   assert.equal(itemIcon("미트라의 분노 : 도적", {}, dict), icon("KEOLKHOA"));
   assert.equal(itemIcon("에테르넬 메이지슈즈", worn, dict), icon("KEPFIGLI"));
   assert.equal(itemIcon("없는 아이템", {}, dict), undefined);
+});
+
+test("a part NEXON spells two ways is saved one way", () => {
+  assert.equal(cleanItem({ name: "페어리 하트", level: 100, icon: "", part: "기계 심장" })?.part, "기계심장");
+  assert.equal(cleanItem({ name: "리튬 하트", level: 120, icon: "", part: "기계심장" })?.part, "기계심장");
+  assert.equal(cleanItem({ name: "앱솔랩스 숄더", level: 160, icon: "", part: "어깨장식" })?.part, "어깨장식");
 });
