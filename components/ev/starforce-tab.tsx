@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Check, ChevronDown, Copy, ImageIcon, Plus, X } from "lucide-react";
 import {
   Chip,
@@ -17,11 +17,11 @@ import {
 } from "@/components/ev/ui";
 import {
   CUSTOM_LEVEL,
-  MESO_RATE_WON,
   MULTIPLIERS,
-  STAR_ITEMS,
   itemImage,
 } from "@/lib/ev/defaults";
+import { market, starItems, type StarGroup } from "@/lib/site-values/values";
+import { useSiteValues } from "@/components/site-values";
 import {
   FLOOR_STAR,
   PROTECT_STARS,
@@ -68,14 +68,14 @@ const DEFAULT_ITEM = "astra";
  * instead of a row per level. The label is read from the levels that are there.
  */
 const MERGE_BELOW = 160;
-const ITEM_GROUPS = (() => {
-  const low = STAR_ITEMS.filter((g) => g.level < MERGE_BELOW);
-  const groups = STAR_ITEMS.filter((g) => g.level >= MERGE_BELOW).map((g) => ({ label: `Lv.${g.level}`, items: g.items }));
+const itemGroups = (list: StarGroup[]) => {
+  const low = list.filter((g) => g.level < MERGE_BELOW);
+  const groups = list.filter((g) => g.level >= MERGE_BELOW).map((g) => ({ label: `Lv.${g.level}`, items: g.items }));
   if (low.length === 0) return groups;
   const first = low[0].level;
   const last = low[low.length - 1].level;
   return [{ label: first === last ? `Lv.${first}` : `Lv.${first} ~ ${last}`, items: low.flatMap((g) => g.items) }, ...groups];
-})();
+};
 /**
  * Eight icons to a row (user, 2026-11-13): an item drawn with several icons takes that many cells, and at eight
  * every group fills whole rows (에테르넬 4 + 3 + one more) with no item left alone on a row.
@@ -86,8 +86,8 @@ const ITEM_COLS = 8;
  * 12 → 30성 end on the panel's bottom (42.7 with the 조건 and 결과 lines over the table, 2026-11-22: measured so the two panels end together). The same for every item and start star; stacked panels keep the plain row.
  */
 const ROW_CSS = "lg:h-[42.7px]";
-const findItem = (id: string) => {
-  for (const g of STAR_ITEMS) {
+const findIn = (list: StarGroup[], id: string) => {
+  for (const g of list) {
     const it = g.items.find((x) => x.id === id);
     if (it) return { ...it, level: g.level };
   }
@@ -148,6 +148,12 @@ function useBoxSteps(steps: number[]) {
 }
 
 export function StarforceTab() {
+  // The items with their spare prices and the meso rate the site starts from (the admin page changes them).
+  const values = useSiteValues();
+  const catalog = starItems(values);
+  const groups = useMemo(() => itemGroups(catalog), [catalog]);
+  const findItem = (id: string) => findIn(catalog, id);
+  const defaultRate = market(values).mesoWon;
   const [item, setItem] = useState(DEFAULT_ITEM);
   const [customLv, setCustomLv] = useState(String(CUSTOM_LEVEL));
   const [event, setEvent] = useState<StarEvent>("shining");
@@ -160,7 +166,7 @@ export function StarforceTab() {
   ]);
   const [view, setView] = useState<"cum" | "step">("cum");
   const [unit, setUnit] = useState<"meso" | "won">("meso");
-  const [rateText, setRateText] = useState(String(MESO_RATE_WON));
+  const [rateText, setRateText] = useState(String(defaultRate));
   const [spareText, setSpareText] = useState(
     String(findItem(DEFAULT_ITEM)?.spareEok ?? 10),
   );
@@ -203,7 +209,7 @@ export function StarforceTab() {
   // Level rule (5 / 8 / 10 / 15 / 20 / 30 stars), lowered by the item's own cap when it has one.
   const itemMax = item === CUSTOM ? undefined : findItem(item)?.maxStar;
   const maxStar = Math.min(maxStarFor(level), itemMax ?? 30);
-  const rate = parseNum(rateText, MESO_RATE_WON);
+  const rate = parseNum(rateText, defaultRate);
   const spareMeso = parseNum(spareText, 0) * 1e8;
 
   // Cheap (30 steps): recomputed every render, the React compiler memoizes it.
@@ -443,7 +449,7 @@ export function StarforceTab() {
         <Panel>
           <Label>장비</Label>
           <div className="flex flex-col gap-2.5">
-            {ITEM_GROUPS.map((g) => (
+            {groups.map((g) => (
               <div key={g.label} className="flex flex-col gap-1.5">
                 <span className="font-num text-[11px] text-muted-foreground">
                   {g.label}

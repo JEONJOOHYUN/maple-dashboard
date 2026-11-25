@@ -18,9 +18,11 @@ import { PotentialSync, StarforceSync } from "@/lib/enhance/sync";
 import { groupTallies, worldGroup } from "@/lib/enhance/worlds";
 import { STAT_CONV_DEFAULT } from "@/lib/ev/defaults";
 import { GRADE_LABEL, NEXT_GRADE, convFromText, type ConvText, type Grade } from "@/lib/ev/potential";
+import { creditShop, starItems } from "@/lib/site-values/values";
 import { useStored } from "@/lib/use-stored";
 import { Digits } from "@/components/ui/digits";
 import { ViewTabs } from "@/components/ui/view-tabs";
+import { useSiteValues } from "@/components/site-values";
 import { cn } from "@/lib/utils";
 
 type View = "insight" | "log" | "items";
@@ -560,6 +562,10 @@ function RollsView({ entries, characters, found }: { entries: PotEntry[]; charac
 export function PotentialBoard({ apiKey, account, onForget, switcher }: { apiKey: string; account: string; onForget: () => void; switcher: ReactNode }) {
   const period = usePeriod();
   const { from, to } = period;
+  // The site's values now: the calculator's item list (pictures) and the credit shop (what a prime cube costs).
+  const values = useSiteValues();
+  const catalog = starItems(values);
+  const shop = creditShop(values);
   const [view, setView] = useState<View>("insight");
   // How much the other lines are worth in main stat %: the same numbers the calculator's potential tab keeps.
   const [convText] = useStored<ConvText>("ev:statConv", {});
@@ -582,7 +588,7 @@ export function PotentialBoard({ apiKey, account, onForget, switcher }: { apiKey
   }, [snap.rows]);
   const names = useMemo(() => [...new Set(snap.rows.map((r) => r.item))], [snap.rows]);
   const dict = useItemDict(snap.status === "done", names, snap.found, rolled);
-  const icons = useMemo(() => Object.fromEntries(names.map((name) => [name, itemIcon(name, snap.found, dict)])) as Icons, [names, snap.found, dict]);
+  const icons = useMemo(() => Object.fromEntries(names.map((name) => [name, itemIcon(name, snap.found, dict, catalog)])) as Icons, [names, snap.found, dict, catalog]);
 
   // Which item a roll belongs to is read from the rolls around it, so that needs every loaded roll, not only the period's.
   const pieces = useMemo(() => trackPieces(snap.rows), [snap.rows]);
@@ -596,10 +602,10 @@ export function PotentialBoard({ apiKey, account, onForget, switcher }: { apiKey
     const out: CubePrices = {};
     for (const cube of PRICED_CUBES) {
       const typed = priceText[cube] ?? "";
-      if (typed !== "") out[cube] = parseNum(typed, 0) * 1e8;
+      out[cube] = typed !== "" ? parseNum(typed, 0) * 1e8 : cubePriceDefault(cube, shop);
     }
     return out;
-  }, [priceText]);
+  }, [priceText, shop]);
   const inPeriod = useMemo(() => {
     const start = dayStart(from);
     const end = dayStart(to) + DAY;
@@ -647,14 +653,14 @@ export function PotentialBoard({ apiKey, account, onForget, switcher }: { apiKey
           // Always there, for both cubes (user, 2026-11-13): shown only to those who had used one, nobody else
           // could tell the price can be set.
           (
-            <BasisButton summary={PRICED_CUBES.map((cube) => `${CUBE_SHORT[cube]} ${eok(prices[cube] ?? cubePriceDefault(cube))}`).join(" · ")}>
+            <BasisButton summary={PRICED_CUBES.map((cube) => `${CUBE_SHORT[cube]} ${eok(prices[cube] ?? cubePriceDefault(cube, shop))}`).join(" · ")}>
               {PRICED_CUBES.map((cube) => (
                 <BasisRow key={cube} label={`${CUBE_NAME[cube]} 1개`}>
                   <NumberField
                     label={`${CUBE_NAME[cube]} 1개 가격 (억 메소)`}
                     value={priceText[cube] ?? ""}
                     onChange={(t) => setPriceText({ ...priceText, [cube]: t })}
-                    placeholder={String(cubePriceDefault(cube) / 1e8)}
+                    placeholder={String(cubePriceDefault(cube, shop) / 1e8)}
                     decimal
                     suffix="억"
                     inputClassName="h-8 w-16"

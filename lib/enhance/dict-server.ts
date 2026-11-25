@@ -6,7 +6,7 @@ import "server-only";
 import { unstable_cache } from "next/cache";
 import { supabase } from "@/lib/supabase";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { fillOf, type Dict, type DictItem, type ReportItem } from "./dict";
+import { fillOf, plainName, type Dict, type DictItem, type ReportItem } from "./dict";
 
 export const ITEM_DICT_TAG = "item-dict";
 const PAGE = 1000;
@@ -39,6 +39,26 @@ export async function lookupDict(names: string[]): Promise<Dict> {
   const out: Dict = {};
   for (const name of names) if (Object.hasOwn(all, name)) out[name] = all[name];
   return out;
+}
+
+/**
+ * Dictionary items whose name has `query` in it (spaces ignored), names starting with it first. For the admin
+ * page's "add an item" search; `skip` = names it already lists.
+ */
+export async function searchDict(query: string, limit: number, skip: ReadonlySet<string> = new Set()): Promise<ReportItem[]> {
+  const q = plainName(query);
+  if (!q) return [];
+  const all = await loadAll();
+  const starts: ReportItem[] = [];
+  const holds: ReportItem[] = [];
+  for (const name of Object.keys(all)) {
+    if (skip.has(name)) continue;
+    const at = plainName(name).indexOf(q);
+    if (at < 0) continue;
+    (at === 0 ? starts : holds).push({ name, ...all[name] });
+    if (starts.length >= limit) break;
+  }
+  return [...starts, ...holds].slice(0, limit);
 }
 
 /**

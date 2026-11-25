@@ -8,6 +8,7 @@ import { Card, Empty, signed, tone } from "@/components/enhance/parts";
 import { CalendarView, InsightView, ItemDialog, ItemsView, LogView } from "@/components/enhance/starforce-views";
 import { useItemDict, type Rolled } from "@/components/enhance/use-item-dict";
 import { ViewTabs } from "@/components/ui/view-tabs";
+import { useSiteValues } from "@/components/site-values";
 import { resolveItem, type ItemInfo, type ItemOverrides } from "@/lib/enhance/items";
 import { NO_DISCOUNT, judge, trackCopies, type Discount } from "@/lib/enhance/judge";
 import type { MvpGrade } from "@/lib/ev/starforce";
@@ -16,6 +17,7 @@ import { inGroup, starEventKind, type EventScope } from "@/lib/enhance/events";
 import { buildStats, reachedFloor, type Entry } from "@/lib/enhance/stats";
 import { StarforceSync } from "@/lib/enhance/sync";
 import { groupTallies, worldGroup } from "@/lib/enhance/worlds";
+import { starItems } from "@/lib/site-values/values";
 import { useStored } from "@/lib/use-stored";
 import { cn } from "@/lib/utils";
 
@@ -41,6 +43,8 @@ const MVPS: { id: MvpGrade; label: string }[] = [
 export function StarforceBoard({ apiKey, account, onForget, switcher }: { apiKey: string; account: string; onForget: () => void; switcher: ReactNode }) {
   const period = usePeriod();
   const { from, to } = period;
+  // Levels and spare prices of the calculator's list, as the site has them now.
+  const catalog = starItems(useSiteValues());
   const [view, setView] = useState<View>("insight");
   // One switch for the log and the item cards (tries · items under 12 stars). Checked every time the board opens
   // (user, 2026-11-13): it used to be remembered, and the link to the cards waiting for a level unchecks it, so one
@@ -78,10 +82,10 @@ export function StarforceBoard({ apiKey, account, onForget, switcher }: { apiKey
     const infos = new Map<string, ItemInfo>();
     return inPeriod.map((row) => {
       let info = infos.get(row.item);
-      if (!info) infos.set(row.item, (info = resolveItem(row.item, snap.found, overrides, dict)));
+      if (!info) infos.set(row.item, (info = resolveItem(row.item, snap.found, overrides, dict, catalog)));
       return { row, info, j: judge(row, info, tracked.restored.has(row.id), discount), copy: tracked.copy.get(row.id) ?? 1 };
     });
-  }, [inPeriod, snap.found, overrides, dict, tracked, discount]);
+  }, [inPeriod, snap.found, overrides, dict, catalog, tracked, discount]);
   const tallies = useMemo(() => groupTallies(judged.map((e) => ({ world: e.row.world, spent: e.j.ok ? e.j.cost : 0 }))), [judged]);
   const groups = useKnownGroups(account, tallies);
   const entries = useMemo(() => judged.filter((e) => !groupsOff.includes(worldGroup(e.row.world))), [judged, groupsOff]);

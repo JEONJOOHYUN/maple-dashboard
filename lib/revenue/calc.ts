@@ -42,8 +42,11 @@ function readRows(state: SchedulerState): BossRow[] {
   });
 }
 
-/** Crystal sale price in meso, or null when no official price is known for that boss · difficulty. */
-export const crystalPrice = (key: string): number | null => CRYSTAL[key] ?? null;
+/**
+ * Crystal sale price in meso, or null when no official price is known for that boss · difficulty. `table` = the
+ * prices in force (lib/site-values/values.ts crystalTable); without it the code's own.
+ */
+export const crystalPrice = (key: string, table: Record<string, number> = CRYSTAL): number | null => table[key] ?? null;
 /** One member's share of a crystal (meso, rounded down). */
 export const share = (price: number, party: number): number => Math.floor(price / Math.max(1, party));
 
@@ -60,7 +63,10 @@ export function withParty(store: PartyStore, ocid: string, boss: string, diff: s
   return { ...store, [partyKey(ocid, boss, diff)]: n, [partyKey(ocid, boss)]: n };
 }
 
-/** Prices the user changed, 만 메소 by item id. */
+/**
+ * Prices in 만 메소 by item id: what the user changed, or (the screen) those laid over the default of every item
+ * (lib/site-values/values.ts rewardPrices). An id that is not there falls back to the code's default.
+ */
 export type Prices = Partial<Record<ItemId, number>>;
 export const priceOf = (id: ItemId, prices: Prices): number => (prices[id] ?? ITEMS[id].price) * 10_000;
 

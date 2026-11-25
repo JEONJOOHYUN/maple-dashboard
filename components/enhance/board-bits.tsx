@@ -14,6 +14,7 @@ import { Reveal } from "@/components/ui/reveal";
 import { Spinner } from "@/components/ui/spinner";
 import { SwapIcon } from "@/components/ui/swap-icon";
 import type { ApiErrorKind } from "@/lib/enhance/client";
+import { plainName } from "@/lib/enhance/dict";
 import { addDays, kstDate } from "@/lib/enhance/kst";
 import type { HistorySync, SyncSnap } from "@/lib/enhance/sync";
 import { GROUP_LABEL, WORLD_GROUPS, type GroupTally, type WorldGroup } from "@/lib/enhance/worlds";
@@ -310,10 +311,9 @@ export function SyncBanners({ snap, unit, onRetry, onForget }: { snap: Pick<Sync
   );
 }
 
-const plain = (s: string) => s.replace(/\s+/g, "").toLowerCase();
 
 /** Whether an item passes the 모아보기 filter: the one picked in the list, else any name that has the typed text in it. */
-export const itemMatches = (name: string, filter: ItemFilterState) => (filter.picked ? name === filter.picked : plain(name).includes(plain(filter.query)));
+export const itemMatches = (name: string, filter: ItemFilterState) => (filter.picked ? name === filter.picked : plainName(name).includes(plainName(filter.query)));
 
 export type ItemFilterState = { query: string; picked: string };
 export const NO_ITEM_FILTER: ItemFilterState = { query: "", picked: "" };
@@ -382,7 +382,7 @@ function NamePick({
       onItemHighlighted={(item) => {
         highlighted.current = typeof item === "string" ? item : undefined;
       }}
-      filter={(item, query) => plain(String(item)).includes(plain(query))}
+      filter={(item, query) => plainName(String(item)).includes(plainName(query))}
       autoHighlight={!free}
     >
       <ComboboxInput

@@ -4,7 +4,9 @@ import { useMemo, useState } from "react";
 import { ChevronDown, Minus, Plus } from "lucide-react";
 import { Label, LuckRow, NumberField, Panel, Segment, Switch, arrowTurn, count, eok, parseNum, pct, stepButton } from "@/components/ev/ui";
 import { CustomGoal, condText } from "@/components/ev/custom-goal";
-import { CREDIT_SHOP, STAT_CONV_DEFAULT } from "@/lib/ev/defaults";
+import { STAT_CONV_DEFAULT } from "@/lib/ev/defaults";
+import { creditShop } from "@/lib/site-values/values";
+import { useSiteValues } from "@/components/site-values";
 import { averageTries } from "@/lib/ev/luck";
 import { useStored } from "@/lib/use-stored";
 import { type MainStat,
@@ -87,6 +89,8 @@ const ADD_GOALS: { id: AddWeaponGoal; label: (need: number, a: string) => string
 ];
 
 export function PotentialTab() {
+  // What a prime cube sells for now (the credit shop of the MVP page; the admin page changes it).
+  const shop = creditShop(useSiteValues());
   const [group, setGroup] = useState<(typeof GROUPS)[number]["id"]>("wpn");
   const [slotId, setSlotId] = useState("weapon");
   const [levelText, setLevelText] = useState("200");
@@ -282,7 +286,7 @@ export function PotentialTab() {
     .filter((c) => picked.includes(c.id))
     .map((c) => {
       // Meso resets cost what the game charges; cash cubes (and the white cube) need a price typed in.
-      const shopEok = CREDIT_SHOP.find((x) => x.id === c.id)?.auctionEok;
+      const shopEok = shop.find((x) => x.id === c.id)?.auctionEok;
       const auto = c.fixFirst ? (shopEok ? shopEok * 1e8 : null) : whiteUp && goal === "grade" && c.upAlt ? null : resetMeso(c.id, grade, soul ? 0 : level);
       const fixed = auto !== null && !c.fixFirst;
       const typed = parseNum(prices[c.id] ?? "", 0) * 1e8;

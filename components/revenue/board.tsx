@@ -30,10 +30,12 @@ import {
   type SchedulerState,
 } from "@/lib/revenue/calc";
 import { BOXES, CATEGORIES, DROPS, ITEMS, MATERIALS, iconSrc, isBox, item, maxParty, type Icon, type ItemId } from "@/lib/revenue/data";
+import { crystalTable, rewardPrices } from "@/lib/site-values/revenue";
 import { useStored } from "@/lib/use-stored";
 import { cn } from "@/lib/utils";
 import { Face } from "@/components/revenue/face";
 import { SheetHead } from "@/components/revenue/sheet-head";
+import { useSiteValues } from "@/components/site-values";
 import { DIFF_STYLE, chip, focus, hoverRing, lineTile, openRing, pickedRing, problemLine, sheetPanel } from "@/components/revenue/styles";
 import type { Char } from "@/components/revenue/use-data";
 import type { RevenueSettings } from "@/components/revenue/use-settings";
@@ -149,12 +151,17 @@ export function Board({
       else base[k] = v;
       return { week, marks: base };
     });
-  const prices: Prices = useMemo(() => {
+  // The site's default prices (the admin page changes them), with what this visitor typed laid over them.
+  const values = useSiteValues();
+  const basePrices = rewardPrices(values);
+  const crystals = crystalTable(values);
+  const typed: Prices = useMemo(() => {
     const out: Prices = {};
     for (const [id, t] of Object.entries(priceText)) if (t && t.trim()) out[id as ItemId] = Math.round(parseNum(t) * 10_000);
     return out;
   }, [priceText]);
-  const changed = Object.keys(prices).length;
+  const prices: Prices = useMemo(() => ({ ...basePrices, ...typed }), [basePrices, typed]);
+  const changed = Object.keys(typed).length;
 
   const views: CharView[] = useMemo(
     () =>
@@ -166,7 +173,7 @@ export function Board({
           const thisWeek = r.monthly && r.done ? monthlyThisWeek(r.boss, prev[c.ocid], now) : true;
           if (thisWeek === null) return [];
           const earlier = !thisWeek;
-          const price = crystalPrice(r.key);
+          const price = crystalPrice(r.key, crystals);
           const p = partyFor(party, c.ocid, r.boss, r.diff);
           const cells = cellsOf(c.ocid, r.key, marks);
           const material = withMat && !earlier ? materialValue(r.key, prices) : 0;
@@ -187,7 +194,7 @@ export function Board({
           limit: state?.weekly_boss_clear_limit_count ?? 12,
         };
       }),
-    [chars, states, prev, now, party, marks, prices, withMat, fee]
+    [chars, states, prev, now, party, marks, prices, crystals, withMat, fee]
   );
   const sheetIdx = views.findIndex((v) => v.c.ocid === sheetId);
   const sheet = sheetIdx >= 0 ? views[sheetIdx] : null;
@@ -287,7 +294,7 @@ export function Board({
                     value={priceText[id] ?? ""}
                     onChange={(t) => setPriceText((prev) => ({ ...prev, [id]: t }))}
                     label={`${ITEMS[id].name} 개당 가격, 억 메소`}
-                    placeholder={(ITEMS[id].price / 10_000).toLocaleString("ko-KR", { maximumFractionDigits: 2 })}
+                    placeholder={(basePrices[id] / 10_000).toLocaleString("ko-KR", { maximumFractionDigits: 2 })}
                     suffix="억"
                     decimal
                     inputClassName={priceText[id]?.trim() ? "text-primary-text" : undefined}

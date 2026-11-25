@@ -4,7 +4,9 @@
 // The dictionary comes last on purpose: a wrong value someone sent can never beat what this account itself knows.
 // Levels and spare prices come from the calculator's list (lib/ev/defaults.ts, user-checked); the set prefixes are
 // the level every piece of that set has (에테르넬 250 · 아케인셰이드 200 · 앱솔랩스 160 · 파프니르 150).
-import { STAR_ITEMS, itemImage } from "../ev/defaults.ts";
+// The screens pass the list in force (lib/site-values/values.ts starItems: prices the admin changed, items added);
+// without it the code's own list is used.
+import { STAR_ITEMS, itemImage, type StarItem } from "../ev/defaults.ts";
 import { iconUrl, type Dict } from "./dict.ts";
 
 export type KnownItem = {
@@ -17,21 +19,32 @@ export type KnownItem = {
 
 const norm = (s: string) => s.replace(/\s+/g, "");
 
-const byId = new Map(STAR_ITEMS.flatMap((g) => g.items.map((it) => [it.id, { ...it, level: g.level }] as const)));
-const pick = (id: string, withIcon = false): KnownItem => {
-  const it = byId.get(id)!;
-  return { level: it.level, spare: it.spareEok * 1e8, maxStar: it.maxStar, icon: withIcon ? itemImage(it.icons[0]) : undefined };
-};
-
+type Listed = { level: number; items: StarItem[] }[];
 /** List entries that are one item (not a group such as "아케인셰이드 장비"). */
 const GROUPS = new Set(["arcane", "astra", "eterArmor", "eterAcc", "destiny"]);
-const EXACT = new Map(
-  STAR_ITEMS.flatMap((g) => g.items.filter((it) => !GROUPS.has(it.id)).map((it) => [norm(it.name), it.id] as const))
-);
+type Index = { byId: Map<string, StarItem & { level: number }>; exact: Map<string, string> };
+/** Looked up for every row of a history: the index of a list is built once. */
+const indexes = new WeakMap<Listed, Index>();
+function indexOf(list: Listed): Index {
+  let index = indexes.get(list);
+  if (!index) {
+    index = {
+      byId: new Map(list.flatMap((g) => g.items.map((it) => [it.id, { ...it, level: g.level }] as const))),
+      exact: new Map(list.flatMap((g) => g.items.filter((it) => !GROUPS.has(it.id)).map((it) => [norm(it.name), it.id] as const))),
+    };
+    indexes.set(list, index);
+  }
+  return index;
+}
 
-export function knownItem(name: string): KnownItem | null {
+export function knownItem(name: string, list: Listed = STAR_ITEMS): KnownItem | null {
+  const { byId, exact: names } = indexOf(list);
+  const pick = (id: string, withIcon = false): KnownItem => {
+    const it = byId.get(id)!;
+    return { level: it.level, spare: it.spareEok * 1e8, maxStar: it.maxStar, icon: withIcon && it.icons[0] ? itemImage(it.icons[0]) : undefined };
+  };
   const n = norm(name);
-  const exact = EXACT.get(n);
+  const exact = names.get(n);
   if (exact) return pick(exact, true);
   // "여명의 가디언 엔젤 링" is the same ring as "가디언 엔젤 링".
   if (n.endsWith("가디언엔젤링")) return pick("gaen", true);
@@ -68,8 +81,8 @@ export type ItemOverrides = {
   spares: Record<string, number>;
 };
 
-export function resolveItem(name: string, found: Record<string, FoundItem>, over: ItemOverrides, dict: Dict = {}): ItemInfo {
-  const table = knownItem(name);
+export function resolveItem(name: string, found: Record<string, FoundItem>, over: ItemOverrides, dict: Dict = {}, list?: Listed): ItemInfo {
+  const table = knownItem(name, list);
   const api = found[name];
   const shared = Object.hasOwn(dict, name) ? dict[name] : undefined;
   const userLevel = over.levels[name];
@@ -86,5 +99,5 @@ export function resolveItem(name: string, found: Record<string, FoundItem>, over
 }
 
 /** Picture of an item whose level is already known (potential rolls carry it): equipment → the calculator's list → the dictionary. */
-export const itemIcon = (name: string, found: Record<string, FoundItem>, dict: Dict = {}): string | undefined =>
-  found[name]?.icon || knownItem(name)?.icon || iconUrl(Object.hasOwn(dict, name) ? dict[name].icon : "") || undefined;
+export const itemIcon = (name: string, found: Record<string, FoundItem>, dict: Dict = {}, list?: Listed): string | undefined =>
+  found[name]?.icon || knownItem(name, list)?.icon || iconUrl(Object.hasOwn(dict, name) ? dict[name].icon : "") || undefined;

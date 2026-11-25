@@ -13,6 +13,9 @@ export type ReportItem = DictItem & { name: string };
 export const ICON_BASE = "https://open.api.nexon.com/static/maplestory/item/icon/";
 const ICON_CODE = /^[A-Za-z0-9]{1,40}$/;
 
+/** An item name as it is compared in a search: no spaces, one case. */
+export const plainName = (text: string) => text.replace(/\s+/g, "").toLowerCase();
+
 export const MAX_NAME = 60;
 export const MAX_PART = 20;
 export const MAX_LEVEL = 300;

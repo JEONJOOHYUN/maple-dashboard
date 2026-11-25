@@ -8,8 +8,10 @@ import "./globals.css";
 import { Clarity } from "@/components/clarity";
 import { SideNav } from "@/components/side-nav";
 import { SiteHeader } from "@/components/site-header";
+import { SiteValuesProvider } from "@/components/site-values";
 import { ThemeProvider } from "@/components/theme-provider";
 import { MEMBER_HINT_SCRIPT } from "@/lib/auth/member-hint";
+import { siteValues } from "@/lib/site-values/server";
 
 // Big numbers only (font-num). Official NEXON files, unmodified (license: fonts/Maplestory/LICENSE.md).
 // unicode-range keeps it to ASCII so units like 억 or 명 fall through to Pretendard
@@ -37,11 +39,14 @@ export const metadata: Metadata = {
   description: "메이플스토리 유틸리티 사이트",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // Default prices the admin changed (a kept copy of a small table; the code's own values when it cannot be read).
+  // The pages stay static: changing a value clears the tag, and the next visit is built with the new ones.
+  const values = await siteValues();
   return (
     <html lang="ko" suppressHydrationWarning className={maple.variable}>
       <body>
@@ -55,7 +60,9 @@ export default function RootLayout({
               <SiteHeader />
               {/* Column, so the footer sits at the bottom of the screen even when the page is short. */}
               <main className="flex flex-1 flex-col px-4 pt-[18px] pb-7 lg:px-8 lg:pt-7 lg:pb-9">
-                <div className="mx-auto w-full max-w-6xl pb-10">{children}</div>
+                <div className="mx-auto w-full max-w-6xl pb-10">
+                  <SiteValuesProvider values={values}>{children}</SiteValuesProvider>
+                </div>
                 <footer className="mx-auto mt-auto flex w-full max-w-6xl flex-wrap items-center gap-x-4 gap-y-1 border-t border-border pt-4 text-[11px] text-muted-foreground">
                   <Link
                     href="/privacy"

@@ -41,7 +41,8 @@ import {
   type RunUse,
 } from "@/lib/ev/ability";
 import type { ClassAbility } from "@/lib/ev/ability-classes";
-import { CREDIT_SHOP } from "@/lib/ev/defaults";
+import { creditShop } from "@/lib/site-values/values";
+import { useSiteValues } from "@/components/site-values";
 import { cn } from "@/lib/utils";
 import { koreanUnits } from "@/lib/format";
 
@@ -69,8 +70,9 @@ export function AbilityTab({ classes }: { classes: ClassAbility[] }) {
   } | null>(null);
   // Abyss circulator price (억), same default as the MVP credit shop. Only the advanced reset uses it: the fame-reset
   // build rerolls values with the black · chaos circulators, event items with no price (user, 2026-11-15).
+  const shop = creditShop(useSiteValues());
   const [circText, setCircText] = useState(
-    String(CREDIT_SHOP.find((x) => x.id === "circulator")?.auctionEok ?? ""),
+    String(shop.find((x) => x.id === "circulator")?.auctionEok ?? ""),
   );
   // Miracle circulator price (억): no longer sold, traded at about 1.5억 (user, 2026-11-15).
   const [miracleText, setMiracleText] = useState("1.5");

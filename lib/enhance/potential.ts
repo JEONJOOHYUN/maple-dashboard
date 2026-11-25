@@ -161,8 +161,11 @@ export type PricedCube = "prime" | "primeAddi";
 export const PRICED_CUBES: PricedCube[] = ["prime", "primeAddi"];
 /** Meso for one cube, by the user ("" = our default). */
 export type CubePrices = Partial<Record<PricedCube, number>>;
-/** Our price for one cube in meso: the auction price the MVP page uses (lib/ev/defaults.ts CREDIT_SHOP). */
-export const cubePriceDefault = (cube: PricedCube): number => (CREDIT_SHOP.find((x) => x.id === cube)?.auctionEok ?? 0) * 1e8;
+/**
+ * Our price for one cube in meso: the auction price the MVP page uses. `shop` = the credit shop in force
+ * (lib/site-values/values.ts creditShop); without it the code's own (lib/ev/defaults.ts CREDIT_SHOP).
+ */
+export const cubePriceDefault = (cube: PricedCube, shop: readonly { id: string; auctionEok: number }[] = CREDIT_SHOP): number => (shop.find((x) => x.id === cube)?.auctionEok ?? 0) * 1e8;
 
 /** The priced cube a roll used, or null (a reset, or a cube that is not traded for meso). */
 export function pricedCube(row: PotRow): PricedCube | null {

@@ -1,12 +1,14 @@
 "use client";
 
-import { Fragment, useRef, useState, type ReactNode } from "react";
+import { Fragment, useMemo, useRef, useState, type ReactNode } from "react";
 import { ChevronDown, X } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { Chip, NumberField, Segment, parseNum } from "@/components/ev/ui";
 import { BoutiquePanel, type BoutiqueTab } from "@/components/mvp/boutique-panel";
 import { Field } from "@/components/mvp/field";
-import { BOUTIQUE_OPEN_ID, CREDIT_PCT, CREDIT_SHOP, GIFT_WON_PER_10K, MESO_MARKET_MP, MVP_ITEMS, MVP_MESO_WON, MVP_METHODS } from "@/lib/ev/defaults";
+import { BOUTIQUE_OPEN_ID, CREDIT_PCT, MVP_METHODS, type CREDIT_SHOP, type MVP_ITEMS } from "@/lib/ev/defaults";
+import { creditShop, market as marketNow, mvpItems, type Market as Rates } from "@/lib/site-values/values";
+import { useSiteValues } from "@/components/site-values";
 import { ticketsPer10 } from "@/lib/mvp/boutique";
 import {
   MESO_SELL_KEEP,
@@ -71,39 +73,43 @@ type Settings = {
 };
 const SETTINGS_V = 2;
 const itemOf = (i: (typeof MVP_ITEMS)[number]): Item => ({ id: i.id, name: i.name, cash: String(i.cash), price: String(i.ticketMan ?? i.auctionEok) });
-const DEFAULT_SETTINGS: Settings = {
+/**
+ * What the page starts from: the items and rates the site has now (the admin page changes them). They reach someone
+ * who has not saved anything yet; a save keeps its whole item list, so later changes do not reach it.
+ */
+const defaultSettings = (items: typeof MVP_ITEMS, shop: typeof CREDIT_SHOP, rates: Rates): Settings => ({
   v: SETTINGS_V,
   opened: { n: "", t: "" },
   boutiqueTab: "before",
   boutiqueShow: false,
   discounts: Object.fromEntries(MVP_METHODS.map((m) => [m.id, String(m.discountPct)])),
-  wonRate: String(MVP_MESO_WON),
-  mmRate: String(MESO_MARKET_MP),
-  giftRate: String(GIFT_WON_PER_10K),
+  wonRate: String(rates.mesoWon),
+  mmRate: String(rates.mesoMp),
+  giftRate: String(rates.giftWon),
   fee: 3,
   useCredit: true,
   creditNow: "",
-  items: MVP_ITEMS.map(itemOf),
-  shop: CREDIT_SHOP.map((i) => ({ id: i.id, name: i.name, credit: String(i.credit), price: String(i.auctionEok) })),
+  items: items.map(itemOf),
+  shop: shop.map((i) => ({ id: i.id, name: i.name, credit: String(i.credit), price: String(i.auctionEok) })),
   target: "next",
   custom: "",
   sum13: "",
   drop: "",
-};
+});
 
 /**
  * Saves from before 2026-11-17 keep their whole item list, so new rows would never reach them: "부티크" (the old name,
  * only if untouched) becomes "부티크 기프트 10개 · 그대로" and the opened row goes right after it, once (v 2 after that,
  * so a row the person takes out stays out).
  */
-function upgrade(raw: Partial<Settings>): Settings {
-  const s = { ...DEFAULT_SETTINGS, ...raw };
+function upgrade(raw: Partial<Settings>, defaults: Settings, cash: typeof MVP_ITEMS): Settings {
+  const s = { ...defaults, ...raw };
   if ((raw.v ?? 1) >= SETTINGS_V) return s;
-  const asIs = MVP_ITEMS.find((i) => i.id === "boutique")!;
+  const asIs = cash.find((i) => i.id === "boutique")!;
   const items = s.items.map((it) => (it.id === "boutique" && it.name === "부티크" ? { ...it, name: asIs.name } : it));
   if (!items.some((it) => it.id === BOUTIQUE_OPEN_ID)) {
     const at = items.findIndex((it) => it.id === "boutique");
-    items.splice(at < 0 ? items.length : at + 1, 0, itemOf(MVP_ITEMS.find((i) => i.id === BOUTIQUE_OPEN_ID)!));
+    items.splice(at < 0 ? items.length : at + 1, 0, itemOf(cash.find((i) => i.id === BOUTIQUE_OPEN_ID)!));
   }
   return { ...s, items, v: SETTINGS_V };
 }
@@ -169,17 +175,21 @@ function Toggle<T extends string>({ value, options, onChange, label }: { value: 
 export function MvpCalculator() {
   const now = useNow();
   // New shape (2026-11-09 restructure) under a new key so old saved numbers do not mix in.
-  const [settings, setSettings] = useStored<Settings>("mvp:settings2", DEFAULT_SETTINGS);
+  const values = useSiteValues();
+  const cash = mvpItems(values);
+  const rates = marketNow(values);
+  const defaults = useMemo(() => defaultSettings(cash, creditShop(values), rates), [cash, values, rates]);
+  const [settings, setSettings] = useStored<Settings>("mvp:settings2", defaults);
   const [chargeOpen, setChargeOpen] = useState(false);
   const [draft, setDraft] = useState({ name: "", cash: "", price: "" });
   const [shopDraft, setShopDraft] = useState({ name: "", credit: "", price: "" });
 
-  const s = upgrade(settings);
+  const s = upgrade(settings, defaults, cash);
   const boutique = useReveal(s.boutiqueShow, LEAVE_MS);
   // A row cannot be given a height: the box inside its one cell is, and the row follows it.
   const boutiqueBox = useRef<HTMLDivElement>(null);
   useSelfGlide(boutiqueBox, s.boutiqueShow);
-  const update = (patch: Partial<Settings>) => setSettings((prev) => ({ ...upgrade(prev), ...patch }));
+  const update = (patch: Partial<Settings>) => setSettings((prev) => ({ ...upgrade(prev, defaults, cash), ...patch }));
 
   if (now === 0) {
     return (
@@ -218,10 +228,10 @@ export function MvpCalculator() {
   const methods = MVP_METHODS.map((m) => ({ ...m, discountPct: parseNum(s.discounts[m.id] ?? String(m.discountPct), 0) }));
   const plan = chargePlan(pay, methods);
   const market: Market = {
-    wonPer100m: parseNum(s.wonRate, MVP_MESO_WON),
-    mpPer100m: parseNum(s.mmRate, MESO_MARKET_MP),
+    wonPer100m: parseNum(s.wonRate, rates.mesoWon),
+    mpPer100m: parseNum(s.mmRate, rates.mesoMp),
     auctionFeePct: s.fee,
-    giftWonPer10k: parseNum(s.giftRate, GIFT_WON_PER_10K),
+    giftWonPer10k: parseNum(s.giftRate, rates.giftWon),
     // Fixed in game: 5 % of cash spent comes back as credit.
     creditPct: CREDIT_PCT,
     useCredit: s.useCredit,
@@ -561,7 +571,7 @@ export function MvpCalculator() {
                         <BoutiquePanel
                           tab={s.boutiqueTab}
                           onTab={(tab) => update({ boutiqueTab: tab })}
-                          ticketMan={parseNum(openItem?.price ?? "", MVP_ITEMS.find((x) => x.id === BOUTIQUE_OPEN_ID)!.ticketMan!)}
+                          ticketMan={parseNum(openItem?.price ?? "", cash.find((x) => x.id === BOUTIQUE_OPEN_ID)!.ticketMan!)}
                           cashPer10={parseNum((openItem ?? asIsItem)!.cash, 33_000)}
                           opened={s.opened}
                           onOpened={(opened) => update({ opened })}
@@ -600,7 +610,7 @@ export function MvpCalculator() {
           >
             추가
           </button>
-          {MVP_ITEMS.filter((p) => !s.items.some((it) => it.id === p.id)).map((p) => (
+          {cash.filter((p) => !s.items.some((it) => it.id === p.id)).map((p) => (
             <button
               key={p.id}
               type="button"

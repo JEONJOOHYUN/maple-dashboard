@@ -56,43 +56,54 @@ export const iconSrc = (icon: Icon): string =>
 export type Category = "ring" | "stone" | "pitch" | "glow" | "eter" | "soul";
 export type Item = { name: string; cat: Category; icon: Icon; /** Default price, 만 메소. */ price: number; level?: string };
 
+/**
+ * Boss rewards priced as a star force item of the expected-value calculator (reward → that list's id): one price in
+ * one place, so changing the item's spare price changes the reward too (lib/site-values/values.ts rewardPrices).
+ * Each Eternel box gives a fixed part group (NEXON notices; 갈망 · 광기 = user): 모자 · 상의 · 하의 · 어깨 side is worth
+ * the calculator's 에테르넬 armor, 신발 · 장갑 · 망토 its accessories.
+ */
+export const SPARE_LINK = {
+  rcm: "loose", patch: "eye", dream: "dream", fear: "terror", commander: "commander", pain: "pain",
+  whisper: "whisper", nightmare: "nightmare", oath: "oath", sin: "sin", wraith: "soulblood",
+  eterWill: "eterArmor", eterBeast: "eterArmor", eterFantasy: "eterArmor", eterAncient: "eterArmor",
+  eterDesire: "eterAcc", eterOath: "eterAcc", eterCraving: "eterAcc", eterMadness: "eterAcc",
+} as const;
+
 /** Spare-item prices of the expected-value calculator, 억 → 만 메소. */
 const ev = (id: string): number => {
   for (const g of STAR_ITEMS) for (const it of g.items) if (it.id === id) return Math.round(it.spareEok * 10_000);
   throw new Error(`expected-value item ${id} is missing`);
 };
 
-/** What a boss can give that is counted. 리레 · 컨티 = level 4 only (user: level 3 is not tracked). */
+/** What a boss can give that is counted. 리레 · 컨티 = level 4 only (user: level 3 is not tracked). `price` is the code's default. */
 export const ITEMS = {
   rr4: { name: "리스트레인트 링 4레벨", cat: "ring", icon: { code: "KEODIHHJ" }, price: 330_000, level: "4" },
   ct4: { name: "컨티뉴어스 링 4레벨", cat: "ring", icon: { code: "KEODIEMI" }, price: 230_000, level: "4" },
   lifeStone: { name: "생명의 연마석", cat: "stone", icon: { file: "stone-life" }, price: 70_000 },
   faithStone: { name: "신념의 연마석", cat: "stone", icon: { file: "stone-faith" }, price: 270_000 },
-  rcm: { name: "루즈 컨트롤 머신 마크", cat: "pitch", icon: { code: "KEPDJBND" }, price: ev("loose") },
-  patch: { name: "마력이 깃든 안대", cat: "pitch", icon: { code: "KEPAJFJJ" }, price: ev("eye") },
-  dream: { name: "몽환의 벨트", cat: "pitch", icon: { code: "KEOBJEOJ" }, price: ev("dream") },
+  rcm: { name: "루즈 컨트롤 머신 마크", cat: "pitch", icon: { code: "KEPDJBND" }, price: ev(SPARE_LINK.rcm) },
+  patch: { name: "마력이 깃든 안대", cat: "pitch", icon: { code: "KEPAJFJJ" }, price: ev(SPARE_LINK.patch) },
+  dream: { name: "몽환의 벨트", cat: "pitch", icon: { code: "KEOBJEOJ" }, price: ev(SPARE_LINK.dream) },
   grimoire: { name: "저주받은 마도서 선택 상자", cat: "pitch", icon: { file: "grimoire-box" }, price: 360_000 },
-  fear: { name: "거대한 공포", cat: "pitch", icon: { code: "KEODIEOH" }, price: ev("terror") },
-  commander: { name: "커맨더 포스 이어링", cat: "pitch", icon: { code: "KEPBJEPH" }, price: ev("commander") },
-  pain: { name: "고통의 근원", cat: "pitch", icon: { code: "KEOAJDNB" }, price: ev("pain") },
+  fear: { name: "거대한 공포", cat: "pitch", icon: { code: "KEODIEOH" }, price: ev(SPARE_LINK.fear) },
+  commander: { name: "커맨더 포스 이어링", cat: "pitch", icon: { code: "KEPBJEPH" }, price: ev(SPARE_LINK.commander) },
+  pain: { name: "고통의 근원", cat: "pitch", icon: { code: "KEOAJDNB" }, price: ev(SPARE_LINK.pain) },
   mitra: { name: "미트라의 분노 선택 상자", cat: "pitch", icon: { file: "mitra-box" }, price: 160_000 },
   genesis: { name: "창세의 뱃지", cat: "pitch", icon: { code: "KEOKJFGE" }, price: 1_800_000 },
-  whisper: { name: "근원의 속삭임", cat: "glow", icon: { code: "KEODIEKA" }, price: ev("whisper") },
-  nightmare: { name: "황홀한 악몽", cat: "glow", icon: { code: "KEODIEIB" }, price: ev("nightmare") },
-  oath: { name: "죽음의 맹세", cat: "glow", icon: { code: "KEOAJDKG" }, price: ev("oath") },
+  whisper: { name: "근원의 속삭임", cat: "glow", icon: { code: "KEODIEKA" }, price: ev(SPARE_LINK.whisper) },
+  nightmare: { name: "황홀한 악몽", cat: "glow", icon: { code: "KEODIEIB" }, price: ev(SPARE_LINK.nightmare) },
+  oath: { name: "죽음의 맹세", cat: "glow", icon: { code: "KEOAJDKG" }, price: ev(SPARE_LINK.oath) },
   legacy: { name: "불멸의 유산", cat: "glow", icon: { file: "legacy" }, price: 6_700_000 },
-  sin: { name: "오만의 원죄", cat: "glow", icon: { code: "KEPDJOPA" }, price: ev("sin") },
-  wraith: { name: "굶주리는 핏빛 원혼", cat: "glow", icon: { code: "KEPAJEHG" }, price: ev("soulblood") },
-  // Each Eternel box gives a fixed part group (NEXON notices; 갈망 · 광기 = user): 모자 · 상의 · 하의 · 어깨 side is worth
-  // the calculator's 에테르넬 armor, 신발 · 장갑 · 망토 its accessories.
-  eterWill: { name: "의지의 에테르넬 방어구 상자", cat: "eter", icon: { file: "eter-will" }, price: ev("eterArmor") },
-  eterBeast: { name: "흉수의 에테르넬 방어구 상자", cat: "eter", icon: { file: "eter-beast" }, price: ev("eterArmor") },
-  eterFantasy: { name: "환상의 에테르넬 방어구 상자", cat: "eter", icon: { file: "eter-fantasy" }, price: ev("eterArmor") },
-  eterAncient: { name: "고대의 에테르넬 방어구 상자", cat: "eter", icon: { file: "eter-ancient" }, price: ev("eterArmor") },
-  eterDesire: { name: "욕망의 에테르넬 방어구 상자", cat: "eter", icon: { file: "eter-desire" }, price: ev("eterAcc") },
-  eterOath: { name: "맹세의 에테르넬 방어구 상자", cat: "eter", icon: { file: "eter-oath" }, price: ev("eterAcc") },
-  eterCraving: { name: "갈망의 에테르넬 방어구 상자", cat: "eter", icon: { file: "eter-craving" }, price: ev("eterAcc") },
-  eterMadness: { name: "광기의 에테르넬 방어구 상자", cat: "eter", icon: { file: "eter-madness" }, price: ev("eterAcc") },
+  sin: { name: "오만의 원죄", cat: "glow", icon: { code: "KEPDJOPA" }, price: ev(SPARE_LINK.sin) },
+  wraith: { name: "굶주리는 핏빛 원혼", cat: "glow", icon: { code: "KEPAJEHG" }, price: ev(SPARE_LINK.wraith) },
+  eterWill: { name: "의지의 에테르넬 방어구 상자", cat: "eter", icon: { file: "eter-will" }, price: ev(SPARE_LINK.eterWill) },
+  eterBeast: { name: "흉수의 에테르넬 방어구 상자", cat: "eter", icon: { file: "eter-beast" }, price: ev(SPARE_LINK.eterBeast) },
+  eterFantasy: { name: "환상의 에테르넬 방어구 상자", cat: "eter", icon: { file: "eter-fantasy" }, price: ev(SPARE_LINK.eterFantasy) },
+  eterAncient: { name: "고대의 에테르넬 방어구 상자", cat: "eter", icon: { file: "eter-ancient" }, price: ev(SPARE_LINK.eterAncient) },
+  eterDesire: { name: "욕망의 에테르넬 방어구 상자", cat: "eter", icon: { file: "eter-desire" }, price: ev(SPARE_LINK.eterDesire) },
+  eterOath: { name: "맹세의 에테르넬 방어구 상자", cat: "eter", icon: { file: "eter-oath" }, price: ev(SPARE_LINK.eterOath) },
+  eterCraving: { name: "갈망의 에테르넬 방어구 상자", cat: "eter", icon: { file: "eter-craving" }, price: ev(SPARE_LINK.eterCraving) },
+  eterMadness: { name: "광기의 에테르넬 방어구 상자", cat: "eter", icon: { file: "eter-madness" }, price: ev(SPARE_LINK.eterMadness) },
   soul1: { name: "1단계 소울 에테르", cat: "soul", icon: { file: "soul-1" }, price: 10_000 },
   soul2: { name: "2단계 소울 에테르", cat: "soul", icon: { file: "soul-2" }, price: 30_000 },
   soul3: { name: "3단계 소울 에테르", cat: "soul", icon: { file: "soul-3" }, price: 40_000 },
