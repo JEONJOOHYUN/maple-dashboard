@@ -164,7 +164,8 @@ function fullOf(memberId: string, account: Opened, get: Get, ocid: string): Prom
   return kept(
     memberId,
     account,
-    `full|${kstDate(now)}|${ocid}`,
+    // "2": the kept registrations carry the weekly boss limit too (the first ones of 2026-11-26 did not).
+    `full2|${kstDate(now)}|${ocid}`,
     () =>
       latestFull(now, async (date) => {
         const answer = await get<HomeworkState>(...schedulerAsk(ocid, date));

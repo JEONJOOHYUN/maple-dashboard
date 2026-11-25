@@ -19,10 +19,17 @@ export const LOOK_BACK_DAYS = 14;
 
 export const isThin = (s: HomeworkState | null | undefined): boolean => !!s && (s.boss_contents?.length ?? 0) < FULL_BOSS_ROWS;
 
-/** The part of a full answer that fills a thin one: the registered rows of the two lists a thin answer drops (a tenth of the answer). */
-export type Registrations = Pick<HomeworkState, "boss_contents" | "daily_contents">;
+/**
+ * The part of a full answer that fills a thin one: the registered rows of the two lists a thin answer drops (a tenth
+ * of the answer), and the weekly boss limit (a thin answer says 0).
+ */
+export type Registrations = Pick<HomeworkState, "boss_contents" | "daily_contents" | "weekly_boss_clear_limit_count">;
 const onSchedule = (row: { registration_flag?: string }) => row.registration_flag === "true";
-export const registrationsOf = (s: HomeworkState): Registrations => ({ boss_contents: (s.boss_contents ?? []).filter(onSchedule), daily_contents: (s.daily_contents ?? []).filter(onSchedule) });
+export const registrationsOf = (s: HomeworkState): Registrations => ({
+  boss_contents: (s.boss_contents ?? []).filter(onSchedule),
+  daily_contents: (s.daily_contents ?? []).filter(onSchedule),
+  weekly_boss_clear_limit_count: s.weekly_boss_clear_limit_count,
+});
 
 const contentKey = (c: SchedulerContent) => c.content_name ?? "";
 const bossKey = (b: SchedulerBoss) => `${b.content_name}|${b.difficulty}|${b.cycle}`;
@@ -52,6 +59,7 @@ export function fillThin(today: HomeworkState, full: Registrations | null): Home
     ...today,
     boss_contents: merged(full.boss_contents ?? [], today.boss_contents ?? [], bossKey, notCleared, flag),
     daily_contents: merged(full.daily_contents ?? [], today.daily_contents ?? [], contentKey, notDone, flag),
+    weekly_boss_clear_limit_count: today.weekly_boss_clear_limit_count || full.weekly_boss_clear_limit_count,
   };
 }
 

@@ -22,6 +22,7 @@ const full: HomeworkState = {
   ],
   weekly_contents: [],
   weekly_boss_clear_count: 2,
+  weekly_boss_clear_limit_count: 12,
 };
 // Right after the Thursday reset, not logged in since: the monthly clear and one daily row, nothing registered.
 const thin: HomeworkState = {
@@ -29,6 +30,7 @@ const thin: HomeworkState = {
   daily_contents: [{ content_name: "몬스터파크", type: "contents", registration_flag: "false", now_count: 0, max_count: 14 }],
   weekly_contents: [],
   weekly_boss_clear_count: 0,
+  weekly_boss_clear_limit_count: 0,
 };
 
 test("thin answer: told apart by its few boss rows", () => {
@@ -44,6 +46,8 @@ test("thin answer, filled: the registered bosses and dailies are back and not do
   assert.deepEqual(hw.monthly.items.map((b) => [b.name, b.done]), [["검은 마법사", true]]);
   assert.deepEqual(hw.today.items.map((i) => i.done), [false]);
   // Boss revenue reads the same rows: the registered weekly bosses are there, not cleared.
+  // A thin answer says the weekly limit is 0: the full one's 12 stands in.
+  assert.equal(fillThin(thin, registrationsOf(full)).weekly_boss_clear_limit_count, 12);
   const rows = bossRows(fillThin(thin, registrationsOf(full)));
   assert.equal(rows.filter((r) => !r.monthly && !r.done).length, 2);
 });
