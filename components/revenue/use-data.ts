@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { openRevenue, readFaces, readSchedulers, refreshRevenue } from "@/app/revenue/actions";
-import { ApiError, createApi, type Api, type ApiErrorKind, type RawCharacterList } from "@/lib/enhance/client";
+import { ApiError, characterList, createApi, type Api, type ApiErrorKind, type RawCharacterList } from "@/lib/enhance/client";
 import type { SavedKey } from "@/lib/enhance/keys";
 import type { SchedulerState } from "@/lib/revenue/calc";
 import { MAX_ASKED } from "@/lib/revenue/data";
@@ -42,7 +42,7 @@ type Source = {
 /** A key kept in this browser: NEXON is asked straight from here, and the key never reaches our server. */
 function keySource(api: Api): Source {
   return {
-    list: (account) => api.get<RawCharacterList>("character/list", {}).then(
+    list: (account) => characterList(api).then(
       (body) => charsOf(body, account),
       (err) => (err instanceof ApiError ? err.kind : "failed")
     ),

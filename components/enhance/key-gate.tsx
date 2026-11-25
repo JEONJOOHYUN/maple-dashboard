@@ -13,14 +13,46 @@ import { hasRecords } from "@/lib/enhance/sync";
 
 export type Connected = { key: string; account: string };
 
-const ERRORS: Record<ApiErrorKind, string> = {
-  badKey: "API 키가 올바르지 않음",
-  quota: "이 키의 호출 한도 초과 (개발 단계 키 = 하루 1,000건) → 내일 다시",
+/** What a key check that failed for NEXON's side says, here and on 보스 수익 (each says its own key and quota lines). */
+export const SOON_AGAIN = {
   param: "넥슨 API 응답 오류 → 잠시 뒤 다시",
   busy: "넥슨 API 점검 중 → 잠시 뒤 다시",
   network: "넥슨 서버 연결 실패 → 잠시 뒤 다시",
   failed: "넥슨 API 응답 오류 → 잠시 뒤 다시",
+} satisfies Partial<Record<ApiErrorKind, string>>;
+
+const ERRORS: Record<ApiErrorKind, string> = {
+  badKey: "API 키가 올바르지 않음",
+  quota: "이 키의 호출 한도 초과 (개발 단계 키 = 하루 1,000건) → 내일 다시",
+  ...SOON_AGAIN,
 };
+
+/**
+ * Saved keys without a name get their account's highest character (one call each — the same character/list the
+ * page asks anyway, so usually none of its own). Used by the key gate for the list it shows and by 강화 기록 for the
+ * key in use. `onNamed` may be a new function each render: the keys are what decide the calls.
+ */
+export function useKeyNames(keys: { key: string; account: string }[], onNamed: ((account: string, name: string) => void) | undefined) {
+  const named = useRef(onNamed);
+  useEffect(() => {
+    named.current = onNamed;
+  });
+  const signature = onNamed ? keys.map((k) => `${k.account}:${k.key}`).join(",") : "";
+  useEffect(() => {
+    if (!signature) return;
+    const stop = new AbortController();
+    for (const part of signature.split(",")) {
+      const at = part.indexOf(":");
+      const account = part.slice(0, at);
+      fetchMainCharacter(createApi(part.slice(at + 1), account), stop.signal)
+        .then((who) => {
+          if (who && !stop.signal.aborted) named.current?.(account, who);
+        })
+        .catch(() => {});
+    }
+    return () => stop.abort();
+  }, [signature]);
+}
 /** Pressed with nothing in the field (the button stays on: a greyed one would not say why). */
 const NO_KEY = "API 키 먼저 붙여 넣기";
 
@@ -62,23 +94,10 @@ export function KeyGate({
       on = false;
     };
   }, []);
-  const unnamed = saved.filter((k) => !k.name).map((k) => `${k.account}:${k.key}`).join(",");
-  useEffect(() => {
-    if (!onNamed || !unnamed) return;
-    const stop = new AbortController();
-    for (const part of unnamed.split(",")) {
-      const at = part.indexOf(":");
-      const account = part.slice(0, at);
-      fetchMainCharacter(createApi(part.slice(at + 1), account), stop.signal)
-        .then((who) => {
-          if (who && !stop.signal.aborted) onNamed(account, who);
-        })
-        .catch(() => {});
-    }
-    return () => stop.abort();
-    // onNamed is a new function each render of the page; the keys are what decide the calls.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [unnamed]);
+  useKeyNames(
+    saved.filter((k) => !k.name),
+    onNamed
+  );
   const [remember, setRemember] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");

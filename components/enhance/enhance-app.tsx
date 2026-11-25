@@ -1,14 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Ellipsis } from "lucide-react";
 import { Segment } from "@/components/ev/ui";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { KeyGate, type Connected } from "@/components/enhance/key-gate";
+import { KeyGate, useKeyNames, type Connected } from "@/components/enhance/key-gate";
 import { PotentialBoard } from "@/components/enhance/potential-board";
 import { StarforceBoard } from "@/components/enhance/starforce-board";
 import { PageHeader } from "@/components/page-header";
-import { createApi, fetchMainCharacter, forgetPace } from "@/lib/enhance/client";
+import { forgetPace } from "@/lib/enhance/client";
 import { withKey, withName, withoutKey, type SavedKey } from "@/lib/enhance/keys";
 import { clearAccount, clearEverything } from "@/lib/enhance/sync";
 import { useNow } from "@/lib/use-now";
@@ -79,18 +79,9 @@ export function EnhanceApp() {
   // The list shows the account's main character (its highest level) instead of the key: asked once, for a
   // remembered key that has no name yet. A failure only leaves it as "저장된 키 n" until the next visit.
   const unnamed = saved && !list.find((k) => k.account === saved.account)?.name ? saved : null;
-  const unnamedKey = unnamed?.key;
-  const unnamedAccount = unnamed?.account;
-  useEffect(() => {
-    if (!unnamedKey || !unnamedAccount) return;
-    const stop = new AbortController();
-    fetchMainCharacter(createApi(unnamedKey, unnamedAccount), stop.signal)
-      .then((who) => {
-        if (who && !stop.signal.aborted) setKeys((prev) => withName(withKey(prev, { key: unnamedKey, account: unnamedAccount }), unnamedAccount, who));
-      })
-      .catch(() => {});
-    return () => stop.abort();
-  }, [unnamedKey, unnamedAccount, setKeys]);
+  useKeyNames(unnamed ? [unnamed] : [], (account, who) => {
+    if (unnamed) setKeys((prev) => withName(withKey(prev, unnamed), account, who));
+  });
 
   // Layout C (user, 2026-11-13): the switch sits in the board's tool row with the period and refresh; what is done
   // to the key (rarely) is in a menu next to the title.

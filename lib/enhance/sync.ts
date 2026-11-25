@@ -5,6 +5,7 @@ import { ApiError, createApi, fetchCharacters, fetchEquipment, fetchHistoryDay, 
 import { idbAny, idbDeletePrefix, idbGet, idbPut, idbRange } from "./idb.ts";
 import { knownItem, type FoundItem } from "./items.ts";
 import { DAY, datesBetween, dayStart } from "./kst.ts";
+import { once } from "../nexon/open-api.ts";
 import { parseStarforce, type RawStarforce, type SfRow } from "./parse.ts";
 import { parsePotential, type PotRow, type RawPotential } from "./potential.ts";
 
@@ -258,8 +259,8 @@ type SavedCharacters = { at: number; worlds: Record<string, string>; ocids: Reco
 type Characters = Pick<SavedCharacters, "worlds" | "ocids" | "classes">;
 const charactersKey = (account: string) => `${VERSION}|${account}|cw`;
 
-/** character/list calls under way, by key: the world lookup and the 통찰력 lookup start together and share one. */
-const listing = new Map<string, Promise<Characters>>();
+/** Lookups under way, by key: the world lookup and the 통찰력 lookup start together and share one. */
+const listing = new Map<string, Promise<unknown>>();
 
 /**
  * The account's characters (where each is now, and its id), asked at most once a day (one call). A failure answers
@@ -267,9 +268,7 @@ const listing = new Map<string, Promise<Characters>>();
  * The call is not tied to one caller's abort signal: it is shared, and it is a single small request.
  */
 function accountCharacters(api: Api, account: string): Promise<Characters> {
-  const running = listing.get(account);
-  if (running) return running;
-  const work = (async () => {
+  return once(listing, account, async () => {
     const saved = await idbGet<Partial<SavedCharacters>>(charactersKey(account));
     // A copy saved before the ids · jobs were kept counts as stale.
     if (saved?.worlds && saved.ocids && saved.classes && saved.at && Date.now() - saved.at < DAY) return { worlds: saved.worlds, ocids: saved.ocids, classes: saved.classes };
@@ -280,9 +279,7 @@ function accountCharacters(api: Api, account: string): Promise<Characters> {
     } catch {
       return { worlds: saved?.worlds ?? {}, ocids: saved?.ocids ?? {}, classes: saved?.classes ?? {} };
     }
-  })().finally(() => listing.delete(account));
-  listing.set(account, work);
-  return work;
+  });
 }
 
 /** Character → the world it is in today. */

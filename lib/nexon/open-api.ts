@@ -50,7 +50,7 @@ type Clock = { now: () => number; sleep: (ms: number) => Promise<void> };
 const real: Clock = { now: () => Date.now(), sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)) };
 
 /** `work`, or a rejection with the signal's reason the moment the caller gives up (the work itself is left to end). */
-function unlessGivenUp<T>(work: Promise<T>, signal?: AbortSignal): Promise<T> {
+export function unlessGivenUp<T>(work: Promise<T>, signal?: AbortSignal): Promise<T> {
   if (!signal) return work;
   return new Promise((resolve, reject) => {
     const stop = () => reject(signal.reason);

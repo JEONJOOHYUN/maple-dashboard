@@ -5,7 +5,7 @@
 // Visitors are told to register a service-stage application (500 calls per second, 20,000,000 per day), so calls
 // start close together. A development-stage key allows 5 per second and 1,000 per day: the first "too many requests"
 // answer drops this key to that pace, and the browser remembers it for the key.
-import { BASE, CODE_KINDS, FAST, KEY_HEADER, REFUSED_RETRIES, SLOW, pacer, refusedWait } from "../nexon/open-api.ts";
+import { BASE, CODE_KINDS, FAST, KEY_HEADER, REFUSED_RETRIES, SLOW, pacer, refusedWait, unlessGivenUp } from "../nexon/open-api.ts";
 import type { FoundItem } from "./items.ts";
 
 /** A refusal while this few requests were started in the last second can only be a development-stage key. */
@@ -58,7 +58,7 @@ export function createApi(key: string, account?: string): Api {
   // pace is counted over a whole second rather than spaced by a few ms each: timers are too coarse for that.
   const line = pacer(slow ? SLOW : FAST);
 
-  return {
+  const api: Api = {
     async get<T>(path: string, params: Record<string, string>, signal?: AbortSignal): Promise<T> {
       const url = `${BASE}/${path}?${new URLSearchParams(params)}`;
       for (let attempt = 0; ; attempt++) {
@@ -91,6 +91,35 @@ export function createApi(key: string, account?: string): Api {
       }
     },
   };
+  keyOf.set(api, key);
+  return api;
+}
+
+/** Which key an Api calls with, for answers shared by key (characterList). */
+const keyOf = new WeakMap<Api, string>();
+/** How long one character/list answer serves every caller of the same key. */
+const LIST_KEEP_MS = 5 * 60_000;
+const lists = new Map<string, { at: number; body: Promise<RawCharacterList> }>();
+
+/**
+ * The key's character/list, one call for every caller while the page is open: the key check, the key's name, the
+ * worlds · jobs of 강화 기록 and the account lists of 보스 수익 all ask it, often at once. An answer serves for
+ * LIST_KEEP_MS; a failure is not kept, so the next caller asks again. The call is shared, so it is not tied to one
+ * caller's signal: a caller that gives up is told at once and the call goes on for the others.
+ */
+export function characterList(api: Api, signal?: AbortSignal): Promise<RawCharacterList> {
+  const key = keyOf.get(api);
+  if (key === undefined) return api.get<RawCharacterList>("character/list", {}, signal);
+  let kept = lists.get(key);
+  if (!kept || Date.now() - kept.at >= LIST_KEEP_MS) {
+    const body = api.get<RawCharacterList>("character/list", {});
+    const mine = (kept = { at: Date.now(), body });
+    lists.set(key, mine);
+    body.catch(() => {
+      if (lists.get(key) === mine) lists.delete(key);
+    });
+  }
+  return unlessGivenUp(kept.body, signal);
 }
 
 /**
@@ -153,7 +182,7 @@ export function mainCharacter(body: RawCharacterList): string {
 
 /** What a remembered key is called in the list: the account's main character. One call (checked 2026-11-12: 66 characters in one answer). */
 export async function fetchMainCharacter(api: Api, signal?: AbortSignal): Promise<string> {
-  return mainCharacter(await api.get<RawCharacterList>("character/list", {}, signal));
+  return mainCharacter(await characterList(api, signal));
 }
 
 /** Character → the world it is in today. */
@@ -179,7 +208,7 @@ export function characterIdsOf(body: RawCharacterList): Record<string, string> {
 
 /** The account's characters: where each is today and its id. One call (the same answer as fetchMainCharacter's). */
 export async function fetchCharacters(api: Api, signal?: AbortSignal): Promise<{ worlds: Record<string, string>; ocids: Record<string, string>; classes: Record<string, string> }> {
-  const body = await api.get<RawCharacterList>("character/list", {}, signal);
+  const body = await characterList(api, signal);
   return { worlds: characterWorldsOf(body), ocids: characterIdsOf(body), classes: characterClassesOf(body) };
 }
 

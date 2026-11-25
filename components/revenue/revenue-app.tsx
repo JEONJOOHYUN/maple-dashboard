@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Users } from "lucide-react";
 import { openRevenue } from "@/app/revenue/actions";
-import { KeyGate, type Connected } from "@/components/enhance/key-gate";
+import { KeyGate, SOON_AGAIN, type Connected } from "@/components/enhance/key-gate";
 import { IntentLink } from "@/components/intent-link";
 import { PageHeader } from "@/components/page-header";
 import { PageWaiting } from "@/components/page-waiting";
@@ -12,7 +12,7 @@ import { Picker, type AccountView } from "@/components/revenue/picker";
 import { useRevenueData, type Char, type Problem } from "@/components/revenue/use-data";
 import { useRevenueSettings } from "@/components/revenue/use-settings";
 import { KEPT_KEY_PROBLEMS } from "@/lib/auth/key-problems";
-import { createApi } from "@/lib/enhance/client";
+import { characterList, createApi } from "@/lib/enhance/client";
 import { keyLabel, withKey, withName, type SavedKey } from "@/lib/enhance/keys";
 import { bossRows, lastWeekDate, monthlyThisWeek, weekId } from "@/lib/revenue/calc";
 import { MAX_PICKED, SCAN_MIN_LEVEL } from "@/lib/revenue/data";
@@ -25,10 +25,7 @@ import { ACCOUNT_COLORS, focus, lineTile } from "@/components/revenue/styles";
 const ERRORS: Record<Problem, string> = {
   badKey: "API 키가 올바르지 않음 → 빼고 다시 추가",
   quota: "이 키의 호출 한도 초과 → 내일 다시",
-  param: "넥슨 API 응답 오류 → 잠시 뒤 다시",
-  busy: "넥슨 API 점검 중 → 잠시 뒤 다시",
-  network: "넥슨 서버 연결 실패 → 잠시 뒤 다시",
-  failed: "넥슨 API 응답 오류 → 잠시 뒤 다시",
+  ...SOON_AGAIN,
   locked: KEPT_KEY_PROBLEMS.locked,
 };
 
@@ -272,7 +269,7 @@ function Screen({ now, member }: { now: number; member: MemberRevenue | null }) 
             onConnect={connect}
             onNamed={(account, name) => setKeys((prev) => withName(prev, account, name))}
             action="보스 수익 보기"
-            check={(key) => createApi(key).get("character/list", {})}
+            check={(key) => characterList(createApi(key))}
             savedHint="저장된 키 → 누르면 바로 (강화 기록에 저장한 키도 여기)"
             notes={[member ? "여기 넣은 키 = 이 브라우저에만 저장 · 파티원 · 가격 설정은 내 계정에" : "키 = 이 브라우저에만 저장, 우리 서버로 안 보냄", "키 하나 = 그 키를 만든 넥슨 계정 · 여러 개 등록하면 합쳐서 봄"]}
           />
