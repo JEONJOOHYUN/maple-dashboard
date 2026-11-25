@@ -417,7 +417,7 @@ export function PotentialTab() {
               )}
             >
               <b className={cn("text-[13px]", s.id === slotId && "text-primary-text")}>{s.label}</b>
-              <span title={s.sub} className="truncate text-[11px] text-muted-foreground">{s.sub}</span>
+              <span data-tip={s.sub} className="truncate text-[11px] text-muted-foreground">{s.sub}</span>
             </button>
           ))}
         </div>

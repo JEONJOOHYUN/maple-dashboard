@@ -133,7 +133,7 @@ function Lines({ items, two }: { items: Item[]; two?: boolean }) {
               {it.diff}
             </span>
           )}
-          <span className="min-w-0 flex-1 truncate" title={it.name}>
+          <span className="min-w-0 flex-1 truncate" data-tip={it.name}>
             {it.name}
             {it.done && it.progress && <span className="ml-1.5 font-num text-xs">{it.progress}</span>}
           </span>
@@ -292,7 +292,7 @@ function AccountCard({ group: g, faces, shownId, onTab, onOpen, onRef }: { group
             >
               <Face src={faces[c.ocid]} name={c.name} />
               <span className="flex min-w-0 flex-col">
-                <b className="truncate text-[13px]" title={c.name}>
+                <b className="truncate text-[13px]" data-tip={c.name}>
                   {c.name}
                 </b>
                 <span className="truncate text-xs text-muted-foreground">{c.chips.length ? c.chips.join(" · ") : nothingRegistered(c.hw) ? "등록한 숙제 없음" : "다 끝남"}</span>
@@ -337,7 +337,7 @@ const CharCard = memo(function CharCard({ card: c, face, shown, onOpen, onRef }:
       <span className="flex items-center gap-3">
         <Face src={face} name={c.name} />
         <span className="flex min-w-0 flex-col">
-          <b className="truncate text-[15px]" title={c.name}>
+          <b className="truncate text-[15px]" data-tip={c.name}>
             {c.name}
           </b>
           <span className="truncate text-xs text-muted-foreground">

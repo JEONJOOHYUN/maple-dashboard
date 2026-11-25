@@ -49,7 +49,7 @@ export function SundayHomeCard({ week, prediction }: { week: SundayPageData["thi
             <ul className="flex w-full max-w-md flex-col gap-1">
               {shown.map((row) => (
                 <li key={row.name + row.amount} className="flex items-baseline justify-between gap-3 text-sm">
-                  <span className="min-w-0 truncate" title={row.name}>
+                  <span className="min-w-0 truncate" data-tip={row.name}>
                     {row.name}
                   </span>
                   {row.amount && <b className="shrink-0 whitespace-nowrap text-primary-text">{row.amount}</b>}

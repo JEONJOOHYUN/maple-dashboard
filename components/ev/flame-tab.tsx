@@ -376,7 +376,7 @@ export function FlameTab() {
               )}
             >
               <span className="col-span-full flex min-w-0 flex-col @min-[28rem]:col-span-1">
-                <b title={r.name} className="truncate">{r.name}</b>
+                <b data-tip={r.name} className="truncate">{r.name}</b>
                 <span className="text-[11px] text-muted-foreground">
                   {equip === "weapon" ? `최고 ${bestWeaponGrade(r.id)}추까지` : "추옵 재설정"}
                   {r.id === "eternal" && " · 1번 300만 메소"}

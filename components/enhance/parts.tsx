@@ -1,11 +1,12 @@
 "use client";
 
-import { useRef, useState, type ComponentProps, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { ChevronDown, Package } from "lucide-react";
 import { eok } from "@/components/ev/ui";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Digits } from "@/components/ui/digits";
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { BELOW, MENU_ARROW, NONE } from "@/components/ui/menu-select";
 import { roundDates, roundName, type EventGroup, type EventRound } from "@/lib/enhance/events";
 import type { ItemInfo } from "@/lib/enhance/items";
 import type { SkipReason } from "@/lib/enhance/judge";
@@ -132,10 +133,10 @@ export function RankCard<T>({
         <span className="flex min-w-0 items-center gap-2.5">
           <ItemIcon info={info(row)} />
           <span className="flex min-w-0 flex-col gap-0.5">
-            <b className="truncate text-sm" title={name(row)}>
+            <b className="truncate text-sm" data-tip={name(row)}>
               {name(row)}
             </b>
-            <span className={cutSub ? "truncate text-xs text-muted-foreground" : "text-xs text-muted-foreground"} title={cutSub ? under : undefined}>
+            <span className={cutSub ? "truncate text-xs text-muted-foreground" : "text-xs text-muted-foreground"} data-tip={cutSub ? under : undefined}>
               {under}
             </span>
           </span>
@@ -207,7 +208,7 @@ export function Gauge({ label, title, used, mean, children }: { label: ReactNode
   return (
     <div className="flex flex-col gap-[5px]">
       <div className="flex items-baseline justify-between gap-2 text-xs">
-        <span className="min-w-0 truncate text-muted-foreground" title={title ?? (typeof label === "string" ? label : undefined)}>
+        <span className="min-w-0 truncate text-muted-foreground" data-tip={title ?? (typeof label === "string" ? label : undefined)}>
           {label}
         </span>
         <span className="whitespace-nowrap">{children}</span>
@@ -237,12 +238,6 @@ export function ItemIcon({ info, size = 36 }: { info: ItemInfo; size?: number })
   );
 }
 
-const NONE = "\u0000none";
-/**
- * Menus of a long list stay under their field, shorter and scrolling when the room below runs out: by default they
- * flipped above it once the list was taller than that room (user, 2026-11-14).
- */
-export const BELOW = { side: "none" } as const;
 
 /** What a set of records added up to, for a date row and the strip: `delta` = null when none had a profit to count. */
 export type EventTally = { count: number; spent: number; delta: number | null };
@@ -279,7 +274,7 @@ export function EventFields({
     <>
       <DropdownMenu>
         {/* Picked = the orange border alone: with the shadow edge under it the field had two edges. */}
-        <DropdownMenuTrigger aria-label="이벤트" title={group ? group.label : undefined} className={cn(MENU_TRIGGER, group && "border-primary/60 font-semibold shadow-none", className)}>
+        <DropdownMenuTrigger aria-label="이벤트" data-tip={group ? group.label : undefined} className={cn(MENU_TRIGGER, group && "border-primary/60 font-semibold shadow-none", className)}>
           <span className="truncate">{group ? group.label : "모든 기록"}</span>
           <ChevronDown className={MENU_ARROW} aria-hidden="true" />
         </DropdownMenuTrigger>
@@ -290,7 +285,7 @@ export function EventFields({
             </DropdownMenuRadioItem>
             {groups.map((g) => (
               <DropdownMenuRadioItem key={g.label} value={g.label} closeOnClick>
-                <span className="truncate" title={g.label}>
+                <span className="truncate" data-tip={g.label}>
                   {g.label}
                 </span>
               </DropdownMenuRadioItem>
@@ -303,7 +298,7 @@ export function EventFields({
         <div className={cn("flex min-w-0", className)}>
         {group && (
           <DropdownMenu>
-            <DropdownMenuTrigger aria-label="세부 날짜" title={round ? roundName(group, round) : rows[0].name} className={cn(MENU_TRIGGER, "flex-1")}>
+            <DropdownMenuTrigger aria-label="세부 날짜" data-tip={round ? roundName(group, round) : rows[0].name} className={cn(MENU_TRIGGER, "flex-1")}>
               <span className="truncate">{round ? roundName(group, round) : rows[0].name}</span>
               <ChevronDown className={MENU_ARROW} aria-hidden="true" />
             </DropdownMenuTrigger>
@@ -314,10 +309,10 @@ export function EventFields({
                   return (
                     <DropdownMenuRadioItem key={r.id} value={r.id} closeOnClick className="gap-3 py-1.5">
                       <span className="flex min-w-0 flex-1 flex-col">
-                        <span className={cn("truncate", i === 0 && "font-semibold")} title={r.name}>
+                        <span className={cn("truncate", i === 0 && "font-semibold")} data-tip={r.name}>
                           {r.name}
                         </span>
-                        <span className="truncate text-xs text-muted-foreground" title={sub(t)}>
+                        <span className="truncate text-xs text-muted-foreground" data-tip={sub(t)}>
                           {sub(t)}
                         </span>
                       </span>
@@ -377,8 +372,6 @@ export function RoundsIn({ group, n }: { group: EventGroup; n: number }) {
 /** A menu button that reads like the fields next to it. The `after` box makes it 40px tall to the finger. */
 const MENU_TRIGGER =
   "relative inline-flex h-8 min-w-0 items-center tile-sm pr-8 pl-2.5 text-left text-[13px] text-foreground outline-none after:absolute after:inset-x-0 after:-inset-y-1 hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50";
-/** The arrow of a menu button or a select. Its glyph has 3.5px of air inside its box, so the box sits 6px in for the glyph to stand 10px in like the text. */
-const MENU_ARROW = "pointer-events-none absolute top-1/2 right-1.5 size-3.5 -translate-y-1/2 text-muted-foreground";
 
 export type Sort = "spent" | "delta" | "recent";
 const SORT_LABEL: Record<Sort, string> = { spent: "많이 쓴 순", delta: "이득 큰 순", recent: "최근 순" };
@@ -390,7 +383,7 @@ const SORT_LABEL: Record<Sort, string> = { spent: "많이 쓴 순", delta: "이�
 export function SortMenu({ value, onChange, hideLow, onHideLow, className }: { value: Sort; onChange: (sort: Sort) => void; hideLow?: boolean; onHideLow?: (v: boolean) => void; className?: string }) {
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger aria-label="정렬" title={`${SORT_LABEL[value]}${onHideLow && hideLow ? " · 12성 이상" : ""}`} className={cn(MENU_TRIGGER, className)}>
+      <DropdownMenuTrigger aria-label="정렬" data-tip={`${SORT_LABEL[value]}${onHideLow && hideLow ? " · 12성 이상" : ""}`} className={cn(MENU_TRIGGER, className)}>
         <span className="truncate">
           {SORT_LABEL[value]}
           {onHideLow && hideLow ? " · 12성 이상" : ""}
@@ -415,25 +408,6 @@ export function SortMenu({ value, onChange, hideLow, onHideLow, className }: { v
         )}
       </DropdownMenuContent>
     </DropdownMenu>
-  );
-}
-
-/** Native select with our own arrow: the browser one sits flush against the right edge. */
-export function Select({ className, children, ...props }: ComponentProps<"select">) {
-  return (
-    <span className="relative inline-flex min-w-0">
-      <select
-        {...props}
-        className={cn(
-          // 16px on a phone: iOS zooms the page in on a field with smaller text.
-          "h-8 min-w-0 appearance-none rounded-md border border-border bg-background pr-8 pl-2.5 text-base text-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50 sm:text-[13px]",
-          className
-        )}
-      >
-        {children}
-      </select>
-      <ChevronDown className={MENU_ARROW} aria-hidden="true" />
-    </span>
   );
 }
 

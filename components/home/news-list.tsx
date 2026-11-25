@@ -14,12 +14,12 @@ export function NewsList({ title, more, lines }: { title: string; more: string; 
         {lines.map((line) => (
           <li key={line.id}>
             {/* The row's hover fill reaches 8px past the text on both sides, so the text itself stays on the card's edge.
-                A title cut short shows whole in the browser's own tooltip. */}
+                A title cut short shows whole in the site's bubble. */}
             <a
               href={line.url}
               target="_blank"
               rel="noreferrer"
-              title={line.title}
+              data-tip={line.title}
               className="-mx-2 flex items-baseline justify-between gap-4 rounded-md px-2 py-2 text-sm font-medium transition-colors outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
             >
               <span className="min-w-0 truncate">{line.title}</span>

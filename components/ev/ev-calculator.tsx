@@ -36,7 +36,7 @@ export function EvCalculator({ abilityClasses }: { abilityClasses: ClassAbility[
             aria-selected={tab === t.id}
             aria-controls="ev-panel"
             onClick={() => setTab(t.id)}
-            title={t.label}
+            data-tip={t.label}
             className={cn(
               "h-10 min-w-0 truncate rounded-lg text-[13px] transition-[background-color,color,box-shadow,scale] duration-150 ease-out active:scale-[0.96] sm:text-sm",
               // The transparent border is the tab's edge where shadows are not drawn (forced colours); it takes its 1px

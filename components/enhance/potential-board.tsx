@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { Package, Split } from "lucide-react";
 import { NumberField, eok, parseNum } from "@/components/ev/ui";
 import { BasisButton, BasisRow, CARD_PAGE, CharacterFilter, ItemFilter, NO_ITEM_FILTER, PICK_W, PeriodBar, ROW_PAGE, SyncBanners, WorldStrip, itemMatches, liveFilter, useGroupsOff, useKnownGroups, usePeriod, useSync } from "@/components/enhance/board-bits";
-import { Card, Delta, Empty, Gauge, EventFields, EventStrip, ItemIcon, PickedTotal, RankCard, RoundsIn, Select, type EventTally, SortMenu, Tile, signed, type Sort } from "@/components/enhance/parts";
+import { Card, Delta, Empty, Gauge, EventFields, EventStrip, ItemIcon, PickedTotal, RankCard, RoundsIn, type EventTally, SortMenu, Tile, signed, type Sort } from "@/components/enhance/parts";
 import { Pager, usePage } from "@/components/pager";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { useItemDict, type Rolled } from "@/components/enhance/use-item-dict";
@@ -21,6 +21,7 @@ import { GRADE_LABEL, NEXT_GRADE, convFromText, type ConvText, type Grade } from
 import { creditShop, starItems } from "@/lib/site-values/values";
 import { useStored } from "@/lib/use-stored";
 import { Digits } from "@/components/ui/digits";
+import { MenuSelect } from "@/components/ui/menu-select";
 import { ViewTabs } from "@/components/ui/view-tabs";
 import { useSiteValues } from "@/components/site-values";
 import { cn } from "@/lib/utils";
@@ -48,6 +49,7 @@ type Icons = Record<string, string | undefined>;
 const iconOf = (item: string, level: number, icons: Icons): ItemInfo => ({ level, spare: 0, icon: icons[item], source: "api" });
 const KIND_LABEL: Record<PotKind, string> = { main: "잠재능력", add: "에디셔널", soul: "소울" };
 const KINDS: PotKind[] = ["main", "add", "soul"];
+const KIND_OPTIONS = [{ value: "", label: "모든 종류" }, ...KINDS.map((k) => ({ value: k, label: KIND_LABEL[k] }))];
 /**
  * The kind as a small label in the corner of a card (user, 2026-11-13: in the line under the name it was easy to
  * miss). Colours by the user: 잠재능력 black as the black cube, 에디셔널 green, 소울 our orange.
@@ -84,10 +86,10 @@ function RollRow({ entry, found, showItem }: { entry: PotEntry; found: Icons; sh
           <span className="flex min-w-0 items-center gap-2.5">
             <ItemIcon info={iconOf(row.item, row.level, found)} />
             <span className="flex min-w-0 flex-col gap-0.5">
-              <b className="truncate text-sm" title={row.item}>
+              <b className="truncate text-sm" data-tip={row.item}>
                 {row.item}
               </b>
-              <span className="truncate text-xs text-muted-foreground" title={row.who}>
+              <span className="truncate text-xs text-muted-foreground" data-tip={row.who}>
                 {row.who}
               </span>
             </span>
@@ -133,7 +135,8 @@ function PieceCard({ piece, found, onOpen, note }: { piece: PieceStat; found: Ic
       <button
         type="button"
         aria-label={`${piece.item} ${kindLabel(piece)} 내역 보기`}
-        title={piece.item}
+        data-tip={piece.item}
+        data-tip-parent
         onClick={onOpen}
         className="absolute inset-0 rounded-[15px] outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
       />
@@ -329,7 +332,7 @@ function PotInsight({ stats, found, onOpen }: { stats: ReturnType<typeof buildPo
     >
       <span className="text-[11px] text-muted-foreground">{label}</span>
       {/* One line: a name on two lines made this box taller than the boxes of the card next to it. */}
-      <b className="truncate text-sm leading-snug" title={p ? p.item : undefined}>
+      <b className="truncate text-sm leading-snug" data-tip={p ? p.item : undefined}>
         {p ? p.item : "해당 없음"}
       </b>
       {p ? <Delta v={p.delta!} className="text-lg" /> : <b className="font-num text-lg text-muted-foreground">—</b>}
@@ -468,14 +471,7 @@ function PiecesView({
         </b>
         <div className="flex flex-wrap items-center gap-2">
           {/* The kind comes first: the item list next to it holds the items of that kind (user, 2026-11-13). */}
-          <Select aria-label="종류" value={kind} onChange={(e) => setKind(e.target.value as PotKind | "")} className="bg-card">
-            <option value="">모든 종류</option>
-            {KINDS.map((k) => (
-              <option key={k} value={k}>
-                {KIND_LABEL[k]}
-              </option>
-            ))}
-          </Select>
+          <MenuSelect label="종류" value={kind} onChange={(next) => setKind(next as PotKind | "")} options={KIND_OPTIONS} className="bg-card" />
           <CharacterFilter names={characters} value={who} onChange={setWho} className={PICK_W.who} />
           <ItemFilter names={names} value={filter} onChange={setFilter} className={PICK_W.item} />
           <EventFields groups={groups} group={group} round={round} onPick={(g, r) => setPick({ group: g, round: r })} tallies={ev?.tallies ?? []} unit="횟수" className={PICK_W.event} />
@@ -535,14 +531,7 @@ function RollsView({ entries, characters, found }: { entries: PotEntry[]; charac
         <div className="flex flex-wrap items-center gap-2.5">
           <CharacterFilter names={characters} value={who} onChange={(name) => (setWho(name), setItem(NO_ITEM_FILTER))} className={PICK_W.who} />
           <ItemFilter names={items} value={item} onChange={setItem} className={PICK_W.item} />
-          <Select aria-label="종류" value={kind} onChange={(e) => setKind(e.target.value)}>
-            <option value="">모든 종류</option>
-            {KINDS.map((k) => (
-              <option key={k} value={k}>
-                {KIND_LABEL[k]}
-              </option>
-            ))}
-          </Select>
+          <MenuSelect label="종류" value={kind} onChange={setKind} options={KIND_OPTIONS} />
           <label className="relative inline-flex items-center gap-1.5 text-[13px] after:absolute after:-inset-2">
             <input type="checkbox" checked={only} onChange={(e) => setOnly(e.target.checked)} className="size-4 accent-primary" />
             선택 · 등급 상승만
@@ -705,7 +694,7 @@ export function PotentialBoard({ apiKey, account, onForget, switcher }: { apiKey
                 {tiles.map((t) => (
                   <div key={t.label} className="flex min-w-0 flex-col gap-1 rounded-lg bg-muted px-3 py-2.5">
                     <span className="text-xs text-muted-foreground">{t.label}</span>
-                    <b className="truncate font-num text-lg" title={t.value}>
+                    <b className="truncate font-num text-lg" data-tip={t.value}>
                       {t.value}
                     </b>
                   </div>

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Digits } from "@/components/ui/digits";
+import { MenuSelect } from "@/components/ui/menu-select";
 import { Reveal } from "@/components/ui/reveal";
 import { Spinner } from "@/components/ui/spinner";
 import {
@@ -43,6 +44,7 @@ import {
 import type { ClassAbility } from "@/lib/ev/ability-classes";
 import { creditShop } from "@/lib/site-values/values";
 import { useSiteValues } from "@/components/site-values";
+import { extraTip } from "@/lib/tip";
 import { cn } from "@/lib/utils";
 import { koreanUnits } from "@/lib/format";
 
@@ -432,22 +434,14 @@ export function AbilityTab({ classes }: { classes: ClassAbility[] }) {
         </b>
       );
     return (
-      <select
-        aria-label={`${label} 목표 수치`}
-        value={goalOf(ks[0], g)}
-        onChange={(e) =>
-          setGoals({ ...goals, ...Object.fromEntries(ks.map((k) => [`${k}:${g}`, Number(e.target.value)])) })
-        }
-        // 16px on a phone: under that, iOS zooms the page in when the list is tapped.
-        className="h-7 rounded-md border border-input bg-card px-1.5 font-num text-base sm:text-xs"
-      >
-        {choices.map((v) => (
-          <option key={v} value={v}>
-            +{v}
-            {unitOf(ks[0])} 이상
-          </option>
-        ))}
-      </select>
+      <MenuSelect
+        label={`${label} 목표 수치`}
+        value={String(goalOf(ks[0], g))}
+        onChange={(next) => setGoals({ ...goals, ...Object.fromEntries(ks.map((k) => [`${k}:${g}`, Number(next)])) })}
+        options={choices.map((v) => ({ value: String(v), label: `+${v}${unitOf(ks[0])} 이상` }))}
+        className="h-7 border-input bg-card pr-7 pl-1.5 font-num text-xs"
+        menuClassName="font-num"
+      />
     );
   };
   /** 드메: drop or meso on the legendary line 1, the other on line 2 (legendary too in "레전드리 2줄"). */
@@ -1070,7 +1064,7 @@ function GoalLine({ legend, label, value }: { legend: boolean; label: string; va
   return (
     <div className="grid grid-cols-[28px_minmax(0,1fr)] items-center gap-2">
       <span
-        title={legend ? "레전드리" : "유니크 이상"}
+        {...extraTip(legend ? "레전드리" : "유니크 이상")}
         className={cn(
           "flex size-7 items-center justify-center rounded-md font-num text-xs font-bold",
           legend
@@ -1082,7 +1076,7 @@ function GoalLine({ legend, label, value }: { legend: boolean; label: string; va
       </span>
       {/* A label: the option's name goes to the list of wanted values beside it. */}
       <label className="flex h-9 min-w-0 items-center justify-between gap-2 rounded-lg tile-edge bg-background pr-1 pl-3 text-[13px]">
-        <span title={label} className="truncate">
+        <span data-tip={label} className="truncate">
           {label}
         </span>
         {value}
@@ -1095,10 +1089,10 @@ function Box({ k, v, sub }: { k: string; v: string; sub: string }) {
   return (
     <div className="flex min-w-0 flex-col gap-0.5 tile p-3">
       <span className="text-[11px] text-muted-foreground">{k}</span>
-      <b title={v} className="truncate font-num text-base">
+      <b data-tip={v} className="truncate font-num text-base">
         <Digits>{v}</Digits>
       </b>
-      <span title={sub} className="truncate text-[11px] text-muted-foreground">
+      <span data-tip={sub} className="truncate text-[11px] text-muted-foreground">
         {sub}
       </span>
     </div>

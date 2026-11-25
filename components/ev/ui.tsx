@@ -5,6 +5,7 @@ import { LUCK_LEVELS, triesAt } from "@/lib/ev/luck";
 import { koreanUnits } from "@/lib/format";
 import { caretAfter, cleanNumberText, forwardDeleteText, groupDigits, keptBefore } from "@/lib/number-text";
 import { Digits } from "@/components/ui/digits";
+import { extraTip } from "@/lib/tip";
 import { cn } from "@/lib/utils";
 import { SteadyText } from "@/components/ui/steady-text";
 
@@ -50,7 +51,7 @@ export function Chip({
       onClick={onClick}
       disabled={disabled}
       aria-pressed={on}
-      title={title}
+      {...extraTip(title)}
       className={cn(
         // 36px to look at, 40px to press: the area reaches 2px above and below (chips sit 6px apart).
         "relative h-9 min-w-0 rounded-lg border px-3 text-[13px] whitespace-nowrap transition-[background-color,border-color,color,box-shadow,scale] duration-150 ease-out after:absolute after:inset-x-0 after:-inset-y-0.5 enabled:active:scale-[0.96] disabled:cursor-default",
@@ -111,7 +112,7 @@ export function Segment<T extends string>({
         // A label that is cut can still be read whole.
         if (!o.hint)
           return (
-            <button key={o.id} {...props} title={typeof o.label === "string" ? o.label : undefined}>
+            <button key={o.id} {...props} data-tip={typeof o.label === "string" ? o.label : undefined}>
               {content}
             </button>
           );
@@ -288,7 +289,7 @@ export function LuckBox({ label, value, sub, onPage }: { label: string; value: s
         <Digits>{value}</Digits>
       </b>
       {sub && (
-        <span title={sub} className="truncate font-num text-xs text-muted-foreground">
+        <span data-tip={sub} className="truncate font-num text-xs text-muted-foreground">
           <Digits>{sub}</Digits>
         </span>
       )}

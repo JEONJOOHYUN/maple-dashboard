@@ -10,6 +10,7 @@ import { SideNav } from "@/components/side-nav";
 import { SiteHeader } from "@/components/site-header";
 import { SiteValuesProvider } from "@/components/site-values";
 import { ThemeProvider } from "@/components/theme-provider";
+import { TipLayer } from "@/components/tip-layer";
 import { MEMBER_HINT_SCRIPT } from "@/lib/auth/member-hint";
 import { siteValues } from "@/lib/site-values/server";
 
@@ -80,6 +81,7 @@ export default async function RootLayout({
               </main>
             </div>
           </div>
+          <TipLayer />
         </ThemeProvider>
         <Clarity />
       </body>

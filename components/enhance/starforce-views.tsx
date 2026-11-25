@@ -4,7 +4,7 @@ import { useMemo, useRef, useState, type ReactNode } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, Package, Pencil } from "lucide-react";
 import { NumberField, Segment, eok, parseNum } from "@/components/ev/ui";
 import { CARD_PAGE, CharacterFilter, ItemFilter, NO_ITEM_FILTER, PICK_W, ROW_PAGE, itemMatches, liveFilter } from "@/components/enhance/board-bits";
-import { CHIP, Card, Delta, Empty, Gauge, EventFields, EventStrip, ItemIcon, PickedTotal, RankCard, RoundsIn, SKIP_LABEL, type EventTally, Select, SortMenu, type Sort, Tile, TryBadges, signed, signedShort, tone } from "@/components/enhance/parts";
+import { CHIP, Card, Delta, Empty, Gauge, EventFields, EventStrip, ItemIcon, PickedTotal, RankCard, RoundsIn, SKIP_LABEL, type EventTally, SortMenu, type Sort, Tile, TryBadges, signed, signedShort, tone } from "@/components/enhance/parts";
 import { Pager, usePage } from "@/components/pager";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import type { ItemOverrides } from "@/lib/enhance/items";
@@ -15,6 +15,7 @@ import { buildStats, entryKey, reachedFloor, type Entry, type ItemStat, type Sta
 import { FLOOR_STAR } from "@/lib/ev/starforce";
 import { Reveal } from "@/components/ui/reveal";
 import { Digits } from "@/components/ui/digits";
+import { MenuSelect } from "@/components/ui/menu-select";
 import { cn } from "@/lib/utils";
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
@@ -36,7 +37,7 @@ function DuoBox({ label, title, value, sub, onOpen, className }: Box & { classNa
     <>
       <span className="text-[11px] text-muted-foreground">{label}</span>
       {/* One line: a name on two lines made this box taller than the one next to it. */}
-      <b className="truncate text-sm leading-snug" title={title}>
+      <b className="truncate text-sm leading-snug" data-tip={title}>
         {title}
       </b>
       {value === null ? <b className="font-num text-lg text-muted-foreground">—</b> : <Delta v={value} className="text-lg" />}
@@ -130,6 +131,7 @@ const RESULT = {
   fail: { label: "실패", text: "text-loss", bar: "var(--loss)" },
   destroy: { label: "파괴", text: "text-destructive", bar: "var(--destructive)" },
 } as const;
+const RESULT_OPTIONS = [{ value: "", label: "모든 결과" }, ...Object.entries(RESULT).map(([value, r]) => ({ value, label: r.label }))];
 
 /** One try. `showItem` = with the item's picture and name (the log); the item window leaves them out. */
 function TryRow({ entry, showItem }: { entry: Entry; showItem: boolean }) {
@@ -151,10 +153,10 @@ function TryRow({ entry, showItem }: { entry: Entry; showItem: boolean }) {
           <span className="flex min-w-0 items-center gap-2.5">
             <ItemIcon info={info} />
             <span className="flex min-w-0 flex-col gap-0.5">
-              <b className="truncate text-sm" title={row.item}>
+              <b className="truncate text-sm" data-tip={row.item}>
                 {row.item}
               </b>
-              <span className="truncate text-xs text-muted-foreground" title={row.who}>
+              <span className="truncate text-xs text-muted-foreground" data-tip={row.who}>
                 {row.who}
               </span>
             </span>
@@ -215,12 +217,7 @@ export function LogView({ entries, characters, hideLow, onHideLow }: { entries: 
         <div className="flex flex-wrap items-center gap-2.5">
           <CharacterFilter names={characters} value={who} onChange={(name) => (setWho(name), setItem(NO_ITEM_FILTER))} className={PICK_W.who} />
           <ItemFilter names={items} value={item} onChange={setItem} className={PICK_W.item} />
-          <Select aria-label="결과" value={result} onChange={(e) => setResult(e.target.value)}>
-            <option value="">모든 결과</option>
-            <option value="success">성공</option>
-            <option value="fail">실패</option>
-            <option value="destroy">파괴</option>
-          </Select>
+          <MenuSelect label="결과" value={result} onChange={setResult} options={RESULT_OPTIONS} />
           <label className="relative inline-flex items-center gap-1.5 text-[13px] after:absolute after:-inset-2">
             <input type="checkbox" checked={hideLow} onChange={(e) => onHideLow(e.target.checked)} className="size-4 accent-primary" />
             12성 미만 숨기기
@@ -336,7 +333,8 @@ export function ItemsView({
               <button
                 type="button"
                 aria-label={`${it.item} 강화 내역 보기`}
-                title={it.item}
+                data-tip={it.item}
+                data-tip-parent
                 onClick={() => onOpen(it.key, scope)}
                 className="absolute inset-0 rounded-[15px] outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
               />
@@ -695,7 +693,7 @@ export function CalendarView({ stats, from, to }: { stats: Stats; from: string; 
             <span className="w-11 shrink-0 font-num text-[13px] text-muted-foreground">
               <Digits>{`${Number(d.date.slice(5, 7))}/${Number(d.date.slice(8))}`}</Digits>
             </span>
-            <span className="min-w-0 flex-1 truncate text-[13px]" title={d.best?.label ?? `강화 ${d.tries}번`}>
+            <span className="min-w-0 flex-1 truncate text-[13px]" data-tip={d.best?.label ?? `강화 ${d.tries}번`}>
               {d.best?.label ?? `강화 ${d.tries}번`}
             </span>
             <Delta v={d.delta} className="text-sm" />

@@ -337,7 +337,7 @@ export function PinballGame() {
                     className="inline-flex h-9 items-center gap-1.5 rounded-full tile-edge px-3 text-[13px]"
                   >
                     <span aria-hidden="true" className="size-3.5 shrink-0 rounded-full" style={{ background: colorFor(e.name) }} />
-                    <span className="max-w-24 truncate" title={e.name}>
+                    <span className="max-w-24 truncate" data-tip={e.name}>
                       {e.name}
                     </span>
                     <span className={cn("font-num text-xs font-bold", e.count > 1 ? "text-primary-text" : "text-muted-foreground")}>
@@ -442,7 +442,7 @@ export function PinballGame() {
                       <Digits>{`${k + 1}등`}</Digits>
                     </b>
                     <span aria-hidden="true" className="size-3.5 shrink-0 rounded-full" style={{ background: r.color }} />
-                    <span className="truncate" title={r.name}>
+                    <span className="truncate" data-tip={r.name}>
                       {r.name}
                     </span>
                     <span className="text-xs">

@@ -1,14 +1,15 @@
 "use client";
 
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { Ban, Check, ImageOff, Plus, Search, Undo2, X } from "lucide-react";
 import { Pic } from "@/components/admin/item-search";
-import { Select } from "@/components/enhance/parts";
 import { NumberField } from "@/components/ev/ui";
+import { MenuSelect } from "@/components/ui/menu-select";
 import { Pager, usePage } from "@/components/pager";
 import { iconUrl, plainName } from "@/lib/enhance/dict";
 import { num } from "@/lib/site-values/describe";
 import { canPrice, dictKey, editedState, sameDict, stateOf, type DictEdit, type DictRow } from "@/lib/site-values/dict-edit";
+import { extraTip } from "@/lib/tip";
 import { cn } from "@/lib/utils";
 
 // The shared item dictionary on the admin page: every row visitors' browsers sent (name · level · icon · part), to
@@ -20,6 +21,11 @@ const PAGE = 30;
 const FIELD_BAD = "border-destructive text-destructive";
 const FIELD_ON = "border-primary text-primary-text ring-1 ring-primary";
 const iconButton = "relative grid size-8 shrink-0 place-items-center rounded-lg text-muted-foreground after:absolute after:-inset-1 hover:bg-muted hover:text-foreground";
+
+/** A row's icon button, named in the site's bubble (components/tip-layer.tsx) on hover or keyboard focus. */
+function IconButton({ tip, className, ...props }: ComponentProps<"button"> & { tip: string }) {
+  return <button type="button" {...extraTip(tip)} {...props} className={cn(iconButton, className)} />;
+}
 
 export function DictSection({
   head,
@@ -57,6 +63,8 @@ export function DictSection({
   const open = useMemo(() => rows.filter((r) => !r.blocked), [rows]);
   const parts = useMemo(() => [...new Set(open.map((r) => r.part).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ko")), [open]);
   const levels = useMemo(() => [...new Set(open.map((r) => r.level))].sort((a, b) => a - b), [open]);
+  const partOptions = useMemo(() => [{ value: "", label: "모든 부위" }, ...parts.map((p) => ({ value: p, label: p }))], [parts]);
+  const levelOptions = useMemo(() => [{ value: "", label: "모든 레벨" }, ...levels.map((l) => ({ value: String(l), label: `${l}제` }))], [levels]);
   const counts: Record<Status, number> = {
     all: open.length,
     unchecked: open.filter((r) => !r.checked).length,
@@ -106,7 +114,7 @@ export function DictSection({
       <div key={name} className={cn("grid grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-x-2.5 gap-y-2 border-t border-border py-2 lg:grid-cols-[32px_minmax(0,1fr)_84px_120px_132px_100px] lg:py-1.5", blocked && "opacity-60")}>
         <Pic src={iconUrl(icon) || undefined} />
         <span className="flex min-w-0 flex-col">
-          <b className={cn("truncate text-[13px] font-semibold", blocked && "line-through")} title={name}>
+          <b className={cn("truncate text-[13px] font-semibold", blocked && "line-through")} data-tip={name}>
             {name}
           </b>
           <span className="truncate text-xs text-muted-foreground">
@@ -115,23 +123,23 @@ export function DictSection({
         </span>
         <span className="flex items-center justify-end gap-0.5 lg:order-last">
           {row && !row.checked && (
-            <button type="button" aria-pressed={checks.includes(name)} aria-label={`${name} 확인함`} title="확인함" onClick={() => onCheck([name], !checks.includes(name))} className={cn(iconButton, marked && "text-primary-text")}>
+            <IconButton tip="확인함" aria-pressed={checks.includes(name)} aria-label={`${name} 확인함`} onClick={() => onCheck([name], !checks.includes(name))} className={cn(marked && "text-primary-text")}>
               <Check className="size-4" aria-hidden="true" />
-            </button>
+            </IconButton>
           )}
           {icon && (
-            <button type="button" aria-label={`${name} 그림 지우기`} title="그림 지우기" onClick={() => onEdit(name, { icon: "" })} className={iconButton}>
+            <IconButton tip="그림 지우기" aria-label={`${name} 그림 지우기`} onClick={() => onEdit(name, { icon: "" })}>
               <ImageOff className="size-4" aria-hidden="true" />
-            </button>
+            </IconButton>
           )}
           {row ? (
-            <button type="button" aria-pressed={blocked} aria-label={blocked ? `${name} 막기 풀기` : `${name} 막기`} title={blocked ? "막기 풀기" : "막기 · 사전에서 빼고 다시 못 올라오게"} onClick={() => onEdit(name, { blocked: !blocked })} className={iconButton}>
+            <IconButton tip={blocked ? "막기 풀기" : "막기 · 사전에서 빼고 다시 못 올라오게"} aria-pressed={blocked} aria-label={blocked ? `${name} 막기 풀기` : `${name} 막기`} onClick={() => onEdit(name, { blocked: !blocked })}>
               {blocked ? <Undo2 className="size-4" aria-hidden="true" /> : <Ban className="size-4" aria-hidden="true" />}
-            </button>
+            </IconButton>
           ) : (
-            <button type="button" aria-label={`${name} 넣지 않기`} title="넣지 않기" onClick={() => onFresh(name, false)} className={iconButton}>
+            <IconButton tip="넣지 않기" aria-label={`${name} 넣지 않기`} onClick={() => onFresh(name, false)}>
               <X className="size-4" aria-hidden="true" />
-            </button>
+            </IconButton>
           )}
         </span>
         {/* Three cells under the name on a phone, beside it from lg. */}
@@ -186,22 +194,8 @@ export function DictSection({
             </button>
           )}
         </label>
-        <Select aria-label="부위" value={part} onChange={(e) => setPart(e.target.value)} className="h-9">
-          <option value="">모든 부위</option>
-          {parts.map((p) => (
-            <option key={p} value={p}>
-              {p}
-            </option>
-          ))}
-        </Select>
-        <Select aria-label="레벨" value={level} onChange={(e) => setLevel(e.target.value)} className="h-9">
-          <option value="">모든 레벨</option>
-          {levels.map((l) => (
-            <option key={l} value={l}>
-              {l}제
-            </option>
-          ))}
-        </Select>
+        <MenuSelect label="부위" value={part} onChange={setPart} options={partOptions} className="h-9 rounded-lg" />
+        <MenuSelect label="레벨" value={level} onChange={setLevel} options={levelOptions} className="h-9 rounded-lg" />
       </div>
       <div role="radiogroup" aria-label="보기" className="flex flex-wrap gap-1.5">
         {(

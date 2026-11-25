@@ -142,7 +142,7 @@ export function ItemSearch({
                   <ComboboxItem key={`${hit.kind}|${hit.name}`} value={hit} className="min-h-11 gap-2.5 py-1.5 pr-2.5 pl-2">
                     <Pic src={hit.kind === "row" ? hit.img : iconUrl(hit.icon) || undefined} />
                     <span className="flex min-w-0 flex-1 flex-col">
-                      <b className="truncate text-[13px]" title={hit.name}>
+                      <b className="truncate text-[13px]" data-tip={hit.name}>
                         {hit.name}
                       </b>
                       <span className="truncate text-xs text-muted-foreground">{hit.kind === "row" ? hit.group : [`${hit.level}제`, hit.part].filter(Boolean).join(" · ")}</span>

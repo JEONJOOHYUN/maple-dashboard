@@ -123,7 +123,7 @@ export function CustomGoal({
                         replacing ? "border-primary text-primary-text" : "tile-edge hover:border-primary/60"
                       )}
                     >
-                      <span title={option.label} className="truncate">
+                      <span data-tip={option.label} className="truncate">
                         {option.label}
                       </span>
                       <ChevronDown size={16} className={cn("shrink-0 text-muted-foreground", arrowTurn, replacing && "rotate-180")} aria-hidden="true" />
@@ -187,7 +187,7 @@ export function CustomGoal({
                               <button
                                 key={o.cat}
                                 type="button"
-                                title={o.label}
+                                data-tip={o.label}
                                 disabled={used}
                                 aria-pressed={current}
                                 onClick={() => (current ? setPicking(null) : pick(si, open.row, o))}

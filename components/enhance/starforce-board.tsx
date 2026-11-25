@@ -166,7 +166,7 @@ export function StarforceBoard({ apiKey, account, onForget, switcher }: { apiKey
                 {tiles.map((t) => (
                   <div key={t.label} className="flex min-w-0 flex-col gap-1 rounded-lg bg-muted px-3 py-2.5">
                     <span className="text-xs text-muted-foreground">{t.label}</span>
-                    <b className={cn("truncate font-num text-lg", t.css)} title={t.value}>
+                    <b className={cn("truncate font-num text-lg", t.css)} data-tip={t.value}>
                       {t.value}
                     </b>
                   </div>

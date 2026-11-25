@@ -67,7 +67,7 @@ export function ThumbCarousel({ title, more, slides, empty }: { title: string; m
           {slides.map((slide) => (
             <li key={slide.id} className="min-w-0 shrink-0 basis-full snap-start sm:basis-[calc((100%-12px)/2)]">
               {/* A title cut at two lines shows whole in the browser's own tooltip, like the lists below. */}
-              <a href={slide.url} target="_blank" rel="noreferrer" title={slide.title} className="group flex flex-col rounded-lg outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+              <a href={slide.url} target="_blank" rel="noreferrer" data-tip={slide.title} className="group flex flex-col rounded-lg outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
                 {/* eslint-disable-next-line @next/next/no-img-element -- NEXON's notice picture, shown as is (never stored or resized by us) */}
                 <img src={slide.img} alt="" loading="lazy" className="aspect-[14/5] w-full rounded-lg bg-muted object-cover image-line" />
                 <span className="mt-2.5 flex items-start gap-2">

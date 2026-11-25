@@ -90,7 +90,7 @@ export function Picker({
             <div key={a.account} className={card}>
               <i aria-hidden="true" className="size-2.5 shrink-0 rounded-full" style={{ background: a.color }} />
               <span className="flex min-w-0 flex-1 flex-col">
-                <b className="truncate text-sm" title={a.label}>{a.label}</b>
+                <b className="truncate text-sm" data-tip={a.label}>{a.label}</b>
                 <span className="text-xs text-muted-foreground">
                   {a.loading ? "캐릭터 받는 중…" : a.error ? a.error : `캐릭터 ${a.chars.length}명 · 보스 있는 캐릭터 ${a.chars.filter((c) => bossCount(c) > 0).length}명`}
                 </span>

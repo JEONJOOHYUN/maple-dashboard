@@ -382,7 +382,7 @@ export function AdminBoard({
     <div key={b.boss} className={cn(CRYSTAL_COLS, "items-center gap-2 rounded-[10px] px-2.5 py-1.5", index % 2 === 1 && "bg-background")}>
       {/* Stays at the left edge while the table is scrolled sideways (a phone), on the row's own fill. */}
       <span className={cn(stuck, "rounded-l-[10px]", index % 2 === 1 ? "bg-background" : "bg-card")}>
-        <span className="truncate text-[13px] font-bold" title={b.boss}>
+        <span className="truncate text-[13px] font-bold" data-tip={b.boss}>
           {b.boss}
         </span>
       </span>
@@ -748,7 +748,7 @@ function ItemLine({ fieldKey, name, img, children }: { fieldKey: string; name: s
   return (
     <div className="grid min-h-[52px] grid-cols-[32px_minmax(0,1fr)_104px_16px] items-center gap-2.5 border-t border-border">
       <Pic src={img} />
-      <label htmlFor={fieldId(fieldKey)} className="truncate text-[13px] font-semibold" title={name}>
+      <label htmlFor={fieldId(fieldKey)} className="truncate text-[13px] font-semibold" data-tip={name}>
         {name}
       </label>
       {children}

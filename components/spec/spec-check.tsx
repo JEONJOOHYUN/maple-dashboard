@@ -495,7 +495,7 @@ function Result({ result, at, asOf, optimizer, refreshing, refreshNote, onRefres
               disabled={refreshing}
               // The time is in the name too: a title alone never reaches a keyboard or a screen reader.
               aria-label={`다시 조회, ${fetchedAt(at)} 조회`}
-              title={`${fetchedAt(at)} 조회`}
+              data-tip={`${fetchedAt(at)} 조회`}
               // after: the press area reaches 6px past the 32px button. With the words beside it, the icon's side is 2px tighter.
               className="absolute top-4 right-4 inline-flex h-8 items-center gap-1 rounded-md tile-edge px-2 text-xs font-semibold whitespace-nowrap after:absolute after:-inset-1.5 disabled:opacity-50 @sm:pl-1.5 sm:top-5 sm:right-5"
             >

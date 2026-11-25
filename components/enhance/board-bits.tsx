@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { AlertCircle, RefreshCw, Search, SlidersHorizontal, X } from "lucide-react";
 import { eok } from "@/components/ev/ui";
-import { BELOW } from "@/components/enhance/parts";
+import { BELOW } from "@/components/ui/menu-select";
 import { SteadyText } from "@/components/ui/steady-text";
 import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from "@/components/ui/combobox";
 import { InputGroupAddon, InputGroupButton } from "@/components/ui/input-group";
@@ -431,7 +431,7 @@ function NamePick({
         <ComboboxList>
           {(name: string) => (
             <ComboboxItem key={name} value={name} className="text-[13px]">
-              <span className="truncate" title={name}>
+              <span className="truncate" data-tip={name}>
                 {name}
               </span>
             </ComboboxItem>

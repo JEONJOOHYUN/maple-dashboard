@@ -32,6 +32,7 @@ import {
 import { BOXES, CATEGORIES, DROPS, ITEMS, MATERIALS, iconSrc, isBox, item, maxParty, type Icon, type ItemId } from "@/lib/revenue/data";
 import { crystalTable, rewardPrices } from "@/lib/site-values/revenue";
 import { useStored } from "@/lib/use-stored";
+import { extraTip } from "@/lib/tip";
 import { cn } from "@/lib/utils";
 import { Face } from "@/components/revenue/face";
 import { SheetHead } from "@/components/revenue/sheet-head";
@@ -287,8 +288,8 @@ export function Board({
                 <label key={id} className="grid min-h-[54px] grid-cols-[30px_minmax(0,1fr)_100px] items-center gap-2.5 border-t border-border">
                   <ItemImg icon={ITEMS[id].icon} className="size-[30px]" />
                   <span className="flex min-w-0 flex-col">
-                    <b className="truncate text-[13px]" title={ITEMS[id].name}>{ITEMS[id].name}</b>
-                    <span className="truncate text-[11px] text-muted-foreground" title={from}>{from}</span>
+                    <b className="truncate text-[13px]" data-tip={ITEMS[id].name}>{ITEMS[id].name}</b>
+                    <span className="truncate text-[11px] text-muted-foreground" data-tip={from}>{from}</span>
                   </span>
                   <NumberField
                     value={priceText[id] ?? ""}
@@ -332,7 +333,7 @@ export function Board({
                       label={`${r.boss} ${r.diff} ${r.party}인, 파티원 고치기`}
                       trigger={
                         <>
-                        <span className="max-w-full truncate text-[13px] font-bold" title={r.boss}>{r.boss}</span>
+                        <span className="max-w-full truncate text-[13px] font-bold" data-tip={r.boss}>{r.boss}</span>
                         <span className="flex items-center gap-[5px] text-xs text-muted-foreground">
                           <span className="inline-flex h-4 items-center rounded px-1 pt-px text-[11px] font-bold" style={DIFF_STYLE[r.diff]}>
                             {r.diff}
@@ -386,7 +387,7 @@ export function Board({
               >
                 <Face src={faces[v.c.ocid]} name={v.c.name} />
                 <span className="flex min-w-0 flex-col">
-                  <span className="truncate text-[15px] font-bold" title={v.c.name}>{v.c.name}</span>
+                  <span className="truncate text-[15px] font-bold" data-tip={v.c.name}>{v.c.name}</span>
                   <span className="truncate text-[13px] text-muted-foreground">
                     Lv.{v.c.level} · {v.c.job} · {v.c.world}
                   </span>
@@ -478,7 +479,7 @@ function DoneRow({ r, zebra, withMat, prices, onParty, onMark }: { r: Row; zebra
       <div className={doneRow(zebra)}>
         {/* No party or drop cells here, so the name may take their room; chips wrap before the name is cut. */}
         <span className="col-span-4 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 @2xl:col-span-8">
-          <span className="truncate font-semibold" title={r.boss}>{r.boss}</span>
+          <span className="truncate font-semibold" data-tip={r.boss}>{r.boss}</span>
           <span className={chip} style={DIFF_STYLE[r.diff]}>
             {r.diff}
           </span>
@@ -493,7 +494,7 @@ function DoneRow({ r, zebra, withMat, prices, onParty, onMark }: { r: Row; zebra
     <div className={doneRow(zebra)}>
       <span className="col-span-4 flex min-w-0 flex-col items-start gap-0.5 @2xl:col-span-1">
         <span className="flex max-w-full items-center gap-2">
-          <span className="truncate font-semibold" title={r.boss}>{r.boss}</span>
+          <span className="truncate font-semibold" data-tip={r.boss}>{r.boss}</span>
           <span className={chip} style={DIFF_STYLE[r.diff]}>
             {r.diff}
           </span>
@@ -553,7 +554,7 @@ function CellButton({ cell, boss, prices, onMark }: { cell: Cell; boss: string; 
   if (cell.kind === "item") {
     const it = ITEMS[cell.id];
     return (
-      <button type="button" aria-pressed={cell.on} aria-label={`${it.name} 먹음`} title={`${it.name} · ${won(priceOf(cell.id, prices))}`} onClick={() => onMark(cell.on ? undefined : true)} className={cn(cellBase, cell.on && pickedRing)}>
+      <button type="button" aria-pressed={cell.on} aria-label={`${it.name} 먹음`} {...extraTip(`${it.name} · ${won(priceOf(cell.id, prices))}`)} onClick={() => onMark(cell.on ? undefined : true)} className={cn(cellBase, cell.on && pickedRing)}>
         <ItemImg icon={it.icon} className={cn("size-[30px] lg:size-8", !cell.on && "opacity-50 saturate-50")} />
       </button>
     );

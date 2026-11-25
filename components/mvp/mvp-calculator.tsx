@@ -33,6 +33,7 @@ import { Reveal, useReveal } from "@/components/ui/reveal";
 import { LEAVE_MS, useSelfGlide } from "@/components/ui/glide";
 import { Digits } from "@/components/ui/digits";
 import { SwapLabel } from "@/components/ui/swap-icon";
+import { extraTip } from "@/lib/tip";
 import { cn } from "@/lib/utils";
 import { SteadyText } from "@/components/ui/steady-text";
 import { koreanUnits } from "@/lib/format";
@@ -550,7 +551,7 @@ export function MvpCalculator() {
                         <button
                           type="button"
                           aria-expanded={s.boutiqueShow}
-                          title="까기 전 · 이미 깐 결과"
+                          {...extraTip("까기 전 · 이미 깐 결과")}
                           onClick={() => update({ boutiqueShow: !s.boutiqueShow })}
                           // The arrow's side has less padding: its glyph has air inside its box.
                           className="relative hidden h-7 items-center gap-0.5 rounded-md pr-0.5 pl-1.5 text-xs font-semibold whitespace-nowrap text-primary-text outline-none after:absolute after:-inset-x-2 after:top-0 after:-bottom-2 hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 @min-[720px]:inline-flex"

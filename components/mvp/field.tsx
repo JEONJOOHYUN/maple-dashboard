@@ -9,7 +9,7 @@ export function Field({ label, as: Tag = "label", children }: { label: string; a
   return (
     // Corner 14 = the field inside (10) + the 4px between them.
     <Tag className="flex h-10 min-w-0 items-center justify-between gap-2 rounded-xl border border-border bg-background pr-1 pl-3 text-[13px] text-muted-foreground">
-      <span className="truncate" title={label}>
+      <span className="truncate" data-tip={label}>
         {label}
       </span>
       {children}

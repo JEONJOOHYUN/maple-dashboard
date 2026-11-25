@@ -58,7 +58,7 @@ export function CharCard({ c, on, boss, color, onToggle, disabled }: { c: { name
         {on && <Check className="size-3" strokeWidth={3.5} aria-hidden="true" />}
       </span>
       <span className="flex min-w-0 flex-col">
-        <span className="truncate text-sm font-bold" title={c.name}>
+        <span className="truncate text-sm font-bold" data-tip={c.name}>
           {c.name}
         </span>
         <span className="truncate text-xs text-muted-foreground">

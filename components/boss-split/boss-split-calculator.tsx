@@ -275,7 +275,7 @@ export function BossSplitCalculator() {
                     key={i}
                     className="flex min-w-0 flex-col items-center gap-1.5 rounded-[1rem] tile-edge bg-background px-2.5 py-3"
                   >
-                    <span className="w-full truncate text-center text-[13px] font-semibold" title={names[i] || DEFAULT_NAMES[i]}>
+                    <span className="w-full truncate text-center text-[13px] font-semibold" data-tip={names[i] || DEFAULT_NAMES[i]}>
                       {names[i] || DEFAULT_NAMES[i]}
                     </span>
                     <span className="relative w-full">

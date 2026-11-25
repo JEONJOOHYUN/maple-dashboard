@@ -33,11 +33,6 @@ import {
   type StarEvent,
   type StarOptions,
 } from "@/lib/ev/starforce";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { Digits } from "@/components/ui/digits";
 import { useGlide } from "@/components/ui/glide";
 import { Reveal } from "@/components/ui/reveal";
@@ -459,42 +454,39 @@ export function StarforceTab() {
                   style={{ gridTemplateColumns: `repeat(${ITEM_COLS}, minmax(0, 1fr))` }}
                 >
                   {g.items.map((it) => (
-                    // Our own name bubble instead of the browser's title box.
-                    <Tooltip key={it.id}>
-                      <TooltipTrigger
-                        render={<button type="button" />}
-                        aria-pressed={item === it.id}
-                        aria-label={`${it.name} · 노작값 ${eok(it.spareEok * 1e8)}`}
-                        onClick={() => pickItem(it.id)}
-                        // A name without a picture needs two cells to be read.
-                        style={{ gridColumn: `span ${Math.min(ITEM_COLS, it.icons.length || 2)}` }}
-                        className={cn(
-                          "flex h-11 min-w-0 items-center justify-around rounded-lg border transition-[background-color,border-color,box-shadow,scale] duration-150 ease-out",
-                          item === it.id
-                            ? "border-primary bg-primary-soft ring-1 ring-primary"
-                            : "tile-edge bg-card hover:border-primary/60",
-                        )}
-                      >
-                        {it.icons.length ? (
-                          it.icons.map((code) => (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              key={code}
-                              src={itemImage(code)}
-                              alt=""
-                              className="size-7 object-contain"
-                            />
-                          ))
-                        ) : (
-                          <span className="px-1 text-[11px] leading-tight">
-                            {it.name}
-                          </span>
-                        )}
-                      </TooltipTrigger>
-                      <TooltipContent className="font-semibold">
-                        {it.name}
-                      </TooltipContent>
-                    </Tooltip>
+                    // The name in the site's bubble (components/tip-layer.tsx), the browser's title box before.
+                    <button
+                      key={it.id}
+                      type="button"
+                      data-tip={it.name}
+                      aria-pressed={item === it.id}
+                      aria-label={`${it.name} · 노작값 ${eok(it.spareEok * 1e8)}`}
+                      onClick={() => pickItem(it.id)}
+                      // A name without a picture needs two cells to be read.
+                      style={{ gridColumn: `span ${Math.min(ITEM_COLS, it.icons.length || 2)}` }}
+                      className={cn(
+                        "flex h-11 min-w-0 items-center justify-around rounded-lg border transition-[background-color,border-color,box-shadow,scale] duration-150 ease-out",
+                        item === it.id
+                          ? "border-primary bg-primary-soft ring-1 ring-primary"
+                          : "tile-edge bg-card hover:border-primary/60",
+                      )}
+                    >
+                      {it.icons.length ? (
+                        it.icons.map((code) => (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            key={code}
+                            src={itemImage(code)}
+                            alt=""
+                            className="size-7 object-contain"
+                          />
+                        ))
+                      ) : (
+                        <span className="px-1 text-[11px] leading-tight">
+                          {it.name}
+                        </span>
+                      )}
+                    </button>
                   ))}
                 </div>
               </div>
@@ -821,7 +813,7 @@ export function StarforceTab() {
                           </span>
                           {/* Two rows of one item and range differ by their settings: the hand-set one says so. */}
                           <span
-                            title={`${c.item}${c.opt.protect !== "auto" ? ` · 방지 ${starList(c.opt.protect)}` : ""}`}
+                            data-tip={`${c.item}${c.opt.protect !== "auto" ? ` · 방지 ${starList(c.opt.protect)}` : ""}`}
                             className="truncate text-[11px] text-muted-foreground"
                           >
                             {c.item}

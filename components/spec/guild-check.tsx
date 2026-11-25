@@ -13,7 +13,6 @@ import { Chip } from "@/components/ev/ui";
 import { Message } from "@/components/message";
 import { PageHeader } from "@/components/page-header";
 import {
-  Pieces,
   RECENT_DROP,
   RECENT_NAME,
   RECENT_PILL,
@@ -26,7 +25,6 @@ import {
   whatText,
 } from "@/components/spec/spec-check";
 import { SpecTabs } from "@/components/spec/spec-tabs";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Spinner } from "@/components/ui/spinner";
 import { SwapLabel } from "@/components/ui/swap-icon";
 import type { Tier } from "@/lib/spec/check";
@@ -48,6 +46,7 @@ import {
 import { useStored } from "@/lib/use-stored";
 import { useReveal } from "@/components/ui/reveal";
 import { LEAVE_MS, useRowGlide } from "@/components/ui/glide";
+import { extraTip } from "@/lib/tip";
 import { cn } from "@/lib/utils";
 
 /** count = characters; users = accounts (the in-game member count), null when NEXON gives none. */
@@ -90,21 +89,14 @@ const TONE: Record<Tier, string> = {
  */
 function Pill({ cell }: { cell: Cell }) {
   return (
-    <Tooltip>
-      <TooltipTrigger
-        render={<span tabIndex={0} />}
-        // No ring of its own: the site's focus outline keeps the outlined pill's shadow edge under it.
-        className={cn("inline-block cursor-default rounded-full px-2.5 py-0.5 text-xs font-bold whitespace-nowrap", TONE[cell.tier])}
-      >
-        {cell.text}
-      </TooltipTrigger>
-      <TooltipContent className="max-w-[min(18rem,calc(100vw-2rem))] flex-col items-start gap-1 py-2 text-left leading-snug">
-        <b className="break-keep">{whatText(cell.what)}</b>
-        {cell.detail.map((d, i) => (
-          <Pieces key={i} text={d} className="text-xs opacity-80" />
-        ))}
-      </TooltipContent>
-    </Tooltip>
+    <span
+      tabIndex={0}
+      {...extraTip([whatText(cell.what), ...cell.detail].join("\n"))}
+      // No ring of its own: the site's focus outline keeps the outlined pill's shadow edge under it.
+      className={cn("inline-block cursor-default rounded-full px-2.5 py-0.5 text-xs font-bold whitespace-nowrap", TONE[cell.tier])}
+    >
+      {cell.text}
+    </span>
   );
 }
 
