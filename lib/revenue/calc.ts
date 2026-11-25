@@ -4,7 +4,13 @@ import { BOXES, CATEGORIES, CRYSTAL, DIFFICULTY, DROPS, ITEMS, MATERIALS, PER_BO
 
 /** One row of the scheduler's `boss_contents`. */
 export type SchedulerBoss = { content_name?: string; difficulty?: string; cycle?: string; list_order_no?: number; registration_flag?: string; complete_flag?: string };
-export type SchedulerState = { boss_contents?: SchedulerBoss[]; weekly_boss_clear_count?: number; weekly_boss_clear_limit_count?: number };
+export type SchedulerState = {
+  boss_contents?: SchedulerBoss[];
+  weekly_boss_clear_count?: number;
+  weekly_boss_clear_limit_count?: number;
+  /** A past scheduler read from the day before the one asked for (that one was not ready yet): that day. */
+  asOf?: string;
+};
 
 /** A weekly (or monthly) boss of one character this week: cleared, or still on the in-game schedule. */
 export type BossRow = { boss: string; diff: string; key: string; monthly: boolean; done: boolean };
@@ -139,10 +145,30 @@ export const lastWeekDate = (now: number): string => new Date(weekStart(now) - 1
  * otherwise count every week. True when the month began this week; otherwise it is this week's when last week's
  * scheduler (`prev`) does not have it cleared. null = not known yet (last week's scheduler not here, or that call failed).
  * A past date's scheduler is taken as that day's state (the guide does not say when in the day it is read).
+ * Read from the day before (`asOf`, lastWeekOr): cleared then = earlier; not cleared then = not known yet (it may
+ * have been cleared on last week's last day).
  */
 export function monthlyThisWeek(boss: string, prev: SchedulerState | null | undefined, now: number): boolean | null {
   const month = new Date(now + KST).toISOString().slice(0, 7);
   if (lastWeekDate(now).slice(0, 7) !== month) return true;
   if (!prev) return null;
-  return !bossRows(prev).some((r) => r.monthly && r.done && r.boss === boss);
+  // The day before was last month's last day (last week's last day is the 1st): its clears were last month's.
+  if (prev.asOf && prev.asOf.slice(0, 7) !== month) return null;
+  if (bossRows(prev).some((r) => r.monthly && r.done && r.boss === boss)) return false;
+  return prev.asOf ? null : true;
+}
+
+/**
+ * Last week's last day, or the day before it (marked `asOf`) while NEXON is still filling that day — the first hours
+ * of Thursday (2026-11-26: "Please wait until the data is ready" at 00:20 ~ 00:40). Any other failure stays a failure.
+ * Shared by the member's server and a browser key; `notReady` tells their own "not ready" refusal.
+ */
+export async function lastWeekOr<T extends SchedulerState>(date: string, read: (day: string) => Promise<T>, notReady: (e: unknown) => boolean): Promise<T> {
+  try {
+    return await read(date);
+  } catch (e) {
+    if (!notReady(e)) throw e;
+    const before = new Date(Date.parse(date) - DAY).toISOString().slice(0, 10);
+    return { ...(await read(before)), asOf: before };
+  }
 }

@@ -11,13 +11,14 @@ import { openKey } from "@/lib/auth/key-crypto";
 import { ask, type KeyProblem } from "@/lib/auth/nexon-key";
 import { unpackLabel } from "@/lib/auth/rules";
 import type { RawCharacterList } from "@/lib/enhance/client";
-import { kstStamp } from "@/lib/enhance/kst";
+import { kstDate, kstStamp } from "@/lib/enhance/kst";
 import { bossLines, untilReset, type SchedulerBoss } from "@/lib/revenue/calc";
 import { MAX_PICKED } from "@/lib/revenue/data";
 import { FAST, REFUSED_RETRIES, SLOW, once, pacerPool, refusedWait } from "@/lib/nexon/open-api";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { accountHomework, charHomework, leftChips, mergeShared, summarize, untilDailyReset, type AccountHomework, type CharHomework, type HomeworkState } from "./model";
 import { PICK_COOKIE, cleanPick } from "./pick";
+import { fillThin, isThin, latestFull, schedulerAsk, type Registrations } from "./thin";
 
 /** Without a pick of the member's own: the highest characters of each account (one call each). */
 export const PER_ACCOUNT = 12;
@@ -28,6 +29,8 @@ const KEEP_MS = 5 * 60_000;
  * for again each time the schedulers ran out, it put one answer's time before all of them.
  */
 const LIST_KEEP_MS = 60 * 60_000;
+/** How long a character's latest full answer is kept (it is looked for again each day: see fullOf). */
+const FULL_KEEP_MS = 6 * 60 * 60_000;
 
 /** locked = the kept key does not open (another secret, or the row was changed). */
 export type AccountProblem = KeyProblem | "locked";
@@ -95,9 +98,12 @@ export type Get = ReturnType<typeof paced>;
 
 export class Refused extends Error {
   readonly problem: KeyProblem;
-  constructor(problem: KeyProblem) {
+  /** NEXON's own code, when it gave one. */
+  readonly code: string;
+  constructor(problem: KeyProblem, code = "") {
     super(problem);
     this.problem = problem;
+    this.code = code;
   }
 }
 export const problemOf = (e: unknown): KeyProblem => (e instanceof Refused ? e.problem : "failed");
@@ -148,12 +154,33 @@ function listOf(memberId: string, account: Opened, get: Get): Promise<Listed[]> 
 
 export type Answer = { at: number; /** As the scheduler says it now; 0 = it does not. */ level: number; hw: CharHomework; shared: AccountHomework; clears: number; limit: number; /** The boss lines boss revenue reads (lib/revenue/server.ts): one answer serves both pages. */ boss: SchedulerBoss[] };
 
+/**
+ * The registrations a thin answer lacks (lib/homework/thin.ts), from the character's latest full day: looked for once
+ * a day — past days do not change. A search that failed (latestFull says which refusals it skips) throws, and a throw
+ * is not kept: the next request looks again.
+ */
+function fullOf(memberId: string, account: Opened, get: Get, ocid: string): Promise<Registrations | null> {
+  const now = Date.now();
+  return kept(
+    memberId,
+    account,
+    `full|${kstDate(now)}|${ocid}`,
+    () =>
+      latestFull(now, async (date) => {
+        const answer = await get<HomeworkState>(...schedulerAsk(ocid, date));
+        return "problem" in answer ? { kind: answer.problem } : answer;
+      }),
+    FULL_KEEP_MS
+  );
+}
+
 /** One character's scheduler, already worked out (the raw answer is some 15 KB a character; this is what the page needs). */
 export function answerOf(memberId: string, account: Opened, get: Get, ocid: string): Promise<Answer> {
   return kept(memberId, account, ocid, async () => {
-    const answer = await get<HomeworkState>("scheduler/character-state", { ocid });
+    const answer = await get<HomeworkState>(...schedulerAsk(ocid));
     if ("problem" in answer) throw new Refused(answer.problem);
-    const state = answer.body;
+    // Not logged in since the reset: the registrations come from the latest full day (a failed search shows it as it came).
+    const state = isThin(answer.body) ? fillThin(answer.body, await fullOf(memberId, account, get, ocid).catch(() => null)) : answer.body;
     return { at: Date.now(), level: state.character_level ?? 0, hw: charHomework(state), shared: accountHomework([state]), clears: state.weekly_boss_clear_count ?? 0, limit: state.weekly_boss_clear_limit_count ?? 0, boss: bossLines(state) };
   });
 }

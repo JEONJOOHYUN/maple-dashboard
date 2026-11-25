@@ -4,7 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { openRevenue, readFaces, readSchedulers, refreshRevenue } from "@/app/revenue/actions";
 import { ApiError, characterList, createApi, type Api, type ApiErrorKind, type RawCharacterList } from "@/lib/enhance/client";
 import type { SavedKey } from "@/lib/enhance/keys";
-import type { SchedulerState } from "@/lib/revenue/calc";
+import { kstDate } from "@/lib/enhance/kst";
+import { fillThin, isThin, latestFull, schedulerAsk, type Registrations } from "@/lib/homework/thin";
+import type { HomeworkState } from "@/lib/homework/model";
+import { NOT_READY } from "@/lib/nexon/open-api";
+import { lastWeekOr, type SchedulerState } from "@/lib/revenue/calc";
 import { MAX_ASKED } from "@/lib/revenue/data";
 import type { MemberRevenue } from "@/lib/revenue/server";
 import { useStored } from "@/lib/use-stored";
@@ -39,6 +43,29 @@ type Source = {
   renew?(): Promise<boolean>;
 };
 
+/** Latest full answers found this visit, by character and day (lib/homework/thin.ts): past days do not change. A search that failed is dropped, so the next asks again. */
+const fulls = new Map<string, Promise<Registrations | null>>();
+
+/** A thin answer (not logged in since the reset) with the registrations of the character's latest full day. */
+function filled(api: Api, ocid: string, today: HomeworkState): Promise<HomeworkState> {
+  if (!isThin(today)) return Promise.resolve(today);
+  const now = Date.now();
+  const key = `${kstDate(now)}|${ocid}`;
+  let full = fulls.get(key);
+  if (!full) {
+    const search = latestFull(now, (date) =>
+      api.get<HomeworkState>(...schedulerAsk(ocid, date)).then(
+        (body) => ({ body }),
+        (err) => ({ kind: err instanceof ApiError ? err.kind : "failed" })
+      )
+    );
+    search.catch(() => fulls.delete(key));
+    fulls.set(key, (full = search));
+  }
+  // A failed search shows today's answer as it came.
+  return full.then((found) => fillThin(today, found), () => today);
+}
+
 /** A key kept in this browser: NEXON is asked straight from here, and the key never reaches our server. */
 function keySource(api: Api): Source {
   return {
@@ -48,7 +75,11 @@ function keySource(api: Api): Source {
     ),
     states(chars, date, _again, on) {
       for (const c of chars)
-        api.get<SchedulerState>("scheduler/character-state", date ? { ocid: c.ocid, date } : { ocid: c.ocid }).then(
+        // A past day as it came (last week's last day); today's filled when it is thin.
+        (date
+          ? lastWeekOr(date, (day) => api.get<SchedulerState>(...schedulerAsk(c.ocid, day)), (e) => e instanceof ApiError && e.code === NOT_READY)
+          : api.get<HomeworkState>(...schedulerAsk(c.ocid)).then((s) => filled(api, c.ocid, s))
+        ).then(
           (s) => on({ [c.ocid]: s }, Date.now()),
           () => on({ [c.ocid]: null }, 0)
         );
@@ -262,14 +293,14 @@ export function useRevenueData(keys: SavedKey[], registered: MemberRevenue | nul
 
   /** A member's refresh came too soon after the last ones: what is shown is what was kept. */
   const [limited, setLimited] = useState(false);
-  /** These characters' schedulers again, last week's ones that failed, and any character list that failed. */
+  /** These characters' schedulers again, last week's ones that failed or were read from the day before, and any character list that failed. */
   const refresh = useCallback(
     (chars: Char[]) => {
       const again = () => {
         retryAccounts();
         load(chars, true);
         loadFaces(chars, true);
-        ask(chars.filter((c) => cache[`${lastWeek}|${c.ocid}`] === null), lastWeek, lastWeek, true);
+        ask(chars.filter((c) => { const p = cache[`${lastWeek}|${c.ocid}`]; return p === null || !!p?.asOf; }), lastWeek, lastWeek, true);
       };
       const renewals = [...new Set(Object.values(sources))].flatMap((s) => (s.renew ? [s.renew()] : []));
       if (!renewals.length) return again();

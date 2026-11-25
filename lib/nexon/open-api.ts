@@ -22,6 +22,8 @@ export const CODE_KINDS: Record<string, CodeKind> = {
   OPENAPI00010: "busy",
   OPENAPI00011: "busy",
 };
+/** "Please wait until the data is ready": a past day NEXON is still filling (yesterday's, until early morning). */
+export const NOT_READY = "OPENAPI00009";
 /** "Too many requests": the per-second limit of the key's stage, or its daily one. */
 export const isRefusal = (status: number, code: string) => status === 429 || CODE_KINDS[code] === "quota";
 

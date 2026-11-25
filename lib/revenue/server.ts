@@ -6,8 +6,10 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import { answerOf, kept, listsOf, openAccounts, Refused, type AccountProblem, type Answer, type Get, type Listed, type Opened } from "@/lib/homework/server";
+import { schedulerAsk } from "@/lib/homework/thin";
+import { NOT_READY } from "@/lib/nexon/open-api";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { bossLines, lastWeekDate, type SchedulerState } from "./calc";
+import { bossLines, lastWeekDate, lastWeekOr, type SchedulerState } from "./calc";
 import { MAX_PICKED } from "./data";
 import { applyPatch, noSettings, rowOf, settingsOf, tooBig, type Patch, type Settings, type SettingsRow } from "./settings";
 
@@ -48,19 +50,24 @@ async function accountsOf(memberId: string): Promise<{ accounts: MemberAccount[]
 
 const stateOf = (a: Answer): SchedulerState => ({ boss_contents: a.boss, weekly_boss_clear_count: a.clears, weekly_boss_clear_limit_count: a.limit });
 
-/** The scheduler of one character on a past day: only its boss lines are kept. */
+/**
+ * The scheduler of one character on a past day: only its boss lines are kept. Not ready yet: the day before (a
+ * refusal is not kept, so the asked day is tried again next time).
+ */
 function pastOf(memberId: string, account: Opened, get: Get, ocid: string, date: string): Promise<SchedulerState> {
-  return kept(
-    memberId,
-    account,
-    `past|${date}|${ocid}`,
-    async () => {
-      const answer = await get<SchedulerState>("scheduler/character-state", { ocid, date });
-      if ("problem" in answer) throw new Refused(answer.problem);
-      return { boss_contents: bossLines(answer.body) };
-    },
-    PREV_KEEP_MS
-  );
+  const read = (day: string) =>
+    kept(
+      memberId,
+      account,
+      `past|${day}|${ocid}`,
+      async (): Promise<SchedulerState> => {
+        const answer = await get<SchedulerState>(...schedulerAsk(ocid, day));
+        if ("problem" in answer) throw new Refused(answer.problem, answer.code);
+        return { boss_contents: bossLines(answer.body) };
+      },
+      PREV_KEEP_MS
+    );
+  return lastWeekOr(date, read, (e) => e instanceof Refused && e.code === NOT_READY);
 }
 
 /** The past days the page asks for: the last day of last week, as this server or a browser a day off counts it. */

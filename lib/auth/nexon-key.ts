@@ -12,7 +12,8 @@ export type KeyProblem = "badKey" | "quota" | "busy" | "failed";
 export type KeyCheck = { ok: true; ouid: string; name: string; world: string } | { ok: false; problem: KeyProblem };
 
 /** One call to NEXON with a member's key (never cached by the fetch layer: the key is in its header). */
-export async function ask<T>(path: string, key: string, params?: Record<string, string>): Promise<{ body: T } | { problem: KeyProblem }> {
+/** `code` = NEXON's own error code when it gave one (OPENAPI00009 …). */
+export async function ask<T>(path: string, key: string, params?: Record<string, string>): Promise<{ body: T } | { problem: KeyProblem; code?: string }> {
   let res: Response;
   try {
     const query = params ? `?${new URLSearchParams(params)}` : "";
@@ -23,8 +24,9 @@ export async function ask<T>(path: string, key: string, params?: Record<string, 
   const body = (await res.json().catch(() => null)) as (T & { error?: { name?: string } }) | null;
   if (res.ok && body) return { body };
   // A value NEXON does not take ("param") is not the member's to fix: it is a failure here.
-  const kind = CODE_KINDS[body?.error?.name ?? ""];
-  return { problem: kind && kind !== "param" ? kind : res.status === 429 ? "quota" : "failed" };
+  const code = body?.error?.name ?? "";
+  const kind = CODE_KINDS[code];
+  return { problem: kind && kind !== "param" ? kind : res.status === 429 ? "quota" : "failed", code };
 }
 
 /**

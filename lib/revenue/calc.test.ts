@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { evenMemberShare } from "../boss-split/boss-split-math.ts";
-import { bossRows, cellsOf, lastWeekDate, monthlyThisWeek, crystalPrice, markKey, materialValue, partyFor, priceOf, rewardOf, share, untilReset, weekId, weekStart, withParty } from "./calc.ts";
+import { bossRows, cellsOf, lastWeekDate, lastWeekOr, monthlyThisWeek, type SchedulerState, crystalPrice, markKey, materialValue, partyFor, priceOf, rewardOf, share, untilReset, weekId, weekStart, withParty } from "./calc.ts";
 import { BOXES, CRYSTAL, DROPS, ITEMS, MATERIALS, maxParty } from "./data.ts";
 
 const kst = (iso: string) => Date.parse(`${iso}+09:00`);
@@ -128,4 +128,31 @@ test("a monthly clear counts only in the week it was made", () => {
   assert.equal(monthlyThisWeek("검은 마법사", undefined, mid), null, "not known yet");
   // 2026-12-01 (Tue) is in the week of 11-26: the month began this week, so every clear is this week's.
   assert.equal(monthlyThisWeek("검은 마법사", cleared, kst("2026-12-01T12:00:00")), true);
+});
+
+test("early on Thursday last week's last day is not ready: the day before stands in", async () => {
+  const cleared = { boss_contents: [{ content_name: "검은 마법사", difficulty: "hard", cycle: "bossMonthly", registration_flag: "true", complete_flag: "true" }] };
+  const notYet = { boss_contents: [{ content_name: "검은 마법사", difficulty: "hard", cycle: "bossMonthly", registration_flag: "true", complete_flag: "false" }] };
+  const thu = kst("2026-11-26T00:30:00");
+  const asked: string[] = [];
+  const notReady = new Error("busy");
+  const read = (answers: Record<string, SchedulerState>) => async (day: string): Promise<SchedulerState> => {
+    asked.push(day);
+    if (!(day in answers)) throw notReady;
+    return answers[day];
+  };
+  const tue = await lastWeekOr("2026-11-25", read({ "2026-11-24": cleared }), (e) => e === notReady);
+  assert.deepEqual(asked, ["2026-11-25", "2026-11-24"]);
+  assert.equal(tue.asOf, "2026-11-24");
+  // Cleared by Tuesday: certainly before this week. Not by Tuesday: maybe on Wednesday — not known yet (no money shown).
+  assert.equal(monthlyThisWeek("검은 마법사", tue, thu), false);
+  assert.equal(monthlyThisWeek("검은 마법사", await lastWeekOr("2026-11-25", read({ "2026-11-24": notYet }), (e) => e === notReady), thu), null);
+  // Ready: as before, nothing marked.
+  assert.equal((await lastWeekOr("2026-11-25", read({ "2026-11-25": notYet }), (e) => e === notReady)).asOf, undefined);
+  // Last week's last day is the 1st (2027-09-01): the day before is last month's, its clear says nothing about this month.
+  const sep = kst("2027-09-02T00:30:00");
+  assert.equal(lastWeekDate(sep), "2027-09-01");
+  assert.equal(monthlyThisWeek("검은 마법사", { ...cleared, asOf: "2027-08-31" }, sep), null);
+  // Another failure is not covered for.
+  await assert.rejects(lastWeekOr("2026-11-25", async () => Promise.reject(new Error("badKey")), (e) => e === notReady), /badKey/);
 });
